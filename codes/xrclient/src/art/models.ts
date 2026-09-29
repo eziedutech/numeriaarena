@@ -250,6 +250,48 @@ export function makeStar(earned: boolean): Object3D {
   );
 }
 
+/** A standing origami envelope, one per game on the menu. */
+export interface Envelope {
+  root: Group;
+  /** Hinged at the top edge; rotate about X towards -PI to open. */
+  flap: Group;
+  /** Slides up out of the envelope once the flap is open. */
+  letter: Mesh;
+}
+
+const ENV_W = 0.1;
+const ENV_H = 0.066;
+
+/**
+ * An origami envelope standing upright, front +Z, origin at its centre:
+ * back sheet, folded side and bottom pockets, a pointed flap with a seal,
+ * and a paper letter inside. Stand-in until the asset set has one.
+ */
+export function makeEnvelope(color: number): Envelope {
+  const root = new Group();
+  root.name = 'envelope';
+  const w = ENV_W / 2;
+  const h = ENV_H / 2;
+  const back = new Mesh(new BoxGeometry(ENV_W, ENV_H, 0.003), paper(shade(color)));
+  back.position.z = -0.0015;
+  const letter = new Mesh(new PlaneGeometry(ENV_W * 0.86, ENV_H * 0.84), paper(PAPER, { doubleSide: true }));
+  letter.name = 'envelope-letter';
+  letter.position.z = 0.0008;
+  // Side pockets meet in the middle; the bottom pocket laps over them.
+  const sides = folded([-w, -h, 0.002, 0, 0, 0.002, -w, h, 0.002, w, -h, 0.002, w, h, 0.002, 0, 0, 0.002], color);
+  const bottom = folded([-w, -h, 0.003, w, -h, 0.003, 0, 0.004, 0.003], shade(color));
+  const flap = new Group();
+  flap.name = 'envelope-flap';
+  flap.position.set(0, h, 0.004);
+  flap.add(folded([-w, 0, 0, 0, -h * 1.15, 0, w, 0, 0], color));
+  const seal = new Mesh(new CylinderGeometry(0.007, 0.007, 0.002, 12), paper(0xe8b64c));
+  seal.rotation.x = Math.PI / 2;
+  seal.position.set(0, -h * 1.05, 0.0012);
+  flap.add(seal);
+  root.add(back, letter, sides, bottom, flap);
+  return { root, flap, letter };
+}
+
 /** A highlight badge (symbol only), origin at the disc centre; null when missing. */
 export function makeBadge(highlight: string): Object3D | null {
   return staticModel(`badge_${highlight}`, `badge-${highlight}`);

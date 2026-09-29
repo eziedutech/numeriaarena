@@ -7,12 +7,24 @@ import {
   OneHandGrabbable,
   PokeInteractable,
   Pressed,
+  RayInteractable,
   Grabbed,
   Vector3,
 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
-import { forgetMixers, makeBalloon, makeBird, makeButton, makeCrystal, makeFoldling, makeOrb, mixers } from './art/models.js';
+import {
+  type Envelope,
+  forgetMixers,
+  makeBalloon,
+  makeBird,
+  makeButton,
+  makeCrystal,
+  makeEnvelope,
+  makeFoldling,
+  makeOrb,
+  mixers,
+} from './art/models.js';
 import { accentForSkill } from './art/palette.js';
 import {
   Core,
@@ -53,6 +65,10 @@ const SQUAD_POLL_S = 0.1;
 /** Seconds between the last event of a match and the recap card. */
 const RECAP_DELAY_S = 2.0;
 const BOT_NAMES: [string, string] = ['Clip', 'Crease'];
+/** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
+const FLAP_S = 0.45;
+const LETTER_S = 0.35;
+const LETTER_RISE = 0.045;
 
 interface Tween {
   obj: Object3D;
@@ -66,7 +82,7 @@ interface Tween {
   done?: () => void;
 }
 
-type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap';
+type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap';
 type MenuChoice = GameKind | 'solo_squad';
 
 export class GameSystem extends createSystem({
@@ -105,6 +121,8 @@ export class GameSystem extends createSystem({
   private squadPoll = 0;
   private recapIn = -1;
   private stage!: Stage;
+  private envelopes = new Map<Entity, Envelope>();
+  private opening?: { envelope: Envelope; choice: MenuChoice; t: number };
 
   init(): void {
     this.score = new Label('Foldlings', { height: 0.04 });
@@ -132,7 +150,15 @@ export class GameSystem extends createSystem({
           return;
         }
         if (this.phase !== 'menu') return;
-        this.start(e.getValue(MenuButton, 'game') as MenuChoice);
+        const choice = e.getValue(MenuButton, 'game') as MenuChoice;
+        const envelope = this.envelopes.get(e);
+        if (!envelope) {
+          this.start(choice);
+          return;
+        }
+        // The chosen envelope opens before its game starts.
+        this.phase = 'opening';
+        this.opening = { envelope, choice, t: 0 };
       }),
       this.queries.pressedBalloons.subscribe('qualify', (e) => this.popBalloon(e)),
     );
@@ -174,12 +200,43 @@ export class GameSystem extends createSystem({
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
     const games: [MenuChoice, string, number, number][] = [
-      ['solo_squad', T.soloSquad, -0.12, 0x81b29a],
-      ['balloon_burst', T.gameName.balloon_burst, 0, 0xe07a5f],
-      ['orb_forge', T.gameName.orb_forge, 0.12, 0x3d8fb8],
+      ['solo_squad', T.soloSquad, -0.135, 0x3fb6a0],
+      ['balloon_burst', T.gameName.balloon_burst, 0, 0xf2716b],
+      ['orb_forge', T.gameName.orb_forge, 0.135, 0x3469c4],
     ];
     for (const [game, title, x, color] of games) {
-      this.addButton(game, title, x, color);
+      this.addEnvelope(game, title, x, color);
+    }
+  }
+
+  /**
+   * A game on the menu: an origami envelope standing on the desk. Touch it
+   * with a fingertip, or point at it and pinch (a mouse click in the browser).
+   */
+  private addEnvelope(game: MenuChoice, title: string, x: number, color: number): void {
+    const envelope = makeEnvelope(color);
+    envelope.root.name = `menu-${game}`;
+    envelope.root.position.set(x, 0.042, 0.12);
+    envelope.root.scale.setScalar(1.2);
+    const e = this.add(envelope.root);
+    e.addComponent(MenuButton, { game });
+    e.addComponent(PokeInteractable);
+    e.addComponent(RayInteractable);
+    this.label(title, 0.019, envelope.root, -0.018, 0.0045, false);
+    this.envelopes.set(e, envelope);
+  }
+
+  private runOpening(delta: number): void {
+    const o = this.opening;
+    if (!o) return;
+    o.t += delta;
+    const k = Math.min(1, o.t / FLAP_S);
+    o.envelope.flap.rotation.x = -Math.PI * 0.95 * (k * k * (3 - 2 * k));
+    const l = Math.min(1, Math.max(0, (o.t - FLAP_S) / LETTER_S));
+    o.envelope.letter.position.y = LETTER_RISE * l;
+    if (o.t >= FLAP_S + LETTER_S + 0.15) {
+      this.opening = undefined;
+      this.start(o.choice);
     }
   }
 
@@ -190,11 +247,13 @@ export class GameSystem extends createSystem({
     const e = this.add(button);
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
+    e.addComponent(RayInteractable);
     this.label(title, 0.017, button, 0, 0.0075, false);
   }
 
   private start(choice: MenuChoice): void {
     this.clear(this.queries.buttons);
+    this.envelopes.clear();
     this.played = 0;
     if (choice === 'solo_squad') {
       this.phase = 'loading';
@@ -600,6 +659,7 @@ export class GameSystem extends createSystem({
     }
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
+    if (this.phase === 'opening') this.runOpening(delta);
     if (this.squad) this.updateSquad(delta);
 
     // Labels always face the camera that renders them (the head in XR,

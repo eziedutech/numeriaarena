@@ -82,7 +82,7 @@ export async function seat() {
 }
 
 export async function card(x) {
-  for (const dz of [0.08, 0.05, 0.03, 0.02, 0.012, 0.006, 0]) { tip(x, 0.0325, 0.12 + dz); await sleep(0.1); }
+  for (const dz of [0.08, 0.05, 0.03, 0.02, 0.012, 0.006, 0]) { tip(x, 0.04, 0.12 + dz); await sleep(0.1); }
   tip(x, 0.2, 0.35); await sleep(2.5);
 }
 
@@ -141,7 +141,7 @@ export async function balloonRound(line) {
 /** Plays a whole Solo Squad match from the menu to the recap. */
 export async function squadMatch(maxMinutes = 12) {
   const since = Date.now();
-  await card(-0.12);
+  await card(-0.135);
   const failed = cli('browser', 'logs', '--input-json', j({ count: 5, pattern: 'squad\] could not start', since }));
   if ((failed.logs ?? failed).length) throw new Error(`Solo Squad did not start: ${(failed.logs ?? failed)[0].message}`);
   let last = '';
@@ -169,6 +169,6 @@ if (process.argv[2] === 'squad') {
 
 if (process.argv[2] === 'orb') {
   await fresh();
-  await card(0.12);
+  await card(0.135);
   for (let r = 0; r < Number(process.argv[3] ?? 3); r++) console.log(JSON.stringify(await orbRound()));
 }
