@@ -40,6 +40,7 @@ import {
   type SquadVerdict,
   type Verdict,
 } from './game/core.js';
+import type { Species } from './assets.js';
 import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
 import { SquadScene, type Stage } from './squad-view.js';
 import { T } from './text.js';
@@ -136,6 +137,7 @@ export class GameSystem extends createSystem({
   private timing = false;
   private seen: Record<GameKind, number> = { balloon_burst: 0, orb_forge: 0 };
   private figure?: Figure;
+  private species: Species = 'fox';
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
   private creatureScale = 1;
@@ -464,7 +466,8 @@ export class GameSystem extends createSystem({
     );
     const boss = squadInfo?.boss ?? false;
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
-    const figure = makeFoldling(color, boss ? 'elephant' : speciesFor(offer.offer_id));
+    this.species = boss ? 'elephant' : speciesFor(offer.offer_id);
+    const figure = makeFoldling(color, this.species);
     this.figure = figure;
     const { root } = figure;
     root.rotation.y = CREATURE_YAW;
@@ -639,14 +642,36 @@ export class GameSystem extends createSystem({
     }
   }
 
-  /** A right answer: the Foldling folds itself flat, then flies home as a paper bird. */
+  /**
+   * A right answer: the Foldling cheers, turns to the portal and goes home its
+   * own way (land animals hop, the fish swims up, the crane glides), shrinking
+   * into the portal. Only the procedural stand-in, which has no clips, still
+   * folds into a paper bird.
+   */
   private foldHome(creature: Entity, color: number): void {
     this.phase = 'between';
     const obj = creature.object3D!;
-    const fold = this.figure?.play('fold', true);
-    const foldS = fold ? fold.getClip().duration : 0;
-    // A dummy tween on the creature waits out the fold clip.
-    this.tween(obj, obj.position.clone(), Math.max(foldS, 0.01), 0, obj.scale.x, () => this.fly(creature, color));
+    const cheer = this.figure?.play('cheer', true);
+    if (!cheer) {
+      this.fly(creature, color);
+      return;
+    }
+    // A tween that stays in place waits out the cheer.
+    this.tween(obj, obj.position.clone(), cheer.getClip().duration, 0, obj.scale.x, () => {
+      // Head (+X) towards the portal at the back of the book.
+      obj.rotation.y = Math.PI / 2;
+      const style =
+        this.species === 'fish'
+          ? { arc: 0.06, clip: 'idle', dur: 1.3 }
+          : this.species === 'crane'
+            ? { arc: 0.12, clip: 'idle', dur: 1.1 }
+            : { arc: 0.025, clip: 'hop', dur: 1.4 };
+      this.figure?.play(style.clip);
+      this.tween(obj, HOME, style.dur, style.arc, this.creatureScale * 0.25, () => {
+        this.remove(creature);
+        this.next();
+      });
+    });
   }
 
   private fly(creature: Entity, color: number): void {

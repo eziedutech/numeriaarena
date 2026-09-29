@@ -119,7 +119,13 @@ function figure(root: Group, flag: Object3D, model: Object3D, clips: AnimationCl
       return action;
     },
   };
-  if (mixer && rest) mixer.addEventListener('finished', () => fig.play(rest));
+  // Back to rest only if the clip that ended is still the one playing; a
+  // newer clip (a hop started as the cheer ends) keeps going.
+  if (mixer && rest) {
+    mixer.addEventListener('finished', (e) => {
+      if (e.action === current) fig.play(rest);
+    });
+  }
   return fig;
 }
 

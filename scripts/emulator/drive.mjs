@@ -114,7 +114,8 @@ export async function orbRound() {
   grabAt(orb.x, orb.y, orb.z); await sleep(0.3); pinch(1); await sleep(0.4);
   // Held over the creature (front edge of the book), then let go: only a release gives the answer.
   await carry('^orb$', orb, { x: 0, y: 0.075, z: -0.03 });
-  await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(2.5);
+  // Going home after a right answer takes about 2.6 s (cheer, then the walk to the portal).
+  await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(4);
   return { line, pair, orbParts: [parts.first, parts.second], result: logs('orb ', 1)[0] };
 }
 
