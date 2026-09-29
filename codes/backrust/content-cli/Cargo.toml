@@ -1,0 +1,12 @@
+[package]
+name = "content-cli"
+description = "Validates item templates and builds content packs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+foldlings-core = { path = "../core" }
+serde_json.workspace = true
+jsonschema.workspace = true

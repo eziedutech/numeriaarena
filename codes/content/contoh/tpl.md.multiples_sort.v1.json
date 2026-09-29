@@ -1,0 +1,35 @@
+{
+  "id": "tpl.md.multiples_sort.v1",
+  "version": 1,
+  "skill": "MD.FACTORS",
+  "grades": [4, 5],
+  "status": "draft",
+  "answer_kind": "predicate",
+  "params": {
+    "k": { "type": "choice", "values": [3, 4, 6, 7, 8, 9] }
+  },
+  "predicate": {
+    "gates": [
+      { "rule": "x % k == 0", "label": { "en": "Multiple of {k}", "id": "Kelipatan {k}" } },
+      { "rule": "x % k != 0", "label": { "en": "Not a multiple", "id": "Bukan kelipatan" } }
+    ],
+    "item_pool": { "type": "int", "min": 10, "max": "k * 12" },
+    "exclusive": true
+  },
+  "answer": { "expr": "x % k == 0", "format": "bool" },
+  "difficulty": {
+    "base": -0.2,
+    "features": [
+      { "when": "k >= 7", "add": 0.4, "note": "fakta perkalian lebih sulit" }
+    ]
+  },
+  "distractors": [],
+  "prompt": { "en": "Sort by multiples of {k}", "id": "Sortir kelipatan {k}" },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "factory_sort": { "items_per_wave": 10 },
+    "balloon_burst": { "choices": 4 }
+  },
+  "tags": ["multiples"],
+  "provenance": { "source": "human", "created_at": "2026-09-29T08:00:00Z" }
+}

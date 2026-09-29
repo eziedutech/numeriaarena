@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://numeria.local/schema/content-pack.schema.json",
+  "title": "Numeria content pack manifest",
+  "description": "Satu paket konten berversi yang diaktifkan admin. Isinya daftar berkas template beserta hash, supaya yang berjalan di produksi bisa dibuktikan.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "built_at", "skills_version", "validator_version", "templates", "stats"],
+  "properties": {
+    "version": { "type": "string", "pattern": "^cp-[0-9]{4}-[0-9]{2}-[0-9]{2}(\\.[0-9]+)?$" },
+    "built_at": { "type": "string", "format": "date-time" },
+    "skills_version": { "type": "string" },
+    "validator_version": { "type": "string" },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "sha256", "status"],
+        "properties": { "id": { "type": "string" }, "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "status": { "enum": ["reviewed", "live"] } }
+      }
+    },
+    "curriculum_maps": { "type": "array", "items": { "type": "string" } },
+    "stats": {
+      "type": "object", "additionalProperties": false, "required": ["templates_total", "per_skill"],
+      "properties": {
+        "templates_total": { "type": "integer" },
+        "per_skill": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "per_game_type": { "type": "object", "additionalProperties": { "type": "integer" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+# Internal folders (not part of the public repository)
+/agents/
+/docs/
+/resources/
+/credentials/
+/read_folder.md
+/project-global-rule.md
+/CLAUDE.md
+/konsep-awal.md
+/.mcp.json
+/.claude/
+
+# Secrets anywhere
+*.pem
+*.key
+*accessKeys*.csv
+.env
+.env.*
+!.env.example
+
+# Rust
+/codes/backrust/target/
+**/target/
+
+# Node, Bun
+node_modules/
+.pnpm-store/
+dist/
+build/
+.react-router/
+*.tsbuildinfo
+
+# WASM build output (generated from codes/backrust/core)
+/codes/xrclient/src/wasm/pkg/
+/codes/frontrouter/app/wasm/pkg/
+/codes/backrust/core/pkg/
+
+# Tooling
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

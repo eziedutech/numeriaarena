@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://numeria.local/schema/item-template.schema.json",
+  "title": "Numeria item template",
+  "description": "Template soal berparameter. Satu template menghasilkan ribuan soal konkret. Jawaban SELALU dihitung oleh evaluator deterministik dari 'answer.expr', tidak pernah ditulis manual atau oleh AI.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "skill", "grades", "status", "answer_kind", "params", "answer", "difficulty", "prompt", "game_adapters", "provenance"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^tpl\\.[a-z0-9_.]+\\.v[0-9]+$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "skill": { "type": "string", "pattern": "^(PV|MD|FR|DC|ME)\\.[A-Z0-9.]+$", "description": "Kode dari skills.json" },
+    "grades": { "type": "array", "items": { "type": "integer", "minimum": 4, "maximum": 6 }, "minItems": 1 },
+    "status": { "enum": ["draft", "validated", "reviewed", "live", "retired"] },
+    "retired_reason": { "type": "string" },
+    "answer_kind": {
+      "enum": ["value", "compare", "predicate", "equation", "estimate"],
+      "description": "value: satu nilai. compare: pilih yang lebih besar atau sama. predicate: aturan penyortiran untuk Factory Sort. equation: satu bilangan hilang (Balance Gate). estimate: tebak ukuran dunia nyata (Measure Hunt)."
+    },
+    "params": {
+      "type": "object",
+      "description": "Nama parameter ke definisinya. Batas boleh berupa ekspresi atas parameter yang didefinisikan lebih dulu.",
+      "additionalProperties": { "$ref": "#/$defs/param" }
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/expr" },
+      "description": "Ekspresi boolean yang semuanya harus benar. Validator menolak template bila kurang dari 95% sampel acak lolos, supaya pembangkitan tidak boros."
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expr", "format"],
+      "properties": {
+        "expr": { "$ref": "#/$defs/expr" },
+        "format": { "enum": ["int", "fraction", "mixed", "decimal", "percent", "bool", "measure"] },
+        "simplify": { "type": "boolean", "default": true },
+        "decimal_places": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "unit": { "enum": ["mm", "cm", "m"] },
+        "accept_equivalent": { "type": "boolean", "default": true, "description": "Mis. 2/4 diterima untuk 1/2 bila skill bukan penyederhanaan" }
+      }
+    },
+    "predicate": {
+      "type": "object",
+      "description": "Wajib untuk answer_kind predicate",
+      "additionalProperties": false,
+      "required": ["gates", "item_pool"],
+      "properties": {
+        "gates": {
+          "type": "array", "minItems": 2, "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["rule", "label"],
+            "properties": { "rule": { "$ref": "#/$defs/expr" }, "label": { "$ref": "#/$defs/i18n" } }
+          }
+        },
+        "item_pool": { "$ref": "#/$defs/param" },
+        "exclusive": { "type": "boolean", "default": true, "description": "Setiap item cocok ke tepat satu gerbang" }
+      }
+    },
+    "estimate": {
+      "type": "object",
+      "description": "Wajib untuk answer_kind estimate",
+      "additionalProperties": false,
+      "required": ["target", "unit"],
+      "properties": {
+        "target": { "enum": ["table_width", "table_depth", "two_points", "virtual_object"] },
+        "unit": { "enum": ["mm", "cm", "m"] },
+        "fallback_when_no_table": { "enum": ["two_points", "virtual_object"], "default": "two_points" }
+      }
+    },
+    "difficulty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": { "type": "number", "minimum": -3, "maximum": 3 },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["when", "add"],
+            "properties": { "when": { "$ref": "#/$defs/expr" }, "add": { "type": "number", "minimum": -1.5, "maximum": 1.5 }, "note": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "distractors": {
+      "type": "array",
+      "description": "Jawaban salah yang masuk akal, masing-masing mewakili satu miskonsepsi. Dipakai Balloon Burst dan Coach.",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["expr", "misconception"],
+        "properties": { "expr": { "$ref": "#/$defs/expr" }, "misconception": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "id"],
+      "description": "Teks singkat dengan placeholder {nama_param} atau {=ekspresi}. Maks 60 karakter supaya terbaca di headset. Angka diformat otomatis: desimal titik, tanpa pemisah ribuan.",
+      "properties": { "en": { "type": "string", "maxLength": 60 }, "id": { "type": "string", "maxLength": 60 } }
+    },
+    "visual_model": {
+      "enum": ["none", "blocks", "number_line", "bar_model", "area_grid", "pie", "ruler"],
+      "description": "Demonstrasi yang dipakai hint dan Coach"
+    },
+    "game_adapters": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "orb_forge": {
+          "type": "object", "additionalProperties": false, "required": ["ops"],
+          "properties": {
+            "ops": { "type": "array", "items": { "enum": ["+", "-", "x", "/"] }, "minItems": 1 },
+            "max_crystals": { "type": "integer", "minimum": 2, "maximum": 4, "default": 2 },
+            "decoys": { "type": "integer", "minimum": 0, "maximum": 6, "default": 3 }
+          }
+        },
+        "balloon_burst": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "choices": { "type": "integer", "minimum": 2, "maximum": 5, "default": 4 } }
+        },
+        "factory_sort": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "items_per_wave": { "type": "integer", "minimum": 4, "maximum": 20, "default": 10 } }
+        },
+        "bridge_builder": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "max_planks": { "type": "integer", "minimum": 2, "maximum": 4, "default": 3 },
+            "decoys": { "type": "integer", "minimum": 0, "maximum": 5, "default": 3 }
+          }
+        },
+        "balance_gate": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "unknown_side": { "enum": ["left", "right", "any"], "default": "any" } }
+        },
+        "measure_hunt": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "convert_to": { "enum": ["mm", "cm", "m"] } }
+        }
+      }
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": { "enum": ["human", "ai"] },
+        "model": { "type": "string" },
+        "batch_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "validated_at": { "type": "string", "format": "date-time" },
+        "validator_version": { "type": "string" },
+        "reviewed_by": { "type": "string" },
+        "reviewed_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "answer_kind": { "const": "predicate" } } }, "then": { "required": ["predicate"] } },
+    { "if": { "properties": { "answer_kind": { "const": "estimate" } } }, "then": { "required": ["estimate"] } }
+  ],
+  "$defs": {
+    "expr": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ekspresi DSL aman (bukan JavaScript). Bilangan, parameter, + - * / % ( ), perbandingan == != < <= > >=, and or not, fungsi: frac(n,d), dec(x,k), round(x,k), floor, ceil, min, max, gcd, lcm, is_prime, digit(x,pos), mixed(w,n,d). Dihitung dengan pecahan eksak."
+    },
+    "i18n": {
+      "type": "object", "additionalProperties": false, "required": ["en", "id"],
+      "properties": { "en": { "type": "string", "maxLength": 40 }, "id": { "type": "string", "maxLength": 40 } }
+    },
+    "param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["int", "decimal", "choice"] },
+        "min": { "type": ["number", "string"] },
+        "max": { "type": ["number", "string"] },
+        "step": { "type": "number", "exclusiveMinimum": 0 },
+        "values": { "type": "array", "items": { "type": ["number", "string"] }, "minItems": 1 },
+        "exclude": { "type": "array", "items": { "type": "number" } }
+      }
+    }
+  }
+}

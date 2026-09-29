@@ -1,0 +1,20 @@
+{
+  "id": "tpl.me.table_width.v1",
+  "version": 1,
+  "skill": "ME.EST",
+  "grades": [4, 5, 6],
+  "status": "draft",
+  "answer_kind": "estimate",
+  "params": {},
+  "estimate": { "target": "table_width", "unit": "cm", "fallback_when_no_table": "two_points" },
+  "answer": { "expr": "measured", "format": "measure", "unit": "cm" },
+  "difficulty": { "base": 0.0 },
+  "distractors": [],
+  "prompt": { "en": "How wide is your table in cm?", "id": "Berapa cm lebar mejamu?" },
+  "visual_model": "ruler",
+  "game_adapters": {
+    "measure_hunt": { "convert_to": "m" }
+  },
+  "tags": ["passthrough", "real_world"],
+  "provenance": { "source": "human", "created_at": "2026-09-29T08:00:00Z" }
+}

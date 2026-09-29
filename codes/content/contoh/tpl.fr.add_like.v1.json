@@ -1,0 +1,37 @@
+{
+  "id": "tpl.fr.add_like.v1",
+  "version": 1,
+  "skill": "FR.ADD.LIKE",
+  "grades": [4],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "d": { "type": "int", "min": 3, "max": 12 },
+    "a": { "type": "int", "min": 1, "max": "d - 2" },
+    "b": { "type": "int", "min": 1, "max": "d - a - 1" }
+  },
+  "constraints": ["a + b < d"],
+  "answer": { "expr": "frac(a + b, d)", "format": "fraction", "simplify": false, "accept_equivalent": true },
+  "difficulty": {
+    "base": -0.6,
+    "features": [
+      { "when": "d > 8", "add": 0.3, "note": "penyebut besar" },
+      { "when": "gcd(a + b, d) > 1", "add": 0.2, "note": "hasil bisa disederhanakan" }
+    ]
+  },
+  "distractors": [
+    { "expr": "frac(a + b, d + d)", "misconception": "add_denominators" },
+    { "expr": "frac(a * b, d)", "misconception": "multiply_numerators" },
+    { "expr": "frac(a + b + 1, d)", "misconception": "off_by_one" }
+  ],
+  "prompt": { "en": "{a}/{d} + {b}/{d} = ?", "id": "{a}/{d} + {b}/{d} = ?" },
+  "visual_model": "bar_model",
+  "game_adapters": {
+    "orb_forge": { "ops": ["+"], "max_crystals": 2, "decoys": 3 },
+    "balloon_burst": { "choices": 4 },
+    "bridge_builder": { "max_planks": 2, "decoys": 3 },
+    "balance_gate": { "unknown_side": "any" }
+  },
+  "tags": ["fractions", "like_denominators"],
+  "provenance": { "source": "human", "created_at": "2026-09-29T08:00:00Z" }
+}

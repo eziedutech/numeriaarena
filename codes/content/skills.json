@@ -1,0 +1,42 @@
+{
+  "version": "skills-2026-09-29",
+  "note": "Taksonomi keterampilan kelas 4 sampai 6 yang umum di banyak kurikulum. Kode stabil; judul boleh diubah. Tambah skill baru, jangan ubah arti kode lama.",
+  "missions": [
+    { "id": "place_value", "title": { "en": "Place Value", "id": "Nilai Tempat" }, "skill_prefix": "PV" },
+    { "id": "multiply_divide", "title": { "en": "Multiply & Divide", "id": "Kali & Bagi" }, "skill_prefix": "MD" },
+    { "id": "fractions", "title": { "en": "Fractions", "id": "Pecahan" }, "skill_prefix": "FR" },
+    { "id": "decimals", "title": { "en": "Decimals", "id": "Desimal" }, "skill_prefix": "DC" },
+    { "id": "measurement", "title": { "en": "Measurement", "id": "Pengukuran" }, "skill_prefix": "ME" },
+    { "id": "mixed_review", "title": { "en": "Mixed Review", "id": "Campuran" }, "skill_prefix": "*" }
+  ],
+  "skills": [
+    { "code": "PV.READ", "grades": [4, 5], "title": { "en": "Read and build numbers to 1000000", "id": "Membaca dan menyusun bilangan sampai 1000000" } },
+    { "code": "PV.COMPARE", "grades": [4], "title": { "en": "Compare and order whole numbers", "id": "Membandingkan dan mengurutkan bilangan cacah" } },
+    { "code": "PV.ROUND", "grades": [4, 5], "title": { "en": "Round whole numbers", "id": "Membulatkan bilangan cacah" } },
+    { "code": "PV.ADD", "grades": [4], "title": { "en": "Add multi-digit numbers", "id": "Menjumlahkan bilangan bersusun" } },
+    { "code": "PV.SUB", "grades": [4], "title": { "en": "Subtract multi-digit numbers", "id": "Mengurangkan bilangan bersusun" } },
+    { "code": "MD.FACTS", "grades": [4], "title": { "en": "Multiplication facts to 12 x 12", "id": "Fakta perkalian sampai 12 x 12" } },
+    { "code": "MD.MULT", "grades": [4, 5], "title": { "en": "Multiply multi-digit numbers", "id": "Perkalian bilangan bersusun" } },
+    { "code": "MD.DIV", "grades": [4, 5], "title": { "en": "Divide with and without remainders", "id": "Pembagian dengan dan tanpa sisa" } },
+    { "code": "MD.FACTORS", "grades": [4, 5], "title": { "en": "Factors and multiples", "id": "Faktor dan kelipatan" } },
+    { "code": "MD.PRIME", "grades": [5, 6], "title": { "en": "Prime and composite numbers", "id": "Bilangan prima dan komposit" } },
+    { "code": "MD.ORDER", "grades": [5, 6], "title": { "en": "Order of operations", "id": "Urutan operasi hitung" } },
+    { "code": "FR.EQUIV", "grades": [4], "title": { "en": "Equivalent fractions", "id": "Pecahan senilai" } },
+    { "code": "FR.COMPARE", "grades": [4, 5], "title": { "en": "Compare fractions", "id": "Membandingkan pecahan" } },
+    { "code": "FR.ADD.LIKE", "grades": [4], "title": { "en": "Add and subtract like fractions", "id": "Jumlah dan kurang pecahan berpenyebut sama" } },
+    { "code": "FR.ADD.UNLIKE", "grades": [5], "title": { "en": "Add and subtract unlike fractions", "id": "Jumlah dan kurang pecahan berpenyebut beda" } },
+    { "code": "FR.MIXED", "grades": [4, 5], "title": { "en": "Mixed numbers", "id": "Pecahan campuran" } },
+    { "code": "FR.MULT", "grades": [5, 6], "title": { "en": "Multiply fractions", "id": "Perkalian pecahan" } },
+    { "code": "FR.OF", "grades": [5, 6], "title": { "en": "Fraction of a quantity", "id": "Pecahan dari suatu jumlah" } },
+    { "code": "DC.READ", "grades": [4, 5], "title": { "en": "Tenths, hundredths, thousandths", "id": "Persepuluhan, perseratusan, perseribuan" } },
+    { "code": "DC.COMPARE", "grades": [4, 5], "title": { "en": "Compare decimals", "id": "Membandingkan desimal" } },
+    { "code": "DC.ADD", "grades": [5], "title": { "en": "Add and subtract decimals", "id": "Jumlah dan kurang desimal" } },
+    { "code": "DC.MULT10", "grades": [5], "title": { "en": "Multiply and divide decimals by 10, 100, 1000", "id": "Kali dan bagi desimal dengan 10, 100, 1000" } },
+    { "code": "DC.FRAC", "grades": [4, 5, 6], "title": { "en": "Decimals and fractions", "id": "Desimal dan pecahan" } },
+    { "code": "DC.PERCENT", "grades": [6], "title": { "en": "Percent", "id": "Persen" } },
+    { "code": "ME.EST", "grades": [4, 5, 6], "title": { "en": "Estimate length", "id": "Menaksir panjang" } },
+    { "code": "ME.CONVERT", "grades": [4, 5], "title": { "en": "Convert mm, cm, m", "id": "Mengubah mm, cm, m" } },
+    { "code": "ME.PERIM", "grades": [4, 5], "title": { "en": "Perimeter", "id": "Keliling" } },
+    { "code": "ME.AREA", "grades": [4, 5, 6], "title": { "en": "Area of rectangles", "id": "Luas persegi panjang" } }
+  ]
+}

@@ -1,0 +1,21 @@
+[workspace]
+resolver = "3"
+members = ["core", "content-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+wasm-bindgen = "=0.2.129"
+sha2 = "=0.11.0"
+jsonschema = { version = "=0.58.2", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

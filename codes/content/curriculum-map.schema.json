@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://numeria.local/schema/curriculum-map.schema.json",
+  "title": "Numeria curriculum map",
+  "description": "Memetakan skill Numeria ke satu kurikulum. Game tidak bergantung pada berkas ini; guru memakainya untuk melihat keselarasan. Kode dan kutipan resmi WAJIB disalin dari dokumen resmi, bukan dari ingatan AI.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "region", "source_url", "retrieved_at", "entries"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^cur\\.[a-z0-9_]+$" },
+    "name": { "type": "string" },
+    "region": { "type": "string", "description": "ISO 3166-1 alpha-2 atau 'intl'" },
+    "source_url": { "type": "string" },
+    "retrieved_at": { "type": "string", "format": "date" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["skill", "local_level", "local_ref"],
+        "properties": {
+          "skill": { "type": "string" },
+          "local_level": { "type": "string", "description": "Mis. 'Grade 5', 'Fase C', 'Stage 5'" },
+          "local_ref": { "type": "string", "description": "Kode atau kutipan resmi" },
+          "fit": { "enum": ["full", "partial"], "default": "full" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  }
+}
