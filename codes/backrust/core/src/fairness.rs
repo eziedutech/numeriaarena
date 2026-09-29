@@ -67,7 +67,7 @@ impl Default for FairnessParams {
     /// Starting values from the design notes. Starting points, not results.
     fn default() -> Self {
         FairnessParams {
-            version: "fp-2026-09-29".into(),
+            version: "fp-2026-09-29.2".into(),
             target_p: 0.75,
             accept_low: 0.6,
             accept_high: 0.9,
@@ -85,9 +85,9 @@ impl Default for FairnessParams {
             sigma_decay: 0.97,
             sigma_daily_growth: 0.02,
             assisted_weight: 0.5,
-            placement_items: 5,
+            placement_items: 8,
             placement_step_up: 0.5,
-            placement_step_down: 0.75,
+            placement_step_down: 1.0,
             start_theta_grade4: -0.5,
             start_theta_grade5: 0.0,
             start_theta_grade6: 0.5,
@@ -636,7 +636,7 @@ mod tests {
         let r1 = update(r, 0.5, Outcome::Correct, false, &p);
         let r2 = update(r1, 0.5, Outcome::Wrong, false, &p);
         assert_eq!(r1.theta, 0.5);
-        assert_eq!(r2.theta, -0.25);
+        assert_eq!(r2.theta, -0.5);
     }
 
     #[test]

@@ -47,7 +47,8 @@ impl Default for SimConfig {
             items: 40,
             candidates_per_pick: 12,
             b_noise: 0.25,
-            bank_low: -3.0,
+            // Same range the validator allows for template difficulty.
+            bank_low: -4.0,
             bank_high: 3.0,
             expected_answer_s: 8.0,
             session_s: 480.0,
@@ -364,6 +365,7 @@ pub fn run(cfg: &SimConfig, p: &FairnessParams) -> SimReport {
     let cold_strong = points_per_minute(cfg, p, &mut rng, 1.5, false);
     let cold_weak = points_per_minute(cfg, p, &mut rng, -1.5, false);
     let gap = (strong - weak).abs() / strong.max(weak);
+    let cold_gap = (cold_strong - cold_weak).abs() / cold_strong.max(cold_weak);
     let (max_waiting, stuck, highlight_failures) = matches(cfg, p, &mut rng);
 
     let criteria = vec![
@@ -378,6 +380,12 @@ pub fn run(cfg: &SimConfig, p: &FairnessParams) -> SimReport {
             value: gap,
             limit: 0.15,
             passed: gap < 0.15,
+        },
+        Criterion {
+            name: "first session points per minute gap, strong vs weak",
+            value: cold_gap,
+            limit: 0.15,
+            passed: cold_gap < 0.15,
         },
         Criterion {
             name: "matches with a stuck desk",

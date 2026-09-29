@@ -66,7 +66,7 @@ Choices worth knowing:
 
 - **One core, four places.** Item generation, the expression language, the number formatter and the Fairness Engine are written once in Rust. The headset and the classroom pages use it as WebAssembly, the server and the content tool natively. The same template and seed give the same item, byte for byte, on both.
 - **Exact fractions.** Every expression is computed with exact fractions, so `0.1 + 0.2` is `0.3` and `2/8` can still be shown as `2/8` when a skill needs it.
-- **Templates are validated before they are used.** 2000 random draws per template check constraints, answers, distractors, prompt length and difficulty, and every failure is named with an example.
+- **Templates are validated before they are used.** 2000 random draws per template check constraints, answers, distractors, prompt length and difficulty, and every failure is named with an example. Distractors that collide are dropped exactly as the game drops them.
 - **The headset is designed to work without the server.** Solo play with bots will run offline, so the game stays playable if the server is down. The core already runs in the browser; the bots come next.
 - **Hands first.** Hand pinch grab is switched on explicitly; the SDK leaves it off by default.
 
@@ -139,31 +139,32 @@ Measured, not claimed. Everything below is reproducible with the commands above.
 
 ### Template validator
 
-| Template | Result |
-|---|---|
-| Decimal addition | pass |
-| Multiples sort (Factory Sort) | pass |
-| Table width estimate (Measure Hunt) | pass |
-| Like-fraction addition | **fail**: two distractors collide too often (usable in 84.5% and 75.1% of items, the rule is 90%) |
+All four example templates pass: decimal addition, like-fraction addition, multiples
+sort (Factory Sort) and table width estimate (Measure Hunt).
 
-The failure is in the content, not the code: when both numerators are 1, "adding the
-denominators" and "multiplying the numerators" give the same wrong answer. The template
-will be changed before it is used.
+The first run failed like-fraction addition: when both numerators are 1, "adding the
+denominators" and "multiplying the numerators" give the same wrong answer, in 15.5% of
+items. The rule now matches what the game does: a distractor equal to the answer or to
+an earlier one is dropped, and at least two different distractors must remain in 90%
+of items. For 1/5 + 1/5 the balloons show 2/5, 2/10 and 3/5. That template now keeps
+two different distractors in every item.
 
 ### Fairness Engine simulation
 
 1000 synthetic students of known ability, 12 candidate items per pick, item difficulties
 known to the engine only with noise; 1000 three-desk matches of 8 minutes.
+Parameters `fp-2026-09-29.2`.
 
-| Check | Item bank difficulty -3 to 3 | Bank with easier items (-4 to 3) | Limit |
-|---|---|---|---|
-| Ability error after 40 items | 0.285 | 0.293 | under 0.35 |
-| Points per minute, strong vs weak student | **16.0% apart** | 8.6% apart | under 15% |
-| Matches where a desk piles up (12 or more waiting) | 0 | 0 | 0 |
-| Matches where highlights were not unique for every player | 0 | 0 | 0 |
+| Check | Result | Limit |
+|---|---|---|
+| Ability error after 40 items | 0.307 | under 0.35 |
+| Points per minute, strong vs weak student | 5.8% apart | under 15% |
+| Points per minute in a first session, strong vs weak | 13.8% apart | under 15% |
+| Matches where a desk piles up (12 or more waiting) | 0 | 0 |
+| Matches where highlights were not unique for every player | 0 | 0 |
 
-- **The engine is fair when the content is.** The gap comes from too few easy items for the weakest students; with easier items it falls to 8.6%.
-- **A first session is not yet fair for weak students.** Without a warm-up they earn about 27% fewer points per minute, because placement starts from the grade level. This is the next thing to fix.
+- **Fairness needed easy items, not a new formula.** With item difficulty limited to -3 the weakest students ran out of items at their level and earned 16.0% fewer points per minute. Allowing templates down to -4 closed most of the gap.
+- **The first session was the hardest part.** Starting from the grade level, weak students first earned 27.1% fewer points. Eight placement items, a larger step down after a wrong answer and easier items together bring it to 13.8%, which passes, but only just.
 - **A first design was wrong and the simulator caught it.** Spawning creatures at a fixed pace piled them up in 983 of 1000 matches; the pace now follows each player's own correct answers.
 
 ### Emulator checks
@@ -186,7 +187,7 @@ Planned, not built. Nothing here is a result.
 
 - **Two games playable solo with bots:** Orb Forge and Balloon Burst, then Factory Sort, Bridge Builder, Balance Gate and Measure Hunt.
 - **Class Match** on a server that decides every answer, with a class screen for the room and Book Keeper for students without a headset.
-- **Fairer first session** and more easy items, then the simulation run again.
+- **Real item bank:** six templates per skill, including very easy ones, then the simulation run again on real difficulties.
 - **Accessibility:** one-handed play, head-gaze and dwell, high contrast, captions, no-timer mode.
 - **Pip, the paper owl coach**, as an optional AI layer that only receives structured data.
 
@@ -207,7 +208,7 @@ Findings that changed the design so far:
 
 - **Grab by hand is off by default in the SDK.** Without switching it on, the game would not be playable with hands alone.
 - **The simulator overruled the first load-balancing design.** A fixed spawn pace piled creatures up almost every match.
-- **Fairness depends on content, not only on the formula.** The weakest students need easy items to exist.
+- **Fairness depends on content, not only on the formula.** The weakest students need easy items to exist, so templates may now go easier than first planned.
 
 ## License
 

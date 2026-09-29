@@ -51,7 +51,14 @@ pub struct Options {
     pub samples: u32,
     pub seed: u64,
     pub min_constraint_rate: f64,
-    pub min_distractor_rate: f64,
+    /// Distinct distractors every item should keep after collisions are dropped.
+    pub min_distinct_distractors: usize,
+    /// Share of draws that must keep `min_distinct_distractors`.
+    pub min_distinct_rate: f64,
+    /// A distractor kept in fewer draws than this is flagged as nearly useless.
+    pub min_distractor_keep_rate: f64,
+    pub b_low: f64,
+    pub b_high: f64,
     pub max_prompt_chars: usize,
     pub max_label_chars: usize,
 }
@@ -62,7 +69,11 @@ impl Default for Options {
             samples: 2000,
             seed: 20260929,
             min_constraint_rate: 0.95,
-            min_distractor_rate: 0.90,
+            min_distinct_distractors: 2,
+            min_distinct_rate: 0.90,
+            min_distractor_keep_rate: 0.50,
+            b_low: -4.0,
+            b_high: 3.0,
             max_prompt_chars: 60,
             max_label_chars: 40,
         }
@@ -79,7 +90,10 @@ pub struct Stats {
     pub b_min: f64,
     pub b_max: f64,
     pub feature_true_counts: Vec<u32>,
+    /// Share of draws in which each distractor is kept (not dropped as a collision).
     pub distractor_ok_rates: Vec<(String, f64)>,
+    /// Share of draws that keep the required number of distinct distractors.
+    pub distinct_distractor_rate: f64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -245,6 +259,7 @@ pub fn validate(template: &ItemTemplate, skills: &SkillCatalog, opts: &Options) 
     let answer_fmt = compiled.answer_format();
     let n_distractors = template.distractors.len();
     let mut distractor_ok = vec![0u32; n_distractors];
+    let mut distinct_ok = 0u32;
     let n_features = template.difficulty.features.len();
     let mut feature_true = vec![0u32; n_features];
 
@@ -397,16 +412,19 @@ pub fn validate(template: &ItemTemplate, skills: &SkillCatalog, opts: &Options) 
                 _ => None,
             })
             .collect();
+        // Same rule as the game: in order, drop a distractor equal to the
+        // answer or to one already kept.
+        let mut kept: Vec<Rational> = Vec::new();
         for (i, v) in values.iter().enumerate() {
             let Some(v) = v else { continue };
-            let differs_from_answer = answer_num.is_none_or(|a| a != *v);
-            let differs_from_others = values
-                .iter()
-                .enumerate()
-                .all(|(j, w)| j == i || w.is_none_or(|w| w != *v));
-            if differs_from_answer && differs_from_others {
-                distractor_ok[i] += 1;
+            if answer_num.is_some_and(|a| a == *v) || kept.contains(v) {
+                continue;
             }
+            kept.push(*v);
+            distractor_ok[i] += 1;
+        }
+        if kept.len() >= opts.min_distinct_distractors.min(n_distractors) {
+            distinct_ok += 1;
         }
     }
 
@@ -428,19 +446,38 @@ pub fn validate(template: &ItemTemplate, skills: &SkillCatalog, opts: &Options) 
         );
     }
     if stats.accepted > 0 {
+        let needs_distractors = !matches!(
+            template.answer_kind,
+            AnswerKind::Predicate | AnswerKind::Estimate
+        );
+        if needs_distractors && n_distractors > 0 {
+            stats.distinct_distractor_rate = distinct_ok as f64 / stats.accepted as f64;
+            if stats.distinct_distractor_rate < opts.min_distinct_rate {
+                c.push(
+                    "distractor_rate",
+                    format!(
+                        "only {:.1}% of items keep {} different distractors (needs {:.0}%)",
+                        stats.distinct_distractor_rate * 100.0,
+                        opts.min_distinct_distractors.min(n_distractors),
+                        opts.min_distinct_rate * 100.0
+                    ),
+                    None,
+                );
+            }
+        }
         for (i, d) in template.distractors.iter().enumerate() {
             let rate = distractor_ok[i] as f64 / stats.accepted as f64;
             stats
                 .distractor_ok_rates
                 .push((d.misconception.clone(), rate));
-            if rate < opts.min_distractor_rate {
+            if needs_distractors && rate < opts.min_distractor_keep_rate {
                 c.push(
-                    "distractor_rate",
+                    "distractor_useless",
                     format!(
-                        "distractor {} is usable in only {:.1}% of draws (needs {:.0}%)",
+                        "distractor {} is kept in only {:.1}% of items (needs {:.0}%)",
                         d.misconception,
                         rate * 100.0,
-                        opts.min_distractor_rate * 100.0
+                        opts.min_distractor_keep_rate * 100.0
                     ),
                     Some(d.expr.clone()),
                 );
@@ -459,12 +496,12 @@ pub fn validate(template: &ItemTemplate, skills: &SkillCatalog, opts: &Options) 
                 );
             }
         }
-        if stats.b_min < -3.0 || stats.b_max > 3.0 {
+        if stats.b_min < opts.b_low || stats.b_max > opts.b_high {
             c.push(
                 "b_range",
                 format!(
-                    "difficulty b ranges {:.2} to {:.2}, outside -3 to 3",
-                    stats.b_min, stats.b_max
+                    "difficulty b ranges {:.2} to {:.2}, outside {} to {}",
+                    stats.b_min, stats.b_max, opts.b_low, opts.b_high
                 ),
                 None,
             );

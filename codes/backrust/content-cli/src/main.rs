@@ -178,7 +178,7 @@ fn run() -> Result<bool, String> {
                 s.b_max
             );
             for (m, rate) in &s.distractor_ok_rates {
-                println!("     distractor {m}: usable in {:.1}%", rate * 100.0);
+                println!("     distractor {m}: kept in {:.1}% of items", rate * 100.0);
             }
             for i in &r.issues {
                 match &i.example {

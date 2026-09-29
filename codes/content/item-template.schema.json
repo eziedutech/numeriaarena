@@ -73,7 +73,7 @@
       "additionalProperties": false,
       "required": ["base"],
       "properties": {
-        "base": { "type": "number", "minimum": -3, "maximum": 3 },
+        "base": { "type": "number", "minimum": -4, "maximum": 3 },
         "features": {
           "type": "array",
           "items": {

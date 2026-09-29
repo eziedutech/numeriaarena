@@ -46,19 +46,8 @@ fn num(env: &foldlings_core::dsl::Env, name: &str) -> Rational {
     }
 }
 
-/// Known content finding (29 Sep 2026), waiting for a decision: in
-/// tpl.fr.add_like.v1 two distractors collide too often (a = b = 1 makes
-/// add_denominators equal multiply_numerators; a = b = 2 makes
-/// multiply_numerators equal the answer). Exact rates 84.5% and 75.1%,
-/// below the 90% rule. When the template is fixed, move it to PASSING.
-const PASSING: [&str; 3] = [
-    "tpl.dc.add.v1",
-    "tpl.md.multiples_sort.v1",
-    "tpl.me.table_width.v1",
-];
-
 #[test]
-fn examples_pass_the_validator_except_the_known_finding() {
+fn all_four_examples_pass_the_validator() {
     let skills = SkillCatalog::from_json(SKILLS).unwrap();
     for (id, text) in EXAMPLES {
         let t = ItemTemplate::from_json(text).unwrap();
@@ -68,23 +57,7 @@ fn examples_pass_the_validator_except_the_known_finding() {
             !report.not_checked.is_empty(),
             "skipped checks must be named"
         );
-        if PASSING.contains(&id) {
-            assert!(report.passed, "{id} failed: {:#?}", report.issues);
-        } else {
-            let failing: Vec<(&str, Option<&str>)> = report
-                .issues
-                .iter()
-                .map(|i| (i.code, i.example.as_deref()))
-                .collect();
-            assert_eq!(
-                failing,
-                vec![
-                    ("distractor_rate", Some("frac(a + b, d + d)")),
-                    ("distractor_rate", Some("frac(a * b, d)"))
-                ],
-                "{id}"
-            );
-        }
+        assert!(report.passed, "{id} failed: {:#?}", report.issues);
     }
 }
 
@@ -123,9 +96,18 @@ fn validator_catches_broken_templates() {
     t.constraints = vec!["a + b < 3".into()];
     assert!(codes(&t).contains(&"constraint_rate"));
 
+    // Two distractors equal to the answer leave only one distinct distractor.
     let mut t = template("tpl.fr.add_like.v1");
     t.distractors[0].expr = "frac(a + b, d)".into();
-    assert!(codes(&t).contains(&"distractor_rate"));
+    t.distractors[1].expr = "frac(a + b, d)".into();
+    let found = codes(&t);
+    assert!(found.contains(&"distractor_rate"), "{found:?}");
+    assert!(found.contains(&"distractor_useless"), "{found:?}");
+
+    // Colliding distractors are dropped, not fatal, while two different ones remain.
+    let mut t = template("tpl.fr.add_like.v1");
+    t.distractors[0].expr = "frac(a + b, d)".into();
+    assert!(!codes(&t).contains(&"distractor_rate"));
 
     let mut t = template("tpl.fr.add_like.v1");
     t.difficulty.features[0].when = "d > 100".into();

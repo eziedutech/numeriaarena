@@ -13,33 +13,26 @@ fn small() -> SimConfig {
 }
 
 #[test]
-fn rating_error_stuck_desks_and_highlights_pass_with_the_default_bank() {
+fn every_criterion_passes_with_the_default_bank() {
     let report = run(&small(), &FairnessParams::default());
-    for c in report
-        .criteria
-        .iter()
-        .filter(|c| !c.name.starts_with("points per minute"))
-    {
+    for c in &report.criteria {
         assert!(c.passed, "{}: {} (limit {})", c.name, c.value, c.limit);
     }
     assert!(report.max_waiting_any_desk < small().stuck_at);
     assert!(!report.not_checked.is_empty());
 }
 
-/// Known finding (29 Sep 2026): with the item bank limited to b in [-3, 3]
-/// the weakest simulated students (theta -1.5) run out of easy items and the
-/// gap is about 16%. With easy items down to b = -4 it is about 9%. This
-/// test uses the wider bank until the content decision is made.
+/// Without easy items (b only down to -3) the weakest students run out of
+/// items at their level; this is why templates may go down to b = -4.
 #[test]
-fn points_per_minute_are_fair_when_the_bank_has_easy_items() {
+fn a_bank_without_easy_items_is_unfair() {
     let cfg = SimConfig {
-        bank_low: -4.0,
-        bank_high: 3.0,
+        bank_low: -3.0,
         ..small()
     };
     let report = run(&cfg, &FairnessParams::default());
     assert!(
-        report.points_per_min_gap < 0.15,
+        report.points_per_min_gap > 0.10,
         "gap {}",
         report.points_per_min_gap
     );
