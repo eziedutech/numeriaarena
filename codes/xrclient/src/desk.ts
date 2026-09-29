@@ -12,6 +12,9 @@ const EDGE_INSET_M = 0.2;
 const TABLE_REACH_M = 1.0;
 /** A table must lie within this angle of where the player faces (cos 60 degrees). */
 const TABLE_FACING_COS = 0.5;
+/** Comfortable table top: this far below the eyes (seated at a desk or on a sofa). */
+const TABLE_DROP_MIN_M = 0.2;
+const TABLE_DROP_MAX_M = 0.75;
 /** After this long with the pinch ghost, the book is put in front of the player. */
 const PINCH_WAIT_S = 6;
 /** Seated desk: this far below the eyes and this far in front. */
@@ -131,6 +134,9 @@ export class DeskSystem extends createSystem({
       const nz = Math.min(Math.max(this.head.z, this.box.min.z), this.box.max.z);
       const reach = Math.hypot(this.head.x - nx, this.head.z - nz);
       if (reach > TABLE_REACH_M) continue;
+      // Skip tables at knee height for a standing player, or above the chest.
+      const drop = this.head.y - this.box.max.y;
+      if (drop < TABLE_DROP_MIN_M || drop > TABLE_DROP_MAX_M) continue;
       // Skip tables beside or behind the player: the book must appear in view.
       this.player.head.getWorldDirection(this.forward).negate();
       this.forward.y = 0;

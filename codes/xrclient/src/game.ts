@@ -30,7 +30,12 @@ const MERGE_DWELL_S = 0.4;
 /** A crystal or orb reaches the creature this close to its centre. */
 const HIT_DIST = 0.07;
 /** Where the creature stands, in the desk frame (reader on +Z). */
-const STAND = new Vector3(0, 0.0, 0.035);
+const STAND = new Vector3(0, 0.0, 0.06);
+/** Rows in front of the creature, still within seated reach. */
+const BALLOON_Z = 0.17;
+const CRYSTAL_Z = 0.2;
+/** Balloon Burst question card, above the balloons so nothing hides it. */
+const PROMPT_POS = new Vector3(0, 0.27, BALLOON_Z);
 const HOME = new Vector3(0, 0.02, -0.07);
 
 interface Tween {
@@ -67,6 +72,7 @@ export class GameSystem extends createSystem({
   private waveStart = 0;
   private score!: Label;
   private flagLabel?: Label;
+  private prompt?: Label;
   private labels = new Set<Mesh>();
   private tweens: Tween[] = [];
   private head = new Vector3();
@@ -78,7 +84,7 @@ export class GameSystem extends createSystem({
 
   init(): void {
     this.score = new Label('Foldlings', { height: 0.04 });
-    this.score.mesh.position.set(0, 0.26, -0.1);
+    this.score.mesh.position.set(0, 0.34, -0.05);
     this.score.mesh.name = 'score-label';
     this.labels.add(this.score.mesh);
 
@@ -175,8 +181,17 @@ export class GameSystem extends createSystem({
     root.scale.setScalar(0.2);
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
-    const flagText = offer.game === 'orb_forge' ? offer.target!.text : offer.prompt.en;
-    const flagLabel = new Label(flagText, { height: offer.game === 'orb_forge' ? 0.05 : 0.032 });
+    // Orb Forge shows the target on the flag; Balloon Burst puts the question on its own card.
+    const flagText = offer.game === 'orb_forge' ? offer.target!.text : '?';
+    const flagLabel = new Label(flagText, { height: offer.game === 'orb_forge' ? 0.05 : 0.04 });
+    if (offer.game === 'balloon_burst') {
+      this.clearPrompt();
+      this.prompt = new Label(offer.prompt.en, { height: 0.036 });
+      this.prompt.mesh.name = 'prompt-label';
+      this.prompt.mesh.position.copy(PROMPT_POS);
+      this.deskEntity()!.object3D!.add(this.prompt.mesh);
+      this.labels.add(this.prompt.mesh);
+    }
     flagLabel.mesh.name = 'flag-label';
     flag.add(flagLabel.mesh);
     this.labels.add(flagLabel.mesh);
@@ -198,11 +213,11 @@ export class GameSystem extends createSystem({
     offer.balloons.forEach((b, i) => {
       const g = makeBalloon(i % 2 === 0 ? 0xf2cc8f : 0x81b29a);
       g.name = `balloon-${i}`;
-      g.position.set((i - (n - 1) / 2) * 0.085, 0.02, 0.1);
+      g.position.set((i - (n - 1) / 2) * 0.085, 0.02, BALLOON_Z);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
       this.label(b.text, 0.03, g, 0.075, 0.033);
-      this.tween(g, new Vector3(g.position.x, 0.1, 0.1), 0.5, 0, 1, () => e.addComponent(PokeInteractable));
+      this.tween(g, new Vector3(g.position.x, 0.1, BALLOON_Z), 0.5, 0, 1, () => e.addComponent(PokeInteractable));
     });
   }
 
@@ -213,7 +228,7 @@ export class GameSystem extends createSystem({
     offer.crystals.forEach((c, i) => {
       const m = makeCrystal(0x9b7bb8);
       m.name = `crystal-${i}`;
-      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, 0.03, 0.15);
+      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, 0.03, CRYSTAL_Z);
       const e = this.add(m);
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);
@@ -274,6 +289,7 @@ export class GameSystem extends createSystem({
       this.clear(this.queries.crystals);
       this.clear(this.queries.orbs);
       this.flagLabel?.set(`= ${v.expected_text}`);
+      this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
       this.phase = 'between';
       this.tween(obj, HOME, 1.4, 0.02, 0.2, () => {
         this.remove(creature);
@@ -295,7 +311,15 @@ export class GameSystem extends createSystem({
     });
   }
 
+  private clearPrompt(): void {
+    if (!this.prompt) return;
+    this.prompt.mesh.removeFromParent();
+    this.labels.delete(this.prompt.mesh);
+    this.prompt = undefined;
+  }
+
   private next(): void {
+    this.clearPrompt();
     this.played += 1;
     this.offer = undefined;
     if (this.played >= WAVE) {

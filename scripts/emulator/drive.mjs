@@ -10,7 +10,13 @@ const CWD = new URL('../../codes/xrclient/', import.meta.url).pathname.replace(/
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
 function cli(...args) {
-  const out = execFileSync(BUN, ['x', 'iwsdk', ...args, '--raw'], { cwd: CWD, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  let out;
+  try {
+    out = execFileSync(BUN, ['x', 'iwsdk', ...args, '--raw'], { cwd: CWD, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (error) {
+    // A refused command (for example entering XR twice) still prints its JSON reply.
+    out = error.stdout ?? '';
+  }
   try { return JSON.parse(out); } catch { return out; }
 }
 const j = (o) => JSON.stringify(o);
@@ -28,13 +34,15 @@ export const w = (x, y, z) => {
   return { x: D.p[0] + x * c + z * s, y: D.p[1] + y, z: D.p[2] - x * s + z * c };
 };
 const TIP = { x: -0.034, y: 0.064, z: -0.033 }; // index tip relative to hand-right, identity orientation
-const GRAB_X = 0.075; // grab point sits this far toward -X (desk frame) from the index tip
+// Hand grab point relative to the index tip, in WORLD axes (hand kept at identity orientation).
+const GRAB = { x: 0, y: 0, z: 0.075 };
 const wristFor = (p) => ({ x: p.x - TIP.x, y: p.y - TIP.y, z: p.z - TIP.z });
 const ID = { x: 0, y: 0, z: 0, w: 1 };
 export const tip = (x, y, z) => cli('xr', 'set-transform', '--input-json', j({ device: 'hand-right', position: wristFor(w(x, y, z)), orientation: ID }));
-export const grabAt = (x, y, z) => tip(x + GRAB_X, y, z);
+const tipForGrab = (x, y, z) => { const g = w(x, y, z); return { x: g.x - GRAB.x, y: g.y - GRAB.y, z: g.z - GRAB.z }; };
+export const grabAt = (x, y, z) => cli('xr', 'set-transform', '--input-json', j({ device: 'hand-right', position: wristFor(tipForGrab(x, y, z)), orientation: ID }));
 export const glideGrab = (x, y, z, d = 0.6) =>
-  cli('xr', 'animate-to', '--input-json', j({ device: 'hand-right', position: wristFor(w(x + GRAB_X, y, z)), orientation: ID, duration: d }));
+  cli('xr', 'animate-to', '--input-json', j({ device: 'hand-right', position: wristFor(tipForGrab(x, y, z)), orientation: ID, duration: d }));
 export const pinch = (v) => cli('xr', 'set-select-value', '--input-json', j({ device: 'hand-right', value: v }));
 
 export function find(pattern) {
@@ -55,8 +63,19 @@ export function logs(pattern, n = 1) {
 
 export async function fresh() {
   cli('browser', 'reload'); await sleep(7);
+  await seat();
+}
+
+/** Enters XR, waits for the book to land, and seats the head in front of it. */
+export async function seat() {
   cli('xr', 'enter'); await sleep(5);
-  cli('xr', 'set-input-mode', '--input-json', j({ mode: 'hand' })); await sleep(1.5);
+  cli('xr', 'set-input-mode', '--input-json', j({ mode: 'hand' }));
+  // The book may take up to about 9 s to land (table search, then pinch wait).
+  for (let i = 0; i < 30; i++) {
+    const p = posOf('^desk-root$');
+    if (p?.comps.find((c) => c.componentId === 'DeskRoot')?.values.placed) break;
+    await sleep(0.5);
+  }
   desk();
   cli('xr', 'set-transform', '--input-json', j({ device: 'headset', position: w(0, 0.42, 0.45) }));
   cli('xr', 'look-at', '--input-json', j({ device: 'headset', target: w(0, 0.06, 0) }));
@@ -91,7 +110,7 @@ export async function orbRound() {
   if (!orb) return { line, result: 'no orb formed' };
   const parts = orb.comps.find((c) => c.componentId === 'Orb').values;
   grabAt(orb.x, orb.y, orb.z); await sleep(0.3); pinch(1); await sleep(0.4);
-  await carry('^orb$', orb, { x: 0, y: 0.05, z: 0.035 });
+  await carry('^orb$', orb, { x: 0, y: 0.05, z: 0.06 });
   await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(2.5);
   return { line, pair, orbParts: [parts.first, parts.second], result: logs('orb ', 1)[0] };
 }

@@ -51,7 +51,8 @@ export function makeBook(): Group {
       -w, h, 0, w, h, 0, 0, h + 0.022, 0,
     ];
     const house = folded(tris, color);
-    house.position.set(x, 0.018, -0.05 + Math.abs(x) * 0.3);
+    // Along the back edge of the pages, leaving the front for the creature.
+    house.position.set(x, 0.018, -0.085);
     house.rotation.x = -0.12;
     book.add(house);
   }
