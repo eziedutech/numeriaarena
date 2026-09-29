@@ -3,7 +3,7 @@ import { createComponent, Types } from '@iwsdk/core';
 /** Root of the play area on the real desk. Every game object is its child. */
 export const DeskRoot = createComponent('DeskRoot', {
   placed: { type: Types.Boolean, default: false },
-  /** How it was placed: 0 not yet, 1 detected table, 2 pinch, 3 browser preview. */
+  /** How it was placed: 0 not yet, 1 detected table, 2 pinch, 3 browser preview, 4 in front of the player. */
   method: { type: Types.Int8, default: 0 },
 });
 

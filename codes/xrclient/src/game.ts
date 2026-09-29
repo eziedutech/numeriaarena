@@ -108,11 +108,12 @@ export class GameSystem extends createSystem({
     return this.world.createTransformEntity(obj, { parent: desk });
   }
 
-  private label(text: string, height: number, parent: Object3D, y: number, z = 0): Label {
+  /** Adds a text card. `billboard: false` keeps it flat on its parent's +Z face. */
+  private label(text: string, height: number, parent: Object3D, y: number, z = 0, billboard = true): Label {
     const l = new Label(text, { height });
     l.mesh.position.set(0, y, z);
     parent.add(l.mesh);
-    this.labels.add(l.mesh);
+    if (billboard) this.labels.add(l.mesh);
     return l;
   }
 
@@ -142,7 +143,7 @@ export class GameSystem extends createSystem({
       const e = this.add(button);
       e.addComponent(MenuButton, { game });
       e.addComponent(PokeInteractable);
-      this.label(title, 0.026, button, 0, 0.008);
+      this.label(title, 0.017, button, 0, 0.0075, false);
     }
   }
 
@@ -348,8 +349,9 @@ export class GameSystem extends createSystem({
     }
     this.runTweens(delta);
 
-    // Labels always face the player.
-    this.player.head.getWorldPosition(this.head);
+    // Labels always face the camera that renders them (the head in XR,
+    // the browser camera outside it).
+    this.camera.getWorldPosition(this.head);
     for (const m of this.labels) if (m.parent) m.lookAt(this.head);
 
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;

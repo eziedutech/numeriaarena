@@ -32,6 +32,9 @@ export class PanelSystem extends createSystem({}) {
         const is2D = visibilityState === VisibilityState.NonImmersive;
         xrButton.setProperties({ display: is2D ? 'flex' : 'none' });
         exitButton.setProperties({ display: is2D ? 'none' : 'flex' });
+        // In XR the panel would float in front of the player's face; the
+        // headset's own system menu exits the session instead.
+        panel!.visible = is2D;
       }),
     );
   }

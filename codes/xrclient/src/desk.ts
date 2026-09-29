@@ -1,4 +1,4 @@
-import { Box3, createSystem, Group, Vector3, VisibilityState, XRMesh } from '@iwsdk/core';
+import { Box3, Color, createSystem, Group, Vector3, VisibilityState, XRMesh } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { makeBook } from './art/models.js';
@@ -8,10 +8,22 @@ import { DeskRoot } from './game-components.js';
 const TABLE_WAIT_S = 3;
 /** How far the book sits inside the table edge nearest the player. */
 const EDGE_INSET_M = 0.2;
+/** A table farther than this (horizontally, from the head) is out of seated reach. */
+const TABLE_REACH_M = 1.0;
+/** A table must lie within this angle of where the player faces (cos 60 degrees). */
+const TABLE_FACING_COS = 0.5;
+/** After this long with the pinch ghost, the book is put in front of the player. */
+const PINCH_WAIT_S = 6;
+/** Seated desk: this far below the eyes and this far in front. */
+const SEATED_DROP_M = 0.45;
+const SEATED_REACH_M = 0.45;
+/** Paper cream behind the browser preview; XR keeps the background clear for passthrough. */
+const PREVIEW_BACKGROUND = new Color(0xf6e3c0);
 
 /**
- * Places the play area. A detected real table wins; otherwise the player
- * pinches to put the book down. The flow never dead-ends on an unknown room.
+ * Places the play area. A detected table within seated reach wins; otherwise
+ * the player pinches to put the book down, and if they do not, it lands in
+ * front of them. The flow never dead-ends on an unknown room.
  */
 export class DeskSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -25,6 +37,7 @@ export class DeskSystem extends createSystem({
   private corner = new Vector3();
   private head = new Vector3();
   private tip = new Vector3();
+  private forward = new Vector3();
 
   init(): void {
     this.root = new Group();
@@ -51,11 +64,13 @@ export class DeskSystem extends createSystem({
         immersive = now;
         this.waited = 0;
         this.setPlaced(false, 0);
+        this.scene.background = now ? null : PREVIEW_BACKGROUND;
         if (!now) this.placeForBrowser();
       }),
     );
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive && immersive === null) {
       immersive = false;
+      this.scene.background = PREVIEW_BACKGROUND;
       this.placeForBrowser();
     }
   }
@@ -75,9 +90,26 @@ export class DeskSystem extends createSystem({
   }
 
   private placeForBrowser(): void {
-    this.root.position.set(0, 0.72, -0.35);
+    this.root.position.set(0, 0.8, -0.2);
     this.root.rotation.set(0, 0, 0);
+    // Frame the whole book from the browser camera.
+    this.camera.lookAt(0, 0.86, -0.22);
     this.setPlaced(true, 3);
+  }
+
+  private placeInFront(): void {
+    this.player.head.getWorldPosition(this.head);
+    // The head looks down its -Z axis; keep only the horizontal part.
+    this.player.head.getWorldDirection(this.forward).negate();
+    this.forward.y = 0;
+    if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
+    this.forward.normalize();
+    const x = this.head.x + this.forward.x * SEATED_REACH_M;
+    const z = this.head.z + this.forward.z * SEATED_REACH_M;
+    this.root.position.set(x, this.head.y - SEATED_DROP_M, z);
+    this.root.rotation.set(0, Math.atan2(this.head.x - x, this.head.z - z), 0);
+    this.setPlaced(true, 4);
+    console.info('[desk] no reachable table and no pinch: placed in front of the player');
   }
 
   private placeOnTable(): boolean {
@@ -94,6 +126,18 @@ export class DeskSystem extends createSystem({
         this.box.expandByPoint(this.corner.applyMatrix4(obj.matrixWorld));
       }
       this.player.head.getWorldPosition(this.head);
+      // Skip tables the seated player cannot reach.
+      const nx = Math.min(Math.max(this.head.x, this.box.min.x), this.box.max.x);
+      const nz = Math.min(Math.max(this.head.z, this.box.min.z), this.box.max.z);
+      const reach = Math.hypot(this.head.x - nx, this.head.z - nz);
+      if (reach > TABLE_REACH_M) continue;
+      // Skip tables beside or behind the player: the book must appear in view.
+      this.player.head.getWorldDirection(this.forward).negate();
+      this.forward.y = 0;
+      const cx = (this.box.min.x + this.box.max.x) / 2 - this.head.x;
+      const cz = (this.box.min.z + this.box.max.z) / 2 - this.head.z;
+      const len = Math.hypot(cx, cz) * Math.hypot(this.forward.x, this.forward.z);
+      if (len > 1e-6 && (cx * this.forward.x + cz * this.forward.z) / len < TABLE_FACING_COS) continue;
       const inset = (lo: number, hi: number, v: number) =>
         hi - lo > 2 * EDGE_INSET_M ? Math.min(Math.max(v, lo + EDGE_INSET_M), hi - EDGE_INSET_M) : (lo + hi) / 2;
       const x = inset(this.box.min.x, this.box.max.x, this.head.x);
@@ -127,6 +171,8 @@ export class DeskSystem extends createSystem({
       this.root.rotation.copy(this.ghost.rotation);
       this.setPlaced(true, 2);
       console.info('[desk] placed by pinch');
+      return;
     }
+    if (this.waited >= TABLE_WAIT_S + PINCH_WAIT_S) this.placeInFront();
   }
 }
