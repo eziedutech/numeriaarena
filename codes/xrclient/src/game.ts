@@ -12,7 +12,7 @@ import {
 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
-import { makeBalloon, makeBird, makeButton, makeCrystal, makeFoldling, makeOrb } from './art/models.js';
+import { forgetMixers, makeBalloon, makeBird, makeButton, makeCrystal, makeFoldling, makeOrb, mixers } from './art/models.js';
 import { accentForSkill } from './art/palette.js';
 import {
   Core,
@@ -158,6 +158,7 @@ export class GameSystem extends createSystem({
   }
 
   private remove(e: Entity): void {
+    if (e.object3D) forgetMixers(e.object3D);
     e.object3D?.traverse((o) => this.labels.delete(o as Mesh));
     e.dispose();
   }
@@ -408,7 +409,7 @@ export class GameSystem extends createSystem({
       g.position.set((i - (n - 1) / 2) * 0.085, 0.02, BALLOON_Z);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
-      this.label(b.text, 0.03, g, 0.075, 0.033);
+      this.label(b.text, 0.03, g, 0.0875, 0.034);
       this.tween(g, new Vector3(g.position.x, 0.1, BALLOON_Z), 0.5, 0, 1, () => e.addComponent(PokeInteractable));
     });
   }
@@ -418,7 +419,7 @@ export class GameSystem extends createSystem({
     this.clear(this.queries.crystals);
     const n = offer.crystals.length;
     offer.crystals.forEach((c, i) => {
-      const m = makeCrystal(0x9b7bb8);
+      const m = makeCrystal(0xb7a3e0);
       m.name = `crystal-${i}`;
       m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, 0.03, CRYSTAL_Z);
       const e = this.add(m);
@@ -520,8 +521,10 @@ export class GameSystem extends createSystem({
   private foldHome(creature: Entity, color: number): void {
     this.phase = 'between';
     const obj = creature.object3D!;
-    const bird = makeBird(color);
+    const bird = makeBird(color).root;
     bird.position.copy(obj.position).add(new Vector3(0, 0.05, 0));
+    // The bird flies towards its +X; turn it to head for the book.
+    bird.rotation.y = Math.PI / 2;
     const birdEntity = this.add(bird);
     this.remove(creature);
     this.tween(bird, new Vector3(0, 0.08, -0.1), 0.9, 0.12, 0.4, () => {
@@ -596,6 +599,7 @@ export class GameSystem extends createSystem({
       this.showMenu();
     }
     this.runTweens(delta);
+    for (const m of mixers) m.update(delta);
     if (this.squad) this.updateSquad(delta);
 
     // Labels always face the camera that renders them (the head in XR,

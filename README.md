@@ -220,6 +220,7 @@ Planned, not built. Nothing here is a result.
 - **React Router**, **React**, **Tailwind CSS**, **Vite** (MIT), **TypeScript** (Apache-2.0).
 - **serde**, **serde_json**, **sha2**, **wasm-bindgen** (MIT or Apache-2.0), **jsonschema** (MIT).
 - **Bun** (MIT) as package manager and script runner.
+- **Origami models** (book, portal, paper bird, flag, crystals, balloons, buttons, partner robots, stars, badges) from [orimathassets](https://github.com/sayazia/orimathassets), made by the same owner for this game, CC0 1.0. Copied by `scripts/sync-assets.mjs`, which records the source commit in `public/models/manifest.json`.
 
 ## How this was built
 

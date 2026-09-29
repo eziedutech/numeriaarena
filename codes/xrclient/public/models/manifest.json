@@ -1,0 +1,727 @@
+{
+  "source": "https://github.com/sayazia/orimathassets",
+  "commit": "92d8c1d9f253d11cefdf433d083cdd55a7f6437b",
+  "license": "CC0-1.0 (models); same owner as this game",
+  "assets": [
+    {
+      "name": "popup_book",
+      "category": "book",
+      "sheet": "book",
+      "file": "book/popup_book.glb",
+      "unit": "m",
+      "triangles": 380,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.18,
+          -0.0015,
+          -0.12
+        ],
+        "max": [
+          0.18,
+          0.0234,
+          0.12
+        ]
+      },
+      "anchors": {
+        "spawn_anchor": [
+          -0.09,
+          0.0217,
+          0
+        ],
+        "exit_anchor": [
+          0,
+          0.06,
+          0
+        ],
+        "town_origin": [
+          0.09,
+          0.0217,
+          0
+        ]
+      },
+      "parts": [
+        "spine",
+        "cover_left",
+        "pages_left",
+        "page_hinge_left",
+        "cover_right",
+        "pages_right",
+        "page_hinge_right"
+      ],
+      "materials": [
+        "gold",
+        "navy",
+        "navy_shade",
+        "paper",
+        "paper_shade"
+      ],
+      "notes": "Open flat. spawn_anchor: centre of the left page; town_origin: centre of the right page; exit_anchor: 6 cm above the spine. page_hinge_* hold the top leaf (rotate about z to turn a page)."
+    },
+    {
+      "name": "portal_main",
+      "category": "game",
+      "sheet": "portal",
+      "file": "game/portal/portal_main.glb",
+      "unit": "m",
+      "triangles": 364,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.07,
+          0,
+          -0.01
+        ],
+        "max": [
+          0.07,
+          0.142,
+          0.01
+        ]
+      },
+      "anchors": {
+        "spawn_anchor": [
+          0,
+          0,
+          0.014
+        ]
+      },
+      "parts": [
+        "ring_outer",
+        "ring_inner"
+      ],
+      "materials": [
+        "gold",
+        "lavender",
+        "navy",
+        "violet",
+        "violet_shade"
+      ],
+      "notes": "Stands upright on its feet at the edge of the book. ring_inner spins about z around the portal centre (0, 0.072, 0). spawn_anchor on the table just in front."
+    },
+    {
+      "name": "paper_bird",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/paper_bird.glb",
+      "unit": "m",
+      "triangles": 186,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.0035,
+          -0.0351
+        ],
+        "max": [
+          0.03,
+          0.009,
+          0.0351
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "body",
+        "eyes_happy",
+        "wing_l",
+        "wing_r"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "flap"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ],
+      "notes": "Flying form after a correct answer. Origin at the body centre; flies towards +x."
+    },
+    {
+      "name": "flag_small",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/flag_small.glb",
+      "unit": "m",
+      "triangles": 96,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0025,
+          0,
+          -0.0026
+        ],
+        "max": [
+          0.0516,
+          0.0926,
+          0.0026
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0.0265,
+          0.0685,
+          0.0018
+        ]
+      },
+      "parts": [
+        "pole",
+        "cloth"
+      ],
+      "materials": [
+        "cream",
+        "cream_shade",
+        "wood",
+        "wood_shade"
+      ],
+      "clips": [
+        "wave"
+      ],
+      "notes": "Origin at the foot of the pole; attach to a Foldling flag_anchor. Plain cream cloth, the game draws the number at label_anchor."
+    },
+    {
+      "name": "crystal",
+      "category": "game",
+      "sheet": "orb_forge",
+      "file": "game/orb_forge/crystal.glb",
+      "unit": "m",
+      "triangles": 48,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0175,
+          -0.025,
+          -0.0175
+        ],
+        "max": [
+          0.0175,
+          0.025,
+          0.0175
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0,
+          0.019
+        ],
+        "hand_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "parts": [
+        "gem"
+      ],
+      "materials": [
+        "lavender",
+        "lavender_shade"
+      ],
+      "notes": "Neutral lavender; the game recolours the lavender materials. Origin at the centre."
+    },
+    {
+      "name": "orb",
+      "category": "game",
+      "sheet": "orb_forge",
+      "file": "game/orb_forge/orb.glb",
+      "unit": "m",
+      "triangles": 174,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.027,
+          -0.025,
+          -0.027
+        ],
+        "max": [
+          0.027,
+          0.0285,
+          0.027
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0,
+          0.028
+        ],
+        "hand_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "parts": [
+        "core"
+      ],
+      "materials": [
+        "gold",
+        "gold_shade",
+        "lavender",
+        "lavender_shade"
+      ],
+      "notes": "Origin at the centre."
+    },
+    {
+      "name": "balloon_round",
+      "category": "game",
+      "sheet": "balloon",
+      "file": "game/balloon/balloon_round.glb",
+      "unit": "m",
+      "triangles": 104,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0319,
+          -0.0001,
+          -0.0319
+        ],
+        "max": [
+          0.0319,
+          0.12,
+          0.0319
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0.0875,
+          0.0335
+        ]
+      },
+      "parts": [
+        "skin",
+        "knot",
+        "string"
+      ],
+      "materials": [
+        "paper",
+        "paper_shade",
+        "sky",
+        "sky_shade"
+      ],
+      "notes": "Origin at the bottom end of the string. Sky blue; the game recolours sky/sky_shade."
+    },
+    {
+      "name": "paper_button",
+      "category": "ui",
+      "sheet": "ui",
+      "file": "ui/paper_button.glb",
+      "unit": "m",
+      "triangles": 36,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.05,
+          0,
+          -0.006
+        ],
+        "max": [
+          0.05,
+          0.065,
+          0.006
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0.0325,
+          0.0065
+        ]
+      },
+      "parts": [
+        "card",
+        "press"
+      ],
+      "materials": [
+        "cream",
+        "cream_shade",
+        "sky",
+        "sky_shade"
+      ],
+      "notes": "Poke from the front. press moves back along -z by up to 0.005 m; the game recolours sky."
+    },
+    {
+      "name": "partner_window",
+      "category": "game",
+      "sheet": "portal",
+      "file": "game/portal/partner_window.glb",
+      "unit": "m",
+      "triangles": 64,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.09,
+          -0.06,
+          -0.005
+        ],
+        "max": [
+          0.09,
+          0.06,
+          0.0065
+        ]
+      },
+      "anchors": {
+        "view_anchor": [
+          0,
+          0,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.068,
+          0
+        ]
+      },
+      "parts": [
+        "frame"
+      ],
+      "materials": [
+        "cream",
+        "cream_shade",
+        "violet",
+        "violet_shade"
+      ],
+      "notes": "Floating frame, origin at its centre. view_anchor: centre of the opening (0.16 x 0.1 m) where the game renders the partner table; label_anchor above for the bot name."
+    },
+    {
+      "name": "robot_partner_a",
+      "category": "characters",
+      "sheet": "characters",
+      "file": "characters/robot_partner_a.glb",
+      "unit": "m",
+      "triangles": 508,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0233,
+          0,
+          -0.011
+        ],
+        "max": [
+          0.0233,
+          0.0785,
+          0.014
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0.1,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "antenna",
+        "arm_l",
+        "arm_r"
+      ],
+      "materials": [
+        "cobalt",
+        "cobalt_shade",
+        "ink",
+        "lemon",
+        "stone",
+        "stone_shade"
+      ],
+      "clips": [
+        "idle",
+        "wave",
+        "cheer",
+        "help"
+      ],
+      "notes": "Boxy robot, cobalt."
+    },
+    {
+      "name": "robot_partner_b",
+      "category": "characters",
+      "sheet": "characters",
+      "file": "characters/robot_partner_b.glb",
+      "unit": "m",
+      "triangles": 510,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0243,
+          0,
+          -0.0148
+        ],
+        "max": [
+          0.0243,
+          0.083,
+          0.017
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0.1,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "antenna",
+        "arm_l",
+        "arm_r"
+      ],
+      "materials": [
+        "ink",
+        "lemon",
+        "stone",
+        "stone_shade",
+        "teal",
+        "teal_shade"
+      ],
+      "clips": [
+        "idle",
+        "wave",
+        "cheer",
+        "help"
+      ],
+      "notes": "Round robot on a wheel, teal."
+    },
+    {
+      "name": "star",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/star.glb",
+      "unit": "m",
+      "triangles": 30,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0238,
+          -0.0202,
+          -0.008
+        ],
+        "max": [
+          0.0238,
+          0.025,
+          0.008
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "star"
+      ],
+      "materials": [
+        "gold",
+        "gold_shade"
+      ],
+      "notes": "Origin at the centre; faces +Z."
+    },
+    {
+      "name": "star_empty",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/star_empty.glb",
+      "unit": "m",
+      "triangles": 120,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0248,
+          -0.0215,
+          -0.0015
+        ],
+        "max": [
+          0.0248,
+          0.0256,
+          0.0015
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "star"
+      ],
+      "materials": [
+        "cream",
+        "cream_shade"
+      ],
+      "notes": "Paper outline of the same star (not yet earned)."
+    },
+    {
+      "name": "badge_best_save",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/badge_best_save.glb",
+      "unit": "m",
+      "triangles": 272,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.046,
+          -0.004
+        ],
+        "max": [
+          0.03,
+          0.03,
+          0.0075
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "badge",
+        "ribbon"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "gold",
+        "gold_shade"
+      ],
+      "notes": "Symbol only, no text. Origin at the disc centre; ribbon hangs below."
+    },
+    {
+      "name": "badge_most_improved",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/badge_most_improved.glb",
+      "unit": "m",
+      "triangles": 228,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.046,
+          -0.004
+        ],
+        "max": [
+          0.03,
+          0.03,
+          0.007
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "badge",
+        "ribbon"
+      ],
+      "materials": [
+        "cream",
+        "gold",
+        "gold_shade",
+        "leaf",
+        "leaf_shade"
+      ],
+      "notes": "Symbol only, no text. Origin at the disc centre; ribbon hangs below."
+    },
+    {
+      "name": "badge_sharpest_aim",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/badge_sharpest_aim.glb",
+      "unit": "m",
+      "triangles": 500,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.046,
+          -0.004
+        ],
+        "max": [
+          0.03,
+          0.03,
+          0.0075
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "badge",
+        "ribbon"
+      ],
+      "materials": [
+        "cobalt",
+        "cobalt_shade",
+        "cream",
+        "gold",
+        "gold_shade"
+      ],
+      "notes": "Symbol only, no text. Origin at the disc centre; ribbon hangs below."
+    },
+    {
+      "name": "badge_steady_streak",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/badge_steady_streak.glb",
+      "unit": "m",
+      "triangles": 352,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.046,
+          -0.004
+        ],
+        "max": [
+          0.03,
+          0.03,
+          0.0068
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "badge",
+        "ribbon"
+      ],
+      "materials": [
+        "cream",
+        "gold",
+        "gold_shade",
+        "violet",
+        "violet_shade"
+      ],
+      "notes": "Symbol only, no text. Origin at the disc centre; ribbon hangs below."
+    },
+    {
+      "name": "badge_brave_try",
+      "category": "rewards",
+      "sheet": "rewards",
+      "file": "rewards/badge_brave_try.glb",
+      "unit": "m",
+      "triangles": 232,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.03,
+          -0.046,
+          -0.004
+        ],
+        "max": [
+          0.03,
+          0.03,
+          0.0082
+        ]
+      },
+      "anchors": {},
+      "parts": [
+        "badge",
+        "ribbon"
+      ],
+      "materials": [
+        "cream",
+        "gold",
+        "gold_shade",
+        "orange",
+        "orange_shade"
+      ],
+      "notes": "Symbol only, no text. Origin at the disc centre; ribbon hangs below."
+    }
+  ]
+}

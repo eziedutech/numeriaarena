@@ -1,17 +1,33 @@
 import { Color, DoubleSide, FrontSide, MeshStandardMaterial } from '@iwsdk/core';
 
-/** Paper cream and ink navy, plus one accent per mission. */
-export const PAPER = 0xf4ecd8;
-export const PAPER_SHADE = 0xe2d5b8;
-export const INK = 0x1f2a44;
+/**
+ * Colours follow the origami asset set's palette (its `ROLES`), so procedural
+ * props and the imported models read as one set of paper.
+ */
+export const PAPER = 0xfff8ec;
+export const PAPER_SHADE = 0xf6e3c0; // `cream`, the back of the paper
+export const INK = 0x3a3f4b;
+export const CORRECT = 0x5db85b;
+export const TRY_AGAIN = 0xf8961e;
+export const GOLD = 0xe8b64c;
 
-export const ACCENTS = {
-  place_value: 0xe07a5f,
-  multiply_divide: 0x3d8fb8,
-  fractions: 0x81b29a,
-  decimals: 0xf2cc8f,
-  measurement: 0x9b7bb8,
-} as const;
+export type Mission = 'place_value' | 'multiply_divide' | 'fractions' | 'decimals' | 'measurement';
+
+export const ACCENTS: Record<Mission, number> = {
+  place_value: 0xf2716b, // coral
+  multiply_divide: 0x3469c4, // cobalt
+  fractions: 0x3fb6a0, // teal
+  decimals: 0xf9c74f, // sunflower
+  measurement: 0xb198ea, // violet
+};
+
+/** The side of a fold facing away from the light: about 11% darker and a touch warmer. */
+export function shade(color: number): number {
+  const r = Math.round(((color >> 16) & 255) * 0.91);
+  const g = Math.round(((color >> 8) & 255) * 0.89);
+  const b = Math.round((color & 255) * 0.86);
+  return (r << 16) | (g << 8) | b;
+}
 
 const cache = new Map<string, MeshStandardMaterial>();
 
@@ -22,7 +38,7 @@ export function paper(color: number, opts: { doubleSide?: boolean; emissive?: nu
   if (!m) {
     m = new MeshStandardMaterial({
       color: new Color(color),
-      roughness: 0.92,
+      roughness: 0.95,
       metalness: 0,
       flatShading: true,
       side: opts.doubleSide ? DoubleSide : FrontSide,
@@ -33,11 +49,16 @@ export function paper(color: number, opts: { doubleSide?: boolean; emissive?: nu
   return m;
 }
 
+/** Mission for a skill code such as FR.ADD.LIKE. */
+export function missionForSkill(skill: string): Mission {
+  if (skill.startsWith('PV')) return 'place_value';
+  if (skill.startsWith('MD')) return 'multiply_divide';
+  if (skill.startsWith('FR')) return 'fractions';
+  if (skill.startsWith('DC')) return 'decimals';
+  return 'measurement';
+}
+
 /** Colour for a skill code such as FR.ADD.LIKE. */
 export function accentForSkill(skill: string): number {
-  if (skill.startsWith('PV')) return ACCENTS.place_value;
-  if (skill.startsWith('MD')) return ACCENTS.multiply_divide;
-  if (skill.startsWith('FR')) return ACCENTS.fractions;
-  if (skill.startsWith('DC')) return ACCENTS.decimals;
-  return ACCENTS.measurement;
+  return ACCENTS[missionForSkill(skill)];
 }

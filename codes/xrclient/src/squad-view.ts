@@ -1,8 +1,7 @@
 import { Entity, Group, Object3D, Vector3 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
-import { makeBot, makeFoldling, makeOrb, makePortal, makeStar, makeTeamCrystal } from './art/models.js';
-import { PAPER_SHADE } from './art/palette.js';
+import { makeBadge, makeBot, makeFoldling, makeOrb, makePortal, makeStar, makeTeamCrystal, type Figure } from './art/models.js';
 import type { Emote, Recap, SquadState } from './game/core.js';
 import { T } from './text.js';
 
@@ -10,8 +9,11 @@ import { T } from './text.js';
 const WINDOW_POS = [new Vector3(-0.3, 0.2, 0.02), new Vector3(0.3, 0.2, 0.02)];
 /** Windows turn toward the player's side of the desk. */
 const WINDOW_YAW = [0.45, -0.45];
-const BOT_COLORS = [0x3d8fb8, 0xe07a5f];
-const CRYSTAL_POS = new Vector3(0.15, 0.0, -0.03);
+/** Frame colours match the robots: cobalt (a) and teal (b). */
+const BOT_COLORS = [0x3469c4, 0x3fb6a0];
+const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave', help: 'help' };
+/** On the table just past the book's right edge, clear of the balloon and crystal rows. */
+const CRYSTAL_POS = new Vector3(0.22, 0.0, -0.06);
 const BOSS_POS = new Vector3(0, 0.0, -0.06);
 /** A flash label stays up this long (seconds). */
 const FLASH_S = 1.6;
@@ -26,7 +28,7 @@ export interface Stage {
 
 interface BotWindow {
   entity: Entity;
-  bot: Object3D;
+  bot: Figure;
   name: Label;
   status: Label;
   work: Label;
@@ -61,13 +63,14 @@ export class SquadScene {
       frame.position.copy(WINDOW_POS[i]);
       frame.rotation.y = WINDOW_YAW[i];
       const entity = stage.add(frame);
-      const bot = makeBot(BOT_COLORS[i]);
-      bot.position.set(0, -0.058, 0.004);
-      bot.scale.setScalar(1.1);
-      frame.add(bot);
-      const nameLabel = stage.label(T.bot(name), 0.02, frame, -0.095, 0.006, false);
-      const status = stage.label(T.waiting(0), 0.016, frame, 0.095, 0.006, false);
-      const work = stage.label(' ', 0.016, frame, 0.042, 0.006, false);
+      const bot = makeBot(i === 0 ? 0 : 1, BOT_COLORS[i]);
+      // The robot stands in the lower half of the dark opening.
+      bot.root.position.set(0, -0.048, 0.003);
+      bot.root.scale.setScalar(0.95);
+      frame.add(bot.root);
+      const nameLabel = stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
+      const status = stage.label(T.waiting(0), 0.022, frame, 0.08, 0.008, false);
+      const work = stage.label(' ', 0.02, frame, 0.036, 0.008, false);
       const flash = stage.label(' ', 0.022, frame, 0.0, 0.03, false);
       flash.mesh.visible = false;
       work.mesh.visible = false;
@@ -109,8 +112,7 @@ export class SquadScene {
 
   emote(desk: number, emote: Emote): void {
     this.flash(desk, T.emote[emote]);
-    const w = this.windows[desk - 1];
-    if (w) this.stage.tween(w.bot, w.bot.position.clone(), 0.35, 0.02, 1.1);
+    this.windows[desk - 1]?.bot.play(EMOTE_CLIP[emote], true);
   }
 
   working(desk: number, prompt: string): void {
@@ -207,8 +209,9 @@ export class SquadScene {
     const e = this.stage.add(card);
     this.recapItems.push(e);
     for (let i = 0; i < 3; i += 1) {
-      const star = makeStar(i < recap.stars ? 0xf2c14e : PAPER_SHADE, 0.028);
+      const star = makeStar(i < recap.stars);
       star.position.set((i - 1) * 0.07, 0.11, 0);
+      star.scale.setScalar(1.2);
       card.add(star);
     }
     this.stage.label(T.recapTitle, 0.034, card, 0.06, 0.004, false);
@@ -216,7 +219,15 @@ export class SquadScene {
     recap.players.forEach((p, i) => {
       const who = p.bot ? T.bot(p.name) : playerName;
       const what = p.highlight ? T.highlight[p.highlight] : '';
-      this.stage.label(`${who}: ${what}`, 0.026, card, -0.016 - i * 0.034, 0.004, false);
+      const y = -0.016 - i * 0.034;
+      this.stage.label(`${who}: ${what}`, 0.026, card, y, 0.004, false);
+      // The badge is a symbol, so the row still reads without the words.
+      const badge = p.highlight ? makeBadge(p.highlight) : null;
+      if (badge) {
+        badge.position.set(-0.17, y + 0.004, 0.004);
+        badge.scale.setScalar(0.45);
+        card.add(badge);
+      }
     });
   }
 
