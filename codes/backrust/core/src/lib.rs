@@ -9,6 +9,7 @@ pub mod rational;
 pub mod rng;
 pub mod session;
 pub mod sim;
+pub mod squad;
 pub mod template;
 pub mod validate;
 

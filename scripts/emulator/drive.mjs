@@ -55,8 +55,8 @@ export function posOf(pattern) {
   const t = q.components.find((c) => c.componentId === 'Transform').values.position;
   return { x: t[0], y: t[1], z: t[2], comps: q.components };
 }
-export function logs(pattern, n = 1) {
-  const r = cli('browser', 'logs', '--input-json', j({ count: 200, pattern }));
+export function logs(pattern, n = 1, since = undefined) {
+  const r = cli('browser', 'logs', '--input-json', j({ count: 200, pattern, since }));
   const msgs = [...new Set((r.logs ?? r).map((l) => l.message))];
   return msgs.slice(-n);
 }
@@ -102,7 +102,9 @@ export async function orbRound() {
   const xs = m[2].split(' ').map(val);
   let pair;
   for (let i = 0; i < xs.length && !pair; i++) for (let k = 0; k < xs.length; k++) if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) { pair = [i, k]; break; }
+  if (!pair) return { line, result: 'no exact pair in the log line' };
   const a = posOf(`^crystal-${pair[0]}$`), b = posOf(`^crystal-${pair[1]}$`);
+  if (!a || !b) return { line, pair, result: 'crystals not found' };
   grabAt(a.x, a.y, a.z); await sleep(0.3); pinch(1); await sleep(0.4);
   await carry(`^crystal-${pair[0]}$`, a, { x: b.x, y: b.y + 0.005, z: b.z });
   await sleep(0.8); pinch(0); await sleep(0.3);
@@ -115,8 +117,58 @@ export async function orbRound() {
   return { line, pair, orbParts: [parts.first, parts.second], result: logs('orb ', 1)[0] };
 }
 
+/** Pokes balloon `i` of `n` from the front. */
+export async function popAt(i, n) {
+  const x = (i - (n - 1) / 2) * 0.085;
+  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, 0.175, 0.17 + dz); await sleep(0.1); }
+  tip(x, 0.25, 0.4); await sleep(0.6);
+}
+
+/** Plays one Balloon Burst creature: a blind first poke, then the right balloon if a retry is offered. */
+export async function balloonRound(line) {
+  const texts = /balloons (.*?)( \||$)/.exec(line)[1].split(' ');
+  await popAt(0, texts.length);
+  const first = logs('\\[game\\] balloon ', 1)[0] ?? '';
+  const expected = /expected (\S+),/.exec(first)?.[1];
+  if (/: wrong,/.test(first) && expected) {
+    await sleep(0.8);
+    const i = texts.indexOf(expected);
+    if (i > 0) await popAt(i, texts.length);
+  }
+  return logs('\\[game\\] balloon ', 1)[0];
+}
+
+/** Plays a whole Solo Squad match from the menu to the recap. */
+export async function squadMatch(maxMinutes = 12) {
+  const since = Date.now();
+  await card(-0.12);
+  const failed = cli('browser', 'logs', '--input-json', j({ count: 5, pattern: 'squad\] could not start', since }));
+  if ((failed.logs ?? failed).length) throw new Error(`Solo Squad did not start: ${(failed.logs ?? failed)[0].message}`);
+  let last = '';
+  const end = Date.now() + maxMinutes * 60000;
+  while (Date.now() < end) {
+    // The log buffer outlives page reloads, so only lines from this match count.
+    if (logs('\\[squad\\] recap', 1, since).length) break;
+    const line = logs('\\[game\\] offer', 1, since)[0] ?? '';
+    const id = /offer (\d+)/.exec(line)?.[1];
+    if (!id || line === last) { await sleep(0.5); continue; }
+    last = line;
+    await sleep(1.4); // walk-in and balloons rising
+    const result = line.includes(' orb_forge ') ? (await orbRound()).result : await balloonRound(line);
+    console.log(`${line.replace(/^\[game\] /, '')}\n  -> ${result}`);
+  }
+  const recap = logs('\\[squad\\] recap', 1, since)[0];
+  console.log(recap ?? 'no recap before the time limit');
+  return recap;
+}
+
+if (process.argv[2] === 'squad') {
+  await fresh();
+  await squadMatch();
+}
+
 if (process.argv[2] === 'orb') {
   await fresh();
-  await card(0.1);
+  await card(0.12);
   for (let r = 0; r < Number(process.argv[3] ?? 3); r++) console.log(JSON.stringify(await orbRound()));
 }

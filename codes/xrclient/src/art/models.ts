@@ -145,6 +145,80 @@ export function makeOrb(color: number): Mesh {
 }
 
 /**
+ * A partner bot: a folded paper robot head with an antenna. Clearly a
+ * machine, never a person. Origin at its base, facing +Z.
+ */
+export function makeBot(color: number): Group {
+  const g = new Group();
+  g.name = 'bot';
+  const head = new Mesh(new BoxGeometry(0.05, 0.04, 0.035), paper(color));
+  head.position.y = 0.025;
+  const face = new Mesh(new BoxGeometry(0.038, 0.022, 0.002), paper(INK));
+  face.position.set(0, 0.026, 0.0185);
+  const eyeMat = paper(0xf2cc8f, { emissive: 0x665522 });
+  for (const x of [-0.009, 0.009]) {
+    const eye = new Mesh(new BoxGeometry(0.006, 0.006, 0.002), eyeMat);
+    eye.position.set(x, 0.027, 0.0198);
+    g.add(eye);
+  }
+  const stalk = new Mesh(new CylinderGeometry(0.0012, 0.0012, 0.02, 4), paper(INK));
+  stalk.position.y = 0.055;
+  const tip = new Mesh(new OctahedronGeometry(0.005, 0), paper(0xe07a5f));
+  tip.position.y = 0.067;
+  g.add(head, face, stalk, tip);
+  return g;
+}
+
+/**
+ * A paper portal window standing upright: a folded ring around a dark
+ * opening where a partner's mini desk shows. Origin at its centre, facing +Z.
+ */
+export function makePortal(color: number, radius = 0.075): Group {
+  const g = new Group();
+  g.name = 'portal-window';
+  const sides = 10;
+  const ring: number[] = [];
+  const back: number[] = [];
+  const r2 = radius * 0.8;
+  for (let i = 0; i < sides; i += 1) {
+    const a = (i / sides) * Math.PI * 2;
+    const b = ((i + 1) / sides) * Math.PI * 2;
+    const [ca, sa, cb, sb] = [Math.cos(a), Math.sin(a), Math.cos(b), Math.sin(b)];
+    ring.push(
+      ca * r2, sa * r2, 0, ca * radius, sa * radius, 0.004, cb * radius, sb * radius, 0.004,
+      ca * r2, sa * r2, 0, cb * radius, sb * radius, 0.004, cb * r2, sb * r2, 0,
+    );
+    back.push(0, 0, -0.002, ca * r2, sa * r2, -0.002, cb * r2, sb * r2, -0.002);
+  }
+  g.add(folded(ring, color), folded(back, 0x2b3a5c));
+  return g;
+}
+
+/** A five-pointed paper star lying in the XY plane, facing +Z. */
+export function makeStar(color: number, radius = 0.03): Mesh {
+  const tris: number[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const b = Math.PI / 2 + ((i + 1) / 10) * Math.PI * 2;
+    const ra = i % 2 === 0 ? radius : radius * 0.45;
+    const rb = i % 2 === 0 ? radius * 0.45 : radius;
+    tris.push(0, 0, 0.006, Math.cos(a) * ra, Math.sin(a) * ra, 0, Math.cos(b) * rb, Math.sin(b) * rb, 0);
+  }
+  return folded(tris, color);
+}
+
+/** The team crystal the squad defends; origin at its base. */
+export function makeTeamCrystal(): Group {
+  const g = new Group();
+  g.name = 'team-crystal';
+  const m = new Mesh(new OctahedronGeometry(0.02, 0), paper(0x7fc8d8, { emissive: 0x1a3a44 }));
+  m.scale.set(1, 1.8, 1);
+  m.position.y = 0.036;
+  g.add(m);
+  return g;
+}
+
+/**
  * An upright paper card that stands on the table, poked from the front.
  * Origin at its centre; the front face is +Z.
  */

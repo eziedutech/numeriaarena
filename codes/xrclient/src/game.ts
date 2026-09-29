@@ -2,7 +2,6 @@ import {
   createSystem,
   Entity,
   GrabSystem,
-  Group,
   Mesh,
   Object3D,
   OneHandGrabbable,
@@ -15,8 +14,20 @@ import {
 import { Label } from './art/label.js';
 import { makeBalloon, makeBird, makeButton, makeCrystal, makeFoldling, makeOrb } from './art/models.js';
 import { accentForSkill } from './art/palette.js';
-import { Core, type GameKind, type Offer, type Verdict } from './game/core.js';
+import {
+  Core,
+  Squad,
+  type GameKind,
+  type Offer,
+  type SquadEvent,
+  type SquadOffer,
+  type SquadState,
+  type SquadVerdict,
+  type Verdict,
+} from './game/core.js';
 import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
+import { SquadScene, type Stage } from './squad-view.js';
+import { T } from './text.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -37,6 +48,11 @@ const CRYSTAL_Z = 0.2;
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.27, BALLOON_Z);
 const HOME = new Vector3(0, 0.02, -0.07);
+/** Solo Squad asks the core for news this often (seconds), not every frame. */
+const SQUAD_POLL_S = 0.1;
+/** Seconds between the last event of a match and the recap card. */
+const RECAP_DELAY_S = 2.0;
+const BOT_NAMES: [string, string] = ['Clip', 'Crease'];
 
 interface Tween {
   obj: Object3D;
@@ -50,7 +66,8 @@ interface Tween {
   done?: () => void;
 }
 
-type Phase = 'loading' | 'menu' | 'playing' | 'between';
+type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap';
+type MenuChoice = GameKind | 'solo_squad';
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -69,7 +86,6 @@ export class GameSystem extends createSystem({
   private offer?: Offer;
   private shownAt = 0;
   private played = 0;
-  private waveStart = 0;
   private score!: Label;
   private flagLabel?: Label;
   private prompt?: Label;
@@ -82,11 +98,25 @@ export class GameSystem extends createSystem({
   private mergeWith?: Entity;
   private mergeHeld = 0;
 
+  // Solo Squad
+  private squad?: Squad;
+  private squadScene?: SquadScene;
+  private squadState?: SquadState;
+  private squadPoll = 0;
+  private recapIn = -1;
+  private stage!: Stage;
+
   init(): void {
     this.score = new Label('Foldlings', { height: 0.04 });
     this.score.mesh.position.set(0, 0.34, -0.05);
     this.score.mesh.name = 'score-label';
     this.labels.add(this.score.mesh);
+    this.stage = {
+      add: (obj) => this.add(obj),
+      remove: (e) => this.remove(e),
+      label: (text, height, parent, y, z, billboard) => this.label(text, height, parent, y, z, billboard),
+      tween: (obj, to, dur, arc, scaleTo, done) => this.tween(obj, to, dur, arc, scaleTo, done),
+    };
 
     Core.start(Date.now() >>> 0)
       .then((core) => {
@@ -97,8 +127,12 @@ export class GameSystem extends createSystem({
 
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => {
+        if (this.phase === 'recap') {
+          this.endSquad();
+          return;
+        }
         if (this.phase !== 'menu') return;
-        this.start(e.getValue(MenuButton, 'game') as GameKind);
+        this.start(e.getValue(MenuButton, 'game') as MenuChoice);
       }),
       this.queries.pressedBalloons.subscribe('qualify', (e) => this.popBalloon(e)),
     );
@@ -138,47 +172,205 @@ export class GameSystem extends createSystem({
     this.phase = 'menu';
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
-    const games: [GameKind, string, number, number][] = [
-      ['balloon_burst', 'Balloon Burst', -0.1, 0xe07a5f],
-      ['orb_forge', 'Orb Forge', 0.1, 0x3d8fb8],
+    const games: [MenuChoice, string, number, number][] = [
+      ['solo_squad', T.soloSquad, -0.12, 0x81b29a],
+      ['balloon_burst', T.gameName.balloon_burst, 0, 0xe07a5f],
+      ['orb_forge', T.gameName.orb_forge, 0.12, 0x3d8fb8],
     ];
     for (const [game, title, x, color] of games) {
-      const button = makeButton(color);
-      button.name = `menu-${game}`;
-      button.position.set(x, 0.0325, 0.12);
-      const e = this.add(button);
-      e.addComponent(MenuButton, { game });
-      e.addComponent(PokeInteractable);
-      this.label(title, 0.017, button, 0, 0.0075, false);
+      this.addButton(game, title, x, color);
     }
   }
 
-  private start(kind: GameKind): void {
-    this.kind = kind;
+  private addButton(game: MenuChoice, title: string, x: number, color: number): void {
+    const button = makeButton(color);
+    button.name = `menu-${game}`;
+    button.position.set(x, 0.0325, 0.12);
+    const e = this.add(button);
+    e.addComponent(MenuButton, { game });
+    e.addComponent(PokeInteractable);
+    this.label(title, 0.017, button, 0, 0.0075, false);
+  }
+
+  private start(choice: MenuChoice): void {
     this.clear(this.queries.buttons);
     this.played = 0;
-    this.waveStart = 0;
+    if (choice === 'solo_squad') {
+      this.phase = 'loading';
+      this.startSquad().catch((error) => {
+        console.error('[squad] could not start', error);
+        this.showMenu();
+      });
+      return;
+    }
+    this.kind = choice;
     this.phase = 'playing';
-    this.spawn();
+    this.spawnPractice();
+  }
+
+  // ------------------------------------------------------------ Solo Squad
+
+  private async startSquad(): Promise<void> {
+    const squad = await Squad.create(Date.now() >>> 0, BOT_NAMES);
+    this.squad = squad;
+    this.squadScene = new SquadScene(this.stage, this.deskEntity()!.object3D!, BOT_NAMES);
+    this.recapIn = -1;
+    squad.start(Date.now());
+    this.squadState = squad.view();
+    this.score.set(T.team(0));
+    this.phase = 'playing';
+  }
+
+  private updateSquad(delta: number): void {
+    const squad = this.squad;
+    const scene = this.squadScene;
+    if (!squad || !scene) return;
+    scene.update(delta, this.squadState);
+    if (this.recapIn > 0) {
+      this.recapIn -= delta;
+      if (this.recapIn <= 0) this.showRecap();
+    }
+    this.squadPoll -= delta;
+    if (this.squadPoll > 0 || this.phase === 'recap') return;
+    this.squadPoll = SQUAD_POLL_S;
+    const events = squad.tick(Date.now());
+    for (const ev of events) this.onSquadEvent(ev);
+    if (events.length > 0) this.refreshSquad();
+    // The player's desk takes the next creature once the last one is gone.
+    if (this.phase === 'playing' && !this.offer && this.queries.creatures.entities.size === 0) {
+      const offer = squad.playerNext();
+      if (offer) {
+        this.spawnOffer(offer);
+        this.refreshSquad();
+      }
+    }
+  }
+
+  private refreshSquad(): void {
+    if (!this.squad) return;
+    this.squadState = this.squad.view();
+    this.score.set(T.team(this.squadState.team_points));
+  }
+
+  private onSquadEvent(ev: SquadEvent): void {
+    const scene = this.squadScene!;
+    switch (ev.type) {
+      case 'wave_start': {
+        const total = this.squadState?.waves ?? 3;
+        scene.showBanner(`${T.wave(ev.wave + 1, total)}: ${T.gameName[ev.game]}`);
+        break;
+      }
+      case 'bot_working':
+        scene.working(ev.desk, ev.prompt);
+        break;
+      case 'bot_answer':
+        scene.answered(ev.desk, ev.correct);
+        break;
+      case 'escape': {
+        // The player's own escapes are animated with the creature itself.
+        if (ev.from === 0) break;
+        scene.flash(ev.from, T.escaped);
+        const from = scene.windowPos(ev.from, new Vector3());
+        if (ev.to === null) {
+          scene.flyOrb(from, scene.crystalPos(new Vector3()), 0x6d597a, () => scene.crystalHit());
+          scene.showBanner(T.crystalHit, 1.5);
+        } else if (ev.to === 0) {
+          scene.flyOrb(from, STAND.clone().setY(0.05), 0x6d597a);
+        } else {
+          scene.flyOrb(from, scene.windowPos(ev.to, new Vector3()), 0x6d597a);
+        }
+        break;
+      }
+      case 'help_orb':
+        scene.flyOrb(scene.windowPos(ev.from, new Vector3()), STAND.clone().setY(0.05), 0xf2cc8f);
+        scene.showBanner(T.helpOrb, 1.5);
+        break;
+      case 'emote':
+        scene.emote(ev.desk, ev.emote);
+        break;
+      case 'boss_start':
+        scene.bossStart();
+        break;
+      case 'boss_part':
+        scene.bossPart(ev.desk);
+        break;
+      case 'boss_end':
+        scene.showBanner(ev.folded ? T.bossFolded : T.bossAway, 2);
+        break;
+      case 'match_end':
+        this.recapIn = RECAP_DELAY_S;
+        break;
+      case 'bot_spawn':
+      case 'wave_end':
+        break;
+    }
+  }
+
+  private showRecap(): void {
+    if (!this.squad || !this.squadScene) return;
+    const recap = this.squad.recap();
+    console.info('[squad] recap', JSON.stringify(recap));
+    const events = this.squad.drainEvents();
+    console.info(`[squad] ${events.length} answer events for the outbox`);
+    this.phase = 'recap';
+    this.clearPlay();
+    this.squadScene.showRecap(recap, T.you);
+    this.addButton('solo_squad', T.done, 0, 0x81b29a);
+  }
+
+  private endSquad(): void {
+    this.clear(this.queries.buttons);
+    this.clearPlay();
+    this.squadScene?.dispose();
+    this.squadScene = undefined;
+    this.squad?.free();
+    this.squad = undefined;
+    this.squadState = undefined;
+    this.score.set('Foldlings');
+    this.showMenu();
+  }
+
+  private clearPlay(): void {
+    this.clearPrompt();
+    this.clear(this.queries.creatures);
+    this.clear(this.queries.balloons);
+    this.clear(this.queries.crystals);
+    this.clear(this.queries.orbs);
+    this.offer = undefined;
   }
 
   // ------------------------------------------------------------ creatures
 
-  private spawn(): void {
+  private spawnPractice(): void {
     if (!this.core) return;
-    const offer = this.core.next(this.kind);
+    this.spawnOffer(this.core.next(this.kind));
+  }
+
+  private spawnOffer(offer: Offer | SquadOffer): void {
     this.offer = offer;
+    this.kind = offer.game;
+    const squadInfo = 'boss' in offer ? offer : undefined;
     console.info(
       `[game] offer ${offer.offer_id} ${offer.game} ${offer.prompt.en} | ` +
         (offer.game === 'orb_forge'
           ? `target ${offer.target?.text} crystals ${offer.crystals.map((c) => c.text).join(' ')}`
-          : `balloons ${offer.balloons.map((b) => b.text).join(' ')}`),
+          : `balloons ${offer.balloons.map((b) => b.text).join(' ')}`) +
+        (squadInfo?.rescued_from ? ` | rescued from desk ${squadInfo.rescued_from}` : '') +
+        (squadInfo?.boss ? ' | boss' : ''),
     );
-    const color = accentForSkill(offer.skill);
+    const boss = squadInfo?.boss ?? false;
+    const color = boss ? 0x6d597a : accentForSkill(offer.skill);
     const { root, flag } = makeFoldling(color);
     root.rotation.y = -Math.PI / 2;
-    root.position.copy(HOME);
     root.scale.setScalar(0.2);
+    // Rescued creatures step out of their partner's window; the rest come from the book.
+    if (squadInfo?.rescued_from && this.squadScene) {
+      this.squadScene.windowPos(squadInfo.rescued_from, root.position);
+      this.squadScene.showBanner(T.rescue, 1.5);
+    } else {
+      root.position.copy(HOME);
+    }
+    if (boss) this.squadScene?.bossHandOff();
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
     // Orb Forge shows the target on the flag; Balloon Burst puts the question on its own card.
@@ -196,7 +388,7 @@ export class GameSystem extends createSystem({
     flag.add(flagLabel.mesh);
     this.labels.add(flagLabel.mesh);
     this.flagLabel = flagLabel;
-    this.tween(root, STAND, 0.7, 0.03, 1, () => {
+    this.tween(root, STAND, 0.7, 0.03, boss ? 1.4 : 1, () => {
       if (offer.game === 'balloon_burst') this.showBalloons(offer);
       else this.showCrystals(offer);
       this.shownAt = performance.now();
@@ -239,11 +431,19 @@ export class GameSystem extends createSystem({
   // ------------------------------------------------------------ answers
 
   private popBalloon(e: Entity): void {
-    if (this.phase !== 'playing' || !this.offer || !this.core) return;
+    if (this.phase !== 'playing' || !this.offer) return;
     // A finger still extended from the last pop must not burst a new balloon.
     if (performance.now() - this.shownAt < PRESS_GRACE_MS) return;
     const index = e.getValue(Balloon, 'index') as number;
-    const verdict = this.core.answerBalloon(this.offer.offer_id, index, performance.now() - this.shownAt);
+    const timeMs = performance.now() - this.shownAt;
+    let verdict: Verdict | SquadVerdict;
+    if (this.squad) {
+      verdict = this.squad.answerBalloon(this.offer.offer_id, index, timeMs, Date.now());
+    } else if (this.core) {
+      verdict = this.core.answerBalloon(this.offer.offer_id, index, timeMs);
+    } else {
+      return;
+    }
     console.info(
       `[game] balloon ${index} ${this.offer.balloons[index]?.text}: ${verdict.correct ? 'right' : 'wrong'}, ` +
         `expected ${verdict.expected_text}, +${verdict.points}, total ${verdict.total_points}`,
@@ -258,8 +458,16 @@ export class GameSystem extends createSystem({
   }
 
   private submitOrb(picks: number[]): void {
-    if (!this.offer || !this.core) return;
-    const verdict = this.core.answerOrb(this.offer.offer_id, picks, performance.now() - this.shownAt);
+    if (!this.offer) return;
+    const timeMs = performance.now() - this.shownAt;
+    let verdict: Verdict | SquadVerdict;
+    if (this.squad) {
+      verdict = this.squad.answerOrb(this.offer.offer_id, picks, timeMs, Date.now());
+    } else if (this.core) {
+      verdict = this.core.answerOrb(this.offer.offer_id, picks, timeMs);
+    } else {
+      return;
+    }
     console.info(
       `[game] orb ${verdict.built_text ?? '?'} for ${this.offer.target?.text}: ${verdict.correct ? 'right' : 'wrong'}, ` +
         `attempt ${verdict.attempt}, +${verdict.points}, total ${verdict.total_points}`,
@@ -270,8 +478,9 @@ export class GameSystem extends createSystem({
     this.afterVerdict(verdict);
   }
 
-  private afterVerdict(v: Verdict): void {
-    this.score.set(`${v.total_points} points`);
+  private afterVerdict(v: Verdict | SquadVerdict): void {
+    if (this.squad) this.refreshSquad();
+    else this.score.set(`${v.total_points} points`);
     const creature = this.creature();
     if (!creature) return;
     const obj = creature.object3D!;
@@ -282,7 +491,7 @@ export class GameSystem extends createSystem({
       this.foldHome(creature, this.offer ? accentForSkill(this.offer.skill) : 0xffffff);
       return;
     }
-    // Wrong: the creature bounces. With a second try it stays; otherwise it walks home.
+    // Wrong: the creature bounces. With a second try it stays; otherwise it leaves.
     this.tween(obj, obj.position.clone(), 0.25, 0.04, 1);
     if (!v.retry_allowed) {
       this.clear(this.queries.balloons);
@@ -291,7 +500,17 @@ export class GameSystem extends createSystem({
       this.flagLabel?.set(`= ${v.expected_text}`);
       this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
       this.phase = 'between';
-      this.tween(obj, HOME, 1.4, 0.02, 0.2, () => {
+      // In Solo Squad it runs to a partner's window, or to the crystal.
+      const to = HOME.clone();
+      const sv = 'escaped_to' in v ? v : undefined;
+      if (sv?.escaped_to && this.squadScene) {
+        this.squadScene.windowPos(sv.escaped_to, to);
+      } else if (sv?.crystal_hit && this.squadScene) {
+        this.squadScene.crystalPos(to);
+        this.squadScene.showBanner(T.crystalHit, 1.5);
+      }
+      this.tween(obj, to, 1.4, 0.02, 0.2, () => {
+        if (sv?.crystal_hit) this.squadScene?.crystalHit();
         this.remove(creature);
         this.next();
       });
@@ -320,15 +539,20 @@ export class GameSystem extends createSystem({
 
   private next(): void {
     this.clearPrompt();
-    this.played += 1;
     this.offer = undefined;
+    if (this.squad) {
+      // The squad loop hands out the next creature when the core has one.
+      if (this.phase === 'between') this.phase = 'playing';
+      return;
+    }
+    this.played += 1;
     if (this.played >= WAVE) {
       this.score.set(`Wave done! ${this.score.value}`);
       this.showMenu();
       return;
     }
     this.phase = 'playing';
-    this.spawn();
+    this.spawnPractice();
   }
 
   // ------------------------------------------------------------ animation
@@ -372,6 +596,7 @@ export class GameSystem extends createSystem({
       this.showMenu();
     }
     this.runTweens(delta);
+    if (this.squad) this.updateSquad(delta);
 
     // Labels always face the camera that renders them (the head in XR,
     // the browser camera outside it).

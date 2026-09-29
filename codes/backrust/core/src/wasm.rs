@@ -129,3 +129,90 @@ impl GameSession {
         self.inner.total_points()
     }
 }
+
+/// Solo Squad match for the headset: the player plus two partner bots.
+#[wasm_bindgen]
+pub struct SquadGame {
+    inner: crate::squad::SquadMatch,
+    rejected: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl SquadGame {
+    /// `templates_json`: array of item templates. `config_json`: SquadConfig.
+    #[wasm_bindgen(constructor)]
+    pub fn new(templates_json: &str, config_json: &str) -> Result<SquadGame, JsError> {
+        let templates: Vec<ItemTemplate> = serde_json::from_str(templates_json).map_err(js)?;
+        let cfg: crate::squad::SquadConfig = serde_json::from_str(config_json).map_err(js)?;
+        let (inner, rejected) = crate::squad::SquadMatch::new(
+            templates,
+            cfg,
+            crate::fairness::FairnessParams::default(),
+        )
+        .map_err(js)?;
+        Ok(SquadGame { inner, rejected })
+    }
+
+    pub fn rejected(&self) -> String {
+        serde_json::to_string(&self.rejected).unwrap_or_default()
+    }
+
+    pub fn start(&mut self, now_ms: f64) {
+        self.inner.start(now_ms);
+    }
+
+    /// Events since the last tick, as a JSON array.
+    pub fn tick(&mut self, now_ms: f64) -> String {
+        serde_json::to_string(&self.inner.tick(now_ms)).unwrap_or_default()
+    }
+
+    /// The next creature for the player's desk as JSON, or "null".
+    #[wasm_bindgen(js_name = playerNext)]
+    pub fn player_next(&mut self) -> Result<String, JsError> {
+        serde_json::to_string(&self.inner.player_next().map_err(js)?).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerBalloon)]
+    pub fn answer_balloon(
+        &mut self,
+        offer_id: u32,
+        index: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_balloon(offer_id, index as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerOrb)]
+    pub fn answer_orb(
+        &mut self,
+        offer_id: u32,
+        crystals: Vec<u32>,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let picks: Vec<usize> = crystals.into_iter().map(|c| c as usize).collect();
+        let v = self
+            .inner
+            .answer_orb(offer_id, &picks, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    pub fn view(&self) -> String {
+        serde_json::to_string(&self.inner.view()).unwrap_or_default()
+    }
+
+    pub fn recap(&self) -> String {
+        serde_json::to_string(&self.inner.recap()).unwrap_or_default()
+    }
+
+    #[wasm_bindgen(js_name = drainEvents)]
+    pub fn drain_events(&mut self) -> String {
+        serde_json::to_string(&self.inner.drain_answer_events()).unwrap_or_default()
+    }
+}

@@ -255,6 +255,92 @@ impl SoloSession {
         value_answer && ops_fit
     }
 
+    /// Skill first (uniform for now), then `count` candidate items from that skill.
+    fn draw(
+        templates: &[CompiledTemplate],
+        usable: &[usize],
+        count: u32,
+        rng: &mut Rng,
+    ) -> (String, Vec<(usize, Item)>) {
+        let mut skills: Vec<&str> = usable
+            .iter()
+            .map(|i| templates[*i].source.skill.as_str())
+            .collect();
+        skills.sort_unstable();
+        skills.dedup();
+        let skill = skills[rng.below(skills.len() as u64) as usize].to_string();
+        let pool: Vec<usize> = usable
+            .iter()
+            .copied()
+            .filter(|i| templates[*i].source.skill == skill)
+            .collect();
+        let mut items = Vec::new();
+        for _ in 0..count.max(1) {
+            let ti = pool[rng.below(pool.len() as u64) as usize];
+            let seed = rng.next_u64();
+            if let Ok(item) = templates[ti].instantiate(seed) {
+                items.push((ti, item));
+            }
+        }
+        (skill, items)
+    }
+
+    fn keyed(items: &[(usize, Item)]) -> Vec<Candidate> {
+        items
+            .iter()
+            .map(|(_, it)| Candidate {
+                key: format!("{}#{}", it.template_id, it.params_hash),
+                b: it.b,
+            })
+            .collect()
+    }
+
+    /// An item for a partner bot, chosen for the bot's own rating with the
+    /// bot's own random stream, so the player's state is never touched.
+    pub(crate) fn bot_item(
+        &self,
+        game: GameType,
+        rating: Rating,
+        rng: &mut Rng,
+    ) -> Option<(Item, f64)> {
+        let usable: Vec<usize> = (0..self.templates.len())
+            .filter(|i| Self::supports(&self.templates[*i], game))
+            .collect();
+        if usable.is_empty() {
+            return None;
+        }
+        let (_, mut items) = Self::draw(&self.templates, &usable, self.cfg.candidates, rng);
+        let cands = Self::keyed(&items);
+        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let at = Situation {
+            rating,
+            game,
+            choices,
+            wrong_streak: 0,
+            recent: &[],
+        };
+        let pick = choose(&cands, &at, &self.params, rng)?;
+        Some((items.swap_remove(pick.index).1, pick.p_final))
+    }
+
+    /// Fails when no template can fill creatures for `game`.
+    pub fn check_game(&self, game: GameType) -> Result<(), SessionError> {
+        if self.templates.iter().any(|t| Self::supports(t, game)) {
+            Ok(())
+        } else {
+            Err(SessionError::NoItemForGame(game))
+        }
+    }
+
+    /// Ratings of every skill the player has answered so far.
+    pub fn ratings(&self) -> &BTreeMap<String, Rating> {
+        &self.ratings
+    }
+
+    pub fn params(&self) -> &FairnessParams {
+        &self.params
+    }
+
     pub fn rating(&self, skill: &str) -> Rating {
         self.ratings
             .get(skill)
@@ -274,37 +360,12 @@ impl SoloSession {
         if usable.is_empty() {
             return Err(SessionError::NoItemForGame(game));
         }
-        // Skill first (uniform for now), then candidates from that skill.
-        let mut skills: Vec<&str> = usable
-            .iter()
-            .map(|i| self.templates[*i].source.skill.as_str())
-            .collect();
-        skills.sort_unstable();
-        skills.dedup();
-        let skill = skills[self.rng.below(skills.len() as u64) as usize].to_string();
-        let pool: Vec<usize> = usable
-            .into_iter()
-            .filter(|i| self.templates[*i].source.skill == skill)
-            .collect();
-
-        let mut items = Vec::new();
-        for _ in 0..self.cfg.candidates.max(1) {
-            let ti = pool[self.rng.below(pool.len() as u64) as usize];
-            let seed = self.rng.next_u64();
-            if let Ok(item) = self.templates[ti].instantiate(seed) {
-                items.push((ti, item));
-            }
-        }
+        let (skill, mut items) =
+            Self::draw(&self.templates, &usable, self.cfg.candidates, &mut self.rng);
         if items.is_empty() {
             return Err(SessionError::NoItemForGame(game));
         }
-        let cands: Vec<Candidate> = items
-            .iter()
-            .map(|(_, it)| Candidate {
-                key: format!("{}#{}", it.template_id, it.params_hash),
-                b: it.b,
-            })
-            .collect();
+        let cands = Self::keyed(&items);
 
         let choices = if game == GameType::BalloonBurst {
             Some(adapter_u32(
@@ -666,6 +727,32 @@ impl SoloSession {
             self.open.insert(offer_id, open);
         }
         Ok(verdict)
+    }
+
+    /// The right choice for an open creature: the balloon index, or crystal
+    /// indices that add up to the target. For simulated players and tests;
+    /// the headset never calls it.
+    #[doc(hidden)]
+    pub fn answer_key(&self, offer_id: u32) -> Option<Vec<usize>> {
+        let open = self.open.get(&offer_id)?;
+        match open.offer.game {
+            GameType::BalloonBurst => Some(vec![open.correct_balloon]),
+            GameType::OrbForge => {
+                let v = &open.crystal_values;
+                if let Some(i) = v.iter().position(|x| *x == open.expected) {
+                    return Some(vec![i]);
+                }
+                for i in 0..v.len() {
+                    for j in i + 1..v.len() {
+                        if v[i].checked_add(&v[j]).ok() == Some(open.expected) {
+                            return Some(vec![i, j]);
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 
     /// Answer events since the last call, oldest first, for the device outbox.
