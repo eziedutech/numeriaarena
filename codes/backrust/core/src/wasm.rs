@@ -44,3 +44,88 @@ pub fn instantiate_item(template_json: &str, seed: u32) -> Result<String, JsErro
         .map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&item).map_err(|e| JsError::new(&e.to_string()))
 }
+
+fn js<E: std::fmt::Display>(e: E) -> JsError {
+    JsError::new(&e.to_string())
+}
+
+/// Solo game session for the headset. Every call returns JSON.
+#[wasm_bindgen]
+pub struct GameSession {
+    inner: crate::session::SoloSession,
+    rejected: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl GameSession {
+    /// `templates_json`: array of item templates. `config_json`: SessionConfig.
+    #[wasm_bindgen(constructor)]
+    pub fn new(templates_json: &str, config_json: &str) -> Result<GameSession, JsError> {
+        let templates: Vec<ItemTemplate> = serde_json::from_str(templates_json).map_err(js)?;
+        let cfg: crate::session::SessionConfig = serde_json::from_str(config_json).map_err(js)?;
+        let (inner, rejected) = crate::session::SoloSession::new(
+            templates,
+            cfg,
+            crate::fairness::FairnessParams::default(),
+        )
+        .map_err(js)?;
+        Ok(GameSession { inner, rejected })
+    }
+
+    /// Ids of templates that did not compile (reported, never silently dropped).
+    pub fn rejected(&self) -> String {
+        serde_json::to_string(&self.rejected).unwrap_or_default()
+    }
+
+    /// `game`: "balloon_burst" or "orb_forge".
+    pub fn next(&mut self, game: &str) -> Result<String, JsError> {
+        let game: crate::fairness::GameType =
+            serde_json::from_str(&format!("\"{game}\"")).map_err(js)?;
+        serde_json::to_string(&self.inner.next(game).map_err(js)?).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerBalloon)]
+    pub fn answer_balloon(
+        &mut self,
+        offer_id: u32,
+        index: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_balloon(offer_id, index as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerOrb)]
+    pub fn answer_orb(
+        &mut self,
+        offer_id: u32,
+        crystals: Vec<u32>,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let picks: Vec<usize> = crystals.into_iter().map(|c| c as usize).collect();
+        let v = self
+            .inner
+            .answer_orb(offer_id, &picks, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    pub fn close(&mut self, offer_id: u32) -> bool {
+        self.inner.close(offer_id)
+    }
+
+    #[wasm_bindgen(js_name = drainEvents)]
+    pub fn drain_events(&mut self) -> String {
+        serde_json::to_string(&self.inner.drain_events()).unwrap_or_default()
+    }
+
+    #[wasm_bindgen(js_name = totalPoints)]
+    pub fn total_points(&self) -> u32 {
+        self.inner.total_points()
+    }
+}

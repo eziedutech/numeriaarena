@@ -7,6 +7,7 @@ pub mod fairness;
 pub mod format;
 pub mod rational;
 pub mod rng;
+pub mod session;
 pub mod sim;
 pub mod template;
 pub mod validate;

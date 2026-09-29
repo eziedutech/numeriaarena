@@ -801,6 +801,8 @@ impl CompiledTemplate {
                     distractors.push(DistractorOut {
                         text,
                         misconception,
+                        num: v.num(),
+                        den: v.den(),
                     });
                 }
             }
@@ -842,6 +844,7 @@ impl CompiledTemplate {
                         text,
                         num: Some(shown.num()),
                         den: Some(shown.den()),
+                        raw_den: Some(v.den()),
                         truth: None,
                     },
                     Some(*v),
@@ -852,6 +855,7 @@ impl CompiledTemplate {
                     text: b.to_string(),
                     num: None,
                     den: None,
+                    raw_den: None,
                     truth: Some(*b),
                 },
                 None,
@@ -861,6 +865,7 @@ impl CompiledTemplate {
                     text: t.clone(),
                     num: None,
                     den: None,
+                    raw_den: None,
                     truth: None,
                 },
                 None,
@@ -993,6 +998,9 @@ pub struct AnswerOut {
     pub num: Option<i128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub den: Option<i128>,
+    /// Denominator as the template built it (2/8 keeps 8 even when shown as 1/4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_den: Option<i128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub truth: Option<bool>,
 }
@@ -1001,6 +1009,8 @@ pub struct AnswerOut {
 pub struct DistractorOut {
     pub text: String,
     pub misconception: String,
+    pub num: i128,
+    pub den: i128,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
