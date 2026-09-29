@@ -148,7 +148,7 @@ export class SquadScene {
   bossStart(): void {
     const { root } = makeFoldling(0x6d597a);
     root.name = 'boss';
-    root.rotation.y = -Math.PI / 2;
+    root.rotation.y = -0.45;
     root.position.copy(BOSS_POS);
     root.scale.setScalar(0.1);
     this.boss = this.stage.add(root);

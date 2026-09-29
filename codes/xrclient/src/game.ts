@@ -60,6 +60,11 @@ const CRYSTAL_Z = 0.2;
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.27, BALLOON_Z);
 const HOME = new Vector3(0, 0.02, -0.07);
+/**
+ * Foldlings show their side to the player, head to the right and turned a
+ * little towards them: origami animals read as animals in profile.
+ */
+const CREATURE_YAW = -0.45;
 /** Solo Squad asks the core for news this often (seconds), not every frame. */
 const SQUAD_POLL_S = 0.1;
 /** Seconds between the last event of a match and the recap card. */
@@ -421,7 +426,7 @@ export class GameSystem extends createSystem({
     const boss = squadInfo?.boss ?? false;
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
     const { root, flag } = makeFoldling(color);
-    root.rotation.y = -Math.PI / 2;
+    root.rotation.y = CREATURE_YAW;
     root.scale.setScalar(0.2);
     // Rescued creatures step out of their partner's window; the rest come from the book.
     if (squadInfo?.rescued_from && this.squadScene) {
@@ -433,9 +438,16 @@ export class GameSystem extends createSystem({
     if (boss) this.squadScene?.bossHandOff();
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
-    // Orb Forge shows the target on the flag; Balloon Burst puts the question on its own card.
-    const flagText = offer.game === 'orb_forge' ? offer.target!.text : '?';
-    const flagLabel = new Label(flagText, { height: offer.game === 'orb_forge' ? 0.05 : 0.04 });
+    // Orb Forge shows the target on the flag. Balloon Burst puts the question
+    // on its own card, so its flag stays plain instead of repeating a "?".
+    this.flagLabel = undefined;
+    if (offer.game === 'orb_forge') {
+      const flagLabel = new Label(offer.target!.text, { height: 0.05 });
+      flagLabel.mesh.name = 'flag-label';
+      flag.add(flagLabel.mesh);
+      this.labels.add(flagLabel.mesh);
+      this.flagLabel = flagLabel;
+    }
     if (offer.game === 'balloon_burst') {
       this.clearPrompt();
       this.prompt = new Label(offer.prompt.en, { height: 0.036 });
@@ -444,10 +456,6 @@ export class GameSystem extends createSystem({
       this.deskEntity()!.object3D!.add(this.prompt.mesh);
       this.labels.add(this.prompt.mesh);
     }
-    flagLabel.mesh.name = 'flag-label';
-    flag.add(flagLabel.mesh);
-    this.labels.add(flagLabel.mesh);
-    this.flagLabel = flagLabel;
     this.tween(root, STAND, 0.7, 0.03, boss ? 1.4 : 1, () => {
       if (offer.game === 'balloon_burst') this.showBalloons(offer);
       else this.showCrystals(offer);

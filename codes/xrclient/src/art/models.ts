@@ -142,9 +142,9 @@ export function makeFoldling(color: number): Figure {
   flag.removeFromParent();
   const f = flagModel.scene;
   f.scale.setScalar(FLAG_SCALE);
-  // Foot of the pole on the back, cloth turned to face the player's side.
+  // Foot of the pole on the back; the cloth trails behind like a carried flag.
   f.position.set(-0.012, 0.05, 0);
-  f.rotation.y = Math.PI / 2;
+  f.rotation.y = Math.PI;
   root.add(f);
   const anchor = f.getObjectByName('label_anchor') ?? f;
   const fig = figure(root, anchor, f, flagModel.animations);
