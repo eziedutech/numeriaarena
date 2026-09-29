@@ -7,7 +7,13 @@ import { DeskRoot } from './game-components.js';
 /** Seconds to wait for a detected table before offering pinch placement. */
 const TABLE_WAIT_S = 3;
 /** How far the book sits inside the table edge nearest the player. */
-const EDGE_INSET_M = 0.2;
+const EDGE_INSET_M = 0.3;
+/**
+ * The book sits at the back of the play area; creatures walk off it onto
+ * the free table in front, where the answers are. Offset along -Z (away
+ * from the player) from the play area's centre.
+ */
+const BOOK_Z = -0.12;
 /** A table farther than this (horizontally, from the head) is out of seated reach. */
 const TABLE_REACH_M = 1.0;
 /** A table must lie within this angle of where the player faces (cos 60 degrees). */
@@ -45,11 +51,16 @@ export class DeskSystem extends createSystem({
   init(): void {
     this.root = new Group();
     this.root.name = 'desk-root';
-    this.root.add(makeBook());
+    const book = makeBook();
+    book.position.z = BOOK_Z;
+    this.root.add(book);
     this.root.visible = false;
     this.world.createTransformEntity(this.root).addComponent(DeskRoot);
 
-    this.ghost = makeBook();
+    this.ghost = new Group();
+    const ghostBook = makeBook();
+    ghostBook.position.z = BOOK_Z;
+    this.ghost.add(ghostBook);
     this.ghost.name = 'desk-ghost';
     this.ghost.visible = false;
     this.hint = new Label('Pinch to place the book', { height: 0.03 });

@@ -13,8 +13,8 @@ const WINDOW_YAW = [0.45, -0.45];
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave', help: 'help' };
 /** On the table just past the book's right edge, clear of the balloon and crystal rows. */
-const CRYSTAL_POS = new Vector3(0.22, 0.0, -0.06);
-const BOSS_POS = new Vector3(0, 0.0, -0.06);
+const CRYSTAL_POS = new Vector3(0.25, 0.0, -0.1);
+const BOSS_POS = new Vector3(0, 0.023, -0.14);
 /** A flash label stays up this long (seconds). */
 const FLASH_S = 1.6;
 
@@ -146,7 +146,7 @@ export class SquadScene {
   }
 
   bossStart(): void {
-    const { root } = makeFoldling(0x6d597a);
+    const { root } = makeFoldling(0x6d597a, 'elephant');
     root.name = 'boss';
     root.rotation.y = -0.45;
     root.position.copy(BOSS_POS);
@@ -219,13 +219,13 @@ export class SquadScene {
     recap.players.forEach((p, i) => {
       const who = p.bot ? T.bot(p.name) : playerName;
       const what = p.highlight ? T.highlight[p.highlight] : '';
-      const y = -0.016 - i * 0.034;
-      this.stage.label(`${who}: ${what}`, 0.026, card, y, 0.004, false);
-      // The badge is a symbol, so the row still reads without the words.
+      const y = -0.016 - i * 0.04;
+      const row = this.stage.label(`${who}: ${what}`, 0.026, card, y, 0.004, false);
+      // Each player's highlight badge sits right before their own row.
       const badge = p.highlight ? makeBadge(p.highlight) : null;
       if (badge) {
-        badge.position.set(-0.17, y + 0.004, 0.004);
-        badge.scale.setScalar(0.45);
+        badge.position.set(-row.mesh.scale.x / 2 - 0.02, y + 0.006, 0.004);
+        badge.scale.setScalar(0.55);
         card.add(badge);
       }
     });

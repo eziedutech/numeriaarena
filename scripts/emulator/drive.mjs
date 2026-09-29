@@ -112,15 +112,16 @@ export async function orbRound() {
   if (!orb) return { line, result: 'no orb formed' };
   const parts = orb.comps.find((c) => c.componentId === 'Orb').values;
   grabAt(orb.x, orb.y, orb.z); await sleep(0.3); pinch(1); await sleep(0.4);
-  await carry('^orb$', orb, { x: 0, y: 0.05, z: 0.06 });
+  // Held over the creature (front edge of the book), then let go: only a release gives the answer.
+  await carry('^orb$', orb, { x: 0, y: 0.075, z: -0.03 });
   await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(2.5);
   return { line, pair, orbParts: [parts.first, parts.second], result: logs('orb ', 1)[0] };
 }
 
 /** Pokes balloon `i` of `n` from the front. */
 export async function popAt(i, n) {
-  const x = (i - (n - 1) / 2) * 0.085;
-  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, 0.175, 0.17 + dz); await sleep(0.1); }
+  const x = (i - (n - 1) / 2) * 0.095;
+  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, 0.18, 0.2 + dz); await sleep(0.1); }
   tip(x, 0.25, 0.4); await sleep(0.6);
 }
 

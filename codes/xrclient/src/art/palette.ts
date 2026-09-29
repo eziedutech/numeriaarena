@@ -29,6 +29,12 @@ export function shade(color: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
+/** Mixes a colour towards white by `k` (0 to 1), for paper catching the light. */
+export function tint(color: number, k: number): number {
+  const mix = (v: number) => Math.round(v + (255 - v) * k);
+  return (mix((color >> 16) & 255) << 16) | (mix((color >> 8) & 255) << 8) | mix(color & 255);
+}
+
 const cache = new Map<string, MeshStandardMaterial>();
 
 /** Flat-shaded paper material, shared per colour so meshes stay cheap. */

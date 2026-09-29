@@ -9,6 +9,7 @@ import {
   Pressed,
   RayInteractable,
   Grabbed,
+  PlaneGeometry,
   Vector3,
 } from '@iwsdk/core';
 
@@ -24,8 +25,10 @@ import {
   makeFoldling,
   makeOrb,
   mixers,
+  speciesFor,
+  type Figure,
 } from './art/models.js';
-import { accentForSkill } from './art/palette.js';
+import { accentForSkill, CORRECT, paper, TRY_AGAIN } from './art/palette.js';
 import {
   Core,
   Squad,
@@ -47,19 +50,30 @@ const PRESS_GRACE_MS = 300;
 /** A crystal merges when it comes this close to another one (meters). */
 const MERGE_DIST = 0.05;
 /** Space between crystals in the row; wider than the merge distance. */
-const CRYSTAL_GAP = 0.09;
+const CRYSTAL_GAP = 0.095;
 /** Seconds a held crystal must stay beside the same crystal before they merge. */
 const MERGE_DWELL_S = 0.4;
-/** A crystal or orb reaches the creature this close to its centre. */
-const HIT_DIST = 0.07;
+/**
+ * Letting go of a crystal or orb this close to the creature gives it as the
+ * answer. Only a release counts, so carrying one past the creature never does.
+ */
+const GIVE_DIST = 0.09;
+/** The creature grows this much while it is ready to take what the hand holds. */
+const READY_SCALE = 1.15;
 /** Where the creature stands, in the desk frame (reader on +Z). */
-const STAND = new Vector3(0, 0.0, 0.06);
+/**
+ * On the front edge of the book, well behind the answer rows, so a hand
+ * reaching for an answer never passes the creature.
+ */
+const STAND = new Vector3(0, 0.023, -0.03);
 /** Rows in front of the creature, still within seated reach. */
-const BALLOON_Z = 0.17;
-const CRYSTAL_Z = 0.2;
+const BALLOON_Z = 0.2;
+const BALLOON_GAP = 0.095;
+const CRYSTAL_Z = 0.21;
 /** Balloon Burst question card, above the balloons so nothing hides it. */
-const PROMPT_POS = new Vector3(0, 0.27, BALLOON_Z);
-const HOME = new Vector3(0, 0.02, -0.07);
+const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
+/** The portal at the back of the book, where creatures come from and go home to. */
+const HOME = new Vector3(0, 0.023, -0.18);
 /**
  * Foldlings show their side to the player, head to the right and turned a
  * little towards them: origami animals read as animals in profile.
@@ -70,6 +84,14 @@ const SQUAD_POLL_S = 0.1;
 /** Seconds between the last event of a match and the recap card. */
 const RECAP_DELAY_S = 2.0;
 const BOT_NAMES: [string, string] = ['Clip', 'Crease'];
+/**
+ * The speed bonus runs out at the expected answer time (8 s, the core's
+ * default); the strip shows it. It never fails an answer.
+ */
+const TIMER_MS = 8000;
+const TIMER_W = 0.2;
+/** Creatures per game that also get a how-to line. */
+const HINTED = 3;
 /** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
 const FLAP_S = 0.45;
 const LETTER_S = 0.35;
@@ -98,6 +120,7 @@ export class GameSystem extends createSystem({
   crystals: { required: [Crystal] },
   heldCrystals: { required: [Crystal, Grabbed] },
   orbs: { required: [Orb] },
+  heldOrbs: { required: [Orb, Grabbed] },
   buttons: { required: [MenuButton] },
   pressedButtons: { required: [MenuButton, Pressed] },
 }) {
@@ -108,7 +131,14 @@ export class GameSystem extends createSystem({
   private shownAt = 0;
   private played = 0;
   private score!: Label;
-  private flagLabel?: Label;
+  private hint?: Label;
+  private timerBar!: Mesh;
+  private timing = false;
+  private seen: Record<GameKind, number> = { balloon_burst: 0, orb_forge: 0 };
+  private figure?: Figure;
+  /** The held crystal or orb currently close enough to be given. */
+  private offering?: Entity;
+  private creatureScale = 1;
   private prompt?: Label;
   private labels = new Set<Mesh>();
   private tweens: Tween[] = [];
@@ -131,9 +161,13 @@ export class GameSystem extends createSystem({
 
   init(): void {
     this.score = new Label('Foldlings', { height: 0.04 });
-    this.score.mesh.position.set(0, 0.34, -0.05);
+    this.score.mesh.position.set(0, 0.36, -0.15);
     this.score.mesh.name = 'score-label';
     this.labels.add(this.score.mesh);
+    this.timerBar = new Mesh(new PlaneGeometry(TIMER_W, 0.016), paper(CORRECT, { doubleSide: true }));
+    this.timerBar.name = 'answer-timer';
+    this.timerBar.visible = false;
+    this.labels.add(this.timerBar);
     this.stage = {
       add: (obj) => this.add(obj),
       remove: (e) => this.remove(e),
@@ -166,6 +200,8 @@ export class GameSystem extends createSystem({
         this.opening = { envelope, choice, t: 0 };
       }),
       this.queries.pressedBalloons.subscribe('qualify', (e) => this.popBalloon(e)),
+      this.queries.heldCrystals.subscribe('disqualify', (e) => this.released(e)),
+      this.queries.heldOrbs.subscribe('disqualify', (e) => this.released(e)),
     );
   }
 
@@ -227,7 +263,8 @@ export class GameSystem extends createSystem({
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
-    this.label(title, 0.019, envelope.root, -0.018, 0.0045, false);
+    // On the bottom pocket, below the flap's tip and seal.
+    this.label(title, 0.018, envelope.root, -0.022, 0.0045, false);
     this.envelopes.set(e, envelope);
   }
 
@@ -236,7 +273,8 @@ export class GameSystem extends createSystem({
     if (!o) return;
     o.t += delta;
     const k = Math.min(1, o.t / FLAP_S);
-    o.envelope.flap.rotation.x = -Math.PI * 0.95 * (k * k * (3 - 2 * k));
+    // From resting on the pockets to just past upright, so it ends behind the letter.
+    o.envelope.flap.rotation.x = 0.12 - (Math.PI + 0.2) * (k * k * (3 - 2 * k));
     const l = Math.min(1, Math.max(0, (o.t - FLAP_S) / LETTER_S));
     o.envelope.letter.position.y = LETTER_RISE * l;
     if (o.t >= FLAP_S + LETTER_S + 0.15) {
@@ -248,12 +286,13 @@ export class GameSystem extends createSystem({
   private addButton(game: MenuChoice, title: string, x: number, color: number): void {
     const button = makeButton(color);
     button.name = `menu-${game}`;
-    button.position.set(x, 0.0325, 0.12);
+    button.position.set(x, 0.0325 * 1.3, 0.12);
+    button.scale.setScalar(1.3);
     const e = this.add(button);
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
-    this.label(title, 0.017, button, 0, 0.0075, false);
+    this.label(title, 0.022, button, 0, 0.0075, false);
   }
 
   private start(choice: MenuChoice): void {
@@ -425,7 +464,9 @@ export class GameSystem extends createSystem({
     );
     const boss = squadInfo?.boss ?? false;
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
-    const { root, flag } = makeFoldling(color);
+    const figure = makeFoldling(color, boss ? 'elephant' : speciesFor(offer.offer_id));
+    this.figure = figure;
+    const { root } = figure;
     root.rotation.y = CREATURE_YAW;
     root.scale.setScalar(0.2);
     // Rescued creatures step out of their partner's window; the rest come from the book.
@@ -438,28 +479,37 @@ export class GameSystem extends createSystem({
     if (boss) this.squadScene?.bossHandOff();
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
-    // Orb Forge shows the target on the flag. Balloon Burst puts the question
-    // on its own card, so its flag stays plain instead of repeating a "?".
-    this.flagLabel = undefined;
-    if (offer.game === 'orb_forge') {
-      const flagLabel = new Label(offer.target!.text, { height: 0.05 });
-      flagLabel.mesh.name = 'flag-label';
-      flag.add(flagLabel.mesh);
-      this.labels.add(flagLabel.mesh);
-      this.flagLabel = flagLabel;
+    // The card above the creature says what to do: the question in Balloon
+    // Burst, the number to build in Orb Forge. The first few creatures of a
+    // game also get a how-to line.
+    this.clearPrompt();
+    const seen = this.seen[offer.game]++;
+    const target = offer.target?.text ?? '';
+    const card =
+      offer.game === 'balloon_burst' ? offer.prompt.en : seen < HINTED ? T.orbFirst(target) : T.orbTask(target);
+    const desk = this.deskEntity()!.object3D!;
+    this.prompt = new Label(card, { height: 0.036 });
+    this.prompt.mesh.name = 'prompt-label';
+    this.prompt.mesh.position.copy(PROMPT_POS);
+    desk.add(this.prompt.mesh);
+    this.labels.add(this.prompt.mesh);
+    if (offer.game === 'balloon_burst' && seen < HINTED) {
+      this.hint = new Label(T.popHint, { height: 0.022 });
+      this.hint.mesh.name = 'hint-label';
+      this.hint.mesh.position.set(PROMPT_POS.x, PROMPT_POS.y - 0.034, PROMPT_POS.z);
+      desk.add(this.hint.mesh);
+      this.labels.add(this.hint.mesh);
     }
-    if (offer.game === 'balloon_burst') {
-      this.clearPrompt();
-      this.prompt = new Label(offer.prompt.en, { height: 0.036 });
-      this.prompt.mesh.name = 'prompt-label';
-      this.prompt.mesh.position.copy(PROMPT_POS);
-      this.deskEntity()!.object3D!.add(this.prompt.mesh);
-      this.labels.add(this.prompt.mesh);
-    }
-    this.tween(root, STAND, 0.7, 0.03, boss ? 1.4 : 1, () => {
+    if (!this.timerBar.parent) desk.add(this.timerBar);
+    this.timerBar.position.set(PROMPT_POS.x, PROMPT_POS.y + 0.034, PROMPT_POS.z);
+    this.timerBar.visible = false;
+    this.creatureScale = boss ? 1.4 : 1;
+    this.offering = undefined;
+    this.tween(root, STAND, 0.7, 0.03, this.creatureScale, () => {
       if (offer.game === 'balloon_burst') this.showBalloons(offer);
       else this.showCrystals(offer);
       this.shownAt = performance.now();
+      this.timing = true;
     });
   }
 
@@ -473,10 +523,11 @@ export class GameSystem extends createSystem({
     offer.balloons.forEach((b, i) => {
       const g = makeBalloon(i % 2 === 0 ? 0xf2cc8f : 0x81b29a);
       g.name = `balloon-${i}`;
-      g.position.set((i - (n - 1) / 2) * 0.085, 0.02, BALLOON_Z);
+      g.position.set((i - (n - 1) / 2) * BALLOON_GAP, 0.02, BALLOON_Z);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
-      this.label(b.text, 0.03, g, 0.0875, 0.034);
+      // A tag on the string below the balloon, so the round skin never covers it.
+      this.label(b.text, 0.03, g, 0.03, 0.012);
       this.tween(g, new Vector3(g.position.x, 0.1, BALLOON_Z), 0.5, 0, 1, () => e.addComponent(PokeInteractable));
     });
   }
@@ -547,6 +598,10 @@ export class GameSystem extends createSystem({
   }
 
   private afterVerdict(v: Verdict | SquadVerdict): void {
+    if (v.correct || !v.retry_allowed) {
+      this.timing = false;
+      this.timerBar.visible = false;
+    }
     if (this.squad) this.refreshSquad();
     else this.score.set(`${v.total_points} points`);
     const creature = this.creature();
@@ -560,12 +615,11 @@ export class GameSystem extends createSystem({
       return;
     }
     // Wrong: the creature bounces. With a second try it stays; otherwise it leaves.
-    this.tween(obj, obj.position.clone(), 0.25, 0.04, 1);
+    if (!this.figure?.play('bounce', true)) this.tween(obj, obj.position.clone(), 0.25, 0.04, 1);
     if (!v.retry_allowed) {
       this.clear(this.queries.balloons);
       this.clear(this.queries.crystals);
       this.clear(this.queries.orbs);
-      this.flagLabel?.set(`= ${v.expected_text}`);
       this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
       this.phase = 'between';
       // In Solo Squad it runs to a partner's window, or to the crystal.
@@ -585,8 +639,17 @@ export class GameSystem extends createSystem({
     }
   }
 
+  /** A right answer: the Foldling folds itself flat, then flies home as a paper bird. */
   private foldHome(creature: Entity, color: number): void {
     this.phase = 'between';
+    const obj = creature.object3D!;
+    const fold = this.figure?.play('fold', true);
+    const foldS = fold ? fold.getClip().duration : 0;
+    // A dummy tween on the creature waits out the fold clip.
+    this.tween(obj, obj.position.clone(), Math.max(foldS, 0.01), 0, obj.scale.x, () => this.fly(creature, color));
+  }
+
+  private fly(creature: Entity, color: number): void {
     const obj = creature.object3D!;
     const bird = makeBird(color).root;
     bird.position.copy(obj.position).add(new Vector3(0, 0.05, 0));
@@ -594,17 +657,32 @@ export class GameSystem extends createSystem({
     bird.rotation.y = Math.PI / 2;
     const birdEntity = this.add(bird);
     this.remove(creature);
-    this.tween(bird, new Vector3(0, 0.08, -0.1), 0.9, 0.12, 0.4, () => {
+    this.tween(bird, new Vector3(0, 0.1, HOME.z), 0.9, 0.12, 0.4, () => {
       this.remove(birdEntity);
       this.next();
     });
   }
 
   private clearPrompt(): void {
-    if (!this.prompt) return;
-    this.prompt.mesh.removeFromParent();
-    this.labels.delete(this.prompt.mesh);
+    this.timing = false;
+    this.timerBar.visible = false;
+    for (const l of [this.prompt, this.hint]) {
+      if (!l) continue;
+      l.mesh.removeFromParent();
+      this.labels.delete(l.mesh);
+    }
     this.prompt = undefined;
+    this.hint = undefined;
+  }
+
+  /** The speed-bonus strip shrinks from full to nothing over the expected time. */
+  private runTimer(): void {
+    if (!this.timing) return;
+    const left = 1 - (performance.now() - this.shownAt) / TIMER_MS;
+    this.timerBar.visible = left > 0;
+    if (left <= 0) return;
+    this.timerBar.scale.x = left;
+    this.timerBar.material = paper(left > 0.5 ? CORRECT : TRY_AGAIN, { doubleSide: true });
   }
 
   private next(): void {
@@ -668,6 +746,7 @@ export class GameSystem extends createSystem({
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
     if (this.phase === 'opening') this.runOpening(delta);
+    this.runTimer();
     if (this.squad) this.updateSquad(delta);
 
     // Labels always face the camera that renders them (the head in XR,
@@ -685,12 +764,17 @@ export class GameSystem extends createSystem({
     // dwell stops a crystal dragged across the row from merging with every
     // neighbour it passes.
     let near: Entity | undefined;
+    let offering: Entity | undefined;
+    for (const held of [...this.queries.heldCrystals.entities, ...this.queries.heldOrbs.entities]) {
+      held.object3D!.getWorldPosition(this.a);
+      if (this.a.distanceTo(this.creatureWorld) < GIVE_DIST) offering = held;
+    }
+    this.offering = offering;
+    // The creature leans in (grows a little) while it can take the answer.
+    const s = this.creatureScale * (offering ? READY_SCALE : 1);
+    if (!this.tweens.some((t) => t.obj === creature.object3D)) creature.object3D.scale.setScalar(s);
     for (const held of this.queries.heldCrystals.entities) {
       held.object3D!.getWorldPosition(this.a);
-      if (this.a.distanceTo(this.creatureWorld) < HIT_DIST) {
-        this.submitOrb([held.getValue(Crystal, 'index') as number]);
-        return;
-      }
       for (const other of this.queries.crystals.entities) {
         if (other === held || other.hasComponent(Grabbed)) continue;
         other.object3D!.getWorldPosition(this.b);
@@ -713,13 +797,16 @@ export class GameSystem extends createSystem({
       this.mergeWith = near;
       this.mergeHeld = 0;
     }
-    for (const orb of this.queries.orbs.entities) {
-      if (!orb.hasComponent(Grabbed)) continue;
-      orb.object3D!.getWorldPosition(this.a);
-      if (this.a.distanceTo(this.creatureWorld) < HIT_DIST) {
-        this.submitOrb([orb.getValue(Orb, 'first') as number, orb.getValue(Orb, 'second') as number]);
-        return;
-      }
+  }
+
+  /** A crystal or orb left the hand: it is an answer only if it was offered to the creature. */
+  private released(e: Entity): void {
+    if (e !== this.offering || this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
+    this.offering = undefined;
+    if (e.hasComponent(Orb)) {
+      this.submitOrb([e.getValue(Orb, 'first') as number, e.getValue(Orb, 'second') as number]);
+    } else {
+      this.submitOrb([e.getValue(Crystal, 'index') as number]);
     }
   }
 

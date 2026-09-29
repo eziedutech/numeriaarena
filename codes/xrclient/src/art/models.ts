@@ -18,12 +18,17 @@ import {
   PlaneGeometry,
 } from '@iwsdk/core';
 
-import { INK, PAPER, PAPER_SHADE, paper, shade } from './palette.js';
+import { SPECIES, type Species } from '../assets.js';
+import { INK, PAPER, PAPER_SHADE, paper, shade, tint } from './palette.js';
 
 // ------------------------------------------------------------ origami models
 
 /** Imported number flag, sized to the procedural Foldling. */
 const FLAG_SCALE = 1.25;
+/** Origami Foldlings are about 8 cm long; this keeps them readable at arm's length. */
+const FOLDLING_SCALE = 1.6;
+/** The flag relative to an origami Foldling (already scaled up). */
+const FOLDLING_FLAG_SCALE = 0.75;
 const BIRD_SCALE = 1.5;
 
 /** Mixers of every animated model on the desk; the game advances them each frame. */
@@ -134,7 +139,38 @@ function staticModel(id: string, name: string, from?: string, color?: number): G
  * the table. The body stays procedural until the origami species are final;
  * the flag is the origami `flag_small`.
  */
-export function makeFoldling(color: number): Figure {
+export function makeFoldling(color: number, species: Species = 'fox'): Figure {
+  const loaded = loadModel(`foldling_${species}`);
+  const flagModel = loadModel('flag_small');
+  if (!loaded || !flagModel) return proceduralFoldlingFigure(color);
+  const root = new Group();
+  root.name = 'foldling';
+  const model = loaded.scene;
+  model.scale.setScalar(FOLDLING_SCALE);
+  recolour(model, 'coral', color);
+  root.add(model);
+  const f = flagModel.scene;
+  f.scale.setScalar(FOLDLING_FLAG_SCALE);
+  // The cloth trails behind the animal like a carried flag.
+  f.rotation.y = Math.PI;
+  (model.getObjectByName('flag_anchor') ?? model).add(f);
+  // The number floats just above the pole, never on the cloth that could cover it.
+  const number = new Group();
+  number.name = 'flag-number';
+  number.position.set(0, 0.125, 0);
+  f.add(number);
+  figure(f, f, f, flagModel.animations).play('wave');
+  const fig = figure(root, number, model, loaded.animations, 'idle');
+  fig.play('idle');
+  return fig;
+}
+
+/** Species for a creature: varied, and stable for one offer. */
+export function speciesFor(offerId: number): Species {
+  return SPECIES[(offerId * 5) % SPECIES.length];
+}
+
+function proceduralFoldlingFigure(color: number): Figure {
   const { root, flag, pole } = proceduralFoldling(color);
   const flagModel = loadModel('flag_small');
   if (!flagModel) return figure(root, flag, root, []);
@@ -146,7 +182,11 @@ export function makeFoldling(color: number): Figure {
   f.position.set(-0.012, 0.05, 0);
   f.rotation.y = Math.PI;
   root.add(f);
-  const anchor = f.getObjectByName('label_anchor') ?? f;
+  // The number floats just above the pole, never on the cloth that could cover it.
+  const anchor = new Group();
+  anchor.name = 'flag-number';
+  anchor.position.set(0, 0.125, 0);
+  f.add(anchor);
   const fig = figure(root, anchor, f, flagModel.animations);
   fig.play('wave');
   return fig;
@@ -277,16 +317,25 @@ export function makeEnvelope(color: number): Envelope {
   const letter = new Mesh(new PlaneGeometry(ENV_W * 0.86, ENV_H * 0.84), paper(PAPER, { doubleSide: true }));
   letter.name = 'envelope-letter';
   letter.position.z = 0.0008;
-  // Side pockets meet in the middle; the bottom pocket laps over them.
-  const sides = folded([-w, -h, 0.002, 0, 0, 0.002, -w, h, 0.002, w, -h, 0.002, w, h, 0.002, 0, 0, 0.002], color);
-  const bottom = folded([-w, -h, 0.003, w, -h, 0.003, 0, 0.004, 0.003], shade(color));
+  // Each folded panel gets its own tone so the creases read under any light:
+  // side pockets in shadow, the bottom pocket catching light, the flap between.
+  const sides = folded(
+    [-w, -h, 0.002, 0, 0, 0.002, -w, h, 0.002, w, -h, 0.002, w, h, 0.002, 0, 0, 0.002],
+    shade(shade(color)),
+  );
+  const bottom = folded([-w, -h, 0.003, w, -h, 0.003, 0, 0.004, 0.003], tint(color, 0.18));
   const flap = new Group();
   flap.name = 'envelope-flap';
-  flap.position.set(0, h, 0.004);
-  flap.add(folded([-w, 0, 0, 0, -h * 1.15, 0, w, 0, 0], color));
+  // The flap belongs to the back sheet: its hinge is on the back sheet's top
+  // edge and it folds forward over the pockets. Opened, it ends up behind the
+  // letter, which then slides out of the gap between back sheet and pockets.
+  flap.position.set(0, h, 0);
+  // Lifted a little off the pockets, the way a folded flap never lies quite flat.
+  flap.rotation.x = 0.12;
+  flap.add(folded([-w, 0, 0.004, 0, -h * 0.95, 0.004, w, 0, 0.004], color));
   const seal = new Mesh(new CylinderGeometry(0.007, 0.007, 0.002, 12), paper(0xe8b64c));
   seal.rotation.x = Math.PI / 2;
-  seal.position.set(0, -h * 1.05, 0.0012);
+  seal.position.set(0, -h * 0.85, 0.0052);
   flap.add(seal);
   root.add(back, letter, sides, bottom, flap);
   return { root, flap, letter };

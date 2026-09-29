@@ -15,9 +15,17 @@ if (!src || !existsSync(join(src, 'models/manifest.json'))) {
 const dest = new URL('../codes/xrclient/public/models/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 // The assets the game uses today. Add names here when a system starts using them.
-// Foldling species are left out until their faces are final; the game draws
-// procedural Foldlings until then.
+// Foldling faces are still being refined in the asset repository; run this
+// script again when they land.
 const WANTED = [
+  'foldling_fox',
+  'foldling_rabbit',
+  'foldling_crane',
+  'foldling_turtle',
+  'foldling_frog',
+  'foldling_fish',
+  'foldling_cat',
+  'foldling_elephant',
   'popup_book',
   'portal_main',
   'paper_bird',

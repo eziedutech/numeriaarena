@@ -31,6 +31,9 @@ export const EN = {
     brave_try: 'Brave Try',
   } satisfies Record<Highlight, string>,
   done: 'Done',
+  popHint: 'Pop the right answer',
+  orbFirst: (target: string) => `Join 2 crystals to make ${target}`,
+  orbTask: (target: string) => `Make ${target}`,
   gameName: { balloon_burst: 'Balloon Burst', orb_forge: 'Orb Forge' },
 } as const;
 

@@ -4,6 +4,525 @@
   "license": "CC0-1.0 (models); same owner as this game",
   "assets": [
     {
+      "name": "foldling_fox",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_fox.glb",
+      "unit": "m",
+      "triangles": 412,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0408,
+          0,
+          -0.0116
+        ],
+        "max": [
+          0.0385,
+          0.0581,
+          0.0116
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.004,
+          0.038,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.072,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "eyes_happy",
+        "ear_l",
+        "ear_r",
+        "tail",
+        "leg_fl",
+        "leg_fr",
+        "leg_bl",
+        "leg_br"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink",
+        "pink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_rabbit",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_rabbit.glb",
+      "unit": "m",
+      "triangles": 446,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0268,
+          -0.0001,
+          -0.015
+        ],
+        "max": [
+          0.026,
+          0.0722,
+          0.015
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.008,
+          0.034,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.082,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "eyes_happy",
+        "ear_l",
+        "ear_r",
+        "leg_bl",
+        "leg_fl",
+        "leg_br",
+        "leg_fr"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink",
+        "pink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_crane",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_crane.glb",
+      "unit": "m",
+      "triangles": 232,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.035,
+          0,
+          -0.0355
+        ],
+        "max": [
+          0.037,
+          0.055,
+          0.0355
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.004,
+          0.026,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.072,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "wing_l",
+        "wing_r",
+        "neck",
+        "head",
+        "eyes_happy",
+        "tail"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_turtle",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_turtle.glb",
+      "unit": "m",
+      "triangles": 260,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0352,
+          0,
+          -0.026
+        ],
+        "max": [
+          0.042,
+          0.028,
+          0.026
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.002,
+          0.028,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.048,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "eyes_happy",
+        "leg_fl",
+        "leg_fr",
+        "leg_bl",
+        "leg_br",
+        "tail"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_frog",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_frog.glb",
+      "unit": "m",
+      "triangles": 424,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.021,
+          -0.0003,
+          -0.024
+        ],
+        "max": [
+          0.022,
+          0.032,
+          0.024
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.006,
+          0.02,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.05,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "eyes_happy",
+        "leg_bl",
+        "leg_br"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_fish",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_fish.glb",
+      "unit": "m",
+      "triangles": 218,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.038,
+          0.009,
+          -0.0147
+        ],
+        "max": [
+          0.031,
+          0.045,
+          0.0147
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          0,
+          0.038,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.058,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "eyes_happy",
+        "tail",
+        "fin_l",
+        "fin_r"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ],
+      "notes": "Floats: belly 1 cm above the table; the origin stays on the table top."
+    },
+    {
+      "name": "foldling_cat",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_cat.glb",
+      "unit": "m",
+      "triangles": 370,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0284,
+          -0.0001,
+          -0.0125
+        ],
+        "max": [
+          0.019,
+          0.0661,
+          0.0125
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.008,
+          0.034,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.078,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "eyes_happy",
+        "ear_l",
+        "ear_r",
+        "tail"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink",
+        "pink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
+      "name": "foldling_elephant",
+      "category": "foldlings",
+      "sheet": "foldlings",
+      "file": "foldlings/foldling_elephant.glb",
+      "unit": "m",
+      "triangles": 390,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.0345,
+          0,
+          -0.0198
+        ],
+        "max": [
+          0.0423,
+          0.0581,
+          0.0198
+        ]
+      },
+      "anchors": {
+        "flag_anchor": [
+          -0.008,
+          0.048,
+          0
+        ],
+        "label_anchor": [
+          0,
+          0.072,
+          0
+        ]
+      },
+      "parts": [
+        "body",
+        "head",
+        "eyes_happy",
+        "trunk",
+        "ear_l",
+        "ear_r",
+        "leg_fl",
+        "leg_fr",
+        "leg_bl",
+        "leg_br"
+      ],
+      "materials": [
+        "coral",
+        "coral_shade",
+        "cream",
+        "cream_shade",
+        "ink"
+      ],
+      "clips": [
+        "idle",
+        "hop",
+        "cheer",
+        "bounce",
+        "fold"
+      ],
+      "variants": [
+        "place_value",
+        "multiply_divide",
+        "fractions",
+        "decimals",
+        "measurement",
+        "rare"
+      ]
+    },
+    {
       "name": "popup_book",
       "category": "book",
       "sheet": "book",
