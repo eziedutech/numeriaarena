@@ -59,8 +59,20 @@ export class Label {
       ctx.font = font(h * 0.62);
       w = ctx.measureText(text).width + h * 0.6;
     }
-    this.canvas.width = Math.max(h, Math.ceil(w));
-    this.canvas.height = h;
+    const width = Math.max(h, Math.ceil(w));
+    if (width !== this.canvas.width || h !== this.canvas.height) {
+      this.canvas.width = width;
+      this.canvas.height = h;
+      // GPU texture storage is sized once; a resized canvas needs a new texture.
+      const material = this.mesh?.material as MeshBasicMaterial | undefined;
+      if (material) {
+        this.texture.dispose();
+        this.texture = new CanvasTexture(this.canvas);
+        this.texture.colorSpace = SRGBColorSpace;
+        material.map = this.texture;
+        material.needsUpdate = true;
+      }
+    }
     const c = this.canvas.getContext('2d')!;
     c.clearRect(0, 0, this.canvas.width, h);
     if (this.opts.card) {
