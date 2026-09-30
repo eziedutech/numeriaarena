@@ -12,6 +12,7 @@ import {
   Group,
   MeshBasicMaterial,
   PlaneGeometry,
+  Quaternion,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
@@ -119,6 +120,10 @@ const GROW_M = 0.03;
 const RISE_SPEED = 0.035;
 /** More lanes than balloons, so a balloon always finds a free one. */
 const BALLOON_LANES = 6;
+/** The T helper picks the target nearest the pointing direction within this angle. */
+const TOUCH_CONE = (10 * Math.PI) / 180;
+/** Hosts where the emulator runs; the T touch helper exists only there. */
+const EMULATOR_HOSTS = ['localhost', '127.0.0.1'];
 /** A joined orb flies to the creature in this long (seconds). */
 const ORB_FLIGHT_S = 0.45;
 /** A crystal clicked with the mouse lifts this much to show it is chosen. */
@@ -182,6 +187,7 @@ export class GameSystem extends createSystem({
   private species: Species = 'fox';
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
+  private touchQuat = new Quaternion();
   /** Outside XR: the crystal clicked first, waiting for its partner. */
   private selected?: Entity;
   /** Crystals of the last orb given, to write the finished sum on the card. */
@@ -225,6 +231,14 @@ export class GameSystem extends createSystem({
       tween: (obj, to, dur, arc, scaleTo, done) => this.tween(obj, to, dur, arc, scaleTo, done),
     };
 
+    if (EMULATOR_HOSTS.includes(window.location.hostname)) {
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.code === 'KeyT' && !ev.repeat) this.emulatorTouch();
+      };
+      window.addEventListener('keydown', onKey);
+      this.cleanupFuncs.push(() => window.removeEventListener('keydown', onKey));
+    }
+
     Core.start(Date.now() >>> 0)
       .then((core) => {
         this.core = core;
@@ -233,22 +247,7 @@ export class GameSystem extends createSystem({
       .catch((error) => console.error('[game] core failed to start', error));
 
     this.cleanupFuncs.push(
-      this.queries.pressedButtons.subscribe('qualify', (e) => {
-        if (this.phase === 'recap') {
-          this.endRace();
-          return;
-        }
-        if (this.phase !== 'menu') return;
-        const choice = e.getValue(MenuButton, 'game') as MenuChoice;
-        const envelope = this.envelopes.get(e);
-        if (!envelope) {
-          this.start(choice);
-          return;
-        }
-        // The chosen envelope opens before its game starts.
-        this.phase = 'opening';
-        this.opening = { envelope, choice, t: 0 };
-      }),
+      this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
       this.queries.pressedBalloons.subscribe('qualify', (e) => this.popBalloon(e)),
       this.queries.pressedCrystals.subscribe('qualify', (e) => this.clickCrystal(e)),
       // Entering or leaving XR switches mouse play for what is already on the desk.
@@ -265,6 +264,58 @@ export class GameSystem extends createSystem({
       this.queries.heldCrystals.subscribe('disqualify', (e) => this.released(e)),
       this.queries.heldOrbs.subscribe('disqualify', (e) => this.released(e)),
     );
+  }
+
+  private pressButton(e: Entity): void {
+    if (this.phase === 'recap') {
+      this.endRace();
+      return;
+    }
+    if (this.phase !== 'menu') return;
+    const choice = e.getValue(MenuButton, 'game') as MenuChoice;
+    const envelope = this.envelopes.get(e);
+    if (!envelope) {
+      this.start(choice);
+      return;
+    }
+    // The chosen envelope opens before its game starts.
+    this.phase = 'opening';
+    this.opening = { envelope, choice, t: 0 };
+  }
+
+  /**
+   * Emulator helper, only on this computer (localhost): T touches whatever
+   * the right hand points at, as if the fingertip reached it. Moving an
+   * emulated fingertip into a floating balloon by mouse is slow; the public
+   * build never listens for the key, so the headset stays hands-only.
+   */
+  private emulatorTouch(): void {
+    this.player.raySpaces.right.getWorldPosition(this.a);
+    this.player.raySpaces.right.getWorldQuaternion(this.touchQuat);
+    this.b.set(0, 0, -1).applyQuaternion(this.touchQuat);
+    // The object nearest the pointing direction, within a small cone: easier
+    // than an exact hit on a moving balloon when aiming with a mouse.
+    let e: Entity | undefined;
+    let best = TOUCH_CONE;
+    for (const q of [this.queries.balloons, this.queries.crystals, this.queries.buttons]) {
+      for (const cand of q.entities) {
+        const obj = cand.object3D;
+        if (!obj?.visible || obj.scale.x < 0.5) continue;
+        obj.getWorldPosition(this.creatureWorld);
+        // A balloon's paper envelope is above its basket, the origin.
+        if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
+        const angle = this.b.angleTo(this.creatureWorld.sub(this.a));
+        if (angle < best) {
+          best = angle;
+          e = cand;
+        }
+      }
+    }
+    console.info(`[emulator] T touch: ${e?.object3D?.name ?? 'nothing'}`);
+    if (!e) return;
+    if (e.hasComponent(Balloon)) this.popBalloon(e);
+    else if (e.hasComponent(Crystal)) this.clickCrystal(e);
+    else if (e.hasComponent(MenuButton)) this.pressButton(e);
   }
 
   private deskEntity(): Entity | undefined {
