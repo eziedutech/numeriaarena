@@ -1,4 +1,4 @@
-// Emulator test driver for Foldlings: drives the IWSDK CLI with hand input.
+// Emulator test driver for Numeria Arena: drives the IWSDK CLI with hand input.
 // Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 import { execFileSync } from 'node:child_process';

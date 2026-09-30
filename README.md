@@ -1,4 +1,4 @@
-# Foldlings
+# Numeria Arena
 
 > A hands-first mixed reality math game for grades 4 to 6: a pop-up paper book opens on the player's real desk, origami creatures carrying numbers wander out, and players fold them home by answering with their hands, while an adaptive engine keeps every child at their own level.
 
@@ -30,12 +30,12 @@ Status: early development. No public build yet; the link will be added here when
 ## What it is
 
 Many schools own headsets that sit unused because there is little math content for
-them that fits a lesson. Foldlings is built for that classroom:
+them that fits a lesson. Numeria Arena is built for that classroom:
 
 1. **The book lands on your desk.** The headset finds the real table and opens a pop-up paper book on it. With no table in view, the player places it with a pinch.
-2. **Foldlings wander out.** Each origami creature carries a number. Answering it with the hands (forging number orbs, popping balloons, building fraction bridges, balancing scales, measuring the real table) folds it back into a paper bird that flies home.
+2. **Origami creatures wander out.** Each one carries a number. Answering it with the hands (forging number orbs, popping balloons, building fraction bridges, balancing scales, measuring the real table) folds it back into a paper bird that flies home.
 3. **Everyone plays at their own level.** The Fairness Engine gives each child problems they should get right about three times in four, so a strong and a weak student earn points at the same pace.
-4. **Nobody plays alone.** Two labelled partner bots join a solo player; in class, up to three headsets share one match while students without a headset support them from the classroom screen.
+4. **Nobody plays alone.** A solo player races two clearly labelled robot rivals; in class, up to three headsets share one match while students without a headset support them from the classroom screen.
 
 Answers are never typed in by a person or written by an AI model. Every item comes
 from a template, and the answer is computed by one piece of code.
@@ -60,7 +60,7 @@ There is nothing to test in a headset yet. What runs today:
 
 ## Architecture
 
-![Foldlings architecture: one Rust core runs as WebAssembly in the headset game and the classroom pages, natively in the game server and in the content tool. Solid boxes exist today, dashed boxes are planned.](assets/architecture.svg)
+![Numeria Arena architecture: one Rust core runs as WebAssembly in the headset game and the classroom pages, natively in the game server and in the content tool. Solid boxes exist today, dashed boxes are planned.](assets/architecture.svg)
 
 Choices worth knowing:
 

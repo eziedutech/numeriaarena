@@ -8,6 +8,8 @@ const ORDINAL = ['1st', '2nd', '3rd'];
 const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}th`;
 
 export const EN = {
+  /** The game's name, above the book in the menu. */
+  title: 'Numeria Arena',
   race: 'Robot Race',
   bot: (name: string) => `${name} (bot)`,
   you: 'You',

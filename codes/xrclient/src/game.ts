@@ -243,7 +243,7 @@ export class GameSystem extends createSystem({
   private opening?: { envelope: Envelope; choice: MenuChoice; t: number };
 
   init(): void {
-    this.score = new Label('Foldlings', { height: 0.04 });
+    this.score = new Label(T.title, { height: 0.04 });
     this.score.mesh.position.set(0, 0.36, -0.15);
     this.score.mesh.name = 'score-label';
     this.labels.add(this.score.mesh);
@@ -681,7 +681,7 @@ export class GameSystem extends createSystem({
     this.race?.free();
     this.race = undefined;
     this.raceState = undefined;
-    this.score.set('Foldlings');
+    this.score.set(T.title);
     this.score.mesh.visible = true;
     this.showMenu();
   }

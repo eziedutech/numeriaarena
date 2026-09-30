@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="title desc">
-  <title id="title">Foldlings architecture</title>
+  <title id="title">Numeria Arena architecture</title>
   <desc id="desc">One Rust core computes every answer and every fairness decision. It runs as WebAssembly in the headset game and in the 2D classroom pages, natively in the game server, and natively in the content tool that validates item templates. The headset plays solo offline with bots; the server adds class matches, sync and the class screen. AI providers are an optional layer behind the server. Solid boxes exist today; dashed boxes are planned.</desc>
 
   <defs>
