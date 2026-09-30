@@ -1,13 +1,14 @@
 import {
   BackSide,
   Box3,
-  Color,
+  CanvasTexture,
   createSystem,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
   SphereGeometry,
+  SRGBColorSpace,
   Vector3,
   VisibilityState,
   XRMesh,
@@ -55,8 +56,45 @@ const STATUS_AHEAD_M = 0.4;
 const STATUS_DROP_M = 0.1;
 /** While the ghost book follows the hand, the card rides this far above it, over its portal. */
 const STATUS_ABOVE_GHOST_M = 0.3;
-/** Paper cream behind the browser preview; XR keeps the background clear for passthrough. */
-const PREVIEW_BACKGROUND = new Color(0xf6e3c0);
+/**
+ * Behind the browser preview: a matte faded denim with soft out-of-focus
+ * paper shapes, like a blurred desk behind the book, dark enough for cream
+ * paper lettering. XR keeps the background clear for passthrough.
+ */
+const PREVIEW_BASE = '#5e7391';
+/** Out-of-focus spots: x, y, radius (fractions of the width) and tone. */
+const PREVIEW_SPOTS: [number, number, number, string][] = [
+  [0.12, 0.2, 0.28, 'rgba(255,255,255,0.10)'],
+  [0.85, 0.15, 0.22, 'rgba(255,255,255,0.08)'],
+  [0.7, 0.8, 0.3, 'rgba(0,0,0,0.10)'],
+  [0.25, 0.85, 0.24, 'rgba(0,0,0,0.08)'],
+  [0.5, 0.45, 0.35, 'rgba(255,255,255,0.05)'],
+  [0.95, 0.6, 0.18, 'rgba(0,0,0,0.07)'],
+];
+
+let previewBackdrop: CanvasTexture | undefined;
+
+function makePreviewBackdrop(): CanvasTexture {
+  if (previewBackdrop) return previewBackdrop;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 288;
+  const c = canvas.getContext('2d')!;
+  c.fillStyle = PREVIEW_BASE;
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  for (const [x, y, r, tone] of PREVIEW_SPOTS) {
+    const cx = x * canvas.width;
+    const cy = y * canvas.height;
+    const g = c.createRadialGradient(cx, cy, 0, cx, cy, r * canvas.width);
+    g.addColorStop(0, tone);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  previewBackdrop = new CanvasTexture(canvas);
+  previewBackdrop.colorSpace = SRGBColorSpace;
+  return previewBackdrop;
+}
 
 /**
  * Places the play area. A detected table within seated reach wins; otherwise
@@ -136,13 +174,13 @@ export class DeskSystem extends createSystem({
         immersive = now;
         this.waited = 0;
         this.setPlaced(false, 0);
-        this.scene.background = now ? null : PREVIEW_BACKGROUND;
+        this.scene.background = now ? null : makePreviewBackdrop();
         if (!now) this.placeForBrowser();
       }),
     );
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive && immersive === null) {
       immersive = false;
-      this.scene.background = PREVIEW_BACKGROUND;
+      this.scene.background = makePreviewBackdrop();
       this.placeForBrowser();
     }
   }
