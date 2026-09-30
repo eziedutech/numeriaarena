@@ -15,6 +15,7 @@ import {
 
 import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
+import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
@@ -71,6 +72,10 @@ export class DeskSystem extends createSystem({
   /** A small card in front of the eyes while the book is being placed. */
   private status!: Group;
   private statusText!: Label;
+  /** A second, smaller line under a paper card (the pinch countdown). */
+  private statusSmall!: Label;
+  /** Paper cards for each placing step, made once their images load. */
+  private statusCards = new Map<UiName, Object3D>();
   private statusStar!: Object3D;
   private curtain!: Mesh;
   private curtainMat!: MeshBasicMaterial;
@@ -107,7 +112,10 @@ export class DeskSystem extends createSystem({
     this.statusText.mesh.position.set(0, -0.055, 0);
     this.statusStar = makeStar(true);
     this.statusStar.scale.setScalar(1.4);
-    this.status.add(this.statusText.mesh, this.statusStar);
+    this.statusSmall = new Label(' ', { height: 0.03 });
+    this.statusSmall.mesh.position.set(0, -0.105, 0);
+    this.statusSmall.mesh.visible = false;
+    this.status.add(this.statusText.mesh, this.statusSmall.mesh, this.statusStar);
     this.world.createTransformEntity(this.status);
 
     // A soft grey curtain around the head while the book is not ready: the
@@ -160,7 +168,18 @@ export class DeskSystem extends createSystem({
    * Keeps the placing card about 55 cm in front of the eyes, a little low,
    * facing the player, with its paper star turning while it works.
    */
-  private showStatus(text: string, delta: number, spin: boolean, dim: number, above?: Vector3): void {
+  /**
+   * `paper` shows that paper card instead of `text` once its image has
+   * loaded, with `small` as a short line under it.
+   */
+  private showStatus(
+    text: string,
+    delta: number,
+    spin: boolean,
+    dim: number,
+    above?: Vector3,
+    paper?: { name: UiName; scale: number; small?: string },
+  ): void {
     this.player.head.getWorldPosition(this.head);
     this.curtain.position.copy(this.head);
     // Ease towards the wanted dimming instead of snapping.
@@ -176,9 +195,30 @@ export class DeskSystem extends createSystem({
       this.status.position.y -= STATUS_DROP_M;
     }
     this.status.lookAt(this.head);
-    this.statusText.set(text);
+    const card = paper ? this.statusCard(paper.name, paper.scale) : undefined;
+    for (const [name, c] of this.statusCards) c.visible = !!card && name === paper?.name;
+    this.statusText.mesh.visible = !card;
+    this.statusSmall.mesh.visible = !!card && !!paper?.small;
+    if (card) {
+      if (paper?.small) this.statusSmall.set(paper.small);
+    } else {
+      this.statusText.set(text);
+    }
     if (spin) this.statusStar.rotation.y += delta * 3;
     this.status.visible = true;
+  }
+
+  private statusCard(name: UiName, scale: number): Object3D | undefined {
+    let card = this.statusCards.get(name);
+    if (!card) {
+      const image = uiImage(name, scale);
+      if (!image) return undefined;
+      image.position.set(0, -0.055, 0);
+      this.status.add(image);
+      this.statusCards.set(name, image);
+      card = image;
+    }
+    return card;
   }
 
   private placeForBrowser(): void {
@@ -259,7 +299,7 @@ export class DeskSystem extends createSystem({
     if (e.getValue(DeskRoot, 'placed')) {
       if (this.readyLeft > 0) {
         this.readyLeft -= delta;
-        this.showStatus('Ready!', delta, false, 0);
+        this.showStatus('Ready!', delta, false, 0, undefined, { name: 'status_ready', scale: 0.55 });
       } else {
         this.status.visible = false;
         this.curtain.visible = false;
@@ -271,7 +311,10 @@ export class DeskSystem extends createSystem({
     this.waited += delta;
     if (this.waited < TABLE_WAIT_S) {
       const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
-      this.showStatus(`Finding your table${dots}`, delta, true, CURTAIN_WAIT);
+      this.showStatus(`Finding your table${dots}`, delta, true, CURTAIN_WAIT, undefined, {
+        name: 'status_finding_table',
+        scale: 1.2,
+      });
       return;
     }
     // No table: a ghost book follows the right hand; a pinch puts it down.
@@ -282,7 +325,11 @@ export class DeskSystem extends createSystem({
     this.ghost.position.copy(this.tip);
     this.ghost.rotation.set(0, Math.atan2(this.head.x - this.tip.x, this.head.z - this.tip.z), 0);
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT, this.ghost.position);
+    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT, this.ghost.position, {
+      name: 'status_pinch_to_place',
+      scale: 1.2,
+      small: `or wait ${left} s`,
+    });
     const pads = this.input.xr.gamepads;
     if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
       this.root.position.copy(this.ghost.position);

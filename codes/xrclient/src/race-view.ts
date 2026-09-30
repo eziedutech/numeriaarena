@@ -2,6 +2,7 @@ import { Entity, Group, Object3D, Vector3 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
+import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
 import type { Emote, RaceState, Recap } from './game/core.js';
 import { T } from './text.js';
 
@@ -37,12 +38,20 @@ export interface Stage {
 
 interface RivalWindow {
   entity: Entity;
+  frame: Object3D;
+  /** Colour of the paper speech bubbles, matching the frame. */
+  tone: 'cobalt' | 'teal';
   bot: Figure;
   status: Label;
   work: Label;
   flash: Label;
+  /** A paper speech bubble, when one is up instead of the flash text. */
+  flashImage?: Object3D;
   flashLeft: number;
 }
+
+/** What each robot emote says, as a paper speech bubble. */
+const EMOTE_BUBBLE: Record<Emote, 'nice' | 'yay'> = { thumbs_up: 'nice', clap: 'yay' };
 
 /**
  * Everything the race adds to the desk: two rival windows with their robots,
@@ -51,7 +60,7 @@ interface RivalWindow {
  */
 export class RaceScene {
   private windows: RivalWindow[] = [];
-  private banner?: Label;
+  private banner?: Object3D;
   private bannerLeft = 0;
   private recapItems: Entity[] = [];
   /** One row per participant above the book, in place order. */
@@ -77,42 +86,82 @@ export class RaceScene {
       bot.root.position.set(0, -0.048, 0.003);
       bot.root.scale.setScalar(0.95);
       frame.add(bot.root);
-      stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
+      const nameplate = `race_name_${name.toLowerCase()}`;
+      if (nameplate in UI_HEIGHT) {
+        placeUiImage(nameplate as UiName, frame, [0, -0.08, 0.008], {
+          scale: 1.15,
+          fallback: () => stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false).mesh,
+        });
+      } else {
+        stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
+      }
       const status = stage.label(T.rival(0, 0), 0.024, frame, 0.08, 0.008, false);
       const work = stage.label(' ', 0.02, frame, 0.036, 0.008, false);
       const flash = stage.label(' ', 0.022, frame, 0.0, 0.03, false);
       flash.mesh.visible = false;
       work.mesh.visible = false;
-      this.windows.push({ entity, bot, status, work, flash, flashLeft: 0 });
+      this.windows.push({ entity, frame, tone: i === 0 ? 'cobalt' : 'teal', bot, status, work, flash, flashLeft: 0 });
     });
     for (let i = 0; i < 3; i += 1) {
       this.board.push(stage.label(' ', 0.03, desk, BOARD_TOP - i * 0.036, BOARD_Z));
     }
   }
 
-  showBanner(text: string, seconds = 2.5): void {
-    if (!this.banner) {
-      this.banner = new Label(text, { height: 0.04 });
-      this.banner.mesh.name = 'race-banner';
-      this.banner.mesh.position.set(0, BOARD_TOP + 0.12, BOARD_Z);
-      this.desk.add(this.banner.mesh);
+  /**
+   * A banner over the scoreboard: the paper banners in `images`, stacked top
+   * to bottom, or `text` on a card while they have not loaded.
+   */
+  showBanner(text: string, seconds = 2.5, images: UiName[] = []): void {
+    this.clearBanner();
+    const group = new Group();
+    group.name = 'race-banner';
+    group.position.set(0, BOARD_TOP + 0.12, BOARD_Z);
+    const parts = images.map((name) => uiImage(name, 0.8));
+    if (parts.length > 0 && parts.every((m) => m)) {
+      let y = 0;
+      for (const m of parts) {
+        const h = (m!.geometry as unknown as { parameters: { height: number } }).parameters.height;
+        m!.position.y = y - h / 2;
+        y -= h * 0.85;
+        group.add(m!);
+      }
+      group.position.y -= y / 2;
+    } else {
+      group.add(new Label(text, { height: 0.04 }).mesh);
     }
-    this.banner.set(text);
-    this.banner.mesh.visible = true;
+    this.desk.add(group);
+    this.banner = group;
     this.bannerLeft = seconds;
   }
 
-  flash(desk: number, text: string): void {
+  private clearBanner(): void {
+    this.banner?.removeFromParent();
+    this.banner = undefined;
+  }
+
+  /** A short word over a robot's window, as a paper speech bubble when there is one. */
+  flash(desk: number, text: string, bubble?: UiName): void {
     const w = this.windows[desk - 1];
     if (!w) return;
-    w.flash.set(text);
-    w.flash.mesh.visible = true;
+    w.flashImage?.removeFromParent();
+    w.flashImage = undefined;
+    const image = bubble ? uiImage(bubble) : null;
+    if (image) {
+      image.position.set(0, 0.0, 0.03);
+      w.frame.add(image);
+      w.flashImage = image;
+      w.flash.mesh.visible = false;
+    } else {
+      w.flash.set(text);
+      w.flash.mesh.visible = true;
+    }
     w.flashLeft = FLASH_S;
   }
 
   emote(desk: number, emote: Emote): void {
-    this.flash(desk, T.emote[emote]);
-    this.windows[desk - 1]?.bot.play(EMOTE_CLIP[emote], true);
+    const w = this.windows[desk - 1];
+    this.flash(desk, T.emote[emote], w && (`robot_${EMOTE_BUBBLE[emote]}_${w.tone}` as UiName));
+    w?.bot.play(EMOTE_CLIP[emote], true);
   }
 
   working(desk: number, prompt: string): void {
@@ -123,7 +172,8 @@ export class RaceScene {
   }
 
   answered(desk: number, correct: boolean): void {
-    this.flash(desk, correct ? T.right : T.missed);
+    const w = this.windows[desk - 1];
+    this.flash(desk, correct ? T.right : T.missed, correct && w ? (`robot_got_it_${w.tone}` as UiName) : undefined);
     if (correct) this.windows[desk - 1].work.mesh.visible = false;
   }
 
@@ -174,12 +224,16 @@ export class RaceScene {
   update(delta: number): void {
     if (this.banner && this.bannerLeft > 0) {
       this.bannerLeft -= delta;
-      if (this.bannerLeft <= 0) this.banner.mesh.visible = false;
+      if (this.bannerLeft <= 0) this.clearBanner();
     }
     for (const w of this.windows) {
       if (w.flashLeft > 0) {
         w.flashLeft -= delta;
-        if (w.flashLeft <= 0) w.flash.mesh.visible = false;
+        if (w.flashLeft <= 0) {
+          w.flash.mesh.visible = false;
+          w.flashImage?.removeFromParent();
+          w.flashImage = undefined;
+        }
       }
     }
   }
@@ -201,6 +255,8 @@ export class RaceScene {
       star.scale.setScalar(1.2);
       card.add(star);
     }
+    // The paper title (transparent emboss) is too faint over a real room;
+    // the text card stays until the asset set strengthens it.
     this.stage.label(T.recapTitle, 0.034, card, 0.06, 0.004, false);
     const rows = [...recap.players].sort((a, b) => a.place - b.place);
     rows.forEach((p, i) => {
@@ -225,10 +281,7 @@ export class RaceScene {
     this.board = [];
     for (const e of this.recapItems) this.stage.remove(e);
     this.recapItems = [];
-    if (this.banner) {
-      this.banner.mesh.removeFromParent();
-      this.banner = undefined;
-    }
+    this.clearBanner();
     this.countdown?.mesh.removeFromParent();
     this.countdown = undefined;
   }

@@ -1,0 +1,501 @@
+{
+  "source": "https://github.com/sayazia/orimathassets",
+  "commit": "4c246c07f5f3abffa8bfbae1d40f07d1fe24ced2",
+  "license": "CC0-1.0",
+  "assets": [
+    {
+      "name": "title_numeria_arena",
+      "file": "ui2d/brand/title_numeria_arena.png",
+      "text": "NUMERIA ARENA",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "XL",
+      "px": [
+        2076,
+        400
+      ],
+      "world_height_m": 0.07,
+      "priority": 1,
+      "letter_px": 190
+    },
+    {
+      "name": "menu_robot_race",
+      "file": "ui2d/menu/menu_robot_race.png",
+      "text": "ROBOT RACE",
+      "shape": "parallelogram",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "S",
+      "px": [
+        422,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44
+    },
+    {
+      "name": "menu_balloon_burst",
+      "file": "ui2d/menu/menu_balloon_burst.png",
+      "text": "BALLOON BURST",
+      "shape": "parallelogram",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "S",
+      "px": [
+        516,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44
+    },
+    {
+      "name": "menu_orb_forge",
+      "file": "ui2d/menu/menu_orb_forge.png",
+      "text": "ORB FORGE",
+      "shape": "parallelogram",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "S",
+      "px": [
+        384,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44
+    },
+    {
+      "name": "status_finding_table",
+      "file": "ui2d/placement/status_finding_table.png",
+      "text": "FINDING YOUR TABLE",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "M",
+      "px": [
+        978,
+        160
+      ],
+      "world_height_m": 0.035,
+      "priority": 1,
+      "letter_px": 72
+    },
+    {
+      "name": "status_pinch_to_place",
+      "file": "ui2d/placement/status_pinch_to_place.png",
+      "text": "PINCH TO PLACE THE BOOK",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "M",
+      "px": [
+        1252,
+        160
+      ],
+      "world_height_m": 0.035,
+      "priority": 1,
+      "letter_px": 72
+    },
+    {
+      "name": "status_ready",
+      "file": "ui2d/placement/status_ready.png",
+      "text": "READY!",
+      "shape": "circle",
+      "treatment": "on_color",
+      "background": "#5DB85B",
+      "size_class": "L",
+      "px": [
+        640,
+        644
+      ],
+      "world_height_m": 0.1258,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_wave_1",
+      "file": "ui2d/race/race_wave_1.png",
+      "text": "WAVE 1 OF 3",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "L",
+      "px": [
+        1104,
+        256
+      ],
+      "world_height_m": 0.05,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_wave_2",
+      "file": "ui2d/race/race_wave_2.png",
+      "text": "WAVE 2 OF 3",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "L",
+      "px": [
+        1114,
+        256
+      ],
+      "world_height_m": 0.05,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_wave_3",
+      "file": "ui2d/race/race_wave_3.png",
+      "text": "WAVE 3 OF 3",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "L",
+      "px": [
+        1114,
+        256
+      ],
+      "world_height_m": 0.05,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_boss_round",
+      "file": "ui2d/race/race_boss_round.png",
+      "text": "BOSS ROUND",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#6D597A",
+      "size_class": "L",
+      "px": [
+        1338,
+        302
+      ],
+      "world_height_m": 0.059,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_double_points",
+      "file": "ui2d/race/race_double_points.png",
+      "text": "DOUBLE POINTS!",
+      "shape": "parallelogram",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "M",
+      "px": [
+        822,
+        160
+      ],
+      "world_height_m": 0.035,
+      "priority": 1,
+      "letter_px": 72,
+      "note": "sits under BOSS ROUND"
+    },
+    {
+      "name": "race_times_up",
+      "file": "ui2d/race/race_times_up.png",
+      "text": "TIME'S UP!",
+      "shape": "circle",
+      "treatment": "on_color",
+      "background": "#E04A44",
+      "size_class": "L",
+      "px": [
+        660,
+        662
+      ],
+      "world_height_m": 0.1293,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "race_name_clip",
+      "file": "ui2d/race/race_name_clip.png",
+      "text": "CLIP (BOT)",
+      "shape": "rectangle",
+      "treatment": "on_color",
+      "background": "#3469C4",
+      "size_class": "S",
+      "px": [
+        336,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "also the label under the robot window"
+    },
+    {
+      "name": "race_name_crease",
+      "file": "ui2d/race/race_name_crease.png",
+      "text": "CREASE (BOT)",
+      "shape": "rectangle",
+      "treatment": "on_color",
+      "background": "#3FB6A0",
+      "size_class": "S",
+      "px": [
+        430,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44
+    },
+    {
+      "name": "robot_nice_cobalt",
+      "file": "ui2d/race/robot_nice_cobalt.png",
+      "text": "NICE!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3469C4",
+      "size_class": "S",
+      "px": [
+        190,
+        176
+      ],
+      "world_height_m": 0.0403,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "robot_nice_teal",
+      "file": "ui2d/race/robot_nice_teal.png",
+      "text": "NICE!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3FB6A0",
+      "size_class": "S",
+      "px": [
+        190,
+        176
+      ],
+      "world_height_m": 0.0403,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "robot_yay_cobalt",
+      "file": "ui2d/race/robot_yay_cobalt.png",
+      "text": "YAY!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3469C4",
+      "size_class": "S",
+      "px": [
+        184,
+        170
+      ],
+      "world_height_m": 0.039,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "robot_yay_teal",
+      "file": "ui2d/race/robot_yay_teal.png",
+      "text": "YAY!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3FB6A0",
+      "size_class": "S",
+      "px": [
+        184,
+        170
+      ],
+      "world_height_m": 0.039,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "robot_got_it_cobalt",
+      "file": "ui2d/race/robot_got_it_cobalt.png",
+      "text": "GOT IT!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3469C4",
+      "size_class": "S",
+      "px": [
+        242,
+        224
+      ],
+      "world_height_m": 0.0513,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "robot_got_it_teal",
+      "file": "ui2d/race/robot_got_it_teal.png",
+      "text": "GOT IT!",
+      "shape": "speech_bubble",
+      "treatment": "on_color",
+      "background": "#3FB6A0",
+      "size_class": "S",
+      "px": [
+        242,
+        224
+      ],
+      "world_height_m": 0.0513,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "robot speech bubble"
+    },
+    {
+      "name": "hint_pop_right_answer",
+      "file": "ui2d/question/hint_pop_right_answer.png",
+      "text": "POP THE RIGHT ANSWER",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "S",
+      "px": [
+        694,
+        96
+      ],
+      "world_height_m": 0.022,
+      "priority": 1,
+      "letter_px": 44
+    },
+    {
+      "name": "feedback_try_again",
+      "file": "ui2d/question/feedback_try_again.png",
+      "text": "TRY AGAIN!",
+      "shape": "parallelogram",
+      "treatment": "on_color",
+      "background": "#F8961E",
+      "size_class": "M",
+      "px": [
+        624,
+        160
+      ],
+      "world_height_m": 0.035,
+      "priority": 1,
+      "letter_px": 72
+    },
+    {
+      "name": "recap_title",
+      "file": "ui2d/recap/recap_title.png",
+      "text": "RACE RESULTS",
+      "shape": "ribbon",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "L",
+      "px": [
+        1476,
+        302
+      ],
+      "world_height_m": 0.059,
+      "priority": 1,
+      "letter_px": 120
+    },
+    {
+      "name": "badge_label_best_comeback",
+      "file": "ui2d/recap/badge_label_best_comeback.png",
+      "text": "BEST COMEBACK",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "S",
+      "px": [
+        592,
+        112
+      ],
+      "world_height_m": 0.0257,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "ribbon under rewards/badge_*.glb"
+    },
+    {
+      "name": "badge_label_most_improved",
+      "file": "ui2d/recap/badge_label_most_improved.png",
+      "text": "MOST IMPROVED",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "S",
+      "px": [
+        578,
+        112
+      ],
+      "world_height_m": 0.0257,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "ribbon under rewards/badge_*.glb"
+    },
+    {
+      "name": "badge_label_sharpest_aim",
+      "file": "ui2d/recap/badge_label_sharpest_aim.png",
+      "text": "SHARPEST AIM",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "S",
+      "px": [
+        540,
+        112
+      ],
+      "world_height_m": 0.0257,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "ribbon under rewards/badge_*.glb"
+    },
+    {
+      "name": "badge_label_steady_streak",
+      "file": "ui2d/recap/badge_label_steady_streak.png",
+      "text": "STEADY STREAK",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "S",
+      "px": [
+        584,
+        112
+      ],
+      "world_height_m": 0.0257,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "ribbon under rewards/badge_*.glb"
+    },
+    {
+      "name": "badge_label_brave_try",
+      "file": "ui2d/recap/badge_label_brave_try.png",
+      "text": "BRAVE TRY",
+      "shape": "ribbon",
+      "treatment": "on_color",
+      "background": "#E8B64C",
+      "size_class": "S",
+      "px": [
+        456,
+        112
+      ],
+      "world_height_m": 0.0257,
+      "priority": 1,
+      "letter_px": 44,
+      "note": "ribbon under rewards/badge_*.glb"
+    },
+    {
+      "name": "button_done",
+      "file": "ui2d/recap/button_done.png",
+      "text": "DONE",
+      "shape": "rectangle",
+      "treatment": "emboss",
+      "background": null,
+      "size_class": "M",
+      "px": [
+        334,
+        160
+      ],
+      "world_height_m": 0.035,
+      "priority": 1,
+      "letter_px": 72,
+      "note": "replaces the old #81B29A Done button"
+    }
+  ]
+}

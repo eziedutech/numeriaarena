@@ -1,5 +1,7 @@
 import { AssetType, defineAssets } from '@iwsdk/core';
 
+import { UI_FILES, UI_FIRST, type UiName } from './art/ui2d.js';
+
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
 
@@ -15,9 +17,23 @@ const model = (file: string, name: string) => ({
   priority: 'critical' as const,
 });
 
+/** Paper UI images (public/ui2d), keyed `ui_<name>`; the menu's come first. */
+const uiTextures = Object.fromEntries(
+  (Object.keys(UI_FILES) as UiName[]).map((name) => [
+    `ui_${name}`,
+    {
+      url: publicAssetUrl(UI_FILES[name]),
+      type: AssetType.Texture,
+      name: `UI ${name}`,
+      priority: UI_FIRST.includes(name) ? ('critical' as const) : ('background' as const),
+    },
+  ]),
+);
+
 // Models come from the origami asset set (public/models, synced by
 // scripts/sync-assets.mjs).
 export default defineAssets({
+  ...uiTextures,
   'welcome-panel': {
     url: publicAssetUrl('ui/welcome.uikitml'),
     type: AssetType.UIKitML,

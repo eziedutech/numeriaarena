@@ -36,6 +36,7 @@ import {
   type Figure,
 } from './art/models.js';
 import { accentForSkill, CORRECT, paper, TRY_AGAIN } from './art/palette.js';
+import { placeUiImage, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
   Race,
@@ -203,6 +204,9 @@ export class GameSystem extends createSystem({
   private shownAt = 0;
   private played = 0;
   private score!: Label;
+  /** The paper title over the book on the menu (the score line's place). */
+  private title?: Mesh;
+  private titleAsked = false;
   private hint?: Label;
   private timerBar!: Mesh;
   private timing = false;
@@ -520,10 +524,31 @@ export class GameSystem extends createSystem({
 
   // ------------------------------------------------------------ menu
 
+  /** The paper title stands in for the score line while the menu is up. */
+  private showTitle(): void {
+    if (!this.title) return;
+    const menu = this.phase === 'menu';
+    this.title.visible = menu;
+    this.score.mesh.visible = !menu && !this.race;
+  }
+
   private showMenu(): void {
     this.phase = 'menu';
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
+    if (!this.title && !this.titleAsked) {
+      this.titleAsked = true;
+      const p = this.score.mesh.position;
+      placeUiImage('title_numeria_arena', desk, [p.x, p.y, p.z], {
+        scale: 0.75,
+        ready: (mesh) => {
+          this.title = mesh;
+          this.labels.add(mesh);
+          this.showTitle();
+        },
+      });
+    }
+    this.showTitle();
     const games: [MenuChoice, string, number, number][] = [
       ['race', T.race, -0.135, 0x3fb6a0],
       ['balloon_burst', T.gameName.balloon_burst, 0, 0xf2716b],
@@ -550,8 +575,14 @@ export class GameSystem extends createSystem({
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
-    // On the bottom pocket, below the flap's tip and seal.
-    this.label(title, 0.018, envelope.root, -0.022, 0.0045, false);
+    // On the bottom pocket, below the flap's tip and seal: the paper label,
+    // with a text card standing in until it has loaded.
+    const sticker: UiName = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
+    placeUiImage(sticker, envelope.root, [0, -0.022, 0.0045], {
+      scale: 0.85,
+      maxWidth: 0.09,
+      fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0045, false).mesh,
+    });
     this.envelopes.set(e, envelope);
   }
 
@@ -580,10 +611,14 @@ export class GameSystem extends createSystem({
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
+    // The paper DONE (transparent emboss) is too faint on the green card for
+    // now; the text stays until the asset set strengthens it.
     this.label(title, 0.022, button, 0, 0.0075, false);
   }
 
   private start(choice: MenuChoice): void {
+    this.phase = 'loading';
+    this.showTitle();
     this.clear(this.queries.buttons);
     this.envelopes.clear();
     this.played = 0;
@@ -696,7 +731,9 @@ export class GameSystem extends createSystem({
     switch (ev.type) {
       case 'wave_start': {
         const total = this.raceState?.waves ?? 3;
-        scene.showBanner(`${T.wave(ev.wave + 1, total)}: ${T.gameName[ev.game]}`);
+        // The paper banners read "WAVE n OF 3"; other lengths keep the text card.
+        const paper: UiName[] = total === 3 ? [`race_wave_${ev.wave + 1}` as UiName] : [];
+        scene.showBanner(`${T.wave(ev.wave + 1, total)}: ${T.gameName[ev.game]}`, 2.5, paper);
         break;
       }
       case 'bot_working':
@@ -709,14 +746,14 @@ export class GameSystem extends createSystem({
         scene.emote(ev.desk, ev.emote);
         break;
       case 'boss_start':
-        scene.showBanner(T.bossRound, 3);
+        scene.showBanner(T.bossRound, 3, ['race_boss_round', 'race_double_points']);
         break;
       case 'match_end':
         this.recapIn = RECAP_DELAY_S;
         break;
       case 'time_up':
         scene.timeUp();
-        scene.showBanner(T.timeUp, 2);
+        scene.showBanner(T.timeUp, 2, ['race_times_up']);
         // A creature still open when the clock ran out goes home unanswered.
         if (ev.player_cut) {
           this.clearPlay();
@@ -934,7 +971,10 @@ export class GameSystem extends createSystem({
 
   private afterVerdict(v: Verdict | RaceVerdict): void {
     this.saveAnswers();
-    if (!v.correct) this.pop(v.retry_allowed ? T.tryAgain : T.itWas(v.expected_text), WRONG_INK);
+    if (!v.correct) {
+      if (v.retry_allowed) this.pop(T.tryAgain, WRONG_INK, 'feedback_try_again');
+      else this.pop(T.itWas(v.expected_text), WRONG_INK);
+    }
     if (v.correct || !v.retry_allowed) {
       this.timing = false;
       this.timerBar.visible = false;
@@ -1006,17 +1046,18 @@ export class GameSystem extends createSystem({
    * right, clear of the flag, whose cloth trails to the left of the pole and
    * turns red or green with the answer.
    */
-  private pop(text: string, ink: number): void {
-    const label = new Label(text, { height: 0.034, ink });
-    label.mesh.name = 'feedback-pop';
+  /** `paper`: a paper banner to show instead of the text card, once loaded. */
+  private pop(text: string, ink: number, paper?: UiName): void {
+    const mesh = (paper && uiImage(paper, 0.9)) || new Label(text, { height: 0.034, ink }).mesh;
+    mesh.name = 'feedback-pop';
     const holder = new Group();
     holder.name = 'feedback-pop';
     holder.position.copy(STAND).add(new Vector3(0.11, 0.09, 0.02));
-    holder.add(label.mesh);
-    this.labels.add(label.mesh);
+    holder.add(mesh);
+    this.labels.add(mesh);
     const entity = this.add(holder);
     this.tween(holder, holder.position.clone().add(new Vector3(0, 0.07, 0)), POP_S, 0, 1);
-    this.pops.push({ entity, mesh: label.mesh, t: 0 });
+    this.pops.push({ entity, mesh, t: 0 });
   }
 
   /**
