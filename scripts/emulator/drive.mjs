@@ -113,13 +113,25 @@ export async function orbRound() {
   return { line, pair, result: logs('orb ', 1)[0] };
 }
 
-/** Pokes balloon `i` from the front, aiming at where it floats right now. */
+/**
+ * Pokes balloon `i` from the front. Balloons rise, vanish and come back in
+ * another lane, so wait until it is full size and low enough to reach.
+ */
 export async function popAt(i) {
-  const b = posOf(`^balloon-${i}$`);
+  let b;
+  for (let tries = 0; tries < 30; tries++) {
+    b = posOf(`^balloon-${i}$`);
+    const scale = b?.comps.find((c) => c.componentId === 'Transform')?.values.scale?.[0] ?? 0;
+    if (b && scale > 0.9 && b.y > 0.02 && b.y < 0.1) break;
+    b = undefined;
+    await sleep(0.1);
+  }
   if (!b) return;
-  // The paper envelope sits about 7 cm above the basket, the balloon's origin.
-  const x = b.x, y = b.y + 0.07;
-  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, y, b.z + dz); await sleep(0.08); }
+  // The envelope's middle is about 7 cm above the basket (the origin); aim a
+  // little higher because the balloon keeps rising while the hand moves in.
+  // Steps of 90 ms: faster ones skip the moment the fingertip enters the surface.
+  const x = b.x, y = b.y + 0.07 + 0.05;
+  for (const dz of [0.06, 0.035, 0.02, 0.01, 0.0]) { tip(x, y, b.z + dz); await sleep(0.09); }
   tip(x, 0.25, 0.4); await sleep(0.6);
 }
 
@@ -139,16 +151,22 @@ export async function balloonRound(line) {
 
 /** Plays a whole race from the menu to the results. */
 export async function raceMatch(maxMinutes = 12) {
-  const since = Date.now();
+  // The log buffer outlives page reloads, and browser log timestamps do not
+  // follow this machine's clock, so compare with the last lines seen before
+  // the race instead of filtering by time.
+  const oldRecap = logs('\\[race\\] recap', 1)[0];
+  const oldFail = logs('race\\] could not start', 1)[0];
+  let last = logs('\\[game\\] offer', 1)[0] ?? '';
   await card(-0.135);
-  const failed = cli('browser', 'logs', '--input-json', j({ count: 5, pattern: 'race\] could not start', since }));
-  if ((failed.logs ?? failed).length) throw new Error(`The race did not start: ${(failed.logs ?? failed)[0].message}`);
-  let last = '';
+  const fail = logs('race\\] could not start', 1)[0];
+  if (fail && fail !== oldFail) throw new Error(`The race did not start: ${fail}`);
+  let recap;
   const end = Date.now() + maxMinutes * 60000;
   while (Date.now() < end) {
-    // The log buffer outlives page reloads, so only lines from this match count.
-    if (logs('\\[race\\] recap', 1, since).length) break;
-    const line = logs('\\[game\\] offer', 1, since)[0] ?? '';
+    recap = logs('\\[race\\] recap', 1)[0];
+    if (recap && recap !== oldRecap) break;
+    recap = undefined;
+    const line = logs('\\[game\\] offer', 1)[0] ?? '';
     const id = /offer (\d+)/.exec(line)?.[1];
     if (!id || line === last) { await sleep(0.5); continue; }
     last = line;
@@ -156,7 +174,6 @@ export async function raceMatch(maxMinutes = 12) {
     const result = line.includes(' orb_forge ') ? (await orbRound()).result : await balloonRound(line);
     console.log(`${line.replace(/^\[game\] /, '')}\n  -> ${result}`);
   }
-  const recap = logs('\\[race\\] recap', 1, since)[0];
   console.log(recap ?? 'no recap before the time limit');
   return recap;
 }

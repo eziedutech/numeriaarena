@@ -72,7 +72,8 @@ const READY_SCALE = 1.15;
 const STAND = new Vector3(0, 0.023, -0.03);
 /** Rows in front of the creature, still within seated reach. */
 const BALLOON_Z = 0.2;
-const BALLOON_GAP = 0.095;
+/** Lane spacing: wider than a balloon (0.063 m), so neighbours never touch. */
+const BALLOON_GAP = 0.08;
 const CRYSTAL_Z = 0.21;
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
@@ -99,14 +100,25 @@ const HINTED = 3;
 /** Balloons in the mission-free paper colours: coral, cobalt, teal, sunflower. */
 const BALLOON_COLORS = [0xf2716b, 0x3469c4, 0x3fb6a0, 0xf9c74f];
 /**
- * Floating balloons: each rises slowly from the base height to the top and
- * drifts back down, swaying sideways, always within seated reach (the top
- * of a balloon stays well below the eyes).
+ * Rising balloons. A seated child's eye is about 0.35 to 0.45 m above the
+ * table; the line from there to the bottom of the question card crosses the
+ * balloon row at about 0.30 m. A balloon (0.117 m tall) therefore vanishes
+ * once its basket reaches 0.17 m, so no balloon ever covers the question.
  */
-const FLOAT_BASE = 0.1;
-const FLOAT_RISE = 0.11;
-const FLOAT_PERIOD_S = 11;
-const FLOAT_SWAY = 0.012;
+const RISE_FROM = 0.0;
+/** Upper bound; the live eye line usually sets a lower one (`balloonCeiling`). */
+const RISE_TO = 0.21;
+/** Balloon height from basket bottom to crown, and the gap kept below the eye line. */
+const BALLOON_H = 0.117;
+const SIGHT_MARGIN = 0.005;
+/** Balloons always rise at least this far, even for an unusual viewpoint. */
+const MIN_CEILING = 0.07;
+/** Balloons grow in over their first and shrink away over their last few cm. */
+const GROW_M = 0.03;
+/** Metres per second; each rise varies from 80% to 130% of it. */
+const RISE_SPEED = 0.035;
+/** More lanes than balloons, so a balloon always finds a free one. */
+const BALLOON_LANES = 6;
 /** A joined orb flies to the creature in this long (seconds). */
 const ORB_FLIGHT_S = 0.45;
 /** A crystal clicked with the mouse lifts this much to show it is chosen. */
@@ -548,17 +560,16 @@ export class GameSystem extends createSystem({
     offer.balloons.forEach((b, i) => {
       const g = makeBalloon(BALLOON_COLORS[i % BALLOON_COLORS.length]);
       g.name = `balloon-${i}`;
-      g.position.set((i - (n - 1) / 2) * BALLOON_GAP, 0.0, BALLOON_Z);
+      g.position.set(0, RISE_FROM, BALLOON_Z);
+      g.scale.setScalar(0.001);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
+      e.addComponent(PokeInteractable);
+      this.clickable(e);
       // A tag hanging under the basket, so the balloon never covers the number.
       this.label(b.text, 0.03, g, -0.022, 0.01);
-      this.tween(g, new Vector3(g.position.x, FLOAT_BASE, BALLOON_Z), 0.5, 0, 1, () => {
-        e.addComponent(PokeInteractable);
-        this.clickable(e);
-        // Each balloon drifts on its own rhythm, so the player reaches for it.
-        g.userData.float = { x: g.position.x, t: 0, period: FLOAT_PERIOD_S * (0.8 + 0.15 * i), sway: 1.1 + 0.35 * i };
-      });
+      // The first rise is staggered so the balloons do not all come up together.
+      this.launch(g, n, i * 0.6 + Math.random() * 0.4);
     });
   }
 
@@ -712,16 +723,62 @@ export class GameSystem extends createSystem({
     this.pops.push({ entity, mesh: label.mesh, t: 0 });
   }
 
+  /**
+   * Highest basket height (desk frame) at which a balloon's top stays below
+   * the line from the viewer's eye to the bottom of the question card, so no
+   * balloon ever covers the question, whatever the viewer's height.
+   */
+  private balloonCeiling(): number {
+    const desk = this.deskEntity()?.object3D;
+    if (!desk) return RISE_TO;
+    this.camera.getWorldPosition(this.a);
+    const eye = desk.worldToLocal(this.a);
+    // Bottom edge of the lowest card: the hint line when shown, else the question.
+    const bottom = this.hint ? PROMPT_POS.y - 0.034 - 0.011 : PROMPT_POS.y - 0.018;
+    const span = eye.z - PROMPT_POS.z;
+    if (span <= 0.01) return RISE_TO;
+    const t = (eye.z - BALLOON_Z) / span;
+    const line = eye.y + (bottom - eye.y) * t;
+    return Math.max(MIN_CEILING, Math.min(RISE_TO, line - SIGHT_MARGIN - BALLOON_H));
+  }
+
+  /**
+   * Sends a balloon up again from the table in a lane no other balloon is
+   * using, after `wait` seconds, at its own speed.
+   */
+  private launch(obj: Object3D, count: number, wait: number): void {
+    const taken = new Set<number>();
+    for (const e of this.queries.balloons.entities) {
+      const lane = e.object3D?.userData.rise?.lane as number | undefined;
+      if (e.object3D !== obj && lane !== undefined) taken.add(lane);
+    }
+    const free = [...Array(BALLOON_LANES).keys()].filter((l) => !taken.has(l));
+    const lane = free[Math.floor(Math.random() * free.length)] ?? 0;
+    obj.userData.rise = { lane, wait, speed: RISE_SPEED * (0.8 + 0.5 * Math.random()), count };
+    obj.position.set((lane - (BALLOON_LANES - 1) / 2) * BALLOON_GAP, RISE_FROM, BALLOON_Z);
+    obj.scale.setScalar(0.001);
+  }
+
+  /**
+   * Balloons rise from the table, grow in, and shrink away before the top of
+   * the balloon reaches the line of sight to the question, then come back up
+   * in another free lane: the player reaches for a moving answer.
+   */
   private floatBalloons(delta: number): void {
+    const ceiling = this.balloonCeiling();
     for (const e of this.queries.balloons.entities) {
       const obj = e.object3D;
-      const f = obj?.userData.float as { x: number; t: number; period: number; sway: number } | undefined;
-      if (!obj || !f || this.tweens.some((t) => t.obj === obj)) continue;
-      f.t += delta;
-      // Starts at the base height and still, so floating begins without a jump.
-      const k = 0.5 - 0.5 * Math.cos((2 * Math.PI * f.t) / f.period);
-      obj.position.y = FLOAT_BASE + FLOAT_RISE * k;
-      obj.position.x = f.x + FLOAT_SWAY * Math.sin(f.t * f.sway);
+      const r = obj?.userData.rise as { lane: number; wait: number; speed: number; count: number } | undefined;
+      if (!obj || !r || this.tweens.some((t) => t.obj === obj)) continue;
+      if (r.wait > 0) {
+        r.wait -= delta;
+        continue;
+      }
+      obj.position.y += r.speed * delta;
+      const grown = Math.min(1, (obj.position.y - RISE_FROM) / GROW_M);
+      const left = Math.min(1, (ceiling - obj.position.y) / GROW_M);
+      obj.scale.setScalar(Math.max(0.001, Math.min(grown, left)));
+      if (obj.position.y >= ceiling) this.launch(obj, r.count, 0.2 + Math.random() * 0.8);
     }
   }
 
