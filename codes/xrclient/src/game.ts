@@ -18,7 +18,7 @@ import {
   VisibilityState,
 } from '@iwsdk/core';
 
-import { Label } from './art/label.js';
+import { Label, type LabelOptions } from './art/label.js';
 import {
   type Envelope,
   forgetMixers,
@@ -451,9 +451,20 @@ export class GameSystem extends createSystem({
     return this.world.createTransformEntity(obj, { parent: desk });
   }
 
-  /** Adds a text card. `billboard: false` keeps it flat on its parent's +Z face. */
-  private label(text: string, height: number, parent: Object3D, y: number, z = 0, billboard = true): Label {
-    const l = new Label(text, { height });
+  /**
+   * Adds a text card. `billboard: false` keeps it flat on its parent's +Z face;
+   * `anchor` says which edge sits at `y` when the card grows (stacked fractions).
+   */
+  private label(
+    text: string,
+    height: number,
+    parent: Object3D,
+    y: number,
+    z = 0,
+    billboard = true,
+    anchor: LabelOptions['anchor'] = 'center',
+  ): Label {
+    const l = new Label(text, { height, anchor });
     l.mesh.position.set(0, y, z);
     parent.add(l.mesh);
     if (billboard) this.labels.add(l.mesh);
@@ -762,8 +773,9 @@ export class GameSystem extends createSystem({
       e.addComponent(Balloon, { index: i });
       e.addComponent(PokeInteractable);
       this.clickable(e);
-      // A tag hanging under the basket, so the balloon never covers the number.
-      this.label(b.text, 0.03, g, -0.022, 0.01);
+      // A tag hanging under the basket, so the balloon never covers the number;
+      // a taller fraction tag hangs further down, never up into the basket.
+      this.label(b.text, 0.034, g, -0.007, 0.01, true, 'top');
       // The first rise is staggered so the balloons do not all come up together.
       this.launch(g, n, i * 0.6 + Math.random() * 0.4);
     });
@@ -782,7 +794,8 @@ export class GameSystem extends createSystem({
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);
       this.clickable(e);
-      this.label(c.text, 0.032, m, 0.045);
+      // Above the crystal; a taller fraction card grows upwards, off the gem.
+      this.label(c.text, 0.036, m, 0.029, 0, true, 'bottom');
     });
   }
 

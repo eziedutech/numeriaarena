@@ -9,9 +9,16 @@ export interface LabelOptions {
   paper?: number;
   /** Draw a paper card behind the text. */
   card?: boolean;
+  /**
+   * Which edge stays at the mesh's position when the card grows (a stacked
+   * fraction is taller): a tag hanging under something keeps its top.
+   */
+  anchor?: 'center' | 'top' | 'bottom';
 }
 
 const PX_PER_M = 1400;
+/** A stacked fraction's card is this much taller, so each digit is as big as a whole number's. */
+const FRACTION_TALL = 1.5;
 
 function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
@@ -29,12 +36,14 @@ export class Label {
   private opts: Required<LabelOptions>;
 
   constructor(text: string, opts: LabelOptions = {}) {
-    this.opts = { height: 0.05, ink: INK, paper: PAPER, card: true, ...opts };
+    this.opts = { height: 0.05, ink: INK, paper: PAPER, card: true, anchor: 'center', ...opts };
     this.canvas = document.createElement('canvas');
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
     const material = new MeshBasicMaterial({ map: this.texture, transparent: true, side: DoubleSide, depthWrite: false });
-    this.mesh = new Mesh(new PlaneGeometry(1, 1), material);
+    const plane = new PlaneGeometry(1, 1);
+    if (this.opts.anchor !== 'center') plane.translate(0, this.opts.anchor === 'top' ? -0.5 : 0.5, 0);
+    this.mesh = new Mesh(plane, material);
     this.mesh.renderOrder = 10;
     this.set(text);
   }
@@ -46,10 +55,11 @@ export class Label {
   set(text: string): void {
     if (text === this.text) return;
     this.text = text;
-    const h = Math.round(this.opts.height * PX_PER_M);
     const ctx = this.canvas.getContext('2d');
     if (!ctx) return;
     const fraction = /^(\d+)\/(\d+)$/u.exec(text);
+    const height = this.opts.height * (fraction ? FRACTION_TALL : 1);
+    const h = Math.round(height * PX_PER_M);
     const font = (px: number) => `700 ${px}px "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif`;
     let w: number;
     if (fraction) {
@@ -99,6 +109,6 @@ export class Label {
       c.fillText(text, cx, h * 0.54);
     }
     this.texture.needsUpdate = true;
-    this.mesh.scale.set(this.opts.height * (this.canvas.width / h), this.opts.height, 1);
+    this.mesh.scale.set(height * (this.canvas.width / h), height, 1);
   }
 }
