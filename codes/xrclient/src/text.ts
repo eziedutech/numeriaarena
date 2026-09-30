@@ -15,8 +15,8 @@ export const EN = {
   you: 'You',
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
   place: ordinal,
-  /** A rival's line above its window, for example "4 folded, 380 pts". */
-  rival: (folded: number, points: number) => `${folded} folded, ${points} pts`,
+  /** A rival's line above its window, for example "4 solved, 380 pts". */
+  rival: (solved: number, points: number) => `${solved} solved, ${points} pts`,
   /** Countdown, for example "0:42". */
   clock: (ms: number) => {
     const s = Math.max(0, Math.ceil(ms / 1000));

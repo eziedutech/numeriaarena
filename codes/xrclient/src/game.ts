@@ -927,15 +927,17 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Feedback that rises from the creature and fades: the points of a right
-   * answer in green, "Try again!" or the right answer in red.
+   * Feedback that rises beside the creature and fades: the points of a right
+   * answer in green, "Try again!" or the right answer in red. It rises on the
+   * right, clear of the flag, whose cloth trails to the left of the pole and
+   * turns red or green with the answer.
    */
   private pop(text: string, ink: number): void {
     const label = new Label(text, { height: 0.034, ink });
     label.mesh.name = 'feedback-pop';
     const holder = new Group();
     holder.name = 'feedback-pop';
-    holder.position.copy(STAND).add(new Vector3(0, 0.12, 0.02));
+    holder.position.copy(STAND).add(new Vector3(0.11, 0.09, 0.02));
     holder.add(label.mesh);
     this.labels.add(label.mesh);
     const entity = this.add(holder);
