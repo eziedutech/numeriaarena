@@ -27,6 +27,7 @@ import {
   makeBird,
   makeButton,
   makeCrystal,
+  BALLOON_TAG_TOP,
   ENVELOPE_FLAP_REST,
   makeEnvelope,
   makeFoldling,
@@ -116,7 +117,7 @@ const BALLOON_COLORS = [0xf2716b, 0x3469c4, 0x3fb6a0, 0xf9c74f];
 const RISE_FROM = 0.0;
 /** Upper bound; the live eye line usually sets a lower one (`balloonCeiling`). */
 const RISE_TO = 0.32;
-/** Balloon height from basket bottom to crown, and the gap kept below the eye line. */
+/** Balloon height from its origin (the old basket's foot) to its crown, and the gap kept below the eye line. */
 const BALLOON_H = 0.117;
 const SIGHT_MARGIN = 0.005;
 /** Balloons always rise at least this far, even for an unusual viewpoint. */
@@ -465,7 +466,7 @@ export class GameSystem extends createSystem({
           const obj = cand.object3D;
           if (!obj?.visible || obj.scale.x < 0.5 || ((obj.userData.opacity as number | undefined) ?? 1) < 0.3) continue;
           obj.getWorldPosition(this.creatureWorld);
-          // A balloon's paper envelope is above its basket, the origin.
+          // A balloon's paper envelope is well above its origin.
           if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
           const angle = this.b.angleTo(this.creatureWorld.sub(this.a));
           if (angle < best) {
@@ -882,9 +883,9 @@ export class GameSystem extends createSystem({
       e.addComponent(Balloon, { index: i });
       e.addComponent(PokeInteractable);
       this.clickable(e);
-      // A tag hanging under the basket, so the balloon never covers the number;
-      // a taller fraction tag hangs further down, never up into the basket.
-      this.label(b.text, 0.034, g, -0.007, 0.01, true, 'top');
+      // The answer card hangs on the balloon's string, below it, so the
+      // balloon never covers the number; a taller fraction card hangs lower.
+      this.label(b.text, 0.034, g, BALLOON_TAG_TOP.y, BALLOON_TAG_TOP.z, true, 'top');
       // The first rise is staggered so the balloons do not all come up together.
       this.launch(g, n, i * 0.6 + Math.random() * 0.4);
     });
@@ -1069,7 +1070,7 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Highest basket height (desk frame) at which a balloon's top stays below
+   * Highest origin height (desk frame) at which a balloon's top stays below
    * the line from the viewer's eye to the bottom of the question card, so no
    * balloon ever covers the question, whatever the viewer's height.
    */

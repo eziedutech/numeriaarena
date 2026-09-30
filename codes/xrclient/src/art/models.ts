@@ -20,6 +20,7 @@ import {
   OctahedronGeometry,
   PlaneGeometry,
   SRGBColorSpace,
+  Vector3,
 } from '@iwsdk/core';
 
 import { SPECIES, type Species } from '../assets.js';
@@ -411,10 +412,35 @@ function pageSketch(side: number): Mesh {
  * A paper-cut hot-air balloon in `color`, origin at the bottom of its basket.
  * Its gores alternate two tones; both are painted from the one colour.
  */
+/** The answer card hangs from this point under a balloon (top edge, a little in front). */
+export const BALLOON_TAG_TOP = new Vector3(0, -0.007, 0.01);
+/** The knot at the bottom of the balloon, where its string starts. */
+const BALLOON_KNOT = new Vector3(0, 0.043, 0);
+
+/**
+ * A paper balloon with one white string from its knot straight down to the
+ * answer card: no basket, no rigging.
+ */
 export function makeBalloon(color: number): Group {
   let g = staticModel('balloon_round', 'balloon', 'sky', color);
-  if (g) recolour(g, 'blue', shade(shade(color)));
-  else g = proceduralBalloon(color);
+  if (g) {
+    recolour(g, 'blue', shade(shade(color)));
+    for (const part of ['basket', 'string']) {
+      const o = g.getObjectByName(part);
+      if (o) o.visible = false;
+    }
+  } else {
+    g = proceduralBalloon(color);
+  }
+  const length = BALLOON_KNOT.distanceTo(BALLOON_TAG_TOP);
+  const cord = new Mesh(new CylinderGeometry(0.0006, 0.0006, length, 6), paper(0xfffdf8));
+  cord.name = 'balloon-string';
+  cord.position.copy(BALLOON_KNOT).add(BALLOON_TAG_TOP).multiplyScalar(0.5);
+  cord.quaternion.setFromUnitVectors(
+    new Vector3(0, 1, 0),
+    new Vector3().subVectors(BALLOON_KNOT, BALLOON_TAG_TOP).normalize(),
+  );
+  g.add(cord);
   // Its own materials, so one balloon can fade away without the others.
   g.traverse((o) => {
     const mesh = o as Mesh;
@@ -661,9 +687,7 @@ function proceduralBalloon(color: number): Group {
   skin.scale.set(1, 1.18, 1);
   skin.position.y = 0.075;
   skin.name = 'balloon-skin';
-  const string = new Mesh(new CylinderGeometry(0.0008, 0.0008, 0.045, 4), paper(INK));
-  string.position.y = 0.022;
-  g.add(skin, string);
+  g.add(skin);
   return g;
 }
 
