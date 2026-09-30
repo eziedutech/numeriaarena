@@ -139,8 +139,10 @@ Measured, not claimed. Everything below is reproducible with the commands above.
 
 ### Template validator
 
-All four example templates pass: decimal addition, like-fraction addition, multiples
-sort (Factory Sort) and table width estimate (Measure Hunt).
+168 templates, six for each of the 28 skills (place value, multiplication and division,
+fractions, decimals, measurement), all pass (`content-cli validate`). 158 of them are
+drafts written with an AI model and still await review by a teacher; the game uses them
+for now so every skill can be played.
 
 The first run failed like-fraction addition: when both numerators are 1, "adding the
 denominators" and "multiplying the numerators" give the same wrong answer, in 15.5% of
@@ -180,12 +182,12 @@ places 1st / 2nd / 3rd:
 
 | Time per answer | right 50% | right 75% | right 90% |
 |---|---|---|---|
-| 4 s | 10 / 30 / 60 | 84 / 14 / 2 | 100 / 0 / 0 |
-| 6 s | 8 / 23 / 69 | 64 / 27 / 9 | 96 / 4 / 0 |
-| 10 s | 4 / 10 / 86 | 27 / 37 / 36 | 66 / 28 / 6 |
+| 4 s | 7 / 28 / 65 | 90 / 8 / 2 | 100 / 0 / 0 |
+| 6 s | 8 / 20 / 72 | 66 / 27 / 7 | 93 / 7 / 0 |
+| 10 s | 2 / 8 / 90 | 24 / 38 / 38 | 64 / 31 / 5 |
 
 - Being right matters most: at any pace, a player right 90% of the time usually wins and a player right half the time usually comes last.
-- Speed helps without deciding everything. Without the robots following the player's pace, a 10 s player right 75% of the time won only 11 of 100 races and a 4 s player always won.
+- Speed helps without deciding everything. In an earlier run (with the first ten templates) where the robots did not follow the player's pace, a 10 s player right 75% of the time won only 11 of 100 races and a 4 s player always won.
 - A real player who struggles gets easier items and relief after two misses, which this fixed-chance simulation leaves out.
 - Every round ends on its clock, no robot answers outside a round, places always follow points, the same seed gives the same race, and every player gets a different highlight (`cargo test --test race`).
 

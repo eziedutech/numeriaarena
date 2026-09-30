@@ -1,0 +1,90 @@
+{
+  "id": "tpl.md.prime_largest_factor.v1",
+  "version": 1,
+  "skill": "MD.PRIME",
+  "grades": [
+    6
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "p": {
+      "type": "choice",
+      "values": [
+        2,
+        3
+      ]
+    },
+    "q": {
+      "type": "choice",
+      "values": [
+        2,
+        3,
+        5
+      ]
+    },
+    "r": {
+      "type": "choice",
+      "values": [
+        7,
+        11,
+        13
+      ]
+    }
+  },
+  "answer": {
+    "expr": "r",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": 1.6,
+    "features": [
+      {
+        "when": "r >= 11",
+        "add": 0.2,
+        "note": "larger prime factor"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "p * q",
+      "misconception": "composite_factor"
+    },
+    {
+      "expr": "r * p",
+      "misconception": "composite_factor"
+    },
+    {
+      "expr": "p * q * r",
+      "misconception": "gave_the_number"
+    }
+  ],
+  "prompt": {
+    "en": "Largest prime factor of {=p * q * r}?",
+    "id": "Faktor prima terbesar dari {=p * q * r}?"
+  },
+  "visual_model": "none",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "primes",
+    "factors"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

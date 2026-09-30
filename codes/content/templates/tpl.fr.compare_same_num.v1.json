@@ -1,0 +1,102 @@
+{
+  "id": "tpl.fr.compare_same_num.v1",
+  "version": 1,
+  "skill": "FR.COMPARE",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "n": {
+      "type": "int",
+      "min": 1,
+      "max": 3
+    },
+    "d": {
+      "type": "int",
+      "min": "n + 1",
+      "max": 6
+    },
+    "s": {
+      "type": "int",
+      "min": 1,
+      "max": 3
+    },
+    "o": {
+      "type": "choice",
+      "values": [
+        0,
+        1,
+        2
+      ]
+    },
+    "x0": {
+      "type": "int",
+      "min": "((d) * ((1 - o) * (2 - o) / 2) + (d + s) * (o * (2 - o)) + (d + 2 * s) * (o * (o - 1) / 2))",
+      "max": "((d) * ((1 - o) * (2 - o) / 2) + (d + s) * (o * (2 - o)) + (d + 2 * s) * (o * (o - 1) / 2))"
+    },
+    "x1": {
+      "type": "int",
+      "min": "((d + s) * ((1 - o) * (2 - o) / 2) + (d + 2 * s) * (o * (2 - o)) + (d) * (o * (o - 1) / 2))",
+      "max": "((d + s) * ((1 - o) * (2 - o) / 2) + (d + 2 * s) * (o * (2 - o)) + (d) * (o * (o - 1) / 2))"
+    },
+    "x2": {
+      "type": "int",
+      "min": "((d + 2 * s) * ((1 - o) * (2 - o) / 2) + (d) * (o * (2 - o)) + (d + s) * (o * (o - 1) / 2))",
+      "max": "((d + 2 * s) * ((1 - o) * (2 - o) / 2) + (d) * (o * (2 - o)) + (d + s) * (o * (o - 1) / 2))"
+    }
+  },
+  "answer": {
+    "expr": "frac(n, d)",
+    "format": "fraction",
+    "simplify": false
+  },
+  "difficulty": {
+    "base": -1.2,
+    "features": [
+      {
+        "when": "n >= 2",
+        "add": 0.2,
+        "note": "numerator above one"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "frac(n, d + 2 * s)",
+      "misconception": "bigger_denominator_bigger"
+    },
+    {
+      "expr": "frac(n, d + s)",
+      "misconception": "picked_middle"
+    }
+  ],
+  "prompt": {
+    "en": "Largest: {n}/{x0}, {n}/{x1}, {n}/{x2}?",
+    "id": "Terbesar: {n}/{x0}, {n}/{x1}, {n}/{x2}?"
+  },
+  "visual_model": "bar_model",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 3
+    }
+  },
+  "tags": [
+    "fractions",
+    "compare"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

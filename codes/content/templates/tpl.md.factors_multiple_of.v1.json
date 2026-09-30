@@ -1,0 +1,76 @@
+{
+  "id": "tpl.md.factors_multiple_of.v1",
+  "version": 1,
+  "skill": "MD.FACTORS",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 3,
+      "max": 9
+    },
+    "k": {
+      "type": "int",
+      "min": 3,
+      "max": 12
+    }
+  },
+  "answer": {
+    "expr": "a * k",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": -1.3,
+    "features": [
+      {
+        "when": "a >= 7",
+        "add": 0.3,
+        "note": "larger number"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "a * k + 1",
+      "misconception": "near_multiple"
+    },
+    {
+      "expr": "a * k - 1",
+      "misconception": "near_multiple"
+    },
+    {
+      "expr": "a * k + a + 1",
+      "misconception": "near_multiple"
+    }
+  ],
+  "prompt": {
+    "en": "Which is a multiple of {a}?",
+    "id": "Mana yang kelipatan {a}?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "multiples"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

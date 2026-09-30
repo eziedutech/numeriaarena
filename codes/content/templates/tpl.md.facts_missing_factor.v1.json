@@ -1,0 +1,76 @@
+{
+  "id": "tpl.md.facts_missing_factor.v1",
+  "version": 1,
+  "skill": "MD.FACTS",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 2,
+      "max": 9
+    },
+    "b": {
+      "type": "int",
+      "min": 2,
+      "max": 10
+    }
+  },
+  "answer": {
+    "expr": "b",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": -1.4,
+    "features": [
+      {
+        "when": "a >= 6 and b >= 6",
+        "add": 0.3,
+        "note": "large facts"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "b + 1",
+      "misconception": "off_by_one"
+    },
+    {
+      "expr": "b - 1",
+      "misconception": "off_by_one"
+    },
+    {
+      "expr": "a",
+      "misconception": "copied_factor"
+    }
+  ],
+  "prompt": {
+    "en": "{a} x ? = {=a * b}",
+    "id": "{a} x ? = {=a * b}"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "multiplication"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

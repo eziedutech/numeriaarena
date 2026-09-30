@@ -1,0 +1,70 @@
+{
+  "id": "tpl.me.convert_m_to_cm.v1",
+  "version": 1,
+  "skill": "ME.CONVERT",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "m": {
+      "type": "int",
+      "min": 2,
+      "max": 20
+    }
+  },
+  "answer": {
+    "expr": "100 * m",
+    "format": "measure",
+    "unit": "cm",
+    "decimal_places": 0
+  },
+  "difficulty": {
+    "base": -1.8,
+    "features": [
+      {
+        "when": "m >= 10",
+        "add": 0.2,
+        "note": "two-digit length"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "10 * m",
+      "misconception": "used_ten"
+    },
+    {
+      "expr": "1000 * m",
+      "misconception": "used_thousand"
+    }
+  ],
+  "prompt": {
+    "en": "{m} m = ? cm",
+    "id": "{m} m = ? cm"
+  },
+  "visual_model": "ruler",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "measurement",
+    "convert"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

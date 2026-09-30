@@ -1,0 +1,86 @@
+{
+  "id": "tpl.md.factors_gcf_small.v1",
+  "version": 1,
+  "skill": "MD.FACTORS",
+  "grades": [
+    4,
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "g": {
+      "type": "int",
+      "min": 2,
+      "max": 6
+    },
+    "a": {
+      "type": "choice",
+      "values": [
+        2,
+        3
+      ]
+    },
+    "b": {
+      "type": "choice",
+      "values": [
+        5,
+        7
+      ]
+    }
+  },
+  "answer": {
+    "expr": "g",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": 0.3,
+    "features": [
+      {
+        "when": "g >= 5",
+        "add": 0.2,
+        "note": "larger factor"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "g * a * b",
+      "misconception": "gave_lcm"
+    },
+    {
+      "expr": "a * g",
+      "misconception": "gave_smaller_number"
+    },
+    {
+      "expr": "1",
+      "misconception": "always_one"
+    }
+  ],
+  "prompt": {
+    "en": "Greatest common factor of {=a * g} and {=b * g}?",
+    "id": "FPB dari {=a * g} dan {=b * g} = ?"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "factors"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

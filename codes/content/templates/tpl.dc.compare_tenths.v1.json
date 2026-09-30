@@ -1,0 +1,98 @@
+{
+  "id": "tpl.dc.compare_tenths.v1",
+  "version": 1,
+  "skill": "DC.COMPARE",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 1,
+      "max": 3
+    },
+    "s": {
+      "type": "int",
+      "min": 1,
+      "max": 3
+    },
+    "o": {
+      "type": "choice",
+      "values": [
+        0,
+        1,
+        2
+      ]
+    },
+    "x0": {
+      "type": "int",
+      "min": "((100 * a) * ((1 - o) * (2 - o) / 2) + (100 * (a + s)) * (o * (2 - o)) + (100 * (a + 2 * s)) * (o * (o - 1) / 2))",
+      "max": "((100 * a) * ((1 - o) * (2 - o) / 2) + (100 * (a + s)) * (o * (2 - o)) + (100 * (a + 2 * s)) * (o * (o - 1) / 2))"
+    },
+    "x1": {
+      "type": "int",
+      "min": "((100 * (a + s)) * ((1 - o) * (2 - o) / 2) + (100 * (a + 2 * s)) * (o * (2 - o)) + (100 * a) * (o * (o - 1) / 2))",
+      "max": "((100 * (a + s)) * ((1 - o) * (2 - o) / 2) + (100 * (a + 2 * s)) * (o * (2 - o)) + (100 * a) * (o * (o - 1) / 2))"
+    },
+    "x2": {
+      "type": "int",
+      "min": "((100 * (a + 2 * s)) * ((1 - o) * (2 - o) / 2) + (100 * a) * (o * (2 - o)) + (100 * (a + s)) * (o * (o - 1) / 2))",
+      "max": "((100 * (a + 2 * s)) * ((1 - o) * (2 - o) / 2) + (100 * a) * (o * (2 - o)) + (100 * (a + s)) * (o * (o - 1) / 2))"
+    }
+  },
+  "answer": {
+    "expr": "(a + 2 * s) / 10",
+    "format": "decimal",
+    "decimal_places": 3
+  },
+  "difficulty": {
+    "base": -2.8,
+    "features": [
+      {
+        "when": "s == 1",
+        "add": 0.3,
+        "note": "close values"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "a / 10",
+      "misconception": "picked_smallest"
+    },
+    {
+      "expr": "(a + s) / 10",
+      "misconception": "picked_middle"
+    }
+  ],
+  "prompt": {
+    "en": "Largest: {=x0 / 1000}, {=x1 / 1000}, {=x2 / 1000}?",
+    "id": "Terbesar: {=x0 / 1000}, {=x1 / 1000}, {=x2 / 1000}?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 3
+    }
+  },
+  "tags": [
+    "decimals",
+    "compare",
+    "easy"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

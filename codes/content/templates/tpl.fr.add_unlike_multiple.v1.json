@@ -1,0 +1,85 @@
+{
+  "id": "tpl.fr.add_unlike_multiple.v1",
+  "version": 1,
+  "skill": "FR.ADD.UNLIKE",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "b": {
+      "type": "int",
+      "min": 2,
+      "max": 5
+    },
+    "k": {
+      "type": "int",
+      "min": 2,
+      "max": 3
+    },
+    "a": {
+      "type": "int",
+      "min": 1,
+      "max": "b - 1"
+    },
+    "c": {
+      "type": "int",
+      "min": 1,
+      "max": "b * k - 1"
+    }
+  },
+  "answer": {
+    "expr": "frac(a * k + c, b * k)",
+    "format": "fraction",
+    "simplify": false,
+    "accept_equivalent": true
+  },
+  "difficulty": {
+    "base": -0.5,
+    "features": [
+      {
+        "when": "a * k + c > b * k",
+        "add": 0.2,
+        "note": "sum above one"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "frac(a + c, b + b * k)",
+      "misconception": "added_denominators"
+    },
+    {
+      "expr": "frac(a + c, b * k)",
+      "misconception": "no_conversion"
+    }
+  ],
+  "prompt": {
+    "en": "{a}/{b} + {c}/{=b * k} = ?",
+    "id": "{a}/{b} + {c}/{=b * k} = ?"
+  },
+  "visual_model": "bar_model",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "fractions",
+    "unlike"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

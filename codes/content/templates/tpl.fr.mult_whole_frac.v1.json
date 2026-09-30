@@ -1,0 +1,80 @@
+{
+  "id": "tpl.fr.mult_whole_frac.v1",
+  "version": 1,
+  "skill": "FR.MULT",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "d": {
+      "type": "int",
+      "min": 3,
+      "max": 9
+    },
+    "a": {
+      "type": "int",
+      "min": 1,
+      "max": "d - 1"
+    },
+    "n": {
+      "type": "int",
+      "min": 2,
+      "max": 5
+    }
+  },
+  "answer": {
+    "expr": "frac(n * a, d)",
+    "format": "fraction",
+    "simplify": false,
+    "accept_equivalent": true
+  },
+  "difficulty": {
+    "base": -0.5,
+    "features": [
+      {
+        "when": "n * a > d",
+        "add": 0.2,
+        "note": "product above one"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "frac(a, n * d)",
+      "misconception": "multiplied_denominator"
+    },
+    {
+      "expr": "frac(n + a, d)",
+      "misconception": "added_instead"
+    }
+  ],
+  "prompt": {
+    "en": "{n} x {a}/{d} = ?",
+    "id": "{n} x {a}/{d} = ?"
+  },
+  "visual_model": "bar_model",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "fractions",
+    "multiplication"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

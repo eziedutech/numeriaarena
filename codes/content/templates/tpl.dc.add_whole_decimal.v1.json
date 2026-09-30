@@ -1,0 +1,75 @@
+{
+  "id": "tpl.dc.add_whole_decimal.v1",
+  "version": 1,
+  "skill": "DC.ADD",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "w": {
+      "type": "int",
+      "min": 2,
+      "max": 20
+    },
+    "y": {
+      "type": "decimal",
+      "min": 0.11,
+      "max": 0.99,
+      "step": 0.01
+    }
+  },
+  "answer": {
+    "expr": "w + y",
+    "format": "decimal",
+    "decimal_places": 3
+  },
+  "difficulty": {
+    "base": -0.9,
+    "features": [
+      {
+        "when": "w >= 10",
+        "add": 0.2,
+        "note": "two-digit whole"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "w / 100 + y",
+      "misconception": "aligned_right"
+    },
+    {
+      "expr": "w + y * 10",
+      "misconception": "misaligned_point"
+    }
+  ],
+  "prompt": {
+    "en": "{w} + {y} = ?",
+    "id": "{w} + {y} = ?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "decimals",
+    "addition"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

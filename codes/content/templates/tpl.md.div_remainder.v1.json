@@ -1,0 +1,83 @@
+{
+  "id": "tpl.md.div_remainder.v1",
+  "version": 1,
+  "skill": "MD.DIV",
+  "grades": [
+    4,
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 3,
+      "max": 9
+    },
+    "q": {
+      "type": "int",
+      "min": 3,
+      "max": 12
+    },
+    "r": {
+      "type": "int",
+      "min": 1,
+      "max": "a - 1"
+    }
+  },
+  "answer": {
+    "expr": "r",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": 0.5,
+    "features": [
+      {
+        "when": "a >= 7",
+        "add": 0.2,
+        "note": "larger divisor"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "q",
+      "misconception": "gave_quotient"
+    },
+    {
+      "expr": "a - r",
+      "misconception": "counted_up_to_divisor"
+    },
+    {
+      "expr": "r + 1",
+      "misconception": "off_by_one"
+    }
+  ],
+  "prompt": {
+    "en": "Remainder of {=a * q + r} ÷ {a} = ?",
+    "id": "Sisa {=a * q + r} : {a} = ?"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "division",
+    "remainder"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

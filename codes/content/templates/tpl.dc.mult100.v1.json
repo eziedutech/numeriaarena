@@ -1,0 +1,85 @@
+{
+  "id": "tpl.dc.mult100.v1",
+  "version": 1,
+  "skill": "DC.MULT10",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "w": {
+      "type": "int",
+      "min": 1,
+      "max": 9
+    },
+    "h": {
+      "type": "int",
+      "min": 1,
+      "max": 99,
+      "exclude": [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90
+      ]
+    }
+  },
+  "answer": {
+    "expr": "100 * w + h",
+    "format": "decimal",
+    "decimal_places": 3
+  },
+  "difficulty": {
+    "base": -0.5,
+    "features": [
+      {
+        "when": "h < 10",
+        "add": 0.3,
+        "note": "zero tenths"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "10 * w + h / 10",
+      "misconception": "moved_one_place"
+    },
+    {
+      "expr": "w + h / 100",
+      "misconception": "added_zeros"
+    }
+  ],
+  "prompt": {
+    "en": "{=w + h / 100} x 100 = ?",
+    "id": "{=w + h / 100} x 100 = ?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "decimals",
+    "powers_of_ten"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

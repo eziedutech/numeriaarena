@@ -1,0 +1,76 @@
+{
+  "id": "tpl.me.perim_mixed_units.v1",
+  "version": 1,
+  "skill": "ME.PERIM",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 1,
+      "max": 4
+    },
+    "b": {
+      "type": "int",
+      "min": 20,
+      "max": 90
+    }
+  },
+  "answer": {
+    "expr": "2 * (100 * a + b)",
+    "format": "measure",
+    "unit": "cm",
+    "decimal_places": 0
+  },
+  "difficulty": {
+    "base": 1.6,
+    "features": [
+      {
+        "when": "b % 10 != 0",
+        "add": 0.1,
+        "note": "uneven centimetres"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "2 * (a + b)",
+      "misconception": "no_conversion"
+    },
+    {
+      "expr": "100 * a + b",
+      "misconception": "two_sides_only"
+    }
+  ],
+  "prompt": {
+    "en": "Rectangle {a} m by {b} cm. Perimeter in cm?",
+    "id": "Persegi panjang {a} m x {b} cm. Keliling (cm)?"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "measurement",
+    "perimeter",
+    "hard"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

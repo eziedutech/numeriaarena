@@ -31,7 +31,17 @@ fn session(seed: u64) -> SoloSession {
     s
 }
 
+/// Reads a shown number back: "3/8", "2 1/4" (mixed), "0.25", or a
+/// measurement such as "4 m" or "2.5 cm" (the unit is dropped).
 fn value(text: &str) -> Rational {
+    let text = text
+        .trim_end_matches(|c: char| c.is_ascii_alphabetic())
+        .trim_end();
+    if let Some((whole, frac)) = text.split_once(' ') {
+        return Rational::int(whole.parse().unwrap())
+            .checked_add(&value(frac))
+            .unwrap();
+    }
     match text.split_once('/') {
         Some((n, d)) => Rational::new(n.parse().unwrap(), d.parse().unwrap()).unwrap(),
         None => Rational::parse_decimal(text).unwrap(),
@@ -186,6 +196,13 @@ fn orb_forge_always_has_an_exact_pair() {
                 Rational::new(c.num, c.den).unwrap(),
                 "shown text matches value: {}",
                 c.text
+            );
+            // Crystals read like the target: no fraction beside "16 cm".
+            assert!(
+                target.text.contains('/') || !c.text.contains('/'),
+                "crystal {} shown as a fraction for target {}",
+                c.text,
+                target.text
             );
         }
         let mut pair = None;

@@ -1,0 +1,85 @@
+{
+  "id": "tpl.fr.mixed_whole_minus.v1",
+  "version": 1,
+  "skill": "FR.MIXED",
+  "grades": [
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "w": {
+      "type": "int",
+      "min": 2,
+      "max": 5
+    },
+    "d": {
+      "type": "int",
+      "min": 3,
+      "max": 8
+    },
+    "n": {
+      "type": "int",
+      "min": 1,
+      "max": "d - 1"
+    }
+  },
+  "answer": {
+    "expr": "mixed(w - 1, d - n, d)",
+    "format": "mixed",
+    "simplify": false
+  },
+  "difficulty": {
+    "base": 1.8,
+    "features": [
+      {
+        "when": "d >= 6",
+        "add": 0.2,
+        "note": "larger denominator"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "mixed(w - 1, n, d)",
+      "misconception": "kept_the_fraction"
+    },
+    {
+      "expr": "mixed(w, n, d)",
+      "misconception": "added_instead"
+    },
+    {
+      "expr": "mixed(w - 1, d - n, d + d)",
+      "misconception": "doubled_denominator"
+    }
+  ],
+  "prompt": {
+    "en": "{w} - {n}/{d} = ?",
+    "id": "{w} - {n}/{d} = ?"
+  },
+  "visual_model": "bar_model",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "fractions",
+    "mixed",
+    "subtraction",
+    "hard"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

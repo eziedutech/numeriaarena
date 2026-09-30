@@ -1,0 +1,114 @@
+{
+  "id": "tpl.dc.compare_longer_not_larger.v1",
+  "version": 1,
+  "skill": "DC.COMPARE",
+  "grades": [
+    4,
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "t": {
+      "type": "int",
+      "min": 3,
+      "max": 9
+    },
+    "u": {
+      "type": "int",
+      "min": 1,
+      "max": 9
+    },
+    "v": {
+      "type": "int",
+      "min": 1,
+      "max": 99,
+      "exclude": [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90
+      ]
+    },
+    "o": {
+      "type": "choice",
+      "values": [
+        0,
+        1,
+        2
+      ]
+    },
+    "x0": {
+      "type": "int",
+      "min": "((100 * t) * ((1 - o) * (2 - o) / 2) + (10 * (10 * t - 10 + u)) * (o * (2 - o)) + (100 * t - 200 + v) * (o * (o - 1) / 2))",
+      "max": "((100 * t) * ((1 - o) * (2 - o) / 2) + (10 * (10 * t - 10 + u)) * (o * (2 - o)) + (100 * t - 200 + v) * (o * (o - 1) / 2))"
+    },
+    "x1": {
+      "type": "int",
+      "min": "((10 * (10 * t - 10 + u)) * ((1 - o) * (2 - o) / 2) + (100 * t - 200 + v) * (o * (2 - o)) + (100 * t) * (o * (o - 1) / 2))",
+      "max": "((10 * (10 * t - 10 + u)) * ((1 - o) * (2 - o) / 2) + (100 * t - 200 + v) * (o * (2 - o)) + (100 * t) * (o * (o - 1) / 2))"
+    },
+    "x2": {
+      "type": "int",
+      "min": "((100 * t - 200 + v) * ((1 - o) * (2 - o) / 2) + (100 * t) * (o * (2 - o)) + (10 * (10 * t - 10 + u)) * (o * (o - 1) / 2))",
+      "max": "((100 * t - 200 + v) * ((1 - o) * (2 - o) / 2) + (100 * t) * (o * (2 - o)) + (10 * (10 * t - 10 + u)) * (o * (o - 1) / 2))"
+    }
+  },
+  "answer": {
+    "expr": "t / 10",
+    "format": "decimal",
+    "decimal_places": 3
+  },
+  "difficulty": {
+    "base": -0.6,
+    "features": [
+      {
+        "when": "u >= 5",
+        "add": 0.3,
+        "note": "longer number looks larger"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "(10 * t - 10 + u) / 100",
+      "misconception": "longer_is_larger"
+    },
+    {
+      "expr": "(100 * t - 200 + v) / 1000",
+      "misconception": "longest_is_larger"
+    }
+  ],
+  "prompt": {
+    "en": "Largest: {=x0 / 1000}, {=x1 / 1000}, {=x2 / 1000}?",
+    "id": "Terbesar: {=x0 / 1000}, {=x1 / 1000}, {=x2 / 1000}?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 3
+    }
+  },
+  "tags": [
+    "decimals",
+    "compare"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}

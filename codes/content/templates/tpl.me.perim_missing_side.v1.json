@@ -1,0 +1,85 @@
+{
+  "id": "tpl.me.perim_missing_side.v1",
+  "version": 1,
+  "skill": "ME.PERIM",
+  "grades": [
+    4,
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 3,
+      "max": 15
+    },
+    "b": {
+      "type": "int",
+      "min": 2,
+      "max": 14
+    },
+    "p": {
+      "type": "int",
+      "min": "2 * (a + b)",
+      "max": "2 * (a + b)"
+    }
+  },
+  "answer": {
+    "expr": "b",
+    "format": "measure",
+    "unit": "cm",
+    "decimal_places": 0
+  },
+  "difficulty": {
+    "base": 0.3,
+    "features": [
+      {
+        "when": "a + b >= 18",
+        "add": 0.2,
+        "note": "larger rectangle"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "2 * (a + b) - a",
+      "misconception": "subtracted_once"
+    },
+    {
+      "expr": "a + b",
+      "misconception": "halved_only"
+    },
+    {
+      "expr": "2 * b",
+      "misconception": "forgot_to_halve"
+    }
+  ],
+  "prompt": {
+    "en": "Rectangle: perimeter {p} cm, one side {a} cm. Other?",
+    "id": "Persegi panjang: keliling {p} cm, sisi {a} cm. Sisi lain?"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    }
+  },
+  "tags": [
+    "measurement",
+    "perimeter"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-09-30-a",
+    "created_at": "2026-09-30T14:00:00Z"
+  }
+}
