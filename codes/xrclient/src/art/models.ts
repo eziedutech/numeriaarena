@@ -6,7 +6,9 @@ import {
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
+  CircleGeometry,
   CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   IcosahedronGeometry,
@@ -319,13 +321,64 @@ export function makeBook(): Group {
   for (const side of [-1, 1]) book.add(pageSketch(side));
   // The portal Foldlings step out of stands on the table just behind the
   // book, a doorway at its back edge rather than a sign stuck on the pages.
-  const portal = staticModel('portal_main', 'book-portal');
-  if (portal) {
-    portal.position.set(0, 0, -PAGE_D / 2 - 0.03);
-    portal.scale.setScalar(1.15);
-    book.add(portal);
-  }
+  const portal = makeBookPortal();
+  portal.position.set(0, 0, -PAGE_D / 2 - 0.03);
+  book.add(portal);
   return book;
+}
+
+/** The portal's centre above the table, and its outer radius (star tips). */
+const PORTAL_Y = 0.083;
+const PORTAL_R = 0.082;
+/** The paper disc in the middle, as a share of the outer radius. */
+const PORTAL_DISC = 0.72;
+/** Three charcoal paper sheets, back to front, for the star frame. */
+const PORTAL_SHEETS = [0x3a3a3d, 0x454548, 0x505054];
+/** The disc's colour on the menu, before any creature comes through. */
+export const PORTAL_IDLE = 0xb7a3e0;
+
+/**
+ * The doorway behind the book: a twelve-point star of three flat charcoal
+ * paper squares turned 30 degrees apart, the same for every creature, and a
+ * flat paper disc in its middle that takes the colour of the creature coming
+ * through (a soft lighter centre, like paper catching the light). The frame
+ * is `portal-frame`, the disc `portal-disc`, with a material of its own.
+ */
+function makeBookPortal(): Group {
+  const root = new Group();
+  root.name = 'book-portal';
+  const face = new Group();
+  face.name = 'portal-face';
+  face.position.y = PORTAL_Y;
+  root.add(face);
+  const frame = new Group();
+  frame.name = 'portal-frame';
+  const side = PORTAL_R * Math.SQRT2;
+  PORTAL_SHEETS.forEach((color, i) => {
+    const sheet = new Mesh(new PlaneGeometry(side, side), paper(color, { doubleSide: true }));
+    sheet.rotation.z = (i * Math.PI) / 6;
+    sheet.position.z = i * 0.0006;
+    frame.add(sheet);
+  });
+  face.add(frame);
+  const glow = document.createElement('canvas');
+  glow.width = glow.height = 128;
+  const g = glow.getContext('2d')!;
+  const fade = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  fade.addColorStop(0, '#ffffff');
+  fade.addColorStop(1, '#d6d6d6');
+  g.fillStyle = fade;
+  g.fillRect(0, 0, 128, 128);
+  const map = new CanvasTexture(glow);
+  map.colorSpace = SRGBColorSpace;
+  const disc = new Mesh(
+    new CircleGeometry(PORTAL_R * PORTAL_DISC, 48),
+    new MeshStandardMaterial({ color: PORTAL_IDLE, map, roughness: 0.95, metalness: 0, side: DoubleSide }),
+  );
+  disc.name = 'portal-disc';
+  disc.position.z = PORTAL_SHEETS.length * 0.0006 + 0.0004;
+  face.add(disc);
+  return root;
 }
 
 /** Page area of the open book (metres) and the height of its paper. */

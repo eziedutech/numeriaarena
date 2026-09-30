@@ -31,6 +31,7 @@ import {
   makeCrystal,
   BALLOON_TAG_TOP,
   ENVELOPE_FLAP_REST,
+  PORTAL_IDLE,
   makeEnvelope,
   makeFoldling,
   setOpacity,
@@ -146,9 +147,7 @@ const POKE_INTO_SHARE = 0.5;
 const TIP_SMOOTH_S = 0.1;
 /** The T helper picks the target nearest the pointing direction within this angle. */
 const TOUCH_CONE = (15 * Math.PI) / 180;
-/** The portal ring's materials that take the creature's colour. */
-const PORTAL_TINTED = new Set(['lavender', 'violet', 'violet_shade']);
-/** How quickly the portal's outer ring takes a new creature's colour (per second, about 0.5 s). */
+/** How quickly the portal's disc takes a new creature's colour (per second, about 0.5 s). */
 const PORTAL_TINT_RATE = 6;
 /** The portal's inner ring turns at this rate (radians per second). */
 const PORTAL_SPIN = 0.6;
@@ -231,12 +230,9 @@ export class GameSystem extends createSystem({
   private tipNow = new Vector3();
   private lastPoke = '';
   private portalRing?: Object3D;
-  /**
-   * The portal's outer ring takes the colour of the creature coming through
-   * it: its materials (light, mid, shade) with their own colours to return
-   * to on the menu, and the colours they are easing towards.
-   */
-  private portalGlow?: { mat: MeshStandardMaterial; home: Color; to: Color }[];
+  /** The portal's paper disc, which takes the colour of the creature coming through. */
+  private portalDisc?: MeshStandardMaterial;
+  private portalTo = new Color(PORTAL_IDLE);
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -447,46 +443,21 @@ export class GameSystem extends createSystem({
     });
   }
 
-  /**
-   * Eases the portal's outer ring towards `color` (the creature's), or back
-   * to its own violet when `color` is null.
-   */
+  /** Eases the portal's paper disc towards `color` (the creature's), or its idle colour when null. */
   private tintPortal(color: number | null): void {
-    if (!this.portalGlow) {
-      const ring = this.deskEntity()?.object3D?.getObjectByName('ring_outer');
-      if (!ring) return;
-      // The ring is a group of meshes, one per paper colour. Each gets its
-      // own copy of its material, so the shared model materials stay as they are.
-      const glow: { mat: MeshStandardMaterial; home: Color; to: Color }[] = [];
-      ring.traverse((o) => {
-        const mesh = o as Mesh;
-        const mat = mesh.isMesh ? (mesh.material as MeshStandardMaterial) : undefined;
-        // Only the ring's own violets: the gold inner ring and the navy
-        // doorway (which sit inside this group) keep their colours.
-        if (!mat || Array.isArray(mat) || !PORTAL_TINTED.has(mat.name)) return;
-        const own = mat.clone();
-        mesh.material = own;
-        glow.push({ mat: own, home: own.color.clone(), to: own.color.clone() });
-      });
-      this.portalGlow = glow;
+    if (!this.portalDisc) {
+      const disc = this.deskEntity()?.object3D?.getObjectByName('portal-disc') as Mesh | undefined;
+      if (!disc) return;
+      this.portalDisc = disc.material as MeshStandardMaterial;
     }
-    for (const g of this.portalGlow) {
-      if (color === null) {
-        g.to.copy(g.home);
-      } else {
-        // Keep each band's role: the light band stays light, the shade dark.
-        const name = g.mat.name;
-        g.to.setHex(name.endsWith('_shade') ? shade(color) : name === 'violet' ? color : tint(color, 0.45));
-      }
-    }
+    this.portalTo.setHex(color ?? PORTAL_IDLE);
   }
 
-  /** The book portal's inner ring turns slowly, so the doorway looks alive. */
+  /** The portal's star frame turns slowly, so the doorway looks alive. */
   private spinPortal(delta: number): void {
-    if (!this.portalRing) this.portalRing = this.deskEntity()?.object3D?.getObjectByName('ring_inner');
+    if (!this.portalRing) this.portalRing = this.deskEntity()?.object3D?.getObjectByName('portal-frame');
     if (this.portalRing) this.portalRing.rotation.z += delta * PORTAL_SPIN;
-    const k = Math.min(1, delta * PORTAL_TINT_RATE);
-    for (const g of this.portalGlow ?? []) g.mat.color.lerp(g.to, k);
+    this.portalDisc?.color.lerp(this.portalTo, Math.min(1, delta * PORTAL_TINT_RATE));
   }
 
   /**

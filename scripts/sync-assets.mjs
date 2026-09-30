@@ -27,7 +27,6 @@ const WANTED = [
   'foldling_cat',
   'foldling_elephant',
   'popup_book',
-  'portal_main',
   'paper_bird',
   'flag_small',
   'crystal',

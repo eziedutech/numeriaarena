@@ -40,7 +40,6 @@ export default defineAssets({
     name: 'Start Panel',
   },
   popup_book: model('book/popup_book.glb', 'Pop-up Book'),
-  portal_main: model('game/portal/portal_main.glb', 'Book Portal'),
   paper_bird: model('foldlings/paper_bird.glb', 'Paper Bird'),
   flag_small: model('foldlings/flag_small.glb', 'Number Flag'),
   foldling_fox: model('foldlings/foldling_fox.glb', 'Foldling Fox'),

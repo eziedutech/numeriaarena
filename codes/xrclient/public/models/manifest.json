@@ -578,46 +578,6 @@
       "notes": "Open flat. spawn_anchor: centre of the left page; town_origin: centre of the right page; exit_anchor: 6 cm above the spine. page_hinge_* hold the top leaf (rotate about z to turn a page)."
     },
     {
-      "name": "portal_main",
-      "category": "game",
-      "sheet": "portal",
-      "file": "game/portal/portal_main.glb",
-      "unit": "m",
-      "triangles": 364,
-      "outline_triangles": 0,
-      "bounds": {
-        "min": [
-          -0.07,
-          0,
-          -0.01
-        ],
-        "max": [
-          0.07,
-          0.142,
-          0.01
-        ]
-      },
-      "anchors": {
-        "spawn_anchor": [
-          0,
-          0,
-          0.014
-        ]
-      },
-      "parts": [
-        "ring_outer",
-        "ring_inner"
-      ],
-      "materials": [
-        "gold",
-        "lavender",
-        "navy",
-        "violet",
-        "violet_shade"
-      ],
-      "notes": "Stands upright on its feet at the edge of the book. ring_inner spins about z around the portal centre (0, 0.072, 0). spawn_anchor on the table just in front."
-    },
-    {
       "name": "paper_bird",
       "category": "foldlings",
       "sheet": "foldlings",
