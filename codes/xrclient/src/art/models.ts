@@ -15,6 +15,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  NearestFilter,
   Object3D,
   OctahedronGeometry,
   PlaneGeometry,
@@ -22,7 +23,7 @@ import {
 } from '@iwsdk/core';
 
 import { SPECIES, type Species } from '../assets.js';
-import { INK, PAPER, PAPER_SHADE, paper, shade, tint } from './palette.js';
+import { CORRECT, INK, PAPER, PAPER_SHADE, WRONG, paper, shade, tint } from './palette.js';
 
 // ------------------------------------------------------------ origami models
 
@@ -57,7 +58,11 @@ export interface Figure {
   /** Where the game draws the number. */
   flag: Object3D;
   play(clip: string, once?: boolean): AnimationAction | undefined;
+  /** Colours a creature's flag cloth: race checks, red after a miss, green when right. */
+  mark?(state: FlagState): void;
 }
+
+export type FlagState = 'race' | 'wrong' | 'right';
 
 /** A clone of a registered model, or null (reported) when it did not load. */
 function loadModel(id: string): { scene: Group; animations: AnimationClip[] } | null {
@@ -170,8 +175,92 @@ export function makeFoldling(color: number, species: Species = 'fox'): Figure {
   f.add(number);
   figure(f, f, f, flagModel.animations).play('wave');
   const fig = figure(root, number, model, loaded.animations, 'idle');
+  fig.mark = flagCloth(f);
   fig.play('idle');
   return fig;
+}
+
+/** The flag's cloth spans x 0 to 5 cm and y -3.5 to 0 cm from its top corner. */
+const CLOTH_W = 0.05;
+const CLOTH_H = 0.035;
+/** Chequered like a race flag: 6 by 4 squares on the cloth. */
+const CHECKS_X = 6;
+const CHECKS_Y = 4;
+
+let checks: CanvasTexture | undefined;
+const clothMaterials = new Map<string, MeshStandardMaterial>();
+
+function checkTexture(): CanvasTexture {
+  if (checks) return checks;
+  const px = 16;
+  const canvas = document.createElement('canvas');
+  canvas.width = CHECKS_X * px;
+  canvas.height = CHECKS_Y * px;
+  const c = canvas.getContext('2d')!;
+  c.fillStyle = '#fbf8f1';
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  c.fillStyle = '#2b2d33';
+  for (let y = 0; y < CHECKS_Y; y += 1) {
+    for (let x = (y % 2); x < CHECKS_X; x += 2) c.fillRect(x * px, y * px, px, px);
+  }
+  checks = new CanvasTexture(canvas);
+  checks.colorSpace = SRGBColorSpace;
+  checks.magFilter = NearestFilter;
+  return checks;
+}
+
+/** One material per flag state and side of the fold, shared by every flag. */
+function clothMaterial(base: MeshStandardMaterial, state: FlagState, shaded: boolean): MeshStandardMaterial {
+  const key = `${state}:${shaded}`;
+  let m = clothMaterials.get(key);
+  if (!m) {
+    m = base.clone();
+    m.name = `flag_${key}`;
+    if (state === 'race') {
+      m.map = checkTexture();
+      m.color.setHex(shaded ? 0xdedede : 0xffffff);
+    } else {
+      const color = state === 'right' ? CORRECT : WRONG;
+      m.map = null;
+      m.color.setHex(shaded ? shade(color) : color);
+    }
+    clothMaterials.set(key, m);
+  }
+  return m;
+}
+
+/**
+ * Turns a `flag_small` cloth into a race flag and returns the way to recolour
+ * it. The asset has no texture coordinates, so they are made from the cloth's
+ * flat shape (shared geometry, done once).
+ */
+function flagCloth(flag: Object3D): (state: FlagState) => void {
+  const cloth: Mesh[] = [];
+  flag.traverse((o) => {
+    const mesh = o as Mesh;
+    const name = (mesh.material as Material | undefined)?.name;
+    if (!mesh.isMesh || (name !== 'cream' && name !== 'cream_shade')) return;
+    const g = mesh.geometry;
+    if (!g.getAttribute('uv')) {
+      const pos = g.getAttribute('position');
+      const uv = new Float32Array(pos.count * 2);
+      for (let i = 0; i < pos.count; i += 1) {
+        uv[i * 2] = pos.getX(i) / CLOTH_W;
+        uv[i * 2 + 1] = 1 + pos.getY(i) / CLOTH_H;
+      }
+      g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    }
+    mesh.userData.clothBase = mesh.material;
+    mesh.userData.clothShaded = name === 'cream_shade';
+    cloth.push(mesh);
+  });
+  const mark = (state: FlagState) => {
+    for (const mesh of cloth) {
+      mesh.material = clothMaterial(mesh.userData.clothBase, state, mesh.userData.clothShaded);
+    }
+  };
+  mark('race');
+  return mark;
 }
 
 /** Species for a creature: varied, and stable for one offer. */
@@ -197,6 +286,7 @@ function proceduralFoldlingFigure(color: number): Figure {
   anchor.position.set(0, 0.125, 0);
   f.add(anchor);
   const fig = figure(root, anchor, f, flagModel.animations);
+  fig.mark = flagCloth(f);
   fig.play('wave');
   return fig;
 }

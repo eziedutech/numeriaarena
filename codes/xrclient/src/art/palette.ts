@@ -9,6 +9,7 @@ export const PAPER_SHADE = 0xf6e3c0; // `cream`, the back of the paper
 export const INK = 0x3a3f4b;
 export const CORRECT = 0x5db85b;
 export const TRY_AGAIN = 0xf8961e;
+export const WRONG = 0xe04a44;
 export const GOLD = 0xe8b64c;
 
 export type Mission = 'place_value' | 'multiply_divide' | 'fractions' | 'decimals' | 'measurement';

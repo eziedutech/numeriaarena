@@ -871,6 +871,7 @@ export class GameSystem extends createSystem({
     if (!creature) return;
     const obj = creature.object3D!;
     if (v.correct) {
+      this.figure?.mark?.('right');
       this.solveCard();
       this.pop(T.earned('race_points' in v ? v.race_points : v.points), RIGHT_INK);
       this.clear(this.queries.balloons);
@@ -879,7 +880,9 @@ export class GameSystem extends createSystem({
       this.foldHome(creature, this.offer ? accentForSkill(this.offer.skill) : 0xffffff);
       return;
     }
-    // Wrong: the creature bounces. With a second try it stays; otherwise it leaves.
+    // Wrong: the flag turns red and the creature bounces. With a second try
+    // it stays; otherwise it leaves.
+    this.figure?.mark?.('wrong');
     if (!this.figure?.play('bounce', true)) this.tween(obj, obj.position.clone(), 0.25, 0.04, 1);
     if (!v.retry_allowed) {
       this.clear(this.queries.balloons);
