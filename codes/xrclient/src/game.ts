@@ -5,6 +5,7 @@ import {
   Mesh,
   Object3D,
   OneHandGrabbable,
+  Hovered,
   PokeInteractable,
   Pressed,
   RayInteractable,
@@ -121,7 +122,7 @@ const RISE_SPEED = 0.035;
 /** More lanes than balloons, so a balloon always finds a free one. */
 const BALLOON_LANES = 6;
 /** The T helper picks the target nearest the pointing direction within this angle. */
-const TOUCH_CONE = (10 * Math.PI) / 180;
+const TOUCH_CONE = (15 * Math.PI) / 180;
 /** Hosts where the emulator runs; the T touch helper exists only there. */
 const EMULATOR_HOSTS = ['localhost', '127.0.0.1'];
 /** A joined orb flies to the creature in this long (seconds). */
@@ -235,8 +236,20 @@ export class GameSystem extends createSystem({
       const onKey = (ev: KeyboardEvent) => {
         if (ev.code === 'KeyT' && !ev.repeat) this.emulatorTouch();
       };
-      window.addEventListener('keydown', onKey);
-      this.cleanupFuncs.push(() => window.removeEventListener('keydown', onKey));
+      // Capture phase, before the emulator's own key handling, and also in the
+      // emulator's editor window around this page when it holds the focus.
+      const targets: Window[] = [window];
+      try {
+        if (window.parent !== window && window.parent.location.hostname === window.location.hostname) {
+          targets.push(window.parent);
+        }
+      } catch {
+        console.info('[emulator] editor window is not reachable; T works when the game view has focus');
+      }
+      for (const t of targets) {
+        t.addEventListener('keydown', onKey, true);
+        this.cleanupFuncs.push(() => t.removeEventListener('keydown', onKey, true));
+      }
     }
 
     Core.start(Date.now() >>> 0)
@@ -285,31 +298,39 @@ export class GameSystem extends createSystem({
 
   /**
    * Emulator helper, only on this computer (localhost): T touches whatever
-   * the right hand points at, as if the fingertip reached it. Moving an
+   * a hand highlights or points at, as if the fingertip reached it. Moving an
    * emulated fingertip into a floating balloon by mouse is slow; the public
    * build never listens for the key, so the headset stays hands-only.
    */
   private emulatorTouch(): void {
-    this.player.raySpaces.right.getWorldPosition(this.a);
-    this.player.raySpaces.right.getWorldQuaternion(this.touchQuat);
-    this.b.set(0, 0, -1).applyQuaternion(this.touchQuat);
-    // The object nearest the pointing direction, within a small cone: easier
-    // than an exact hit on a moving balloon when aiming with a mouse.
+    // What a hand's ray already highlights comes first; otherwise the object
+    // nearest either hand's pointing direction within a cone (balloons are
+    // not ray targets in XR, and a moving one is hard to hit exactly).
     let e: Entity | undefined;
-    let best = TOUCH_CONE;
     for (const q of [this.queries.balloons, this.queries.crystals, this.queries.buttons]) {
-      for (const cand of q.entities) {
-        const obj = cand.object3D;
-        if (!obj?.visible || obj.scale.x < 0.5) continue;
-        obj.getWorldPosition(this.creatureWorld);
-        // A balloon's paper envelope is above its basket, the origin.
-        if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
-        const angle = this.b.angleTo(this.creatureWorld.sub(this.a));
-        if (angle < best) {
-          best = angle;
-          e = cand;
+      for (const cand of q.entities) if (!e && cand.hasComponent(Hovered)) e = cand;
+    }
+    let best = TOUCH_CONE;
+    for (const hand of [this.player.raySpaces.right, this.player.raySpaces.left]) {
+      if (e) break;
+      hand.getWorldPosition(this.a);
+      hand.getWorldQuaternion(this.touchQuat);
+      this.b.set(0, 0, -1).applyQuaternion(this.touchQuat);
+      for (const q of [this.queries.balloons, this.queries.crystals, this.queries.buttons]) {
+        for (const cand of q.entities) {
+          const obj = cand.object3D;
+          if (!obj?.visible || obj.scale.x < 0.5) continue;
+          obj.getWorldPosition(this.creatureWorld);
+          // A balloon's paper envelope is above its basket, the origin.
+          if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
+          const angle = this.b.angleTo(this.creatureWorld.sub(this.a));
+          if (angle < best) {
+            best = angle;
+            e = cand;
+          }
         }
       }
+      if (e) break;
     }
     console.info(`[emulator] T touch: ${e?.object3D?.name ?? 'nothing'}`);
     if (!e) return;
