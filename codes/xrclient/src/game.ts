@@ -48,6 +48,7 @@ import {
 import type { Species } from './assets.js';
 import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
+import { LocalStore } from './storage.js';
 import { T } from './text.js';
 
 const WAVE = 6;
@@ -186,6 +187,9 @@ export class GameSystem extends createSystem({
   pressedButtons: { required: [MenuButton, Pressed] },
 }) {
   private core?: Core;
+  /** Device storage; answers judged before it opens wait in `unsaved`. */
+  private store?: LocalStore;
+  private unsaved: { events: unknown[]; mode: string }[] = [];
   private phase: Phase = 'loading';
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
@@ -295,6 +299,11 @@ export class GameSystem extends createSystem({
         this.cleanupFuncs.push(() => t.removeEventListener('keydown', onKey, true));
       }
     }
+
+    LocalStore.open().then((store) => {
+      this.store = store;
+      for (const batch of this.unsaved.splice(0)) void store.record(batch.events, batch.mode);
+    });
 
     Core.start(Date.now() >>> 0)
       .then((core) => {
@@ -707,8 +716,7 @@ export class GameSystem extends createSystem({
     if (!this.race || !this.raceScene) return;
     const recap = this.race.recap();
     console.info('[race] recap', JSON.stringify(recap));
-    const events = this.race.drainEvents();
-    console.info(`[race] ${events.length} answer events for the outbox`);
+    this.saveAnswers();
     this.phase = 'recap';
     this.clearPlay();
     this.raceScene.showRecap(recap, T.you);
@@ -901,7 +909,17 @@ export class GameSystem extends createSystem({
     this.afterVerdict(verdict);
   }
 
+  /** Writes the answers just judged to the device before anything else happens. */
+  private saveAnswers(): void {
+    const mode = this.race ? 'race' : 'practice';
+    const events = this.race ? this.race.drainEvents() : (this.core?.drainEvents() ?? []);
+    if (events.length === 0) return;
+    if (this.store) void this.store.record(events, mode);
+    else this.unsaved.push({ events, mode });
+  }
+
   private afterVerdict(v: Verdict | RaceVerdict): void {
+    this.saveAnswers();
     if (!v.correct) this.pop(v.retry_allowed ? T.tryAgain : T.itWas(v.expected_text), WRONG_INK);
     if (v.correct || !v.retry_allowed) {
       this.timing = false;
