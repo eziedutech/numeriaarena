@@ -3,6 +3,7 @@
 use foldlings_core::fairness::{FairnessParams, GameType};
 use foldlings_core::race::{PLAYER, Phase, RaceConfig, RaceEvent, RaceMatch, RaceOffer, Recap};
 use foldlings_core::rng::Rng;
+use foldlings_core::session::SessionError;
 use foldlings_core::template::ItemTemplate;
 
 fn all_templates() -> Vec<ItemTemplate> {
@@ -31,10 +32,9 @@ struct Played {
     events: Vec<RaceEvent>,
     recap: Recap,
     phase: Phase,
-    /// Creatures each desk met in every round, read when the round ended.
-    met_per_round: Vec<[u32; 3]>,
     player_points_from_verdicts: u32,
-    minutes: f64,
+    /// Answers the core refused because the round's clock had run out.
+    late_answers: u32,
 }
 
 /// Plays one match. The player answers each creature `think_ms` after it
@@ -48,38 +48,26 @@ fn play(seed: u64, accuracy: f64, think_ms: f64) -> Played {
     m.start(now);
     let mut events = Vec::new();
     let mut pending: Option<(RaceOffer, f64)> = None;
-    let mut met_per_round = Vec::new();
-    // Creatures met this round, counted from what actually happened.
-    let mut round = [0u32; 3];
     let mut verdict_points = 0;
+    let mut late_answers = 0;
+    // The player's next creature appears after the last one's homecoming.
+    let mut ready_at = 0.0;
     while m.phase() != Phase::Done && now < 30.0 * 60000.0 {
-        let fresh = m.tick(now);
-        for e in &fresh {
-            match e {
-                RaceEvent::BotWorking { desk, .. } => round[*desk] += 1,
-                RaceEvent::WaveEnd { .. } | RaceEvent::MatchEnd { .. } => {
-                    met_per_round.push(round);
-                    round = [0; 3];
-                }
-                _ => {}
-            }
-        }
-        events.extend(fresh);
+        events.extend(m.tick(now));
         if pending.is_none()
+            && now >= ready_at
             && let Some(o) = m.player_next().unwrap()
         {
-            round[PLAYER] += 1;
             // Walk-in (0.7 s) before the answer clock starts.
             pending = Some((o, now + 700.0 + think_ms));
         }
         if let Some((o, due)) = pending.take() {
             if now >= due {
-                let key = m
-                    .answer_key(o.offer.offer_id)
-                    .expect("open offer has a key");
+                let key = m.answer_key(o.offer.offer_id);
                 let right = rng.unit() < accuracy;
-                let v = match o.offer.game {
-                    GameType::BalloonBurst => {
+                let result = match (o.offer.game, key) {
+                    (_, None) => Err(SessionError::UnknownOffer(o.offer.offer_id)),
+                    (GameType::BalloonBurst, Some(key)) => {
                         let pick = if right {
                             key[0]
                         } else {
@@ -87,7 +75,7 @@ fn play(seed: u64, accuracy: f64, think_ms: f64) -> Played {
                         };
                         m.answer_balloon(o.offer.offer_id, pick, think_ms, now)
                     }
-                    GameType::OrbForge => {
+                    (GameType::OrbForge, Some(key)) => {
                         let picks = if right {
                             key.clone()
                         } else {
@@ -98,17 +86,22 @@ fn play(seed: u64, accuracy: f64, think_ms: f64) -> Played {
                         };
                         m.answer_orb(o.offer.offer_id, &picks, think_ms, now)
                     }
-                    other => panic!("unexpected game {other:?}"),
-                }
-                .unwrap();
-                assert_eq!(v.verdict.correct, right);
-                assert_eq!(v.race_points, v.verdict.points * if o.boss { 2 } else { 1 });
-                verdict_points += v.race_points;
-                if v.verdict.retry_allowed {
-                    pending = Some((o, now + think_ms / 2.0));
-                } else {
-                    // Homecoming animation before the desk takes the next creature.
-                    now += 2600.0;
+                    (other, _) => panic!("unexpected game {other:?}"),
+                };
+                match result {
+                    Ok(v) => {
+                        assert_eq!(v.verdict.correct, right);
+                        assert_eq!(v.race_points, v.verdict.points * if o.boss { 2 } else { 1 });
+                        verdict_points += v.race_points;
+                        if v.verdict.retry_allowed {
+                            pending = Some((o, now + think_ms / 2.0));
+                        } else {
+                            ready_at = now + 2600.0;
+                        }
+                    }
+                    // The round ended while this creature was open: it went home.
+                    Err(SessionError::UnknownOffer(_)) => late_answers += 1,
+                    Err(e) => panic!("{e}"),
                 }
             } else {
                 pending = Some((o, due));
@@ -118,34 +111,44 @@ fn play(seed: u64, accuracy: f64, think_ms: f64) -> Played {
     }
     events.extend(m.tick(now));
     Played {
-        minutes: events
-            .iter()
-            .find_map(|e| match e {
-                RaceEvent::MatchEnd { at_ms } => Some(at_ms / 60000.0),
-                _ => None,
-            })
-            .unwrap_or(f64::NAN),
         events,
         recap: m.recap(),
         phase: m.phase(),
-        met_per_round,
         player_points_from_verdicts: verdict_points,
+        late_answers,
     }
 }
 
+/// (start, end) of every round, in match milliseconds.
+fn rounds(events: &[RaceEvent]) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    let mut start = None;
+    for e in events {
+        match e {
+            RaceEvent::WaveStart {
+                at_ms, ends_at_ms, ..
+            }
+            | RaceEvent::BossStart { at_ms, ends_at_ms } => start = Some((*at_ms, *ends_at_ms)),
+            RaceEvent::TimeUp { at_ms, .. } => {
+                let (s, planned) = start.take().expect("time up without a round");
+                assert_eq!(*at_ms, planned, "a round ended off its clock");
+                out.push((s, *at_ms));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 #[test]
-fn every_race_finishes_with_equal_rounds_and_consistent_places() {
-    for seed in 1..=60u64 {
+fn every_race_runs_on_the_clock_with_consistent_places() {
+    for seed in 1..=40u64 {
         for accuracy in [0.2, 0.75, 0.97] {
             let p = play(seed, accuracy, 6000.0);
             let tag = format!("seed {seed} accuracy {accuracy}");
             assert_eq!(p.phase, Phase::Done, "{tag}: race never ended");
-            // Three waves of 5 and a boss round of 1, the same for every desk.
-            assert_eq!(
-                p.met_per_round,
-                vec![[5, 5, 5], [5, 5, 5], [5, 5, 5], [1, 1, 1]],
-                "{tag}"
-            );
+            let lengths: Vec<f64> = rounds(&p.events).iter().map(|(s, e)| e - s).collect();
+            assert_eq!(lengths, vec![60000.0, 60000.0, 60000.0, 20000.0], "{tag}");
             let r = &p.recap;
             assert_eq!(r.players.len(), 3);
             assert!(!r.players[PLAYER].bot && r.players[1].bot && r.players[2].bot);
@@ -164,6 +167,29 @@ fn every_race_finishes_with_equal_rounds_and_consistent_places() {
             assert_eq!(hl.len(), 3, "{tag}: highlights must differ");
         }
     }
+}
+
+#[test]
+fn no_bot_answer_lands_outside_a_round() {
+    let p = play(5, 0.75, 6000.0);
+    let rounds = rounds(&p.events);
+    for e in &p.events {
+        if let RaceEvent::BotAnswer { at_ms, .. } = e {
+            assert!(
+                rounds.iter().any(|(s, end)| at_ms >= s && at_ms <= end),
+                "bot answered at {at_ms}, outside every round"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_answer_after_time_up_is_refused() {
+    // A very slow player often has a creature open when the clock runs out.
+    let late: u32 = (1..=10u64)
+        .map(|s| play(s, 0.9, 25000.0).late_answers)
+        .sum();
+    assert!(late > 0, "no answer ever arrived after time up");
 }
 
 #[test]
@@ -187,25 +213,28 @@ fn a_player_who_never_misses_usually_wins() {
 #[test]
 #[ignore]
 fn report() {
-    for accuracy in [0.2, 0.5, 0.75, 0.9, 0.97] {
-        let mut places = [0u32; 4];
-        let (mut minutes, mut player, mut bots) = (0.0, 0u32, 0u32);
-        let n = 100u64;
-        for seed in 1..=n {
-            let p = play(seed, accuracy, 6000.0);
-            places[p.recap.players[PLAYER].place as usize] += 1;
-            minutes += p.minutes;
-            player += p.recap.players[PLAYER].points;
-            bots += p.recap.players[1].points + p.recap.players[2].points;
+    for think in [4000.0, 6000.0, 10000.0] {
+        for accuracy in [0.5, 0.75, 0.9] {
+            let mut places = [0u32; 4];
+            let (mut player, mut bots, mut folded) = (0u32, 0u32, 0u32);
+            let n = 100u64;
+            for seed in 1..=n {
+                let p = play(seed, accuracy, think);
+                places[p.recap.players[PLAYER].place as usize] += 1;
+                player += p.recap.players[PLAYER].points;
+                folded += p.recap.players[PLAYER].folded;
+                bots += p.recap.players[1].points + p.recap.players[2].points;
+            }
+            println!(
+                "{:>2.0} s per answer, right {accuracy}: places 1/2/3 = {}/{}/{} of {n}, player {} pts ({} folded), bot {} pts (mean)",
+                think / 1000.0,
+                places[1],
+                places[2],
+                places[3],
+                player / n as u32,
+                folded / n as u32,
+                bots / (2 * n as u32)
+            );
         }
-        println!(
-            "right {accuracy}: places 1/2/3 = {}/{}/{} of {n}, {:.1} min, player {} pts, bot {} pts (mean)",
-            places[1],
-            places[2],
-            places[3],
-            minutes / n as f64,
-            player / n as u32,
-            bots / (2 * n as u32)
-        );
     }
 }

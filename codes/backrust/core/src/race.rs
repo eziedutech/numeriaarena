@@ -1,12 +1,15 @@
 //! Race: the player against two rival bots, each at their own desk.
 //!
-//! Every desk meets the same number of creatures per wave, so the race is
-//! about points, not about who was handed more questions. Points come from the
-//! same formula for everyone: harder items for one's own level are worth more,
-//! and speed and streaks add a bonus. Each wave the bots are re-drawn near the
-//! player's current level, so the race stays close in both directions. A
-//! creature missed twice goes home without points. The last round is a boss
-//! creature per desk, worth double.
+//! Every round lasts a fixed time (a minute per wave, then a short boss
+//! round worth double) and creatures keep coming at every desk until the
+//! clock runs out, so the race rewards answering well and steadily, and a
+//! session always takes the same time. Points come from the same formula for
+//! everyone: harder items for one's own level are worth more, and speed and
+//! streaks add a bonus. Each round the bots are re-drawn near the player's
+//! current level and answer pace, so the race stays close in both directions
+//! for a quick or a careful player. A creature
+//! missed twice goes home without points; one still open when time runs out
+//! goes home too.
 //!
 //! All timing uses the `now_ms` the caller passes, and every scheduled step is
 //! processed at its own time, so results do not depend on how often `tick`
@@ -28,18 +31,23 @@ pub const PLAYER: usize = 0;
 const BOT_READ_MS: f64 = 1200.0;
 /// Walk-in and fold-home animations between two of a bot's creatures.
 const BOT_BETWEEN_MS: f64 = 2500.0;
-/// Once the player has finished a wave, waiting bots speed up to this pace.
-const HURRY_MS: f64 = 700.0;
-/// Pause between waves, for the wave banner.
+/// Pause between rounds, for the round banner.
 const BREAK_MS: f64 = 4000.0;
 /// Boss creatures are worth this many times their points.
 const BOSS_MULTIPLIER: u32 = 2;
+/// No new creature starts this close to the end of a round.
+const LAST_START_MS: f64 = 1500.0;
+/// Rivals' answer pace follows the player's, within these bounds (ms).
+const PACE_MIN_MS: f64 = 3000.0;
+const PACE_MAX_MS: f64 = 15000.0;
+/// Each round a rival's pace is the player's times a factor in this range.
+const PACE_SPREAD: (f64, f64) = (0.85, 1.15);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WaveSpec {
     pub game: GameType,
-    /// Creatures every desk meets in this wave.
-    pub creatures: u32,
+    /// How long the wave lasts; creatures keep coming until then.
+    pub seconds: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -50,6 +58,8 @@ pub struct RaceConfig {
     pub waves: Vec<WaveSpec>,
     #[serde(default = "default_boss_game")]
     pub boss_game: GameType,
+    #[serde(default = "default_boss_seconds")]
+    pub boss_seconds: f64,
     #[serde(default = "default_bot_names")]
     pub bot_names: [String; 2],
 }
@@ -58,20 +68,23 @@ fn default_waves() -> Vec<WaveSpec> {
     vec![
         WaveSpec {
             game: GameType::BalloonBurst,
-            creatures: 5,
+            seconds: 60.0,
         },
         WaveSpec {
             game: GameType::OrbForge,
-            creatures: 5,
+            seconds: 60.0,
         },
         WaveSpec {
             game: GameType::BalloonBurst,
-            creatures: 5,
+            seconds: 60.0,
         },
     ]
 }
 fn default_boss_game() -> GameType {
     GameType::BalloonBurst
+}
+fn default_boss_seconds() -> f64 {
+    20.0
 }
 fn default_bot_names() -> [String; 2] {
     ["Clip".into(), "Crease".into()]
@@ -91,6 +104,7 @@ pub enum RaceEvent {
         at_ms: f64,
         wave: usize,
         game: GameType,
+        ends_at_ms: f64,
     },
     /// A bot started on a creature; `prompt` is shown in its window.
     BotWorking {
@@ -105,22 +119,21 @@ pub enum RaceEvent {
         attempt: u32,
         points: u32,
     },
-    /// A desk met every creature of the current round.
-    DeskDone {
-        at_ms: f64,
-        desk: usize,
-    },
     Emote {
         at_ms: f64,
         desk: usize,
         emote: Emote,
     },
-    WaveEnd {
+    /// The round's clock ran out. `player_cut` is set when the player's open
+    /// creature was sent home unanswered.
+    TimeUp {
         at_ms: f64,
-        wave: usize,
+        wave: Option<usize>,
+        player_cut: bool,
     },
     BossStart {
         at_ms: f64,
+        ends_at_ms: f64,
     },
     MatchEnd {
         at_ms: f64,
@@ -164,9 +177,8 @@ pub struct DeskView {
     pub name: String,
     pub bot: bool,
     pub points: u32,
-    /// Creatures met in the current round, and how many the round has.
-    pub met: u32,
-    pub of: u32,
+    /// Creatures folded (answered right) in the whole race.
+    pub folded: u32,
     /// 1 for the leader; ties share a place.
     pub place: u32,
 }
@@ -176,6 +188,8 @@ pub struct RaceView {
     #[serde(flatten)]
     pub phase: Phase,
     pub waves: usize,
+    /// When the current round's clock runs out, on the caller's clock.
+    pub ends_at_ms: Option<f64>,
     pub desks: Vec<DeskView>,
 }
 
@@ -184,6 +198,7 @@ pub struct PlayerRecap {
     pub name: String,
     pub bot: bool,
     pub points: u32,
+    pub folded: u32,
     pub place: u32,
     /// 1 to 3 from first-try accuracy.
     pub stars: u8,
@@ -207,6 +222,7 @@ pub struct Recap {
 #[derive(Clone, Debug, Default)]
 struct Tally {
     points: u32,
+    folded: u32,
     first_tries: u32,
     first_correct: u32,
     streak: u32,
@@ -229,6 +245,7 @@ impl Tally {
             self.retries_won += 1;
         }
         if correct {
+            self.folded += 1;
             self.streak += 1;
             self.best_streak = self.best_streak.max(self.streak);
         } else {
@@ -261,17 +278,16 @@ struct Work {
     attempt: u32,
     done_at: f64,
     answer_ms: f64,
-    challenge: bool,
 }
 
 struct Bot {
     name: String,
     theta: f64,
+    /// Expected answer time this round, following the player's pace.
+    pace_ms: f64,
     work: Option<Work>,
     /// When the bot may pick up its next creature.
     free_at: f64,
-    met: u32,
-    announced_done: bool,
     tally: Tally,
 }
 
@@ -288,11 +304,15 @@ pub struct RaceMatch {
     phase: Phase,
     bots: [Bot; 2],
     current: Option<Current>,
-    /// Creatures the player met in the current round.
-    met: u32,
-    player_done_at: Option<f64>,
+    /// When the current round's clock runs out.
+    ends_at: f64,
+    /// Latest time the caller reported.
+    now: f64,
     player: Tally,
-    last_player_at: f64,
+    /// First-try answer times of the player in the current round (ms).
+    player_times: Vec<f64>,
+    /// The player's typical answer time, from the last round they answered in.
+    player_pace_ms: Option<f64>,
     events: Vec<RaceEvent>,
 }
 
@@ -311,10 +331,9 @@ impl RaceMatch {
         let bot = |name: &String| Bot {
             name: name.clone(),
             theta: 0.0,
+            pace_ms: 0.0,
             work: None,
             free_at: f64::INFINITY,
-            met: 0,
-            announced_done: false,
             tally: Tally::default(),
         };
         let bots = [bot(&cfg.bot_names[0]), bot(&cfg.bot_names[1])];
@@ -326,10 +345,11 @@ impl RaceMatch {
                 phase: Phase::Ready,
                 bots,
                 current: None,
-                met: 0,
-                player_done_at: None,
+                ends_at: f64::INFINITY,
+                now: 0.0,
                 player: Tally::default(),
-                last_player_at: 0.0,
+                player_times: Vec::new(),
+                player_pace_ms: None,
                 events: Vec::new(),
             },
             rejected,
@@ -342,6 +362,7 @@ impl RaceMatch {
 
     pub fn start(&mut self, now_ms: f64) {
         if self.phase == Phase::Ready {
+            self.now = now_ms;
             self.begin_round(Phase::Wave { wave: 0 }, now_ms);
         }
     }
@@ -354,13 +375,8 @@ impl RaceMatch {
         r.values().map(|x| x.theta).sum::<f64>() / r.len() as f64
     }
 
-    /// Creatures per desk in the current round.
-    fn round_size(&self) -> u32 {
-        match self.phase {
-            Phase::Wave { wave } => self.cfg.waves[wave].creatures,
-            Phase::Boss => 1,
-            _ => 0,
-        }
+    fn in_round(&self) -> bool {
+        matches!(self.phase, Phase::Wave { .. } | Phase::Boss)
     }
 
     fn game(&self) -> GameType {
@@ -372,17 +388,29 @@ impl RaceMatch {
 
     fn begin_round(&mut self, phase: Phase, at: f64) {
         self.phase = phase;
-        self.met = 0;
-        self.player_done_at = None;
-        // Rivals follow the player's current level, re-drawn each round, so
-        // the race stays close whichever way the player's answers go.
+        let seconds = match phase {
+            Phase::Wave { wave } => self.cfg.waves[wave].seconds,
+            _ => self.cfg.boss_seconds,
+        };
+        self.ends_at = at + seconds * 1000.0;
+        // Rivals follow the player's current level and pace, re-drawn each
+        // round, so the race stays close whichever way the player's answers go.
+        if !self.player_times.is_empty() {
+            let mut t = std::mem::take(&mut self.player_times);
+            t.sort_by(f64::total_cmp);
+            self.player_pace_ms = Some(t[t.len() / 2]);
+        }
+        let pace = self
+            .player_pace_ms
+            .unwrap_or(self.cfg.session.expected_answer_ms)
+            .clamp(PACE_MIN_MS, PACE_MAX_MS);
         let theta = self.player_theta();
         for i in 0..2 {
+            let spread = PACE_SPREAD.0 + (PACE_SPREAD.1 - PACE_SPREAD.0) * self.rng.unit();
             let b = &mut self.bots[i];
+            b.pace_ms = pace * spread;
             b.theta = bot_theta(&[theta], self.session.params(), &mut self.rng);
-            b.met = 0;
             b.work = None;
-            b.announced_done = false;
             b.free_at = at + 900.0 + 700.0 * i as f64;
         }
         match phase {
@@ -390,24 +418,24 @@ impl RaceMatch {
                 at_ms: at,
                 wave,
                 game: self.cfg.waves[wave].game,
+                ends_at_ms: self.ends_at,
             }),
-            Phase::Boss => self.events.push(RaceEvent::BossStart { at_ms: at }),
+            Phase::Boss => self.events.push(RaceEvent::BossStart {
+                at_ms: at,
+                ends_at_ms: self.ends_at,
+            }),
             _ => {}
         }
     }
 
     // ------------------------------------------------------------ player
 
-    /// Next creature for the player's desk, or `None` when the player has met
-    /// every creature of the round (or between rounds).
+    /// Next creature for the player's desk, or `None` between rounds, while a
+    /// creature is open, or in the last moments of a round.
     pub fn player_next(&mut self) -> Result<Option<RaceOffer>, SessionError> {
-        if self.current.is_some() || !matches!(self.phase, Phase::Wave { .. } | Phase::Boss) {
+        if self.current.is_some() || !self.in_round() || self.now > self.ends_at - LAST_START_MS {
             return Ok(None);
         }
-        if self.met >= self.round_size() {
-            return Ok(None);
-        }
-        self.met += 1;
         let boss = self.phase == Phase::Boss;
         let offer = self.session.next(self.game())?;
         self.current = Some(Current {
@@ -429,7 +457,7 @@ impl RaceMatch {
         let v = self
             .session
             .answer_balloon(offer_id, index, time_ms, now_ms)?;
-        Ok(self.after_player(v, now_ms))
+        Ok(self.after_player(v, time_ms))
     }
 
     pub fn answer_orb(
@@ -443,9 +471,11 @@ impl RaceMatch {
         let v = self
             .session
             .answer_orb(offer_id, crystals, time_ms, now_ms)?;
-        Ok(self.after_player(v, now_ms))
+        Ok(self.after_player(v, time_ms))
     }
 
+    /// Answers count only for the open creature and only before the round's
+    /// clock runs out.
     fn check_current(&self, offer_id: u32) -> Result<(), SessionError> {
         match &self.current {
             Some(c) if c.offer_id == offer_id => Ok(()),
@@ -453,23 +483,18 @@ impl RaceMatch {
         }
     }
 
-    fn after_player(&mut self, verdict: Verdict, now: f64) -> RaceVerdict {
+    fn after_player(&mut self, verdict: Verdict, time_ms: f64) -> RaceVerdict {
         let cur = self.current.as_ref().expect("checked");
         let (boss, challenge) = (cur.boss, cur.challenge);
         let race_points = verdict.points * if boss { BOSS_MULTIPLIER } else { 1 };
+        if verdict.attempt == 1 {
+            self.player_times.push(time_ms);
+        }
         self.player
             .answered(verdict.attempt, verdict.correct, challenge);
         self.player.points += race_points;
-        self.last_player_at = now;
         if !verdict.retry_allowed {
             self.current = None;
-            if self.met >= self.round_size() {
-                self.player_done_at = Some(now);
-                self.events.push(RaceEvent::DeskDone {
-                    at_ms: now,
-                    desk: PLAYER,
-                });
-            }
         }
         RaceVerdict {
             verdict,
@@ -488,44 +513,21 @@ impl RaceMatch {
             }
             self.step(at);
         }
+        self.now = now_ms.max(self.now);
         std::mem::take(&mut self.events)
-    }
-
-    fn player_finished(&self) -> bool {
-        self.current.is_none() && self.met >= self.round_size()
-    }
-
-    fn round_over(&self) -> bool {
-        self.player_finished()
-            && self
-                .bots
-                .iter()
-                .all(|b| b.met >= self.round_size() && b.work.is_none())
     }
 
     fn next_due(&self) -> Option<f64> {
         match self.phase {
             Phase::Ready | Phase::Done => None,
             Phase::Break { until_ms, .. } => Some(until_ms),
-            Phase::Wave { .. } | Phase::Boss => {
-                if self.round_over() {
-                    let end = self
-                        .bots
-                        .iter()
-                        .map(|b| b.free_at.min(1e300))
-                        .fold(self.last_player_at, f64::max);
-                    return Some(end);
-                }
-                let size = self.round_size();
+            // The earliest bot step, or the end of the round, whichever comes first.
+            Phase::Wave { .. } | Phase::Boss => Some(
                 self.bots
                     .iter()
-                    .filter_map(|b| match &b.work {
-                        Some(w) => Some(w.done_at),
-                        None if b.met < size => Some(b.free_at),
-                        None => None,
-                    })
-                    .reduce(f64::min)
-            }
+                    .map(|b| b.work.as_ref().map_or(b.free_at, |w| w.done_at))
+                    .fold(self.ends_at, f64::min),
+            ),
         }
     }
 
@@ -537,36 +539,7 @@ impl RaceMatch {
             Phase::Break {
                 next_wave: None, ..
             } => self.begin_round(Phase::Boss, at),
-            Phase::Wave { wave } if self.round_over() => {
-                self.events.push(RaceEvent::WaveEnd { at_ms: at, wave });
-                let next_wave = (wave + 1 < self.cfg.waves.len()).then_some(wave + 1);
-                self.phase = Phase::Break {
-                    next_wave,
-                    until_ms: at + BREAK_MS,
-                };
-            }
-            Phase::Boss if self.round_over() => {
-                let leader = self.leader_desk();
-                if leader != PLAYER {
-                    // The winning rival applauds; the others give a thumbs up.
-                    self.events.push(RaceEvent::Emote {
-                        at_ms: at,
-                        desk: leader,
-                        emote: Emote::Clap,
-                    });
-                }
-                for d in [1, 2] {
-                    if d != leader {
-                        self.events.push(RaceEvent::Emote {
-                            at_ms: at,
-                            desk: d,
-                            emote: Emote::ThumbsUp,
-                        });
-                    }
-                }
-                self.events.push(RaceEvent::MatchEnd { at_ms: at });
-                self.phase = Phase::Done;
-            }
+            Phase::Wave { .. } | Phase::Boss if at >= self.ends_at => self.time_up(at),
             Phase::Wave { .. } | Phase::Boss => {
                 for d in 0..2 {
                     self.step_bot(d, at);
@@ -576,13 +549,72 @@ impl RaceMatch {
         }
     }
 
+    /// The round's clock ran out: open creatures go home without points.
+    fn time_up(&mut self, at: f64) {
+        let player_cut = if let Some(cur) = self.current.take() {
+            self.session.close(cur.offer_id);
+            true
+        } else {
+            false
+        };
+        for b in &mut self.bots {
+            b.work = None;
+        }
+        let wave = match self.phase {
+            Phase::Wave { wave } => Some(wave),
+            _ => None,
+        };
+        self.events.push(RaceEvent::TimeUp {
+            at_ms: at,
+            wave,
+            player_cut,
+        });
+        match wave {
+            Some(w) => {
+                let next_wave = (w + 1 < self.cfg.waves.len()).then_some(w + 1);
+                self.phase = Phase::Break {
+                    next_wave,
+                    until_ms: at + BREAK_MS,
+                };
+            }
+            None => self.finish(at),
+        }
+    }
+
+    fn finish(&mut self, at: f64) {
+        let leader = self.leader_desk();
+        if leader != PLAYER {
+            // The winning rival applauds; the others give a thumbs up.
+            self.events.push(RaceEvent::Emote {
+                at_ms: at,
+                desk: leader,
+                emote: Emote::Clap,
+            });
+        }
+        for d in [1, 2] {
+            if d != leader {
+                self.events.push(RaceEvent::Emote {
+                    at_ms: at,
+                    desk: d,
+                    emote: Emote::ThumbsUp,
+                });
+            }
+        }
+        self.events.push(RaceEvent::MatchEnd { at_ms: at });
+        self.phase = Phase::Done;
+    }
+
     fn step_bot(&mut self, d: usize, at: f64) {
         if self.bots[d].work.as_ref().is_some_and(|w| w.done_at <= at) {
             self.finish_bot_answer(d, at);
         }
-        let size = self.round_size();
-        if self.bots[d].work.is_none() && self.bots[d].met < size && self.bots[d].free_at <= at {
-            self.start_bot_work(d, at);
+        if self.bots[d].work.is_none() && self.bots[d].free_at <= at {
+            if at <= self.ends_at - LAST_START_MS {
+                self.start_bot_work(d, at);
+            } else {
+                // Too late in the round to start another creature.
+                self.bots[d].free_at = f64::INFINITY;
+            }
         }
     }
 
@@ -593,9 +625,8 @@ impl RaceMatch {
             sigma: self.session.params().sigma_min,
             answers: u32::MAX,
         };
-        self.bots[d].met += 1;
         let Some((item, p)) = self.session.bot_item(game, rating, &mut self.rng) else {
-            // Checked in `new`; a template that stops instantiating ends this creature.
+            // Checked in `new`; a template that stops instantiating skips this creature.
             self.bots[d].free_at = at + BOT_BETWEEN_MS;
             return;
         };
@@ -605,15 +636,9 @@ impl RaceMatch {
             item.b,
             game,
             choices,
-            self.cfg.session.expected_answer_ms,
+            self.bots[d].pace_ms,
             &mut self.rng,
         );
-        // Once the player is done, rivals finish their round quickly instead of keeping them waiting.
-        let (read, think) = if self.player_finished() {
-            (0.0, HURRY_MS)
-        } else {
-            (BOT_READ_MS, ms)
-        };
         self.events.push(RaceEvent::BotWorking {
             at_ms: at,
             desk: d + 1,
@@ -623,9 +648,8 @@ impl RaceMatch {
             b: item.b,
             p,
             attempt: 1,
-            done_at: at + read + think,
+            done_at: at + BOT_READ_MS + ms,
             answer_ms: ms,
-            challenge: false,
         });
     }
 
@@ -638,7 +662,7 @@ impl RaceMatch {
             w.b,
             game,
             choices,
-            self.cfg.session.expected_answer_ms * 0.6,
+            self.bots[d].pace_ms * 0.6,
             &mut self.rng,
         );
         let correct = outcome == Outcome::Correct;
@@ -654,7 +678,7 @@ impl RaceMatch {
             self.session.params(),
         ) * if boss { BOSS_MULTIPLIER } else { 1 };
         bot.tally.points += pts;
-        bot.tally.answered(w.attempt, correct, w.challenge);
+        bot.tally.answered(w.attempt, correct, false);
         self.events.push(RaceEvent::BotAnswer {
             at_ms: at,
             desk: d + 1,
@@ -662,16 +686,15 @@ impl RaceMatch {
             attempt: w.attempt,
             points: pts,
         });
-        let hurry = self.player_finished();
         if !correct && w.attempt == 1 {
             w.attempt = 2;
-            w.done_at = at + if hurry { HURRY_MS } else { retry_ms };
+            w.done_at = at + retry_ms;
             w.answer_ms = retry_ms;
             self.bots[d].work = Some(w);
             return;
         }
         let bot = &mut self.bots[d];
-        bot.free_at = at + if hurry { HURRY_MS } else { BOT_BETWEEN_MS };
+        bot.free_at = at + BOT_BETWEEN_MS;
         if bot.tally.streak > 0 && bot.tally.streak.is_multiple_of(3) {
             self.events.push(RaceEvent::Emote {
                 at_ms: at,
@@ -679,30 +702,17 @@ impl RaceMatch {
                 emote: Emote::ThumbsUp,
             });
         }
-        let size = self.round_size();
-        let bot = &mut self.bots[d];
-        if bot.met >= size && !bot.announced_done {
-            bot.announced_done = true;
-            self.events.push(RaceEvent::DeskDone {
-                at_ms: at,
-                desk: d + 1,
-            });
-        }
     }
 
     // ------------------------------------------------------------ reading
 
-    fn desk_points(&self) -> [u32; 3] {
-        [
-            self.player.points,
-            self.bots[0].tally.points,
-            self.bots[1].tally.points,
-        ]
+    fn tallies(&self) -> [&Tally; 3] {
+        [&self.player, &self.bots[0].tally, &self.bots[1].tally]
     }
 
     /// Place of each desk: 1 for the most points; ties share a place.
     fn places(&self) -> [u32; 3] {
-        let pts = self.desk_points();
+        let pts = self.tallies().map(|t| t.points);
         let mut out = [1u32; 3];
         for i in 0..3 {
             out[i] = 1 + pts.iter().filter(|p| **p > pts[i]).count() as u32;
@@ -711,36 +721,39 @@ impl RaceMatch {
     }
 
     fn leader_desk(&self) -> usize {
-        let pts = self.desk_points();
+        let pts = self.tallies().map(|t| t.points);
         (0..3)
             .max_by_key(|i| (pts[*i], std::cmp::Reverse(*i)))
             .unwrap_or(0)
     }
 
+    fn names(&self) -> [String; 3] {
+        [
+            self.cfg.session.player_id.clone(),
+            self.bots[0].name.clone(),
+            self.bots[1].name.clone(),
+        ]
+    }
+
     pub fn view(&self) -> RaceView {
         let places = self.places();
-        let size = self.round_size();
-        let mut desks = vec![DeskView {
-            name: self.cfg.session.player_id.clone(),
-            bot: false,
-            points: self.player.points,
-            met: self.met,
-            of: size,
-            place: places[0],
-        }];
-        for (i, b) in self.bots.iter().enumerate() {
-            desks.push(DeskView {
-                name: b.name.clone(),
-                bot: true,
-                points: b.tally.points,
-                met: b.met,
-                of: size,
-                place: places[i + 1],
-            });
-        }
+        let names = self.names();
+        let desks = self
+            .tallies()
+            .iter()
+            .enumerate()
+            .map(|(i, t)| DeskView {
+                name: names[i].clone(),
+                bot: i != PLAYER,
+                points: t.points,
+                folded: t.folded,
+                place: places[i],
+            })
+            .collect();
         RaceView {
             phase: self.phase,
             waves: self.cfg.waves.len(),
+            ends_at_ms: self.in_round().then_some(self.ends_at),
             desks,
         }
     }
@@ -775,24 +788,21 @@ impl RaceMatch {
             best_streak: t.best_streak,
             challenge_tries: t.challenge_tries,
         };
+        let tallies = self.tallies();
         let all = [
-            stats(&self.player, gain),
-            stats(&self.bots[0].tally, 0.0),
-            stats(&self.bots[1].tally, 0.0),
+            stats(tallies[0], gain),
+            stats(tallies[1], 0.0),
+            stats(tallies[2], 0.0),
         ];
         let highlights = assign_highlights(&all);
         let places = self.places();
-        let tallies = [&self.player, &self.bots[0].tally, &self.bots[1].tally];
-        let names = [
-            self.cfg.session.player_id.clone(),
-            self.bots[0].name.clone(),
-            self.bots[1].name.clone(),
-        ];
+        let names = self.names();
         let players = (0..3)
             .map(|i| PlayerRecap {
                 name: names[i].clone(),
                 bot: i != PLAYER,
                 points: tallies[i].points,
+                folded: tallies[i].folded,
                 place: places[i],
                 stars: tallies[i].stars(),
                 highlight: highlights.as_ref().map(|h| h[i]),

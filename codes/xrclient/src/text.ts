@@ -13,16 +13,21 @@ export const EN = {
   you: 'You',
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
   place: ordinal,
-  /** A rival's line above its window, for example "3/5, 380". */
-  rival: (met: number, of: number, points: number) => `${met}/${of}, ${points}`,
+  /** A rival's line above its window, for example "4 folded, 380 pts". */
+  rival: (folded: number, points: number) => `${folded} folded, ${points} pts`,
+  /** Countdown, for example "0:42". */
+  clock: (ms: number) => {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  },
+  timeUp: "Time's up!",
   right: 'Got it!',
   /** Points earned, spelled out so they are never mistaken for an answer. */
   earned: (points: number) => `+${points} points`,
   tryAgain: 'Try again!',
   itWas: (answer: string) => `It was ${answer}`,
   missed: 'Missed',
-  finished: 'Finished!',
-  bossRound: 'Boss round: double points!',
+  bossRound: 'Boss round: 20 seconds, double points!',
   emote: { thumbs_up: 'Nice!', clap: 'Yay!' },
   recapTitle: 'Race results',
   highlight: {

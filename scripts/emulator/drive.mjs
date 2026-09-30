@@ -52,7 +52,10 @@ export function posOf(pattern) {
   const e = find(pattern)[0];
   if (!e) return null;
   const q = cli('ecs', 'query', '--input-json', j({ entityIndex: e.entityIndex }));
-  const t = q.components.find((c) => c.componentId === 'Transform').values.position;
+  // The entity can disappear between the two queries (a popped balloon).
+  const tr = q?.components?.find?.((c) => c.componentId === 'Transform');
+  if (!tr) return null;
+  const t = tr.values.position;
   return { x: t[0], y: t[1], z: t[2], comps: q.components };
 }
 export function logs(pattern, n = 1, since = undefined) {

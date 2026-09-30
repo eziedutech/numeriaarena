@@ -15,6 +15,12 @@ const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
 /** Scoreboard rows above the back of the book, clear of the question card. */
 const BOARD_TOP = 0.46;
 const BOARD_Z = -0.15;
+/** The countdown turns red for the last this many ms of a round. */
+const CLOCK_WARN_MS = 10000;
+/** The countdown sits this far left of the scoreboard's centre. */
+const CLOCK_X = -0.2;
+const CLOCK_INK = 0x1f4fa3;
+const CLOCK_LATE_INK = 0xc62828;
 /** A flash label stays up this long (seconds). */
 const FLASH_S = 1.6;
 
@@ -47,6 +53,10 @@ export class RaceScene {
   private recapItems: Entity[] = [];
   /** One row per participant above the book, in place order. */
   private board: Label[] = [];
+  private countdown?: Label;
+  private countdownLate = false;
+  /** Where the viewer's eye is, for turning the countdown to face it. */
+  readonly eye = new Vector3();
 
   constructor(
     private stage: Stage,
@@ -65,7 +75,7 @@ export class RaceScene {
       bot.root.scale.setScalar(0.95);
       frame.add(bot.root);
       stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
-      const status = stage.label(T.rival(0, 0, 0), 0.024, frame, 0.08, 0.008, false);
+      const status = stage.label(T.rival(0, 0), 0.024, frame, 0.08, 0.008, false);
       const work = stage.label(' ', 0.02, frame, 0.036, 0.008, false);
       const flash = stage.label(' ', 0.022, frame, 0.0, 0.03, false);
       flash.mesh.visible = false;
@@ -81,7 +91,7 @@ export class RaceScene {
     if (!this.banner) {
       this.banner = new Label(text, { height: 0.04 });
       this.banner.mesh.name = 'race-banner';
-      this.banner.mesh.position.set(0, BOARD_TOP + 0.05, BOARD_Z);
+      this.banner.mesh.position.set(0, BOARD_TOP + 0.12, BOARD_Z);
       this.desk.add(this.banner.mesh);
     }
     this.banner.set(text);
@@ -114,18 +124,40 @@ export class RaceScene {
     if (correct) this.windows[desk - 1].work.mesh.visible = false;
   }
 
-  finished(desk: number): void {
-    const w = this.windows[desk - 1];
-    if (!w) return;
-    w.work.mesh.visible = false;
-    this.flash(desk, T.finished);
+  /** Time is up: the rivals' questions leave their windows. */
+  timeUp(): void {
+    for (const w of this.windows) w.work.mesh.visible = false;
+  }
+
+  /**
+   * The round's countdown above the scoreboard, turning red for the last ten
+   * seconds. Hidden between rounds.
+   */
+  clock(msLeft: number | null): void {
+    if (msLeft === null) {
+      if (this.countdown) this.countdown.mesh.visible = false;
+      return;
+    }
+    const late = msLeft <= CLOCK_WARN_MS;
+    if (!this.countdown || this.countdownLate !== late) {
+      this.countdown?.mesh.removeFromParent();
+      this.countdown = new Label(T.clock(msLeft), { height: 0.05, ink: late ? CLOCK_LATE_INK : CLOCK_INK });
+      this.countdown.mesh.name = 'race-countdown';
+      // Left of the scoreboard, at its middle row: inside the seated view.
+      this.countdown.mesh.position.set(CLOCK_X, BOARD_TOP - 0.036, BOARD_Z);
+      this.desk.add(this.countdown.mesh);
+      this.countdownLate = late;
+    }
+    this.countdown.set(T.clock(msLeft));
+    this.countdown.mesh.visible = true;
+    this.countdown.mesh.lookAt(this.eye);
   }
 
   /** The scoreboard for everyone, and progress and points above each rival's window. */
   show(state: RaceState): void {
     this.windows.forEach((w, i) => {
       const d = state.desks[i + 1];
-      if (d) w.status.set(T.rival(d.met, d.of, d.points));
+      if (d) w.status.set(T.rival(d.folded, d.points));
     });
     const rows = state.desks
       .map((d, i) => ({ d, i }))
@@ -194,5 +226,7 @@ export class RaceScene {
       this.banner.mesh.removeFromParent();
       this.banner = undefined;
     }
+    this.countdown?.mesh.removeFromParent();
+    this.countdown = undefined;
   }
 }

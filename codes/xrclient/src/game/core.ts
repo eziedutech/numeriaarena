@@ -102,21 +102,20 @@ export interface RaceVerdict extends Verdict {
 export type Emote = 'thumbs_up' | 'clap';
 
 export type RaceEvent =
-  | { type: 'wave_start'; at_ms: number; wave: number; game: GameKind }
+  | { type: 'wave_start'; at_ms: number; wave: number; game: GameKind; ends_at_ms: number }
   | { type: 'bot_working'; at_ms: number; desk: number; prompt: string }
   | { type: 'bot_answer'; at_ms: number; desk: number; correct: boolean; attempt: number; points: number }
-  | { type: 'desk_done'; at_ms: number; desk: number }
   | { type: 'emote'; at_ms: number; desk: number; emote: Emote }
-  | { type: 'wave_end'; at_ms: number; wave: number }
-  | { type: 'boss_start'; at_ms: number }
+  | { type: 'time_up'; at_ms: number; wave: number | null; player_cut: boolean }
+  | { type: 'boss_start'; at_ms: number; ends_at_ms: number }
   | { type: 'match_end'; at_ms: number };
 
 export interface DeskView {
   name: string;
   bot: boolean;
   points: number;
-  met: number;
-  of: number;
+  /** Creatures answered right in the whole race. */
+  folded: number;
   place: number;
 }
 
@@ -124,6 +123,8 @@ export interface RaceState {
   phase: 'ready' | 'wave' | 'break' | 'boss' | 'done';
   wave?: number;
   waves: number;
+  /** When the current round's clock runs out (Date.now() clock), or null between rounds. */
+  ends_at_ms: number | null;
   desks: DeskView[];
 }
 
@@ -131,7 +132,15 @@ export type Highlight = 'best_save' | 'most_improved' | 'sharpest_aim' | 'steady
 
 export interface Recap {
   /** The player first, then the bots. */
-  players: { name: string; bot: boolean; points: number; place: number; stars: number; highlight: Highlight | null }[];
+  players: {
+    name: string;
+    bot: boolean;
+    points: number;
+    folded: number;
+    place: number;
+    stars: number;
+    highlight: Highlight | null;
+  }[];
   skills: { skill: string; theta_before: number; theta_after: number }[];
 }
 

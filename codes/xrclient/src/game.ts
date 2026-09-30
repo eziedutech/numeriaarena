@@ -544,6 +544,9 @@ export class GameSystem extends createSystem({
     const scene = this.raceScene;
     if (!race || !scene) return;
     scene.update(delta);
+    const ends = this.raceState?.ends_at_ms ?? null;
+    this.camera.getWorldPosition(scene.eye);
+    scene.clock(ends === null || this.phase === 'recap' ? null : ends - Date.now());
     if (this.recapIn > 0) {
       this.recapIn -= delta;
       if (this.recapIn <= 0) this.showRecap();
@@ -561,6 +564,21 @@ export class GameSystem extends createSystem({
         this.spawnOffer(offer);
         this.refreshRace();
       }
+    }
+  }
+
+  /**
+   * An answer that arrives just after the round's clock ran out is refused by
+   * the core; the creature has already gone home, so the desk simply clears.
+   */
+  private raceAnswer(answer: () => RaceVerdict): RaceVerdict | undefined {
+    try {
+      return answer();
+    } catch (error) {
+      console.info('[race] answer after time up, not counted:', String(error));
+      this.clearPlay();
+      if (this.phase === 'between') this.phase = 'playing';
+      return undefined;
     }
   }
 
@@ -584,9 +602,6 @@ export class GameSystem extends createSystem({
       case 'bot_answer':
         scene.answered(ev.desk, ev.correct);
         break;
-      case 'desk_done':
-        if (ev.desk > 0) scene.finished(ev.desk);
-        break;
       case 'emote':
         scene.emote(ev.desk, ev.emote);
         break;
@@ -596,7 +611,14 @@ export class GameSystem extends createSystem({
       case 'match_end':
         this.recapIn = RECAP_DELAY_S;
         break;
-      case 'wave_end':
+      case 'time_up':
+        scene.timeUp();
+        scene.showBanner(T.timeUp, 2);
+        // A creature still open when the clock ran out goes home unanswered.
+        if (ev.player_cut) {
+          this.clearPlay();
+          if (this.phase === 'between') this.phase = 'playing';
+        }
         break;
     }
   }
@@ -752,7 +774,9 @@ export class GameSystem extends createSystem({
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
     if (this.race) {
-      verdict = this.race.answerBalloon(this.offer.offer_id, index, timeMs, Date.now());
+      const v = this.raceAnswer(() => this.race!.answerBalloon(this.offer!.offer_id, index, timeMs, Date.now()));
+      if (!v) return;
+      verdict = v;
     } else if (this.core) {
       verdict = this.core.answerBalloon(this.offer.offer_id, index, timeMs);
     } else {
@@ -777,7 +801,9 @@ export class GameSystem extends createSystem({
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
     if (this.race) {
-      verdict = this.race.answerOrb(this.offer.offer_id, picks, timeMs, Date.now());
+      const v = this.raceAnswer(() => this.race!.answerOrb(this.offer!.offer_id, picks, timeMs, Date.now()));
+      if (!v) return;
+      verdict = v;
     } else if (this.core) {
       verdict = this.core.answerOrb(this.offer.offer_id, picks, timeMs);
     } else {
