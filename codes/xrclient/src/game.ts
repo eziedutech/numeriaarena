@@ -27,6 +27,7 @@ import {
   makeBird,
   makeButton,
   makeCrystal,
+  ENVELOPE_FLAP_REST,
   makeEnvelope,
   makeFoldling,
   setOpacity,
@@ -578,10 +579,10 @@ export class GameSystem extends createSystem({
     // On the bottom pocket, below the flap's tip and seal: the paper label,
     // with a text card standing in until it has loaded.
     const sticker: UiName = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
-    placeUiImage(sticker, envelope.root, [0, -0.022, 0.0045], {
+    placeUiImage(sticker, envelope.root, [0, -0.022, 0.0016], {
       scale: 0.85,
       maxWidth: 0.09,
-      fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0045, false).mesh,
+      fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0016, false).mesh,
     });
     this.envelopes.set(e, envelope);
   }
@@ -592,7 +593,7 @@ export class GameSystem extends createSystem({
     o.t += delta;
     const k = Math.min(1, o.t / FLAP_S);
     // From resting on the pockets to just past upright, so it ends behind the letter.
-    o.envelope.flap.rotation.x = 0.12 - (Math.PI + 0.2) * (k * k * (3 - 2 * k));
+    o.envelope.flap.rotation.x = ENVELOPE_FLAP_REST - (Math.PI + 0.2) * (k * k * (3 - 2 * k));
     const l = Math.min(1, Math.max(0, (o.t - FLAP_S) / LETTER_S));
     o.envelope.letter.visible = l > 0;
     o.envelope.letter.position.y = LETTER_RISE * l;

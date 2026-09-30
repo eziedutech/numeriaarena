@@ -518,6 +518,11 @@ export interface Envelope {
 
 const ENV_W = 0.1;
 const ENV_H = 0.066;
+/**
+ * How far the closed flap stands off the pockets (radians). Nearly flat, so
+ * the envelope reads as thin paper, not a thick card.
+ */
+export const ENVELOPE_FLAP_REST = 0.02;
 
 /**
  * An origami envelope standing upright, front +Z, origin at its centre:
@@ -529,33 +534,34 @@ export function makeEnvelope(color: number): Envelope {
   root.name = 'envelope';
   const w = ENV_W / 2;
   const h = ENV_H / 2;
-  const back = new Mesh(new BoxGeometry(ENV_W, ENV_H, 0.003), paper(shade(color)));
-  back.position.z = -0.0015;
+  // A single sheet, not a box: no edge band to suggest a thick card.
+  const back = new Mesh(new PlaneGeometry(ENV_W, ENV_H), paper(shade(color), { doubleSide: true }));
   const letter = new Mesh(new PlaneGeometry(ENV_W * 0.8, ENV_H * 0.78), paper(PAPER, { doubleSide: true }));
   letter.name = 'envelope-letter';
-  letter.position.z = 0.0008;
+  letter.position.z = 0.0003;
   // Hidden until the envelope opens: its white edges would show through the
   // folds as outlines that no folded paper has.
   letter.visible = false;
   // Each folded panel gets its own tone so the creases read under any light:
   // side pockets in shadow, the bottom pocket catching light, the flap between.
+  // Pockets and flap lie almost on each other, as thin paper does.
   const sides = folded(
-    [-w, -h, 0.002, 0, 0, 0.002, -w, h, 0.002, w, -h, 0.002, w, h, 0.002, 0, 0, 0.002],
+    [-w, -h, 0.0006, 0, 0, 0.0006, -w, h, 0.0006, w, -h, 0.0006, w, h, 0.0006, 0, 0, 0.0006],
     shade(shade(color)),
   );
-  const bottom = folded([-w, -h, 0.003, w, -h, 0.003, 0, 0.004, 0.003], tint(color, 0.18));
+  const bottom = folded([-w, -h, 0.0009, w, -h, 0.0009, 0, 0.004, 0.0009], tint(color, 0.1));
   const flap = new Group();
   flap.name = 'envelope-flap';
   // The flap belongs to the back sheet: its hinge is on the back sheet's top
   // edge and it folds forward over the pockets. Opened, it ends up behind the
   // letter, which then slides out of the gap between back sheet and pockets.
   flap.position.set(0, h, 0);
-  // Lifted a little off the pockets, the way a folded flap never lies quite flat.
-  flap.rotation.x = 0.12;
-  flap.add(folded([-w, 0, 0.004, 0, -h * 0.95, 0.004, w, 0, 0.004], color));
-  const seal = new Mesh(new CylinderGeometry(0.007, 0.007, 0.002, 12), paper(0xe8b64c));
+  flap.rotation.x = ENVELOPE_FLAP_REST;
+  flap.add(folded([-w, 0, 0.0012, 0, -h * 0.95, 0.0012, w, 0, 0.0012], color));
+  // A flat paper seal, not a thick disc.
+  const seal = new Mesh(new CylinderGeometry(0.007, 0.007, 0.0004, 16), paper(0xe8b64c));
   seal.rotation.x = Math.PI / 2;
-  seal.position.set(0, -h * 0.85, 0.0052);
+  seal.position.set(0, -h * 0.85, 0.0016);
   flap.add(seal);
   root.add(back, letter, sides, bottom, flap);
   return { root, flap, letter };
