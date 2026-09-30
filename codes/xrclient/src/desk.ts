@@ -1,7 +1,7 @@
-import { Box3, Color, createSystem, Group, Vector3, VisibilityState, XRMesh } from '@iwsdk/core';
+import { Box3, Color, createSystem, Group, Object3D, Vector3, VisibilityState, XRMesh } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
-import { makeBook } from './art/models.js';
+import { makeBook, makeStar } from './art/models.js';
 import { DeskRoot } from './game-components.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
@@ -26,6 +26,11 @@ const PINCH_WAIT_S = 6;
 /** Seated desk: this far below the eyes and this far in front. */
 const SEATED_DROP_M = 0.45;
 const SEATED_REACH_M = 0.45;
+/** The "Ready!" card stays this long after the book lands (seconds). */
+const READY_S = 1.2;
+/** The placing card floats this far ahead of the eyes and this far below them. */
+const STATUS_AHEAD_M = 0.55;
+const STATUS_DROP_M = 0.1;
 /** Paper cream behind the browser preview; XR keeps the background clear for passthrough. */
 const PREVIEW_BACKGROUND = new Color(0xf6e3c0);
 
@@ -40,7 +45,12 @@ export class DeskSystem extends createSystem({
 }) {
   private root!: Group;
   private ghost!: Group;
-  private hint!: Label;
+  /** A small card in front of the eyes while the book is being placed. */
+  private status!: Group;
+  private statusText!: Label;
+  private statusStar!: Object3D;
+  /** Seconds the "Ready!" card stays up after the book lands. */
+  private readyLeft = 0;
   private waited = 0;
   private box = new Box3();
   private corner = new Vector3();
@@ -63,10 +73,17 @@ export class DeskSystem extends createSystem({
     this.ghost.add(ghostBook);
     this.ghost.name = 'desk-ghost';
     this.ghost.visible = false;
-    this.hint = new Label('Pinch to place the book', { height: 0.03 });
-    this.hint.mesh.position.set(0, 0.08, 0);
-    this.ghost.add(this.hint.mesh);
     this.world.createTransformEntity(this.ghost);
+
+    this.status = new Group();
+    this.status.name = 'placing-status';
+    this.status.visible = false;
+    this.statusText = new Label(' ', { height: 0.036 });
+    this.statusText.mesh.position.set(0, -0.042, 0);
+    this.statusStar = makeStar(true);
+    this.statusStar.scale.setScalar(0.9);
+    this.status.add(this.statusText.mesh, this.statusStar);
+    this.world.createTransformEntity(this.status);
 
     let immersive: boolean | null = null;
     this.cleanupFuncs.push(
@@ -101,6 +118,24 @@ export class DeskSystem extends createSystem({
     e.setValue(DeskRoot, 'method', method);
     this.root.visible = placed;
     this.ghost.visible = false;
+    // A book placed in XR is announced for a moment; in the browser there is no card.
+    const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    this.readyLeft = placed && immersive ? READY_S : 0;
+  }
+
+  /**
+   * Keeps the placing card about 55 cm in front of the eyes, a little low,
+   * facing the player, with its paper star turning while it works.
+   */
+  private showStatus(text: string, delta: number, spin: boolean): void {
+    this.player.head.getWorldPosition(this.head);
+    this.player.head.getWorldDirection(this.forward).negate();
+    this.status.position.copy(this.head).addScaledVector(this.forward, STATUS_AHEAD_M);
+    this.status.position.y -= STATUS_DROP_M;
+    this.status.lookAt(this.head);
+    this.statusText.set(text);
+    if (spin) this.statusStar.rotation.y += delta * 3;
+    this.status.visible = true;
   }
 
   private placeForBrowser(): void {
@@ -170,15 +205,34 @@ export class DeskSystem extends createSystem({
 
   update(delta: number): void {
     const e = this.desk();
-    if (!e || e.getValue(DeskRoot, 'placed')) return;
-    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
+    if (!e) return;
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      this.status.visible = false;
+      return;
+    }
+    if (e.getValue(DeskRoot, 'placed')) {
+      if (this.readyLeft > 0) {
+        this.readyLeft -= delta;
+        this.showStatus('Ready!', delta, false);
+      } else {
+        this.status.visible = false;
+      }
+      return;
+    }
     if (this.placeOnTable()) return;
     this.waited += delta;
-    if (this.waited < TABLE_WAIT_S) return;
+    if (this.waited < TABLE_WAIT_S) {
+      const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
+      this.showStatus(`Finding your table${dots}`, delta, true);
+      return;
+    }
+    const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
+    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true);
 
-    // No table: a ghost book follows the right index finger; a pinch puts it down.
+    // No table: a ghost book follows the right hand; a pinch puts it down.
+    // (The hand's ray origin follows a tracked hand everywhere, the emulator included.)
     this.ghost.visible = true;
-    this.player.indexTipSpaces.right.getWorldPosition(this.tip);
+    this.player.raySpaces.right.getWorldPosition(this.tip);
     this.player.head.getWorldPosition(this.head);
     this.ghost.position.copy(this.tip);
     this.ghost.rotation.set(0, Math.atan2(this.head.x - this.tip.x, this.head.z - this.tip.z), 0);
