@@ -133,8 +133,8 @@ export async function orbRound() {
   return { line, pair, result: after !== before ? after : 'no orb given' };
 }
 
-/** Balloons rise at about 4 cm/s (each rise 80% to 130% of 3.5 cm/s). */
-const RISE = 0.04;
+/** Balloons rise at about 3.2 cm/s (each rise 80% to 130% of 3 cm/s). */
+const RISE = 0.032;
 /**
  * Seconds from a balloon's position being read to the fingertip reaching it:
  * the read itself, parking the hand, letting it settle, and the push (each

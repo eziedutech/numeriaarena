@@ -28,6 +28,7 @@ import {
   makeCrystal,
   makeEnvelope,
   makeFoldling,
+  setOpacity,
   makeOrb,
   mixers,
   speciesFor,
@@ -105,21 +106,26 @@ const BALLOON_COLORS = [0xf2716b, 0x3469c4, 0x3fb6a0, 0xf9c74f];
 /**
  * Rising balloons. A seated child's eye is about 0.35 to 0.45 m above the
  * table; the line from there to the bottom of the question card crosses the
- * balloon row at about 0.30 m. A balloon (0.117 m tall) therefore vanishes
- * once its basket reaches 0.17 m, so no balloon ever covers the question.
+ * balloon row at about 0.35 m. A balloon (0.117 m tall) rises until its top
+ * meets that line and fades out on the way, so it never covers the question
+ * while it can still be read.
  */
 const RISE_FROM = 0.0;
 /** Upper bound; the live eye line usually sets a lower one (`balloonCeiling`). */
-const RISE_TO = 0.21;
+const RISE_TO = 0.32;
 /** Balloon height from basket bottom to crown, and the gap kept below the eye line. */
 const BALLOON_H = 0.117;
 const SIGHT_MARGIN = 0.005;
 /** Balloons always rise at least this far, even for an unusual viewpoint. */
 const MIN_CEILING = 0.07;
-/** Balloons grow in over their first and shrink away over their last few cm. */
+/** Balloons grow in over their first few cm. */
 const GROW_M = 0.03;
+/** Balloons fade out over the last few cm of their rise instead of shrinking. */
+const FADE_M = 0.06;
+/** A fading balloon's top may pass the line of sight to the question by this much. */
+const FADE_PAST_M = 0.015;
 /** Metres per second; each rise varies from 80% to 130% of it. */
-const RISE_SPEED = 0.035;
+const RISE_SPEED = 0.03;
 /** More lanes than balloons, so a balloon always finds a free one. */
 const BALLOON_LANES = 6;
 /**
@@ -444,7 +450,7 @@ export class GameSystem extends createSystem({
       for (const q of [this.queries.balloons, this.queries.crystals, this.queries.buttons]) {
         for (const cand of q.entities) {
           const obj = cand.object3D;
-          if (!obj?.visible || obj.scale.x < 0.5) continue;
+          if (!obj?.visible || obj.scale.x < 0.5 || ((obj.userData.opacity as number | undefined) ?? 1) < 0.3) continue;
           obj.getWorldPosition(this.creatureWorld);
           // A balloon's paper envelope is above its basket, the origin.
           if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
@@ -1021,7 +1027,7 @@ export class GameSystem extends createSystem({
     if (span <= 0.01) return RISE_TO;
     const t = (eye.z - BALLOON_Z) / span;
     const line = eye.y + (bottom - eye.y) * t;
-    return Math.max(MIN_CEILING, Math.min(RISE_TO, line - SIGHT_MARGIN - BALLOON_H));
+    return Math.max(MIN_CEILING, Math.min(RISE_TO, line - SIGHT_MARGIN - BALLOON_H + FADE_PAST_M));
   }
 
   /**
@@ -1042,8 +1048,8 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Balloons rise from the table, grow in, and shrink away before the top of
-   * the balloon reaches the line of sight to the question, then come back up
+   * Balloons rise from the table, grow in, and fade out as the top of the
+   * balloon reaches the line of sight to the question, then come back up
    * in another free lane: the player reaches for a moving answer.
    */
   private floatBalloons(delta: number): void {
@@ -1058,8 +1064,12 @@ export class GameSystem extends createSystem({
       }
       obj.position.y += r.speed * delta;
       const grown = Math.min(1, (obj.position.y - RISE_FROM) / GROW_M);
-      const left = Math.min(1, (ceiling - obj.position.y) / GROW_M);
-      obj.scale.setScalar(Math.max(0.001, Math.min(grown, left)));
+      const opacity = Math.max(0, Math.min(1, (ceiling - obj.position.y) / FADE_M));
+      if (obj.userData.opacity !== opacity) {
+        obj.userData.opacity = opacity;
+        setOpacity(obj, opacity);
+      }
+      obj.scale.setScalar(Math.max(0.001, grown));
       if (obj.position.y >= ceiling) this.launch(obj, r.count, 0.2 + Math.random() * 0.8);
     }
   }

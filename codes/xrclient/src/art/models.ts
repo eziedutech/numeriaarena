@@ -412,10 +412,37 @@ function pageSketch(side: number): Mesh {
  * Its gores alternate two tones; both are painted from the one colour.
  */
 export function makeBalloon(color: number): Group {
-  const g = staticModel('balloon_round', 'balloon', 'sky', color);
-  if (!g) return proceduralBalloon(color);
-  recolour(g, 'blue', shade(shade(color)));
+  let g = staticModel('balloon_round', 'balloon', 'sky', color);
+  if (g) recolour(g, 'blue', shade(shade(color)));
+  else g = proceduralBalloon(color);
+  // Its own materials, so one balloon can fade away without the others.
+  g.traverse((o) => {
+    const mesh = o as Mesh;
+    if (mesh.isMesh) mesh.material = (mesh.material as Material).clone();
+  });
   return g;
+}
+
+/** Fades a balloon and its number tag (1 opaque, 0 gone). */
+export function setOpacity(root: Object3D, opacity: number): void {
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const mat = mesh.material as Material;
+    mat.opacity = opacity;
+    // Opaque paper keeps writing depth; only a fading balloon is sorted as glass.
+    if (!mat.userData.alwaysTransparent) {
+      if (mat.userData.alwaysTransparent === undefined) mat.userData.alwaysTransparent = mat.transparent;
+      if (!mat.userData.alwaysTransparent) {
+        const fading = opacity < 1;
+        if (mat.transparent !== fading) {
+          mat.transparent = fading;
+          mat.needsUpdate = true;
+        }
+      }
+    }
+  });
+  root.visible = opacity > 0.01;
 }
 
 const GEMS = ['crystal', 'crystal_2', 'crystal_3'];
