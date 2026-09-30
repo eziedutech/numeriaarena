@@ -639,7 +639,7 @@ function creaseInk(color: number): LineBasicMaterial {
 }
 
 /** Creases: where the paper bends more than this, a thin line one shade darker marks the fold. */
-const CREASE_DEG = 25;
+const CREASE_DEG = 40;
 
 const scannedShapes = new Map<string, { geo: BufferGeometry; creases: BufferGeometry; flag: Vector3; eye: Vector3 }>();
 
