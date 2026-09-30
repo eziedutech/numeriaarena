@@ -1,6 +1,6 @@
 import { AssetType, defineAssets } from '@iwsdk/core';
 
-import { NOT_APPROVED, UI_FILES, UI_FIRST, type UiName } from './art/ui2d.js';
+import { UI_FILES, UI_FIRST, type UiName } from './art/ui2d.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -19,7 +19,7 @@ const model = (file: string, name: string) => ({
 
 /** Paper UI images (public/ui2d), keyed `ui_<name>`; the menu's come first. */
 const uiTextures = Object.fromEntries(
-  (Object.keys(UI_FILES) as UiName[]).filter((name) => !NOT_APPROVED.has(name)).map((name) => [
+  (Object.keys(UI_FILES) as UiName[]).map((name) => [
     `ui_${name}`,
     {
       url: publicAssetUrl(UI_FILES[name]),

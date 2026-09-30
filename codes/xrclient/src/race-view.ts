@@ -255,9 +255,10 @@ export class RaceScene {
       star.scale.setScalar(1.2);
       card.add(star);
     }
-    // The paper title (transparent emboss) is too faint over a real room;
-    // the text card stays until the asset set strengthens it.
-    this.stage.label(T.recapTitle, 0.034, card, 0.06, 0.004, false);
+    placeUiImage('recap_title', card, [0, 0.06, 0.004], {
+      scale: 0.6,
+      fallback: () => this.stage.label(T.recapTitle, 0.034, card, 0.06, 0.004, false).mesh,
+    });
     const rows = [...recap.players].sort((a, b) => a.place - b.place);
     rows.forEach((p, i) => {
       const who = p.bot ? T.bot(p.name) : playerName;

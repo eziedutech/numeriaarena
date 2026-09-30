@@ -74,25 +74,6 @@ export const UI_FILES: Record<UiName, string> = {
   button_done: 'ui2d/recap/button_done.png',
 };
 
-/**
- * Items the asset set drew in a bevelled emboss that is not the approved
- * style (the clear "BEGIN HERE" sticker). They are not shown; their text
- * cards stay until the sticker versions arrive.
- */
-export const NOT_APPROVED: ReadonlySet<UiName> = new Set<UiName>([
-  'title_numeria_arena',
-  'menu_robot_race',
-  'menu_balloon_burst',
-  'menu_orb_forge',
-  'status_finding_table',
-  'status_pinch_to_place',
-  'race_wave_1',
-  'race_wave_2',
-  'race_wave_3',
-  'hint_pop_right_answer',
-  'recap_title',
-  'button_done',
-]);
 
 /** Shown on the menu, so loaded before the game starts. */
 export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forge', 'menu_robot_race', 'title_numeria_arena'];
@@ -103,7 +84,6 @@ export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forg
  * keeps its text card instead.
  */
 export function uiImage(name: UiName, scale = 1, maxWidth = Infinity): Mesh | null {
-  if (NOT_APPROVED.has(name)) return null;
   const shared = AssetManager.getTexture(`ui_${name}`) as Texture | undefined;
   const image = shared?.image as { width: number; height: number } | undefined;
   if (!shared || !image?.width) return null;

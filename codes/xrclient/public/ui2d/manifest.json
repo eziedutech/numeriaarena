@@ -1,6 +1,6 @@
 {
   "source": "https://github.com/sayazia/orimathassets",
-  "commit": "4c246c07f5f3abffa8bfbae1d40f07d1fe24ced2",
+  "commit": "9e114276f5e212574717070df3d64c12ffb2eb42",
   "license": "CC0-1.0",
   "assets": [
     {
@@ -12,7 +12,7 @@
       "background": null,
       "size_class": "XL",
       "px": [
-        2076,
+        2052,
         400
       ],
       "world_height_m": 0.07,
@@ -28,7 +28,7 @@
       "background": null,
       "size_class": "S",
       "px": [
-        422,
+        424,
         96
       ],
       "world_height_m": 0.022,
@@ -44,7 +44,7 @@
       "background": null,
       "size_class": "S",
       "px": [
-        516,
+        518,
         96
       ],
       "world_height_m": 0.022,
@@ -60,7 +60,7 @@
       "background": null,
       "size_class": "S",
       "px": [
-        384,
+        386,
         96
       ],
       "world_height_m": 0.022,
@@ -76,7 +76,7 @@
       "background": null,
       "size_class": "M",
       "px": [
-        978,
+        980,
         160
       ],
       "world_height_m": 0.035,
@@ -92,7 +92,7 @@
       "background": null,
       "size_class": "M",
       "px": [
-        1252,
+        1256,
         160
       ],
       "world_height_m": 0.035,
@@ -356,7 +356,7 @@
       "background": null,
       "size_class": "S",
       "px": [
-        694,
+        696,
         96
       ],
       "world_height_m": 0.022,
@@ -388,10 +388,10 @@
       "background": null,
       "size_class": "L",
       "px": [
-        1476,
-        302
+        1406,
+        260
       ],
-      "world_height_m": 0.059,
+      "world_height_m": 0.0508,
       "priority": 1,
       "letter_px": 120
     },
@@ -489,7 +489,7 @@
       "background": null,
       "size_class": "M",
       "px": [
-        334,
+        338,
         160
       ],
       "world_height_m": 0.035,

@@ -611,9 +611,14 @@ export class GameSystem extends createSystem({
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
-    // The paper DONE (transparent emboss) is too faint on the green card for
-    // now; the text stays until the asset set strengthens it.
-    this.label(title, 0.022, button, 0, 0.0075, false);
+    if (title === T.done) {
+      placeUiImage('button_done', button, [0, 0, 0.0075], {
+        scale: 0.9,
+        fallback: () => this.label(title, 0.022, button, 0, 0.0075, false).mesh,
+      });
+    } else {
+      this.label(title, 0.022, button, 0, 0.0075, false);
+    }
   }
 
   private start(choice: MenuChoice): void {
