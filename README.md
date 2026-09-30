@@ -169,22 +169,25 @@ Parameters `fp-2026-09-29.2`.
 
 ### Race against two robot rivals
 
-Each player races two clearly labelled robots at their own desks. Every desk meets the
-same creatures per wave (three waves of five and a boss round worth double), points use
-the same formula for everyone, and the robots are re-drawn near the player's level each
-wave. 100 races per row, a simulated player right with a fixed chance, 6 s per answer:
+Each player races two clearly labelled robots at their own desks. The race runs on a
+clock: three waves of 60 seconds and a 20 second boss round worth double. Creatures keep
+arriving at every desk until time is up; a creature still open at the whistle goes home
+without points and a late answer is refused. Points use the same formula for everyone, and
+before each round the robots are re-drawn near the player's level and pace (the median time
+of the player's first tries last round, kept between 3 and 15 s, times 0.85 to 1.15).
+100 races per cell, a simulated player right with a fixed chance and a fixed time per answer,
+places 1st / 2nd / 3rd:
 
-| Player right | 1st / 2nd / 3rd |
-|---|---|
-| 20% | 0 / 0 / 100 |
-| 50% | 3 / 12 / 85 |
-| 75% (what the Fairness Engine aims for) | 57 / 26 / 17 |
-| 90% | 89 / 9 / 2 |
-| 97% | 100 / 0 / 0 |
+| Time per answer | right 50% | right 75% | right 90% |
+|---|---|---|---|
+| 4 s | 10 / 30 / 60 | 84 / 14 / 2 | 100 / 0 / 0 |
+| 6 s | 8 / 23 / 69 | 64 / 27 / 9 | 96 / 4 / 0 |
+| 10 s | 4 / 10 / 86 | 27 / 37 / 36 | 66 / 28 / 6 |
 
-- A player answering at the level the engine aims for wins a little over half the time, so the race stays close in both directions.
-- A player who is right only a fifth of the time always comes last against rivals at their level. A real player who struggles gets easier items and relief after two misses, which this fixed-chance simulation leaves out.
-- Every race ends, every desk meets the same number of creatures, places always follow points, and every player gets a different highlight (`cargo test --test race`).
+- Being right matters most: at any pace, a player right 90% of the time usually wins and a player right half the time usually comes last.
+- Speed helps without deciding everything. Without the robots following the player's pace, a 10 s player right 75% of the time won only 11 of 100 races and a 4 s player always won.
+- A real player who struggles gets easier items and relief after two misses, which this fixed-chance simulation leaves out.
+- Every round ends on its clock, no robot answers outside a round, places always follow points, the same seed gives the same race, and every player gets a different highlight (`cargo test --test race`).
 
 ### Emulator checks
 
@@ -193,8 +196,8 @@ On the Meta Quest 3 preset with hand input: the table in the synthetic room is d
 0.150 m and is released.
 
 A full race played by the emulator test driver with hand pokes and pinches
-(`node scripts/emulator/drive.mjs race`): the menu envelope opens, three waves of five
-creatures and a boss round, a live scoreboard for all three players, and results with
+(`node scripts/emulator/drive.mjs race`): the menu envelope opens, three timed waves
+and a boss round, a live scoreboard for all three players, and results with
 places, stars and a different highlight each. In the browser preview the same game plays
 with a mouse: clicking an envelope, a balloon, or two crystals in turn.
 
