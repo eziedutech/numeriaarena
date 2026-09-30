@@ -1,5 +1,5 @@
 // Emulator test driver for Foldlings: drives the IWSDK CLI with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs orb 3
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -124,47 +124,67 @@ export async function orbRound() {
   if (!pair) return { line, result: 'no exact pair in the log line' };
   const a = posOf(`^crystal-${pair[0]}$`), b = posOf(`^crystal-${pair[1]}$`);
   if (!a || !b) return { line, pair, result: 'crystals not found' };
+  const before = logs('orb ', 1)[0];
   grabAt(a.x, a.y, a.z); await sleep(0.3); pinch(1); await sleep(0.4);
   await carry(`^crystal-${pair[0]}$`, a, { x: b.x, y: b.y + 0.005, z: b.z });
   // Held beside its partner, the pair joins and is given as the answer by itself.
   await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(4);
-  return { line, pair, result: logs('orb ', 1)[0] };
+  const after = logs('orb ', 1)[0];
+  return { line, pair, result: after !== before ? after : 'no orb given' };
 }
 
+/** Balloons rise at about 4 cm/s (each rise 80% to 130% of 3.5 cm/s). */
+const RISE = 0.04;
 /**
- * Pokes balloon `i` from the front. Balloons rise, vanish and come back in
- * another lane, so wait until it is full size and low enough to reach.
+ * Seconds from a balloon's position being read to the fingertip reaching it:
+ * the read itself, parking the hand, letting it settle, and the push (each
+ * CLI call takes about half a second).
+ */
+const LEAD = 1.6;
+
+/**
+ * Pokes balloon `i` straight from the front. The game only counts a finger
+ * pushed into a balloon, and its hand velocity is smoothed over about 0.1 s,
+ * so a hand that jumps sideways to the balloon and then steps in reads as a
+ * sideways brush. Park in front first, wait for the hand to settle, then push
+ * along the desk's forward axis, aimed where the rising balloon will be.
  */
 export async function popAt(i) {
   let b;
-  for (let tries = 0; tries < 30; tries++) {
+  for (let tries = 0; tries < 20; tries++) {
     b = posOf(`^balloon-${i}$`);
-    const scale = b?.comps.find((c) => c.componentId === 'Transform')?.values.scale?.[0] ?? 0;
-    if (b && scale > 0.9 && b.y > 0.02 && b.y < 0.1) break;
+    // Rising (not waiting on the table) and low enough to still be there after LEAD.
+    if (b && b.y > 0.002 && b.y < 0.09) break;
     b = undefined;
     await sleep(0.1);
   }
   if (!b) return;
-  // The envelope's middle is about 7 cm above the basket (the origin); aim a
-  // little higher because the balloon keeps rising while the hand moves in.
-  // Steps of 90 ms: faster ones skip the moment the fingertip enters the surface.
-  const x = b.x, y = b.y + 0.07 + 0.05;
-  for (const dz of [0.06, 0.035, 0.02, 0.01, 0.0]) { tip(x, y, b.z + dz); await sleep(0.09); }
-  tip(x, 0.25, 0.4); await sleep(0.6);
+  // The envelope's middle is about 7 cm above the basket (the origin).
+  const x = b.x, y = b.y + 0.07 + RISE * LEAD;
+  tip(x, y, b.z + 0.07); await sleep(0.3);
+  cli('xr', 'animate-to', '--input-json', j({ device: 'hand-right', position: wristFor(w(x, y, b.z - 0.01)), orientation: ID, duration: 0.3 }));
+  tip(x, y, b.z + 0.07);
+  tip(0, 0.25, 0.4); await sleep(0.3);
 }
 
 /** Plays one Balloon Burst creature: a blind first poke, then the right balloon if a retry is offered. */
 export async function balloonRound(line) {
   const texts = /balloons (.*?)( \||$)/.exec(line)[1].split(' ');
-  await popAt(0, texts.length);
-  const first = logs('\\[game\\] balloon ', 1)[0] ?? '';
+  // The log buffer outlives reloads: only a line that changed is this creature's.
+  const before = logs('\\[game\\] balloon ', 1)[0];
+  const newLine = () => {
+    const l = logs('\\[game\\] balloon ', 1)[0];
+    return l !== before ? l : undefined;
+  };
+  for (let tries = 0; tries < 3 && !newLine(); tries++) await popAt(0);
+  const first = newLine() ?? '';
   const expected = /expected (\S+),/.exec(first)?.[1];
   if (/: wrong,/.test(first) && expected) {
     await sleep(0.8);
     const i = texts.indexOf(expected);
-    if (i > 0) await popAt(i, texts.length);
+    for (let tries = 0; tries < 3 && i > 0 && logs('\\[game\\] balloon ', 1)[0] === first; tries++) await popAt(i);
   }
-  return logs('\\[game\\] balloon ', 1)[0];
+  return newLine() ?? 'no balloon popped';
 }
 
 /** Plays a whole race from the menu to the results. */
@@ -205,4 +225,17 @@ if (process.argv[2] === 'orb') {
   await fresh();
   await card(0.135);
   for (let r = 0; r < Number(process.argv[3] ?? 3); r++) console.log(JSON.stringify(await orbRound()));
+}
+
+if (process.argv[2] === 'balloon') {
+  await fresh();
+  let last = logs('\\[game\\] offer', 1)[0] ?? '';
+  await card(0);
+  for (let r = 0; r < Number(process.argv[3] ?? 3); r++) {
+    let line = '';
+    for (let k = 0; k < 20 && (!line || line === last); k++) { line = logs('\\[game\\] offer', 1)[0] ?? ''; await sleep(0.5); }
+    last = line;
+    await sleep(1.4);
+    console.log(`${line.replace(/^\[game\] /, '')}\n  -> ${await balloonRound(line)}`);
+  }
 }
