@@ -121,6 +121,16 @@ const GROW_M = 0.03;
 const RISE_SPEED = 0.035;
 /** More lanes than balloons, so a balloon always finds a free one. */
 const BALLOON_LANES = 6;
+/**
+ * A balloon poke: the hand moves at 5 cm/s or more, not mostly sideways
+ * (a sweep across the row) and mostly forward or down into the balloon
+ * (not pulled back). Shares are of the hand's speed.
+ */
+const POKE_MIN_SPEED = 0.05;
+const POKE_SIDEWAYS_SHARE = 0.6;
+const POKE_INTO_SHARE = 0.5;
+/** Fingertip velocity is averaged over roughly this long (seconds). */
+const TIP_SMOOTH_S = 0.1;
 /** The T helper picks the target nearest the pointing direction within this angle. */
 const TOUCH_CONE = (15 * Math.PI) / 180;
 /** Hosts where the emulator runs; the T touch helper exists only there. */
@@ -189,6 +199,13 @@ export class GameSystem extends createSystem({
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
   private touchQuat = new Quaternion();
+  private tipPos = [new Vector3(), new Vector3()];
+  private tipVel = [new Vector3(), new Vector3()];
+  private tipNow = new Vector3();
+  private lastPoke = '';
+  private pokeVel = new Vector3();
+  private pokeAxis = new Vector3();
+  private lastDelta = 1 / 72;
   /** Outside XR: the crystal clicked first, waiting for its partner. */
   private selected?: Entity;
   /** Crystals of the last orb given, to write the finished sum on the card. */
@@ -261,7 +278,10 @@ export class GameSystem extends createSystem({
 
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
-      this.queries.pressedBalloons.subscribe('qualify', (e) => this.popBalloon(e)),
+      // A mouse click outside XR is always deliberate; in XR a touch must be a poke.
+      this.queries.pressedBalloons.subscribe('qualify', (e) =>
+        this.popBalloon(e, this.world.visibilityState.peek() === VisibilityState.NonImmersive),
+      ),
       this.queries.pressedCrystals.subscribe('qualify', (e) => this.clickCrystal(e)),
       // Entering or leaving XR switches mouse play for what is already on the desk.
       this.world.visibilityState.subscribe(() => {
@@ -294,6 +314,61 @@ export class GameSystem extends createSystem({
     // The chosen envelope opens before its game starts.
     this.phase = 'opening';
     this.opening = { envelope, choice, t: 0 };
+  }
+
+  /**
+   * A balloon counts only when a fingertip pushes into it, away from the
+   * player's head. A hand swept sideways through the row, or pulled back,
+   * brushes balloons without choosing one.
+   */
+  private pokedForward(e: Entity): boolean {
+    const obj = e.object3D;
+    if (!obj) return false;
+    // The desk's axes: the balloon row runs along its X, the player faces its -Z.
+    const desk = this.deskEntity()?.object3D;
+    if (!desk) return true;
+    desk.getWorldQuaternion(this.touchQuat);
+    const along = this.pokeAxis.set(1, 0, 0).applyQuaternion(this.touchQuat);
+    const into = this.b.set(0, 0, -1).applyQuaternion(this.touchQuat);
+    // The hand nearest the balloon made the touch. The touch can register in
+    // the same frame the hand moved, before `trackTips` saw it, so the latest
+    // movement is added to the smoothed velocity here.
+    obj.getWorldPosition(this.a);
+    const i = this.tipPos[1].distanceTo(this.a) < this.tipPos[0].distanceTo(this.a) ? 1 : 0;
+    const space = i === 0 ? this.player.raySpaces.right : this.player.raySpaces.left;
+    space.getWorldPosition(this.tipNow);
+    const v = this.pokeVel
+      .copy(this.tipNow)
+      .sub(this.tipPos[i])
+      .divideScalar(Math.max(this.lastDelta, 1 / 120))
+      .add(this.tipVel[i]);
+    const speed = v.length();
+    const forward = v.dot(into);
+    const sideways = Math.abs(v.dot(along));
+    const down = -v.y;
+    this.lastPoke = `speed ${speed.toFixed(2)}, forward ${forward.toFixed(2)}, sideways ${sideways.toFixed(2)}, down ${down.toFixed(2)}`;
+    if (speed < POKE_MIN_SPEED || sideways > POKE_SIDEWAYS_SHARE * speed) return false;
+    return forward >= POKE_INTO_SHARE * speed || down >= POKE_INTO_SHARE * speed;
+  }
+
+  /**
+   * Fingertip velocity per hand (0 right, 1 left), smoothed over about the
+   * last 100 ms: a touch is often registered a frame or two after the
+   * finger's last movement, and tracked hands move in small jumps.
+   */
+  private trackTips(delta: number): void {
+    if (delta <= 0) return;
+    this.lastDelta = delta;
+    const keep = Math.exp(-delta / TIP_SMOOTH_S);
+    // The hand's ray origin moves with the fingertip in a poke; in the
+    // emulator the fingertip and grip spaces do not follow a tracked hand.
+    const spaces = [this.player.raySpaces.right, this.player.raySpaces.left];
+    spaces.forEach((space, i) => {
+      space.getWorldPosition(this.tipNow);
+      this.b.copy(this.tipNow).sub(this.tipPos[i]).divideScalar(delta);
+      this.tipVel[i].multiplyScalar(keep).addScaledVector(this.b, 1 - keep);
+      this.tipPos[i].copy(this.tipNow);
+    });
   }
 
   /**
@@ -334,7 +409,7 @@ export class GameSystem extends createSystem({
     }
     console.info(`[emulator] T touch: ${e?.object3D?.name ?? 'nothing'}`);
     if (!e) return;
-    if (e.hasComponent(Balloon)) this.popBalloon(e);
+    if (e.hasComponent(Balloon)) this.popBalloon(e, true);
     else if (e.hasComponent(Crystal)) this.clickCrystal(e);
     else if (e.hasComponent(MenuButton)) this.pressButton(e);
   }
@@ -664,10 +739,14 @@ export class GameSystem extends createSystem({
 
   // ------------------------------------------------------------ answers
 
-  private popBalloon(e: Entity): void {
+  private popBalloon(e: Entity, deliberate = false): void {
     if (this.phase !== 'playing' || !this.offer) return;
     // A finger still extended from the last pop must not burst a new balloon.
     if (performance.now() - this.shownAt < PRESS_GRACE_MS) return;
+    if (!deliberate && !this.pokedForward(e)) {
+      console.info(`[game] ${e.object3D?.name} brushed, not poked: ignored (${this.lastPoke})`);
+      return;
+    }
     const index = e.getValue(Balloon, 'index') as number;
     this.lastBalloon = index;
     const timeMs = performance.now() - this.shownAt;
@@ -994,6 +1073,7 @@ export class GameSystem extends createSystem({
     if (this.phase === 'menu' && placed && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
       this.showMenu();
     }
+    this.trackTips(delta);
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
     if (this.phase === 'opening') this.runOpening(delta);
