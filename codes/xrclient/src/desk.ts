@@ -57,11 +57,11 @@ const STATUS_DROP_M = 0.1;
 /** While the ghost book follows the hand, the card rides this far above it, over its portal. */
 const STATUS_ABOVE_GHOST_M = 0.3;
 /**
- * Behind the browser preview: a matte faded denim with soft out-of-focus
+ * Behind the browser preview: a matte warm sand with soft out-of-focus
  * paper shapes, like a blurred desk behind the book, dark enough for cream
  * paper lettering. XR keeps the background clear for passthrough.
  */
-const PREVIEW_BASE = '#5e7391';
+const PREVIEW_BASE = '#e0c780';
 /** Out-of-focus spots: x, y, radius (fractions of the width) and tone. */
 const PREVIEW_SPOTS: [number, number, number, string][] = [
   [0.12, 0.2, 0.28, 'rgba(255,255,255,0.10)'],
@@ -72,25 +72,56 @@ const PREVIEW_SPOTS: [number, number, number, string][] = [
   [0.95, 0.6, 0.18, 'rgba(0,0,0,0.07)'],
 ];
 
+/** Where the wall starts easing into the floor, as a fraction of the height (under the book). */
+const PREVIEW_FLOOR = 0.66;
+
 let previewBackdrop: CanvasTexture | undefined;
 
 function makePreviewBackdrop(): CanvasTexture {
   if (previewBackdrop) return previewBackdrop;
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 288;
+  canvas.width = 1024;
+  canvas.height = 576;
+  const w = canvas.width;
+  const h = canvas.height;
   const c = canvas.getContext('2d')!;
   c.fillStyle = PREVIEW_BASE;
-  c.fillRect(0, 0, canvas.width, canvas.height);
+  c.fillRect(0, 0, w, h);
+  // A hint of a room: the wall a touch lighter where the book stands and
+  // shaded towards the top, easing into a floor under the book that darkens
+  // gently towards the viewer, with no hard line between them.
+  const room = c.createLinearGradient(0, 0, 0, h);
+  room.addColorStop(0, 'rgba(0,0,0,0.06)');
+  room.addColorStop(0.45, 'rgba(255,255,255,0.05)');
+  room.addColorStop(PREVIEW_FLOOR, 'rgba(255,255,255,0.01)');
+  room.addColorStop(PREVIEW_FLOOR + 0.14, 'rgba(0,0,0,0.04)');
+  room.addColorStop(1, 'rgba(0,0,0,0.09)');
+  c.fillStyle = room;
+  c.fillRect(0, 0, w, h);
   for (const [x, y, r, tone] of PREVIEW_SPOTS) {
-    const cx = x * canvas.width;
-    const cy = y * canvas.height;
-    const g = c.createRadialGradient(cx, cy, 0, cx, cy, r * canvas.width);
+    const g = c.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * w);
     g.addColorStop(0, tone);
     g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g;
-    c.fillRect(0, 0, canvas.width, canvas.height);
+    c.fillRect(0, 0, w, h);
   }
+  // Corners fall off softly, like light on a real wall.
+  const vignette = c.createRadialGradient(w / 2, h * 0.55, h * 0.35, w / 2, h * 0.55, w * 0.7);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.08)');
+  c.fillStyle = vignette;
+  c.fillRect(0, 0, w, h);
+  // Fine paper grain (the same every time) keeps it matte and hides banding.
+  const grain = c.getImageData(0, 0, w, h);
+  let seed = 7;
+  for (let i = 0; i < grain.data.length; i += 4) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const n = ((seed >>> 24) - 128) / 128 * 4;
+    grain.data[i] += n;
+    grain.data[i + 1] += n;
+    grain.data[i + 2] += n;
+  }
+  c.putImageData(grain, 0, 0);
   previewBackdrop = new CanvasTexture(canvas);
   previewBackdrop.colorSpace = SRGBColorSpace;
   return previewBackdrop;
