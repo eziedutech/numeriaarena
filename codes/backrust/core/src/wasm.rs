@@ -130,27 +130,24 @@ impl GameSession {
     }
 }
 
-/// Solo Squad match for the headset: the player plus two partner bots.
+/// Race for the headset: the player against two rival bots.
 #[wasm_bindgen]
-pub struct SquadGame {
-    inner: crate::squad::SquadMatch,
+pub struct RaceGame {
+    inner: crate::race::RaceMatch,
     rejected: Vec<String>,
 }
 
 #[wasm_bindgen]
-impl SquadGame {
-    /// `templates_json`: array of item templates. `config_json`: SquadConfig.
+impl RaceGame {
+    /// `templates_json`: array of item templates. `config_json`: RaceConfig.
     #[wasm_bindgen(constructor)]
-    pub fn new(templates_json: &str, config_json: &str) -> Result<SquadGame, JsError> {
+    pub fn new(templates_json: &str, config_json: &str) -> Result<RaceGame, JsError> {
         let templates: Vec<ItemTemplate> = serde_json::from_str(templates_json).map_err(js)?;
-        let cfg: crate::squad::SquadConfig = serde_json::from_str(config_json).map_err(js)?;
-        let (inner, rejected) = crate::squad::SquadMatch::new(
-            templates,
-            cfg,
-            crate::fairness::FairnessParams::default(),
-        )
-        .map_err(js)?;
-        Ok(SquadGame { inner, rejected })
+        let cfg: crate::race::RaceConfig = serde_json::from_str(config_json).map_err(js)?;
+        let (inner, rejected) =
+            crate::race::RaceMatch::new(templates, cfg, crate::fairness::FairnessParams::default())
+                .map_err(js)?;
+        Ok(RaceGame { inner, rejected })
     }
 
     pub fn rejected(&self) -> String {

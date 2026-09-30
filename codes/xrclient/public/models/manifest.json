@@ -1,6 +1,6 @@
 {
   "source": "https://github.com/sayazia/orimathassets",
-  "commit": "92d8c1d9f253d11cefdf433d083cdd55a7f6437b",
+  "commit": "fd9bb6fd1aaa56ba3f7ba631fa48d196887b41ee",
   "license": "CC0-1.0 (models); same owner as this game",
   "assets": [
     {
@@ -77,7 +77,7 @@
       "sheet": "foldlings",
       "file": "foldlings/foldling_rabbit.glb",
       "unit": "m",
-      "triangles": 446,
+      "triangles": 480,
       "outline_triangles": 0,
       "bounds": {
         "min": [
@@ -86,8 +86,8 @@
           -0.015
         ],
         "max": [
-          0.026,
-          0.0722,
+          0.0223,
+          0.0741,
           0.015
         ]
       },
@@ -397,7 +397,7 @@
       "sheet": "foldlings",
       "file": "foldlings/foldling_cat.glb",
       "unit": "m",
-      "triangles": 370,
+      "triangles": 396,
       "outline_triangles": 0,
       "bounds": {
         "min": [
@@ -406,8 +406,8 @@
           -0.0125
         ],
         "max": [
-          0.019,
-          0.0661,
+          0.015,
+          0.0631,
           0.0125
         ]
       },
@@ -461,7 +461,7 @@
       "sheet": "foldlings",
       "file": "foldlings/foldling_elephant.glb",
       "unit": "m",
-      "triangles": 390,
+      "triangles": 404,
       "outline_triangles": 0,
       "bounds": {
         "min": [
@@ -470,7 +470,7 @@
           -0.0198
         ],
         "max": [
-          0.0423,
+          0.0401,
           0.0581,
           0.0198
         ]
@@ -712,25 +712,25 @@
       "sheet": "orb_forge",
       "file": "game/orb_forge/crystal.glb",
       "unit": "m",
-      "triangles": 48,
+      "triangles": 24,
       "outline_triangles": 0,
       "bounds": {
         "min": [
-          -0.0175,
+          -0.015,
           -0.025,
-          -0.0175
+          -0.0155
         ],
         "max": [
-          0.0175,
-          0.025,
-          0.0175
+          0.015,
+          0.023,
+          0.0155
         ]
       },
       "anchors": {
         "label_anchor": [
           0,
           0,
-          0.019
+          0.017
         ],
         "hand_anchor": [
           0,
@@ -745,7 +745,89 @@
         "lavender",
         "lavender_shade"
       ],
-      "notes": "Neutral lavender; the game recolours the lavender materials. Origin at the centre."
+      "notes": "Long paper gem. Neutral lavender; the game recolours the lavender materials. Origin at the centre."
+    },
+    {
+      "name": "crystal_2",
+      "category": "game",
+      "sheet": "orb_forge",
+      "file": "game/orb_forge/crystal_2.glb",
+      "unit": "m",
+      "triangles": 24,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.012,
+          -0.025,
+          -0.0104
+        ],
+        "max": [
+          0.012,
+          0.025,
+          0.0104
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0,
+          0.0135
+        ],
+        "hand_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "parts": [
+        "gem"
+      ],
+      "materials": [
+        "lavender",
+        "lavender_shade"
+      ],
+      "notes": "Paper gem: hexagonal prism with pointed caps. Neutral lavender; the game recolours it. Origin at the centre."
+    },
+    {
+      "name": "crystal_3",
+      "category": "game",
+      "sheet": "orb_forge",
+      "file": "game/orb_forge/crystal_3.glb",
+      "unit": "m",
+      "triangles": 20,
+      "outline_triangles": 0,
+      "bounds": {
+        "min": [
+          -0.016,
+          -0.016,
+          -0.0162
+        ],
+        "max": [
+          0.017,
+          0.015,
+          0.0162
+        ]
+      },
+      "anchors": {
+        "label_anchor": [
+          0,
+          0,
+          0.0185
+        ],
+        "hand_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "parts": [
+        "gem"
+      ],
+      "materials": [
+        "lavender",
+        "lavender_shade"
+      ],
+      "notes": "Short fat paper gem. Neutral lavender; the game recolours it. Origin at the centre."
     },
     {
       "name": "orb",
@@ -796,39 +878,42 @@
       "sheet": "balloon",
       "file": "game/balloon/balloon_round.glb",
       "unit": "m",
-      "triangles": 104,
+      "triangles": 780,
       "outline_triangles": 0,
       "bounds": {
         "min": [
-          -0.0319,
-          -0.0001,
-          -0.0319
+          -0.0314,
+          0,
+          -0.0314
         ],
         "max": [
-          0.0319,
-          0.12,
-          0.0319
+          0.0314,
+          0.117,
+          0.0314
         ]
       },
       "anchors": {
         "label_anchor": [
           0,
-          0.0875,
+          0.086,
           0.0335
         ]
       },
       "parts": [
         "skin",
         "knot",
+        "basket",
         "string"
       ],
       "materials": [
-        "paper",
-        "paper_shade",
+        "blue",
+        "blue_shade",
         "sky",
-        "sky_shade"
+        "sky_shade",
+        "wood",
+        "wood_shade"
       ],
-      "notes": "Origin at the bottom end of the string. Sky blue; the game recolours sky/sky_shade."
+      "notes": "Paper-cut hot-air balloon. Origin at the bottom of the basket. Gores alternate sky/sky_shade and blue/blue_shade; the game recolours both pairs."
     },
     {
       "name": "paper_button",

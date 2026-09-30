@@ -231,14 +231,22 @@ export function makeBook(): Group {
   return book;
 }
 
-/** Balloon with a short string in `color`; origin at the string's end. */
+/**
+ * A paper-cut hot-air balloon in `color`, origin at the bottom of its basket.
+ * Its gores alternate two tones; both are painted from the one colour.
+ */
 export function makeBalloon(color: number): Group {
-  return staticModel('balloon_round', 'balloon', 'sky', color) ?? proceduralBalloon(color);
+  const g = staticModel('balloon_round', 'balloon', 'sky', color);
+  if (!g) return proceduralBalloon(color);
+  recolour(g, 'blue', shade(shade(color)));
+  return g;
 }
 
-/** A number crystal; origin at its centre. */
-export function makeCrystal(color: number): Object3D {
-  return staticModel('crystal', 'crystal', 'lavender', color) ?? proceduralCrystal(color);
+const GEMS = ['crystal', 'crystal_2', 'crystal_3'];
+
+/** A paper gem crystal; `index` picks one of three shapes. Origin at its centre. */
+export function makeCrystal(color: number, index = 0): Object3D {
+  return staticModel(GEMS[index % GEMS.length], 'crystal', 'lavender', color) ?? proceduralCrystal(color);
 }
 
 /** An orb made from merged crystals; origin at its centre. */
@@ -320,9 +328,12 @@ export function makeEnvelope(color: number): Envelope {
   const h = ENV_H / 2;
   const back = new Mesh(new BoxGeometry(ENV_W, ENV_H, 0.003), paper(shade(color)));
   back.position.z = -0.0015;
-  const letter = new Mesh(new PlaneGeometry(ENV_W * 0.86, ENV_H * 0.84), paper(PAPER, { doubleSide: true }));
+  const letter = new Mesh(new PlaneGeometry(ENV_W * 0.8, ENV_H * 0.78), paper(PAPER, { doubleSide: true }));
   letter.name = 'envelope-letter';
   letter.position.z = 0.0008;
+  // Hidden until the envelope opens: its white edges would show through the
+  // folds as outlines that no folded paper has.
+  letter.visible = false;
   // Each folded panel gets its own tone so the creases read under any light:
   // side pockets in shadow, the bottom pocket catching light, the flap between.
   const sides = folded(
@@ -350,24 +361,6 @@ export function makeEnvelope(color: number): Envelope {
 /** A highlight badge (symbol only), origin at the disc centre; null when missing. */
 export function makeBadge(highlight: string): Object3D | null {
   return staticModel(`badge_${highlight}`, `badge-${highlight}`);
-}
-
-/** The team crystal the squad defends; origin at its base. */
-export function makeTeamCrystal(): Group {
-  const g = new Group();
-  g.name = 'team-crystal';
-  const model = staticModel('crystal', 'team-crystal-gem', 'lavender', 0x7cc8f2);
-  if (model) {
-    model.scale.setScalar(1.6);
-    model.position.y = 0.04;
-    g.add(model);
-    return g;
-  }
-  const m = new Mesh(new OctahedronGeometry(0.02, 0), paper(0x7fc8d8, { emissive: 0x1a3a44 }));
-  m.scale.set(1, 1.8, 1);
-  m.position.y = 0.036;
-  g.add(m);
-  return g;
 }
 
 // ------------------------------------------------------------ procedural stand-ins

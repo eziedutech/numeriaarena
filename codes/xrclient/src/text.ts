@@ -1,30 +1,33 @@
 /**
- * Player-facing text for Solo Squad. English is the default; a second
- * language is added as another table with the same keys.
+ * Player-facing text. English is the default; a second language is added as
+ * another table with the same keys.
  */
 import type { Highlight } from './game/core.js';
 
+const ORDINAL = ['1st', '2nd', '3rd'];
+const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}th`;
+
 export const EN = {
-  soloSquad: 'Solo Squad',
+  race: 'Robot Race',
   bot: (name: string) => `${name} (bot)`,
   you: 'You',
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
-  team: (points: number) => `Team ${points}`,
-  rescue: 'Rescue!',
-  helpOrb: 'Help orb!',
-  crystalHit: 'Crystal hit!',
-  escaped: 'Escaped!',
+  place: ordinal,
+  /** A rival's line above its window, for example "3/5, 380". */
+  rival: (met: number, of: number, points: number) => `${met}/${of}, ${points}`,
   right: 'Got it!',
+  /** Points earned, spelled out so they are never mistaken for an answer. */
+  earned: (points: number) => `+${points} points`,
+  tryAgain: 'Try again!',
+  itWas: (answer: string) => `It was ${answer}`,
   missed: 'Missed',
-  boss: 'Boss!',
-  bossFolded: 'Boss folded!',
-  bossAway: 'The boss slipped away',
-  emote: { thumbs_up: 'Nice!', clap: 'Yay!', help: 'Help!' },
-  waiting: (n: number) => (n === 1 ? '1 waiting' : `${n} waiting`),
-  recapTitle: 'Squad recap',
-  teamPoints: (points: number) => `Team points: ${points}`,
+  finished: 'Finished!',
+  bossRound: 'Boss round: double points!',
+  emote: { thumbs_up: 'Nice!', clap: 'Yay!' },
+  recapTitle: 'Race results',
   highlight: {
-    best_save: 'Best Save',
+    // In a race a won second try is the comeback; the badge is the save symbol.
+    best_save: 'Best Comeback',
     most_improved: 'Most Improved',
     sharpest_aim: 'Sharpest Aim',
     steady_streak: 'Steady Streak',

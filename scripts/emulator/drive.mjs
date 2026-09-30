@@ -82,7 +82,8 @@ export async function seat() {
 }
 
 export async function card(x) {
-  for (const dz of [0.08, 0.05, 0.03, 0.02, 0.012, 0.006, 0]) { tip(x, 0.04, 0.12 + dz); await sleep(0.1); }
+  // Tapped from above and in front: menu envelopes lean back on the table.
+  for (const k of [1, 0.7, 0.45, 0.3, 0.2, 0.1, 0]) { tip(x, 0.02 + 0.06 * k, 0.12 + 0.05 * k); await sleep(0.1); }
   tip(x, 0.2, 0.35); await sleep(2.5);
 }
 
@@ -107,22 +108,18 @@ export async function orbRound() {
   if (!a || !b) return { line, pair, result: 'crystals not found' };
   grabAt(a.x, a.y, a.z); await sleep(0.3); pinch(1); await sleep(0.4);
   await carry(`^crystal-${pair[0]}$`, a, { x: b.x, y: b.y + 0.005, z: b.z });
-  await sleep(0.8); pinch(0); await sleep(0.3);
-  const orb = posOf('^orb$');
-  if (!orb) return { line, result: 'no orb formed' };
-  const parts = orb.comps.find((c) => c.componentId === 'Orb').values;
-  grabAt(orb.x, orb.y, orb.z); await sleep(0.3); pinch(1); await sleep(0.4);
-  // Held over the creature (front edge of the book), then let go: only a release gives the answer.
-  await carry('^orb$', orb, { x: 0, y: 0.075, z: -0.03 });
-  // Going home after a right answer takes about 2.6 s (cheer, then the walk to the portal).
+  // Held beside its partner, the pair joins and is given as the answer by itself.
   await sleep(0.8); pinch(0); tip(0, 0.25, 0.35); await sleep(4);
-  return { line, pair, orbParts: [parts.first, parts.second], result: logs('orb ', 1)[0] };
+  return { line, pair, result: logs('orb ', 1)[0] };
 }
 
-/** Pokes balloon `i` of `n` from the front. */
-export async function popAt(i, n) {
-  const x = (i - (n - 1) / 2) * 0.095;
-  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, 0.18, 0.2 + dz); await sleep(0.1); }
+/** Pokes balloon `i` from the front, aiming at where it floats right now. */
+export async function popAt(i) {
+  const b = posOf(`^balloon-${i}$`);
+  if (!b) return;
+  // The paper envelope sits about 7 cm above the basket, the balloon's origin.
+  const x = b.x, y = b.y + 0.07;
+  for (const dz of [0.1, 0.07, 0.05, 0.035, 0.025, 0.015]) { tip(x, y, b.z + dz); await sleep(0.08); }
   tip(x, 0.25, 0.4); await sleep(0.6);
 }
 
@@ -140,17 +137,17 @@ export async function balloonRound(line) {
   return logs('\\[game\\] balloon ', 1)[0];
 }
 
-/** Plays a whole Solo Squad match from the menu to the recap. */
-export async function squadMatch(maxMinutes = 12) {
+/** Plays a whole race from the menu to the results. */
+export async function raceMatch(maxMinutes = 12) {
   const since = Date.now();
   await card(-0.135);
-  const failed = cli('browser', 'logs', '--input-json', j({ count: 5, pattern: 'squad\] could not start', since }));
-  if ((failed.logs ?? failed).length) throw new Error(`Solo Squad did not start: ${(failed.logs ?? failed)[0].message}`);
+  const failed = cli('browser', 'logs', '--input-json', j({ count: 5, pattern: 'race\] could not start', since }));
+  if ((failed.logs ?? failed).length) throw new Error(`The race did not start: ${(failed.logs ?? failed)[0].message}`);
   let last = '';
   const end = Date.now() + maxMinutes * 60000;
   while (Date.now() < end) {
     // The log buffer outlives page reloads, so only lines from this match count.
-    if (logs('\\[squad\\] recap', 1, since).length) break;
+    if (logs('\\[race\\] recap', 1, since).length) break;
     const line = logs('\\[game\\] offer', 1, since)[0] ?? '';
     const id = /offer (\d+)/.exec(line)?.[1];
     if (!id || line === last) { await sleep(0.5); continue; }
@@ -159,14 +156,14 @@ export async function squadMatch(maxMinutes = 12) {
     const result = line.includes(' orb_forge ') ? (await orbRound()).result : await balloonRound(line);
     console.log(`${line.replace(/^\[game\] /, '')}\n  -> ${result}`);
   }
-  const recap = logs('\\[squad\\] recap', 1, since)[0];
+  const recap = logs('\\[race\\] recap', 1, since)[0];
   console.log(recap ?? 'no recap before the time limit');
   return recap;
 }
 
-if (process.argv[2] === 'squad') {
+if (process.argv[2] === 'race') {
   await fresh();
-  await squadMatch();
+  await raceMatch();
 }
 
 if (process.argv[2] === 'orb') {

@@ -167,21 +167,24 @@ Parameters `fp-2026-09-29.2`.
 - **The first session was the hardest part.** Starting from the grade level, weak students first earned 27.1% fewer points. Eight placement items, a larger step down after a wrong answer and easier items together bring it to 13.8%, which passes, but only just.
 - **A first design was wrong and the simulator caught it.** Spawning creatures at a fixed pace piled them up in 983 of 1000 matches; the pace now follows each player's own correct answers.
 
-### Solo Squad with two partner bots
+### Race against two robot rivals
 
-60 matches per row, a simulated player answering every creature in 6 seconds with a
-fixed chance of being right; three waves of six creatures and a boss.
+Each player races two clearly labelled robots at their own desks. Every desk meets the
+same creatures per wave (three waves of five and a boss round worth double), points use
+the same formula for everyone, and the robots are re-drawn near the player's level each
+wave. 100 races per row, a simulated player right with a fixed chance, 6 s per answer:
 
-| Player | Minutes per match | Bots right on first try | Creatures sent to the player | Crystal hits | Stars 1/2/3 |
-|---|---|---|---|---|---|
-| right 20% | 4.7 | 0.70 | 3.5 | 3.22 | 19/39/2 |
-| right 75% | 3.0 | 0.70 | 2.5 | 0.30 | 0/15/45 |
-| right 97% | 2.7 | 0.73 | 2.1 | 0.02 | 0/1/59 |
+| Player right | 1st / 2nd / 3rd |
+|---|---|
+| 20% | 0 / 0 / 100 |
+| 50% | 3 / 12 / 85 |
+| 75% (what the Fairness Engine aims for) | 57 / 26 / 17 |
+| 90% | 89 / 9 / 2 |
+| 97% | 100 / 0 / 0 |
 
-- **The first version let bots run away from a slow player.** Bot desks kept receiving creatures at the starting pace. A bot desk is now never busier than the player's desk.
-- **The first rescue goal punished a strong team.** When nobody misses there is nothing to rescue, so 21 of 60 strong teams lost a star. The goal is now one rescue, and the wave 2 script always offers one.
-- **Bots still out-score a player who is right only 20% of the time**, because they fold the creatures that player misses. The recap therefore shows team points and one different highlight per player, never a points ranking.
-- Every match ends, the player always lands the last boss part, and a creature that escapes twice hits the crystal instead of bouncing forever (`cargo test --test squad`).
+- A player answering at the level the engine aims for wins a little over half the time, so the race stays close in both directions.
+- A player who is right only a fifth of the time always comes last against rivals at their level. A real player who struggles gets easier items and relief after two misses, which this fixed-chance simulation leaves out.
+- Every race ends, every desk meets the same number of creatures, places always follow points, and every player gets a different highlight (`cargo test --test race`).
 
 ### Emulator checks
 
@@ -189,11 +192,11 @@ On the Meta Quest 3 preset with hand input: the table in the synthetic room is d
 (1.30 x 0.75 x 0.79 m), two pokes register exactly twice, and a pinched crystal moves
 0.150 m and is released.
 
-A full Solo Squad match played by the emulator test driver with hand pokes and pinches
-(`node scripts/emulator/drive.mjs squad`): 21 creatures over three waves, two rescued
-creatures from the partners' windows (one of them the scripted wave 2 escape), the boss
-folded by the player's own answer, a 3-star recap with a different highlight for each of
-the three players, and the Done card returns to the menu with nothing left behind.
+A full race played by the emulator test driver with hand pokes and pinches
+(`node scripts/emulator/drive.mjs race`): the menu envelope opens, three waves of five
+creatures and a boss round, a live scoreboard for all three players, and results with
+places, stars and a different highlight each. In the browser preview the same game plays
+with a mouse: clicking an envelope, a balloon, or two crystals in turn.
 
 ## What it does not claim
 
