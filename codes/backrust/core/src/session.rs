@@ -774,9 +774,15 @@ fn unit_step(answer: &Rational, raw_den: i128, fmt: Option<NumberFormat>) -> Rat
         Some(NumberFormat::Fraction { .. }) | Some(NumberFormat::Mixed { .. }) => {
             Rational::new(1, raw_den.max(1)).unwrap_or(Rational::ONE)
         }
-        Some(NumberFormat::Decimal { .. })
-        | Some(NumberFormat::Measure { .. })
-        | Some(NumberFormat::Percent { .. }) => {
+        // A whole-number length ("16 cm") steps by whole units, so its parts
+        // and decoys stay whole numbers that the answer's format can show.
+        Some(NumberFormat::Measure { .. }) => {
+            let places = (0..=3)
+                .find(|p| answer.fits_decimal_places(*p))
+                .unwrap_or(3);
+            Rational::new(1, 10i128.pow(places)).unwrap_or(Rational::ONE)
+        }
+        Some(NumberFormat::Decimal { .. }) | Some(NumberFormat::Percent { .. }) => {
             let places = (0..=3)
                 .find(|p| answer.fits_decimal_places(*p))
                 .unwrap_or(3)

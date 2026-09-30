@@ -260,3 +260,41 @@ fn equivalent_answers_follow_the_template_rule() {
     assert!(ct.is_correct(&expected, &Rational::raw(1, 2).unwrap()));
     assert!(!ct.is_correct(&expected, &Rational::raw(4, 8).unwrap()));
 }
+
+/// The fraction example with an extra int parameter `c`.
+fn with_param_c(def: &str) -> ItemTemplate {
+    let (_, text) = EXAMPLES
+        .iter()
+        .find(|(i, _)| *i == "tpl.fr.add_like.v1")
+        .unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(text).unwrap();
+    json["params"]["c"] = serde_json::from_str(def).unwrap();
+    ItemTemplate::from_json(&json.to_string()).unwrap()
+}
+
+#[test]
+fn an_int_step_is_honoured() {
+    // c runs 1, 3, 5, 7 (odd only) and never passes its bound.
+    let ct = CompiledTemplate::compile(with_param_c(
+        r#"{ "type": "int", "min": 1, "max": 8, "step": 2 }"#,
+    ))
+    .expect("compiles");
+    let mut rng = foldlings_core::rng::Rng::new(5);
+    let mut seen = std::collections::BTreeSet::new();
+    for _ in 0..300 {
+        let env = ct.sample_valid(&mut rng, 50).unwrap();
+        let c = num(&env, "c");
+        assert!(
+            c.is_integer() && c.floor() % 2 == 1 && c.floor() <= 7,
+            "c = {c}"
+        );
+        seen.insert(c.floor());
+    }
+    assert_eq!(seen.into_iter().collect::<Vec<_>>(), vec![1, 3, 5, 7]);
+}
+
+#[test]
+fn a_fractional_int_step_is_refused() {
+    let t = with_param_c(r#"{ "type": "int", "min": 1, "max": 8, "step": 1.5 }"#);
+    assert!(CompiledTemplate::compile(t).is_err());
+}

@@ -368,6 +368,12 @@ impl Scope<'_> {
                     format!("param {name}: decimal needs a positive step"),
                 ));
             }
+            ParamKind::Int if step.is_some_and(|s| !s.is_integer() || s <= Rational::ZERO) => {
+                self.issues.push(issue(
+                    "param_step",
+                    format!("param {name}: an int step must be a whole number above zero"),
+                ));
+            }
             ParamKind::Choice if values.is_empty() => {
                 self.issues.push(issue(
                     "param_values",
@@ -563,11 +569,14 @@ impl CompiledTemplate {
             ParamKind::Int => {
                 let lo = bound(&p.min)?.ceil();
                 let hi = bound(&p.max)?.floor();
+                // With a step, values run lo, lo + step, ... up to hi.
+                let step = p.step.map(|s| s.floor()).unwrap_or(1).max(1);
+                let count = if hi < lo { -1 } else { (hi - lo) / step };
                 for _ in 0..64 {
-                    let v = Rational::int(
-                        rng.int_between(lo, hi)
-                            .ok_or(SampleFail::EmptyRange(p.name.clone()))?,
-                    );
+                    let k = rng
+                        .int_between(0, count)
+                        .ok_or(SampleFail::EmptyRange(p.name.clone()))?;
+                    let v = Rational::int(lo + k * step);
                     if !p.exclude.contains(&v) {
                         return Ok(Value::Num(v));
                     }
