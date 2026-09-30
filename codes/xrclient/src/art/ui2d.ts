@@ -75,11 +75,11 @@ export const UI_FILES: Record<UiName, string> = {
 };
 
 /**
- * Transparent emboss (E): only a light edge and a dark edge, which read too
- * faintly at table scale; the game strengthens those edges until the asset
- * set's revised files arrive.
+ * Items the asset set drew in a bevelled emboss that is not the approved
+ * style (the clear "BEGIN HERE" sticker). They are not shown; their text
+ * cards stay until the sticker versions arrive.
  */
-const EMBOSS: ReadonlySet<UiName> = new Set<UiName>([
+export const NOT_APPROVED: ReadonlySet<UiName> = new Set<UiName>([
   'title_numeria_arena',
   'menu_robot_race',
   'menu_balloon_burst',
@@ -93,7 +93,6 @@ const EMBOSS: ReadonlySet<UiName> = new Set<UiName>([
   'recap_title',
   'button_done',
 ]);
-const EMBOSS_GAIN = 3;
 
 /** Shown on the menu, so loaded before the game starts. */
 export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forge', 'menu_robot_race', 'title_numeria_arena'];
@@ -104,6 +103,7 @@ export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forg
  * keeps its text card instead.
  */
 export function uiImage(name: UiName, scale = 1, maxWidth = Infinity): Mesh | null {
+  if (NOT_APPROVED.has(name)) return null;
   const shared = AssetManager.getTexture(`ui_${name}`) as Texture | undefined;
   const image = shared?.image as { width: number; height: number } | undefined;
   if (!shared || !image?.width) return null;
@@ -118,15 +118,6 @@ export function uiImage(name: UiName, scale = 1, maxWidth = Infinity): Mesh | nu
     w = maxWidth;
   }
   const material = new MeshBasicMaterial({ map, transparent: true, depthWrite: false, side: DoubleSide });
-  if (EMBOSS.has(name)) {
-    material.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>\n  diffuseColor.a = min(1.0, diffuseColor.a * ${EMBOSS_GAIN.toFixed(1)});`,
-      );
-    };
-    material.customProgramCacheKey = () => 'ui-emboss';
-  }
   const mesh = new Mesh(new PlaneGeometry(w, h), material);
   mesh.name = `ui-${name}`;
   mesh.renderOrder = 10;
