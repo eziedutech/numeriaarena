@@ -17,6 +17,10 @@ export interface LabelOptions {
 }
 
 const PX_PER_M = 1400;
+/** Shadow room around a card, as a share of its height. */
+const CARD_SHADOW_ROOM = 0.18;
+/** A warm paper shadow rather than a grey one. */
+const CARD_SHADOW = 'rgba(70, 50, 25, 0.32)';
 /** A stacked fraction's card is this much taller, so each digit is as big as a whole number's. */
 const FRACTION_TALL = 1.5;
 
@@ -70,9 +74,11 @@ export class Label {
       w = ctx.measureText(text).width + h * 0.6;
     }
     const width = Math.max(h, Math.ceil(w));
-    if (width !== this.canvas.width || h !== this.canvas.height) {
-      this.canvas.width = width;
-      this.canvas.height = h;
+    // Room around a card for its shadow, so the card itself keeps its size.
+    const m = this.opts.card ? Math.round(h * CARD_SHADOW_ROOM) : 0;
+    if (width + 2 * m !== this.canvas.width || h + 2 * m !== this.canvas.height) {
+      this.canvas.width = width + 2 * m;
+      this.canvas.height = h + 2 * m;
       // GPU texture storage is sized once; a resized canvas needs a new texture.
       const material = this.mesh?.material as MeshBasicMaterial | undefined;
       if (material) {
@@ -84,31 +90,36 @@ export class Label {
       }
     }
     const c = this.canvas.getContext('2d')!;
-    c.clearRect(0, 0, this.canvas.width, h);
+    c.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    c.save();
+    c.translate(m, m);
     if (this.opts.card) {
-      const r = h * 0.22;
+      // A plain cut of paper: square corners, no outline, lifted off the
+      // scene by a soft warm shadow down and to the right, like the stickers.
+      c.shadowColor = CARD_SHADOW;
+      c.shadowBlur = h * 0.12;
+      c.shadowOffsetX = h * 0.03;
+      c.shadowOffsetY = h * 0.05;
       c.fillStyle = hex(this.opts.paper);
-      c.beginPath();
-      c.roundRect(2, 2, this.canvas.width - 4, h - 4, r);
-      c.fill();
-      c.lineWidth = Math.max(2, h * 0.04);
-      c.strokeStyle = hex(this.opts.ink);
-      c.stroke();
+      c.fillRect(0, 0, width, h);
+      c.shadowColor = 'transparent';
     }
     c.fillStyle = hex(this.opts.ink);
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    const cx = this.canvas.width / 2;
+    const cx = width / 2;
     if (fraction) {
       c.font = font(h * 0.4);
       c.fillText(fraction[1], cx, h * 0.29);
       c.fillText(fraction[2], cx, h * 0.73);
-      c.fillRect(cx - (this.canvas.width * 0.32), h * 0.49, this.canvas.width * 0.64, Math.max(2, h * 0.045));
+      c.fillRect(cx - width * 0.32, h * 0.49, width * 0.64, Math.max(2, h * 0.045));
     } else {
       c.font = font(h * 0.6);
       c.fillText(text, cx, h * 0.54);
     }
+    c.restore();
     this.texture.needsUpdate = true;
-    this.mesh.scale.set(height * (this.canvas.width / h), height, 1);
+    // The mesh covers the shadow room too, so the card stays `height` tall.
+    this.mesh.scale.set(height * (this.canvas.width / h), height * (this.canvas.height / h), 1);
   }
 }

@@ -638,6 +638,8 @@ export class GameSystem extends createSystem({
     }
     this.kind = choice;
     this.phase = 'playing';
+    // Practice keeps its own running score where the title stood.
+    this.score.set('0 points');
     this.spawnPractice();
   }
 
