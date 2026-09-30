@@ -12,7 +12,9 @@ import {
   UIKitMLAsset,
   Grabbed,
   Group,
+  Color,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -37,7 +39,7 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
-import { accentForSkill, CORRECT, paper, TRY_AGAIN } from './art/palette.js';
+import { accentForSkill, CORRECT, paper, shade, tint, TRY_AGAIN } from './art/palette.js';
 import { placeUiImage, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
@@ -144,6 +146,10 @@ const POKE_INTO_SHARE = 0.5;
 const TIP_SMOOTH_S = 0.1;
 /** The T helper picks the target nearest the pointing direction within this angle. */
 const TOUCH_CONE = (15 * Math.PI) / 180;
+/** The portal ring's materials that take the creature's colour. */
+const PORTAL_TINTED = new Set(['lavender', 'violet', 'violet_shade']);
+/** How quickly the portal's outer ring takes a new creature's colour (per second, about 0.5 s). */
+const PORTAL_TINT_RATE = 6;
 /** The portal's inner ring turns at this rate (radians per second). */
 const PORTAL_SPIN = 0.6;
 /** Hosts where the emulator runs; the T touch helper exists only there. */
@@ -225,6 +231,12 @@ export class GameSystem extends createSystem({
   private tipNow = new Vector3();
   private lastPoke = '';
   private portalRing?: Object3D;
+  /**
+   * The portal's outer ring takes the colour of the creature coming through
+   * it: its materials (light, mid, shade) with their own colours to return
+   * to on the menu, and the colours they are easing towards.
+   */
+  private portalGlow?: { mat: MeshStandardMaterial; home: Color; to: Color }[];
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -435,10 +447,46 @@ export class GameSystem extends createSystem({
     });
   }
 
+  /**
+   * Eases the portal's outer ring towards `color` (the creature's), or back
+   * to its own violet when `color` is null.
+   */
+  private tintPortal(color: number | null): void {
+    if (!this.portalGlow) {
+      const ring = this.deskEntity()?.object3D?.getObjectByName('ring_outer');
+      if (!ring) return;
+      // The ring is a group of meshes, one per paper colour. Each gets its
+      // own copy of its material, so the shared model materials stay as they are.
+      const glow: { mat: MeshStandardMaterial; home: Color; to: Color }[] = [];
+      ring.traverse((o) => {
+        const mesh = o as Mesh;
+        const mat = mesh.isMesh ? (mesh.material as MeshStandardMaterial) : undefined;
+        // Only the ring's own violets: the gold inner ring and the navy
+        // doorway (which sit inside this group) keep their colours.
+        if (!mat || Array.isArray(mat) || !PORTAL_TINTED.has(mat.name)) return;
+        const own = mat.clone();
+        mesh.material = own;
+        glow.push({ mat: own, home: own.color.clone(), to: own.color.clone() });
+      });
+      this.portalGlow = glow;
+    }
+    for (const g of this.portalGlow) {
+      if (color === null) {
+        g.to.copy(g.home);
+      } else {
+        // Keep each band's role: the light band stays light, the shade dark.
+        const name = g.mat.name;
+        g.to.setHex(name.endsWith('_shade') ? shade(color) : name === 'violet' ? color : tint(color, 0.45));
+      }
+    }
+  }
+
   /** The book portal's inner ring turns slowly, so the doorway looks alive. */
   private spinPortal(delta: number): void {
     if (!this.portalRing) this.portalRing = this.deskEntity()?.object3D?.getObjectByName('ring_inner');
     if (this.portalRing) this.portalRing.rotation.z += delta * PORTAL_SPIN;
+    const k = Math.min(1, delta * PORTAL_TINT_RATE);
+    for (const g of this.portalGlow ?? []) g.mat.color.lerp(g.to, k);
   }
 
   /**
@@ -536,6 +584,7 @@ export class GameSystem extends createSystem({
 
   private showMenu(): void {
     this.phase = 'menu';
+    this.tintPortal(null);
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
     if (!this.title && !this.titleAsked) {
@@ -824,6 +873,7 @@ export class GameSystem extends createSystem({
         (boss ? ' | boss' : ''),
     );
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
+    this.tintPortal(color);
     this.species = boss ? 'elephant' : speciesFor(offer.offer_id);
     const figure = makeFoldling(color, this.species);
     this.figure = figure;
