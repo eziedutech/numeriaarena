@@ -5,10 +5,13 @@ import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/mod
 import type { Emote, RaceState, Recap } from './game/core.js';
 import { T } from './text.js';
 
-/** Rival windows sit left and right in front of the player, inside a narrow field of view. */
-const WINDOW_POS = [new Vector3(-0.3, 0.2, 0.02), new Vector3(0.3, 0.2, 0.02)];
-/** Windows turn toward the player's side of the desk. */
-const WINDOW_YAW = [0.45, -0.45];
+/**
+ * Rival windows sit left and right, outside the balloon lanes as the seated
+ * player sees them, so the answers keep the middle of the view.
+ */
+const WINDOW_POS = [new Vector3(-0.4, 0.2, 0.08), new Vector3(0.4, 0.2, 0.08)];
+/** Windows turn to face the seated player. */
+const WINDOW_YAW = [0.75, -0.75];
 /** Frame colours match the robots: cobalt (a) and teal (b). */
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
