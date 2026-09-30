@@ -765,8 +765,8 @@ export class GameSystem extends createSystem({
     console.info(
       `[game] offer ${offer.offer_id} ${offer.game} ${offer.prompt.en} | ` +
         (offer.game === 'orb_forge'
-          ? `target ${offer.target?.text} crystals ${offer.crystals.map((c) => c.text).join(' ')}`
-          : `balloons ${offer.balloons.map((b) => b.text).join(' ')}`) +
+          ? `target ${offer.target?.text} crystals ${offer.crystals.map((c) => c.text).join(', ')}`
+          : `balloons ${offer.balloons.map((b) => b.text).join(', ')}`) +
         (boss ? ' | boss' : ''),
     );
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);

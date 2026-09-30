@@ -103,7 +103,12 @@ export async function card(x) {
   tip(x, 0.2, 0.35); await sleep(2.5);
 }
 
-const val = (t) => (t.includes('/') ? t.split('/').map(Number).reduce((a, b) => a / b) : Number(t));
+/** Reads a shown number: "3/8", "2 1/4", "0.25", or "16 cm" (the unit is dropped). */
+const val = (text) => {
+  const t = text.replace(/\s*[a-z]+$/i, '');
+  if (t.includes(' ')) return t.split(' ').map(val).reduce((a, b) => a + b);
+  return t.includes('/') ? t.split('/').map(Number).reduce((a, b) => a / b) : Number(t);
+};
 
 /** Carry what the hand holds (`held` pattern) so it lands on `to`, correcting for the grab offset. */
 async function carry(held, from, to) {
@@ -116,9 +121,9 @@ async function carry(held, from, to) {
 
 export async function orbRound() {
   const line = logs('orb_forge', 1)[0];
-  const m = /target (\S+) crystals (.*)$/.exec(line);
+  const m = /target (.+?) crystals (.*)$/.exec(line);
   const T = val(m[1]);
-  const xs = m[2].split(' ').map(val);
+  const xs = m[2].split(', ').map(val);
   let pair;
   for (let i = 0; i < xs.length && !pair; i++) for (let k = 0; k < xs.length; k++) if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) { pair = [i, k]; break; }
   if (!pair) return { line, result: 'no exact pair in the log line' };
@@ -169,7 +174,7 @@ export async function popAt(i) {
 
 /** Plays one Balloon Burst creature: a blind first poke, then the right balloon if a retry is offered. */
 export async function balloonRound(line) {
-  const texts = /balloons (.*?)( \||$)/.exec(line)[1].split(' ');
+  const texts = /balloons (.*?)( \||$)/.exec(line)[1].split(', ');
   // The log buffer outlives reloads: only a line that changed is this creature's.
   const before = logs('\\[game\\] balloon ', 1)[0];
   const newLine = () => {
@@ -178,7 +183,7 @@ export async function balloonRound(line) {
   };
   for (let tries = 0; tries < 3 && !newLine(); tries++) await popAt(0);
   const first = newLine() ?? '';
-  const expected = /expected (\S+),/.exec(first)?.[1];
+  const expected = /expected (.+?), [+]/.exec(first)?.[1];
   if (/: wrong,/.test(first) && expected) {
     await sleep(0.8);
     const i = texts.indexOf(expected);
