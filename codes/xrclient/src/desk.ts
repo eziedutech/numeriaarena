@@ -52,6 +52,8 @@ const READY_S = 1.2;
 /** The placing card floats this far ahead of the eyes and this far below them. */
 const STATUS_AHEAD_M = 0.4;
 const STATUS_DROP_M = 0.1;
+/** While the ghost book follows the hand, the card rides this far above it, over its portal. */
+const STATUS_ABOVE_GHOST_M = 0.3;
 /** Paper cream behind the browser preview; XR keeps the background clear for passthrough. */
 const PREVIEW_BACKGROUND = new Color(0xf6e3c0);
 
@@ -158,15 +160,21 @@ export class DeskSystem extends createSystem({
    * Keeps the placing card about 55 cm in front of the eyes, a little low,
    * facing the player, with its paper star turning while it works.
    */
-  private showStatus(text: string, delta: number, spin: boolean, dim: number): void {
+  private showStatus(text: string, delta: number, spin: boolean, dim: number, above?: Vector3): void {
     this.player.head.getWorldPosition(this.head);
     this.curtain.position.copy(this.head);
     // Ease towards the wanted dimming instead of snapping.
     this.curtainMat.opacity += (dim - this.curtainMat.opacity) * Math.min(1, delta * 4);
     this.curtain.visible = this.curtainMat.opacity > 0.01;
     this.player.head.getWorldDirection(this.forward).negate();
-    this.status.position.copy(this.head).addScaledVector(this.forward, STATUS_AHEAD_M);
-    this.status.position.y -= STATUS_DROP_M;
+    if (above) {
+      // Over the ghost book, so the card moves with the hand and never covers it.
+      this.status.position.copy(above);
+      this.status.position.y += STATUS_ABOVE_GHOST_M;
+    } else {
+      this.status.position.copy(this.head).addScaledVector(this.forward, STATUS_AHEAD_M);
+      this.status.position.y -= STATUS_DROP_M;
+    }
     this.status.lookAt(this.head);
     this.statusText.set(text);
     if (spin) this.statusStar.rotation.y += delta * 3;
@@ -264,9 +272,6 @@ export class DeskSystem extends createSystem({
       this.showStatus(`Finding your table${dots}`, delta, true, CURTAIN_WAIT);
       return;
     }
-    const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT);
-
     // No table: a ghost book follows the right hand; a pinch puts it down.
     // (The hand's ray origin follows a tracked hand everywhere, the emulator included.)
     this.ghost.visible = true;
@@ -274,6 +279,8 @@ export class DeskSystem extends createSystem({
     this.player.head.getWorldPosition(this.head);
     this.ghost.position.copy(this.tip);
     this.ghost.rotation.set(0, Math.atan2(this.head.x - this.tip.x, this.head.z - this.tip.z), 0);
+    const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
+    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT, this.ghost.position);
     const pads = this.input.xr.gamepads;
     if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
       this.root.position.copy(this.ghost.position);
