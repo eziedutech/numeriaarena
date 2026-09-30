@@ -12,7 +12,6 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   Group,
-  IcosahedronGeometry,
   LoopOnce,
   Material,
   Mesh,
@@ -29,6 +28,8 @@ import {
 } from '@iwsdk/core';
 
 import { SPECIES, type Species } from '../assets.js';
+import { makeOrigami } from './origami.js';
+import { paperBadge, paperButton, paperOrb, paperStar, paperWindow } from './paper-props.js';
 import { CORRECT, INK, PAPER, PAPER_SHADE, WRONG, paper, shade, tint } from './palette.js';
 
 // ------------------------------------------------------------ origami models
@@ -156,31 +157,30 @@ function staticModel(id: string, name: string, from?: string, color?: number): G
 
 /**
  * A Foldling in `color` carrying a number flag, head towards +X, origin on
- * the table. The body stays procedural until the origami species are final;
- * the flag is the origami `flag_small`.
+ * the table. The body is folded in code (`origami.ts`); the flag is the
+ * origami `flag_small`.
  */
 export function makeFoldling(color: number, species: Species = 'fox'): Figure {
-  const loaded = loadModel(`foldling_${species}`);
+  const folded = makeOrigami(species, color);
   const flagModel = loadModel('flag_small');
-  if (!loaded || !flagModel) return proceduralFoldlingFigure(color);
+  if (!flagModel) return proceduralFoldlingFigure(color);
   const root = new Group();
   root.name = 'foldling';
-  const model = loaded.scene;
+  const model = folded.model;
   model.scale.setScalar(FOLDLING_SCALE);
-  recolour(model, 'coral', color);
   root.add(model);
   const f = flagModel.scene;
   f.scale.setScalar(FOLDLING_FLAG_SCALE);
   // The cloth trails behind the animal like a carried flag.
   f.rotation.y = Math.PI;
-  (model.getObjectByName('flag_anchor') ?? model).add(f);
+  folded.flag.add(f);
   // The number floats just above the pole, never on the cloth that could cover it.
   const number = new Group();
   number.name = 'flag-number';
   number.position.set(0, 0.125, 0);
   f.add(number);
   figure(f, f, f, flagModel.animations).play('wave');
-  const fig = figure(root, number, model, loaded.animations, 'idle');
+  const fig = figure(root, number, model, folded.animations, 'idle');
   fig.mark = flagCloth(f);
   fig.play('idle');
   return fig;
@@ -562,7 +562,19 @@ let crystalPaper: MeshStandardMaterial | undefined;
  * from one base, each flat facet its own tone. `index` varies the cluster so
  * a row never repeats. Origin at its centre, base `CRYSTAL_HALF` below.
  */
+const crystalShapes = new Map<string, BufferGeometry>();
+
 export function makeCrystal(color: number, index = 0): Object3D {
+  crystalPaper ??= new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
+  // Built once per colour and shape, then shared.
+  const key = `${color}:${index}`;
+  const known = crystalShapes.get(key);
+  if (known) {
+    const m = new Mesh(known, crystalPaper);
+    m.name = 'crystal';
+    m.userData.front = known.boundingBox!.max.z;
+    return m;
+  }
   let seed = index * 7919 + 17;
   const rand = () => {
     seed = (seed * 16807) % 2147483647;
@@ -615,9 +627,9 @@ export function makeCrystal(color: number, index = 0): Object3D {
   g.setAttribute('position', new Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
-  crystalPaper ??= new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
   g.scale(CRYSTAL_SCALE, CRYSTAL_SCALE, CRYSTAL_SCALE);
   g.computeBoundingBox();
+  crystalShapes.set(key, g);
   const m = new Mesh(g, crystalPaper);
   m.name = 'crystal';
   // The nearest point to the player, so a card in front never cuts the paper.
@@ -625,9 +637,9 @@ export function makeCrystal(color: number, index = 0): Object3D {
   return m;
 }
 
-/** An orb made from merged crystals; origin at its centre. */
-export function makeOrb(color: number): Object3D {
-  return staticModel('orb', 'orb', 'lavender', color) ?? proceduralOrb(color);
+/** An orb made from two merged crystals, in both their colours; origin at its centre. */
+export function makeOrb(color: number, second = color): Object3D {
+  return paperOrb(color, second);
 }
 
 /**
@@ -635,10 +647,7 @@ export function makeOrb(color: number): Object3D {
  * model's origin is its foot), front face +Z.
  */
 export function makeButton(color: number): Object3D {
-  const model = staticModel('paper_button', 'button', 'sky', color);
-  if (!model) return proceduralButton(color);
-  model.children[0].position.y = -0.0325;
-  return model;
+  return paperButton(color);
 }
 
 /**
@@ -665,19 +674,12 @@ export function makeBot(variant: 0 | 1, color: number): Figure {
  * facing +Z.
  */
 export function makePortal(color: number): Group {
-  const frame = staticModel('partner_window', 'portal-window', 'violet', color);
-  if (!frame) return proceduralPortal(color);
-  const back = new Mesh(new PlaneGeometry(0.16, 0.1), paper(0x2b3a5c));
-  back.position.z = -0.002;
-  frame.add(back);
-  return frame;
+  return paperWindow(color);
 }
 
 /** An earned (gold) or empty paper star, facing +Z, origin at its centre. */
 export function makeStar(earned: boolean): Object3D {
-  return (
-    staticModel(earned ? 'star' : 'star_empty', 'star') ?? proceduralStar(earned ? 0xf2c14e : PAPER_SHADE, 0.028)
-  );
+  return paperStar(earned);
 }
 
 /** A standing origami envelope, one per game on the menu. */
@@ -742,7 +744,7 @@ export function makeEnvelope(color: number): Envelope {
 
 /** A highlight badge (symbol only), origin at the disc centre; null when missing. */
 export function makeBadge(highlight: string): Object3D | null {
-  return staticModel(`badge_${highlight}`, `badge-${highlight}`);
+  return paperBadge(highlight);
 }
 
 // ------------------------------------------------------------ procedural stand-ins
@@ -884,11 +886,6 @@ function paperGoreBalloon(color: number): Group {
   return g;
 }
 
-function proceduralOrb(color: number): Mesh {
-  const m = new Mesh(new IcosahedronGeometry(0.026, 1), paper(color, { emissive: 0x222222 }));
-  m.name = 'orb';
-  return m;
-}
 
 function proceduralBot(color: number): Group {
   const g = new Group();
@@ -903,30 +900,5 @@ function proceduralBot(color: number): Group {
   return g;
 }
 
-function proceduralPortal(color: number): Group {
-  const g = new Group();
-  g.name = 'portal-window';
-  const frame = new Mesh(new BoxGeometry(0.18, 0.12, 0.006), paper(color));
-  const back = new Mesh(new PlaneGeometry(0.16, 0.1), paper(0x2b3a5c));
-  back.position.z = 0.0035;
-  g.add(frame, back);
-  return g;
-}
 
-function proceduralStar(color: number, radius: number): Mesh {
-  const tris: number[] = [];
-  for (let i = 0; i < 10; i += 1) {
-    const a = Math.PI / 2 + (i / 10) * Math.PI * 2;
-    const b = Math.PI / 2 + ((i + 1) / 10) * Math.PI * 2;
-    const ra = i % 2 === 0 ? radius : radius * 0.45;
-    const rb = i % 2 === 0 ? radius * 0.45 : radius;
-    tris.push(0, 0, 0.006, Math.cos(a) * ra, Math.sin(a) * ra, 0, Math.cos(b) * rb, Math.sin(b) * rb, 0);
-  }
-  return folded(tris, color);
-}
 
-function proceduralButton(color: number): Mesh {
-  const m = new Mesh(new BoxGeometry(0.1, 0.065, 0.012), paper(color));
-  m.name = 'button';
-  return m;
-}

@@ -19,6 +19,9 @@ const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
 /** Scoreboard rows above the back of the book, clear of the question card. */
 const BOARD_TOP = 0.46;
 const BOARD_Z = -0.15;
+/** Results rows: text height and spacing, larger than the live scoreboard's. */
+const RECAP_TEXT = 0.036;
+const RECAP_ROW = 0.052;
 /** The countdown turns red for the last this many ms of a round. */
 const CLOCK_WARN_MS = 10000;
 /** The countdown sits this far left of the scoreboard's centre. */
@@ -243,6 +246,10 @@ export class RaceScene {
    * finishing order with place, points, and their highlight badge.
    */
   showRecap(recap: Recap, playerName: string): void {
+    // The results replace the live scoreboard, so the points show once, large.
+    for (const l of this.board) l.mesh.visible = false;
+    if (this.countdown) this.countdown.mesh.visible = false;
+    for (const w of this.windows) w.status.mesh.visible = false;
     const card = new Group();
     card.name = 'race-recap';
     card.position.set(0, 0.2, 0.02);
@@ -263,12 +270,12 @@ export class RaceScene {
     rows.forEach((p, i) => {
       const who = p.bot ? T.bot(p.name) : playerName;
       const what = p.highlight ? `, ${T.highlight[p.highlight]}` : '';
-      const y = 0.018 - i * 0.04;
-      const row = this.stage.label(`${T.place(p.place)}  ${who}: ${p.points}${what}`, 0.026, card, y, 0.004, false);
+      const y = 0.014 - i * RECAP_ROW;
+      const row = this.stage.label(`${T.place(p.place)}  ${who}: ${p.points}${what}`, RECAP_TEXT, card, y, 0.004, false);
       const badge = p.highlight ? makeBadge(p.highlight) : null;
       if (badge) {
-        badge.position.set(-row.mesh.scale.x / 2 - 0.02, y + 0.006, 0.004);
-        badge.scale.setScalar(0.55);
+        badge.position.set(-row.mesh.scale.x / 2 - 0.028, y + 0.008, 0.004);
+        badge.scale.setScalar(0.75);
         card.add(badge);
       }
     });

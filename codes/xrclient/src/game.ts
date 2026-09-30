@@ -27,6 +27,8 @@ import {
   forgetMixers,
   makeBalloon,
   makeBird,
+  makeBadge,
+  makeBot,
   makeButton,
   makeCrystal,
   BALLOON_TAG_TOP,
@@ -37,6 +39,8 @@ import {
   makeFoldling,
   setOpacity,
   makeOrb,
+  makePortal,
+  makeStar,
   mixers,
   speciesFor,
   type Figure,
@@ -54,7 +58,7 @@ import {
   type RaceVerdict,
   type Verdict,
 } from './game/core.js';
-import type { Species } from './assets.js';
+import { SPECIES, type Species } from './assets.js';
 import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
 import { LocalStore } from './storage.js';
@@ -313,6 +317,8 @@ export class GameSystem extends createSystem({
           const device = (window as { IWER_DEVICE?: { visibilityState: string; updateVisibilityState(s: string): void } }).IWER_DEVICE;
           device?.updateVisibilityState(device.visibilityState === 'visible' ? 'visible-blurred' : 'visible');
         }
+        // Z: every species in a row on the table, to compare the folds.
+        if (ev.code === 'KeyZ') this.toggleZoo();
         if (ev.code === 'KeyY') {
           this.emulatorPokes = !this.emulatorPokes;
           console.info(`[emulator] hand touches on balloons ${this.emulatorPokes ? 'on' : 'off'}`);
@@ -472,6 +478,64 @@ export class GameSystem extends createSystem({
    * emulated fingertip into a floating balloon by mouse is slow; the public
    * build never listens for the key, so the headset stays hands-only.
    */
+  private zoo: Entity[] = [];
+  private zooPage = 0;
+
+  /**
+   * Emulator only: four species at a time, large and close, without their
+   * flags, to compare the folds. Pressing again shows the next four, then none.
+   */
+  private toggleZoo(): void {
+    for (const e of this.zoo) this.remove(e);
+    this.zoo = [];
+    const page = this.zooPage;
+    const animalPages = Math.ceil(SPECIES.length / 4);
+    this.zooPage = (this.zooPage + 1) % (animalPages + 2);
+    if (page === animalPages) {
+      this.showPropsZoo();
+      return;
+    }
+    const shown = SPECIES.slice(page * 4, page * 4 + 4);
+    shown.forEach((species, i) => {
+      const fig = makeFoldling(accentForSkill(['PV', 'MD', 'FR', 'DC'][i]), species);
+      fig.root.name = `zoo-${species}`;
+      for (const c of fig.root.getObjectByName('flag_anchor')?.children ?? []) c.visible = false;
+      fig.root.scale.setScalar(1.3);
+      fig.root.position.set(-0.3 + i * 0.2, 0.06, 0.3);
+      this.zoo.push(this.add(fig.root));
+    });
+  }
+
+  /** Emulator only: the paper props side by side (stars, badges, Done, a rival window, an orb). */
+  private showPropsZoo(): void {
+    const g = new Group();
+    g.name = 'zoo-props';
+    g.position.set(0, 0.12, 0.28);
+    const place = (o: Object3D, x: number, y: number, scale = 1) => {
+      o.position.set(x, y, 0);
+      o.scale.setScalar(scale);
+      g.add(o);
+    };
+    place(makeStar(true), -0.3, 0.07, 1.2);
+    place(makeStar(false), -0.24, 0.07, 1.2);
+    ['best_save', 'most_improved', 'sharpest_aim', 'steady_streak', 'brave_try'].forEach((h, i) => {
+      const b = makeBadge(h);
+      if (b) place(b, -0.16 + i * 0.07, 0.07);
+    });
+    const button = makeButton(0x3469c4);
+    placeUiImage('button_done', button, [0, 0, 0.002], { scale: 0.9 });
+    place(button, -0.26, -0.03);
+    const frame = makePortal(0x3469c4);
+    const bot = makeBot(0, 0x3469c4);
+    bot.root.position.set(0, -0.048, 0.003);
+    bot.root.scale.setScalar(0.95);
+    frame.add(bot.root);
+    place(frame, -0.07, -0.03);
+    place(makeOrb(CRYSTAL_COLORS[0], CRYSTAL_COLORS[2]), 0.1, -0.03, 1.4);
+    place(makeCrystal(CRYSTAL_COLORS[1], 1), 0.2, -0.04, 1.2);
+    this.zoo.push(this.add(g));
+  }
+
   private emulatorTouch(): void {
     // What a hand's ray already highlights comes first; otherwise the object
     // nearest either hand's pointing direction within a cone (balloons are
@@ -640,9 +704,9 @@ export class GameSystem extends createSystem({
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
     if (title === T.done) {
-      placeUiImage('button_done', button, [0, 0, 0.0075], {
+      placeUiImage('button_done', button, [0, 0, 0.002], {
         scale: 0.9,
-        fallback: () => this.label(title, 0.022, button, 0, 0.0075, false).mesh,
+        fallback: () => this.label(title, 0.022, button, 0, 0.002, false).mesh,
       });
     } else {
       this.label(title, 0.022, button, 0, 0.0075, false);
@@ -1401,7 +1465,7 @@ export class GameSystem extends createSystem({
     const i = held.getValue(Crystal, 'index') as number;
     const j = other.getValue(Crystal, 'index') as number;
     const texts = this.offer!.crystals;
-    const orb = makeOrb(0xf2cc8f);
+    const orb = makeOrb(CRYSTAL_COLORS[i % CRYSTAL_COLORS.length], CRYSTAL_COLORS[j % CRYSTAL_COLORS.length]);
     orb.name = 'flying-orb';
     other.object3D!.getWorldPosition(this.a);
     this.deskEntity()!.object3D!.worldToLocal(orb.position.copy(this.a));

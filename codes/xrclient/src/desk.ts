@@ -14,6 +14,7 @@ import {
   XRMesh,
 } from '@iwsdk/core';
 
+import { paintBackdropGlyphs } from './art/backdrop-glyphs.js';
 import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
 import { uiImage, type UiName } from './art/ui2d.js';
@@ -54,6 +55,11 @@ const READY_S = 1.2;
 /** The placing card floats this far ahead of the eyes and this far below them. */
 const STATUS_AHEAD_M = 0.4;
 const STATUS_DROP_M = 0.1;
+/**
+ * Ready! stands here in the book's frame: above the front of the pages, with
+ * the card (drawn 5.5 cm under the star) clear of the portal behind.
+ */
+const READY_ON_BOOK = new Vector3(0, 0.15, 0.06);
 /** While the ghost book follows the hand, the card rides this far above it, over its portal. */
 const STATUS_ABOVE_GHOST_M = 0.3;
 /**
@@ -105,6 +111,7 @@ function makePreviewBackdrop(): CanvasTexture {
     c.fillStyle = g;
     c.fillRect(0, 0, w, h);
   }
+  paintBackdropGlyphs(c, w, h);
   // Corners fall off softly, like light on a real wall.
   const vignette = c.createRadialGradient(w / 2, h * 0.55, h * 0.35, w / 2, h * 0.55, w * 0.7);
   vignette.addColorStop(0, 'rgba(0,0,0,0)');
@@ -150,6 +157,7 @@ export class DeskSystem extends createSystem({
   private curtainMat!: MeshBasicMaterial;
   /** Seconds the "Ready!" card stays up after the book lands. */
   private readyLeft = 0;
+  private readyAt = new Vector3();
   private waited = 0;
   private box = new Box3();
   private corner = new Vector3();
@@ -248,6 +256,7 @@ export class DeskSystem extends createSystem({
     dim: number,
     above?: Vector3,
     paper?: { name: UiName; scale: number; small?: string },
+    lift = STATUS_ABOVE_GHOST_M,
   ): void {
     this.player.head.getWorldPosition(this.head);
     this.curtain.position.copy(this.head);
@@ -258,7 +267,7 @@ export class DeskSystem extends createSystem({
     if (above) {
       // Over the ghost book, so the card moves with the hand and never covers it.
       this.status.position.copy(above);
-      this.status.position.y += STATUS_ABOVE_GHOST_M;
+      this.status.position.y += lift;
     } else {
       this.status.position.copy(this.head).addScaledVector(this.forward, STATUS_AHEAD_M);
       this.status.position.y -= STATUS_DROP_M;
@@ -368,7 +377,10 @@ export class DeskSystem extends createSystem({
     if (e.getValue(DeskRoot, 'placed')) {
       if (this.readyLeft > 0) {
         this.readyLeft -= delta;
-        this.showStatus('Ready!', delta, false, 0, undefined, { name: 'status_ready', scale: 0.55 });
+        // On the book itself, over the front of the pages and under the
+        // portal, so it never covers the portal or the title.
+        this.root.localToWorld(this.readyAt.copy(READY_ON_BOOK));
+        this.showStatus('Ready!', delta, false, 0, this.readyAt, { name: 'status_ready', scale: 0.55 }, 0);
       } else {
         this.status.visible = false;
         this.curtain.visible = false;

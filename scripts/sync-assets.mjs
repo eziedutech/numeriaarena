@@ -18,29 +18,11 @@ const dest = new URL('../codes/xrclient/public/models/', import.meta.url).pathna
 // Foldling faces are still being refined in the asset repository; run this
 // script again when they land.
 const WANTED = [
-  'foldling_fox',
-  'foldling_rabbit',
-  'foldling_crane',
-  'foldling_turtle',
-  'foldling_frog',
-  'foldling_fish',
-  'foldling_cat',
-  'foldling_elephant',
   'popup_book',
   'paper_bird',
   'flag_small',
-  'orb',
-  'paper_button',
-  'partner_window',
   'robot_partner_a',
   'robot_partner_b',
-  'star',
-  'star_empty',
-  'badge_best_save',
-  'badge_most_improved',
-  'badge_sharpest_aim',
-  'badge_steady_streak',
-  'badge_brave_try',
 ];
 
 const manifest = JSON.parse(readFileSync(join(src, 'models/manifest.json'), 'utf8'));
