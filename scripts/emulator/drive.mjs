@@ -67,6 +67,19 @@ export function logs(pattern, n = 1, since = undefined) {
 export async function fresh() {
   cli('browser', 'reload'); await sleep(7);
   await seat();
+  allowPokes();
+}
+
+/**
+ * Balloons ignore hand touches in the emulator unless Y switches them on;
+ * this driver pokes with the hand, so it turns them on after each reload.
+ */
+export function allowPokes() {
+  execFileSync(BUN, ['x', 'iwsdk', 'browser', 'interact', '--input-json', j({ steps: [{ action: 'press', key: 'y' }] }), '--raw'], {
+    cwd: CWD,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
 }
 
 /** Enters XR, waits for the book to land, and seats the head in front of it. */

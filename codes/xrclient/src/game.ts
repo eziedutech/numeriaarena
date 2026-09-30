@@ -208,6 +208,10 @@ export class GameSystem extends createSystem({
   private tipNow = new Vector3();
   private lastPoke = '';
   private portalRing?: Object3D;
+  /** Running on this computer with the emulator (the public build never is). */
+  private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
+  /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
+  private emulatorPokes = false;
   private pokeVel = new Vector3();
   private pokeAxis = new Vector3();
   private lastDelta = 1 / 72;
@@ -254,9 +258,14 @@ export class GameSystem extends createSystem({
       tween: (obj, to, dur, arc, scaleTo, done) => this.tween(obj, to, dur, arc, scaleTo, done),
     };
 
-    if (EMULATOR_HOSTS.includes(window.location.hostname)) {
+    if (this.onEmulator) {
       const onKey = (ev: KeyboardEvent) => {
-        if (ev.code === 'KeyT' && !ev.repeat) this.emulatorTouch();
+        if (ev.repeat) return;
+        if (ev.code === 'KeyT') this.emulatorTouch();
+        if (ev.code === 'KeyY') {
+          this.emulatorPokes = !this.emulatorPokes;
+          console.info(`[emulator] hand touches on balloons ${this.emulatorPokes ? 'on' : 'off'}`);
+        }
       };
       // Capture phase, before the emulator's own key handling, and also in the
       // emulator's editor window around this page when it holds the focus.
@@ -284,9 +293,16 @@ export class GameSystem extends createSystem({
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
       // A mouse click outside XR is always deliberate; in XR a touch must be a poke.
-      this.queries.pressedBalloons.subscribe('qualify', (e) =>
-        this.popBalloon(e, this.world.visibilityState.peek() === VisibilityState.NonImmersive),
-      ),
+      this.queries.pressedBalloons.subscribe('qualify', (e) => {
+        const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+        // In the emulator the hands move with the view and the body, so a
+        // "poke" is usually an accident: there, T chooses (Y allows pokes).
+        if (!browser && this.onEmulator && !this.emulatorPokes) {
+          console.info('[emulator] hand touch ignored: point and press T (Y allows touches)');
+          return;
+        }
+        this.popBalloon(e, browser);
+      }),
       this.queries.pressedCrystals.subscribe('qualify', (e) => this.clickCrystal(e)),
       // Entering or leaving XR switches mouse play for what is already on the desk.
       this.world.visibilityState.subscribe(() => {
