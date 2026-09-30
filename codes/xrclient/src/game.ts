@@ -237,6 +237,14 @@ export class GameSystem extends createSystem({
   private raceScene?: RaceScene;
   private raceState?: RaceState;
   private racePoll = 0;
+  /**
+   * Pause while the headset is off or the system menu is open (the session
+   * is hidden or blurred): Date.now() when it started, and the paused time
+   * so far, which the race clock leaves out.
+   */
+  private pausedAt?: number;
+  private pausedPerf = 0;
+  private pausedTotal = 0;
   private recapIn = -1;
   private stage!: Stage;
   private envelopes = new Map<Entity, Envelope>();
@@ -262,6 +270,11 @@ export class GameSystem extends createSystem({
       const onKey = (ev: KeyboardEvent) => {
         if (ev.repeat) return;
         if (ev.code === 'KeyT') this.emulatorTouch();
+        // B: as if the headset came off or the system menu opened, and back.
+        if (ev.code === 'KeyB') {
+          const device = (window as { IWER_DEVICE?: { visibilityState: string; updateVisibilityState(s: string): void } }).IWER_DEVICE;
+          device?.updateVisibilityState(device.visibilityState === 'visible' ? 'visible-blurred' : 'visible');
+        }
         if (ev.code === 'KeyY') {
           this.emulatorPokes = !this.emulatorPokes;
           console.info(`[emulator] hand touches on balloons ${this.emulatorPokes ? 'on' : 'off'}`);
@@ -306,6 +319,7 @@ export class GameSystem extends createSystem({
       this.queries.pressedCrystals.subscribe('qualify', (e) => this.clickCrystal(e)),
       // Entering or leaving XR switches mouse play for what is already on the desk.
       this.world.visibilityState.subscribe(() => {
+        this.pauseWhileAway();
         for (const e of [...this.queries.crystals.entities, ...this.queries.balloons.entities]) {
           if (e.hasComponent(Balloon) && !e.hasComponent(PokeInteractable)) continue;
           if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
@@ -565,12 +579,40 @@ export class GameSystem extends createSystem({
 
   // ------------------------------------------------------------ Race
 
+  /** The game's clock in ms: wall time without the time spent paused. */
+  private now(): number {
+    return (this.pausedAt ?? Date.now()) - this.pausedTotal;
+  }
+
+  /**
+   * Stops the game while the player is away (headset off, system menu open)
+   * and picks up where it left off: the race clock, the answer timer and
+   * everything moving on the desk wait. This suits play against robots on
+   * this headset; a race against other students will keep the server's
+   * clock, which one player cannot stop for everyone.
+   */
+  private pauseWhileAway(): void {
+    const state = this.world.visibilityState.peek();
+    const away = state === VisibilityState.Hidden || state === VisibilityState.VisibleBlurred;
+    if (away && this.pausedAt === undefined) {
+      this.pausedAt = Date.now();
+      this.pausedPerf = performance.now();
+      console.info(`[game] paused (${state})`);
+    } else if (!away && this.pausedAt !== undefined) {
+      const ms = Date.now() - this.pausedAt;
+      this.pausedTotal += ms;
+      this.shownAt += performance.now() - this.pausedPerf;
+      this.pausedAt = undefined;
+      console.info(`[game] resumed after ${(ms / 1000).toFixed(1)} s`);
+    }
+  }
+
   private async startRace(): Promise<void> {
     const race = await Race.create(Date.now() >>> 0, BOT_NAMES);
     this.race = race;
     this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, BOT_NAMES);
     this.recapIn = -1;
-    race.start(Date.now());
+    race.start(this.now());
     // The scoreboard takes the place of the single score line during a race.
     this.score.mesh.visible = false;
     this.refreshRace();
@@ -584,7 +626,7 @@ export class GameSystem extends createSystem({
     scene.update(delta);
     const ends = this.raceState?.ends_at_ms ?? null;
     this.camera.getWorldPosition(scene.eye);
-    scene.clock(ends === null || this.phase === 'recap' ? null : ends - Date.now());
+    scene.clock(ends === null || this.phase === 'recap' ? null : ends - this.now());
     if (this.recapIn > 0) {
       this.recapIn -= delta;
       if (this.recapIn <= 0) this.showRecap();
@@ -592,7 +634,7 @@ export class GameSystem extends createSystem({
     this.racePoll -= delta;
     if (this.racePoll > 0 || this.phase === 'recap') return;
     this.racePoll = RACE_POLL_S;
-    const events = race.tick(Date.now());
+    const events = race.tick(this.now());
     for (const ev of events) this.onRaceEvent(ev);
     if (events.length > 0) this.refreshRace();
     // The player's desk takes the next creature once the last one is gone.
@@ -814,7 +856,7 @@ export class GameSystem extends createSystem({
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
     if (this.race) {
-      const v = this.raceAnswer(() => this.race!.answerBalloon(this.offer!.offer_id, index, timeMs, Date.now()));
+      const v = this.raceAnswer(() => this.race!.answerBalloon(this.offer!.offer_id, index, timeMs, this.now()));
       if (!v) return;
       verdict = v;
     } else if (this.core) {
@@ -841,7 +883,7 @@ export class GameSystem extends createSystem({
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
     if (this.race) {
-      const v = this.raceAnswer(() => this.race!.answerOrb(this.offer!.offer_id, picks, timeMs, Date.now()));
+      const v = this.raceAnswer(() => this.race!.answerOrb(this.offer!.offer_id, picks, timeMs, this.now()));
       if (!v) return;
       verdict = v;
     } else if (this.core) {
@@ -1139,6 +1181,7 @@ export class GameSystem extends createSystem({
   // ------------------------------------------------------------ frame
 
   update(delta: number): void {
+    if (this.pausedAt !== undefined) return;
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     if (this.phase === 'menu' && placed && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
