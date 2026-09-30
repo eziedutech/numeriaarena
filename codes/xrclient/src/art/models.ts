@@ -7,6 +7,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   CircleGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
@@ -21,6 +22,8 @@ import {
   Object3D,
   OctahedronGeometry,
   PlaneGeometry,
+  Shape,
+  ShapeGeometry,
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
@@ -489,16 +492,7 @@ const BALLOON_KNOT = new Vector3(0, 0.043, 0);
  * answer card: no basket, no rigging.
  */
 export function makeBalloon(color: number): Group {
-  let g = staticModel('balloon_round', 'balloon', 'sky', color);
-  if (g) {
-    recolour(g, 'blue', shade(shade(color)));
-    for (const part of ['basket', 'string']) {
-      const o = g.getObjectByName(part);
-      if (o) o.visible = false;
-    }
-  } else {
-    g = proceduralBalloon(color);
-  }
+  const g = paperGoreBalloon(color);
   const length = BALLOON_KNOT.distanceTo(BALLOON_TAG_TOP);
   const cord = new Mesh(new CylinderGeometry(0.0006, 0.0006, length, 6), paper(0xfffdf8));
   cord.name = 'balloon-string';
@@ -747,14 +741,60 @@ function proceduralBird(color: number): Group {
   return g;
 }
 
-function proceduralBalloon(color: number): Group {
+/** The balloon's paper body: bottom (the neck, just above the knot) and top, and its widest half-width. */
+const GORE_BOTTOM = 0.044;
+const GORE_TOP = 0.117;
+const GORE_HALF_WIDTH = 0.031;
+/** Half-width at the neck, and where (up the height) the balloon is widest. */
+const GORE_NECK = 0.004;
+const GORE_SHOULDER = 0.62;
+/** Paper sheets standing on the balloon's vertical axis, turned evenly. */
+const GORE_SHEETS = 8;
+
+/**
+ * A layered paper balloon like a honeycomb paper ornament: identical
+ * lens-shaped sheets standing on the vertical axis, turned evenly round it,
+ * narrow at the neck and rounded into a dome at the top. Each sheet is its own
+ * tone of `color`, darker at the edges of the view and lighter where it faces
+ * the light, so the balloon reads as folded paper, not a faceted ball.
+ */
+function paperGoreBalloon(color: number): Group {
   const g = new Group();
   g.name = 'balloon';
-  const skin = new Mesh(new IcosahedronGeometry(0.03, 1), paper(color));
-  skin.scale.set(1, 1.18, 1);
-  skin.position.y = 0.075;
-  skin.name = 'balloon-skin';
-  g.add(skin);
+  const lens = new Shape();
+  const steps = 28;
+  // Narrow neck at the bottom widening to the shoulder, then a round dome.
+  const half = (t: number) => {
+    if (t <= GORE_SHOULDER) {
+      const u = t / GORE_SHOULDER;
+      return GORE_NECK + (GORE_HALF_WIDTH - GORE_NECK) * Math.pow(Math.sin((u * Math.PI) / 2), 1.1);
+    }
+    const u = (t - GORE_SHOULDER) / (1 - GORE_SHOULDER);
+    return GORE_HALF_WIDTH * Math.sqrt(Math.max(0, 1 - u * u));
+  };
+  const height = GORE_TOP - GORE_BOTTOM;
+  lens.moveTo(0, GORE_BOTTOM);
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    lens.lineTo(half(t), GORE_BOTTOM + height * t);
+  }
+  for (let i = steps; i >= 0; i -= 1) {
+    const t = i / steps;
+    lens.lineTo(-half(t), GORE_BOTTOM + height * t);
+  }
+  const shape = new ShapeGeometry(lens, 1);
+  const dark = new Color(shade(shade(color)));
+  const light = new Color(tint(color, 0.35));
+  for (let i = 0; i < GORE_SHEETS; i += 1) {
+    const turn = (i * Math.PI) / GORE_SHEETS;
+    // Lightest facing the viewer a little to the right, as if lit from there.
+    const facing = (1 + Math.cos(2 * turn - 0.5)) / 2;
+    const tone = dark.clone().lerp(light, facing).getHex();
+    const sheet = new Mesh(shape, paper(tone, { doubleSide: true }));
+    sheet.name = `balloon-gore-${i}`;
+    sheet.rotation.y = turn;
+    g.add(sheet);
+  }
   return g;
 }
 

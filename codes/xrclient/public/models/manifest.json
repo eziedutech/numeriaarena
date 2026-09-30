@@ -833,49 +833,6 @@
       "notes": "Origin at the centre."
     },
     {
-      "name": "balloon_round",
-      "category": "game",
-      "sheet": "balloon",
-      "file": "game/balloon/balloon_round.glb",
-      "unit": "m",
-      "triangles": 780,
-      "outline_triangles": 0,
-      "bounds": {
-        "min": [
-          -0.0314,
-          0,
-          -0.0314
-        ],
-        "max": [
-          0.0314,
-          0.117,
-          0.0314
-        ]
-      },
-      "anchors": {
-        "label_anchor": [
-          0,
-          0.086,
-          0.0335
-        ]
-      },
-      "parts": [
-        "skin",
-        "knot",
-        "basket",
-        "string"
-      ],
-      "materials": [
-        "blue",
-        "blue_shade",
-        "sky",
-        "sky_shade",
-        "wood",
-        "wood_shade"
-      ],
-      "notes": "Paper-cut hot-air balloon. Origin at the bottom of the basket. Gores alternate sky/sky_shade and blue/blue_shade; the game recolours both pairs."
-    },
-    {
       "name": "paper_button",
       "category": "ui",
       "sheet": "ui",

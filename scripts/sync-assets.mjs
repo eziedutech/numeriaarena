@@ -33,7 +33,6 @@ const WANTED = [
   'crystal_2',
   'crystal_3',
   'orb',
-  'balloon_round',
   'paper_button',
   'partner_window',
   'robot_partner_a',

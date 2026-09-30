@@ -54,7 +54,6 @@ export default defineAssets({
   crystal_2: model('game/orb_forge/crystal_2.glb', 'Prism Paper Gem'),
   crystal_3: model('game/orb_forge/crystal_3.glb', 'Short Paper Gem'),
   orb: model('game/orb_forge/orb.glb', 'Orb'),
-  balloon_round: model('game/balloon/balloon_round.glb', 'Paper Hot-Air Balloon'),
   paper_button: model('ui/paper_button.glb', 'Paper Button'),
   partner_window: model('game/portal/partner_window.glb', 'Partner Window'),
   robot_partner_a: model('characters/robot_partner_a.glb', 'Robot Partner A'),
