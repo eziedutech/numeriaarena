@@ -108,6 +108,8 @@ const val = (t) => (t.includes('/') ? t.split('/').map(Number).reduce((a, b) => 
 /** Carry what the hand holds (`held` pattern) so it lands on `to`, correcting for the grab offset. */
 async function carry(held, from, to) {
   const now = posOf(held);
+  // Gone already: the round ran out of time while the hand was on its way.
+  if (!now) return;
   glideGrab(from.x + to.x - now.x, from.y + to.y - now.y, from.z + to.z - now.z);
   await sleep(0.2);
 }
