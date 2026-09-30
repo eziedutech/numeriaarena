@@ -37,6 +37,8 @@ export class Label {
   private canvas: HTMLCanvasElement;
   private texture: CanvasTexture;
   private text = '';
+  /** How far the plane is shifted up (in plane units) for its anchor. */
+  private shift = 0;
   private opts: Required<LabelOptions>;
 
   constructor(text: string, opts: LabelOptions = {}) {
@@ -45,8 +47,9 @@ export class Label {
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
     const material = new MeshBasicMaterial({ map: this.texture, transparent: true, side: DoubleSide, depthWrite: false });
+    // Shifted in `set` so an anchored edge is the paper's edge, not the
+    // edge of the shadow room around it.
     const plane = new PlaneGeometry(1, 1);
-    if (this.opts.anchor !== 'center') plane.translate(0, this.opts.anchor === 'top' ? -0.5 : 0.5, 0);
     this.mesh = new Mesh(plane, material);
     this.mesh.renderOrder = 10;
     this.set(text);
@@ -119,6 +122,14 @@ export class Label {
     }
     c.restore();
     this.texture.needsUpdate = true;
+    // An anchored edge sits on the paper itself, so a string or a surface
+    // meets the card, not the empty shadow room above or below it.
+    const edge = m / this.canvas.height;
+    const shift = this.opts.anchor === 'top' ? -0.5 + edge : this.opts.anchor === 'bottom' ? 0.5 - edge : 0;
+    if (shift !== this.shift) {
+      this.mesh.geometry.translate(0, shift - this.shift, 0);
+      this.shift = shift;
+    }
     // The mesh covers the shadow room too, so the card stays `height` tall.
     this.mesh.scale.set(height * (this.canvas.width / h), height * (this.canvas.height / h), 1);
   }
