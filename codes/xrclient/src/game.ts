@@ -30,6 +30,7 @@ import {
   makeButton,
   makeCrystal,
   BALLOON_TAG_TOP,
+  CRYSTAL_HALF,
   ENVELOPE_FLAP_REST,
   PORTAL_IDLE,
   makeEnvelope,
@@ -40,7 +41,7 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
-import { accentForSkill, CORRECT, paper, shade, tint, TRY_AGAIN } from './art/palette.js';
+import { ACCENTS, accentForSkill, CORRECT, paper, shade, tint, TRY_AGAIN } from './art/palette.js';
 import { placeUiImage, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
@@ -86,6 +87,11 @@ const BALLOON_Z = 0.2;
 /** Lane spacing: wider than a balloon (0.063 m), so neighbours never touch. */
 const BALLOON_GAP = 0.08;
 const CRYSTAL_Z = 0.21;
+/** Height of a crystal's price card, and how far it leans back (radians). */
+const CRYSTAL_TAG_H = 0.03;
+const CRYSTAL_TAG_LEAN = 0.3;
+/** One paper colour per answer choice; the colour says nothing about the answer. */
+const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fractions, ACCENTS.decimals, ACCENTS.measurement];
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
 /** The portal at the back of the book, where creatures come from and go home to. */
@@ -918,15 +924,19 @@ export class GameSystem extends createSystem({
     this.selected = undefined;
     const n = offer.crystals.length;
     offer.crystals.forEach((c, i) => {
-      const m = makeCrystal(0xb7a3e0, i);
+      const m = makeCrystal(CRYSTAL_COLORS[i % CRYSTAL_COLORS.length], i);
       m.name = `crystal-${i}`;
-      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, 0.03, CRYSTAL_Z);
+      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, CRYSTAL_HALF, CRYSTAL_Z);
       const e = this.add(m);
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);
       this.clickable(e);
-      // Above the crystal; a taller fraction card grows upwards, off the gem.
-      this.label(c.text, 0.036, m, 0.029, 0, true, 'bottom');
+      // A price card standing on the table in front of the cluster, leaning
+      // back a little. It does not turn to the head, so its top edge can
+      // never swing into the paper; a taller fraction card grows upwards.
+      const tag = this.label(c.text, CRYSTAL_TAG_H, m, 0.001 - CRYSTAL_HALF, 0, false, 'bottom');
+      tag.mesh.rotation.x = -CRYSTAL_TAG_LEAN;
+      tag.mesh.position.z = (m.userData.front as number) + 0.004 + CRYSTAL_TAG_H * 1.5 * Math.sin(CRYSTAL_TAG_LEAN);
     });
   }
 

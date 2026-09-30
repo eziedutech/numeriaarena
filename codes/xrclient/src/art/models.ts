@@ -532,11 +532,97 @@ export function setOpacity(root: Object3D, opacity: number): void {
   root.visible = opacity > 0.01;
 }
 
-const GEMS = ['crystal', 'crystal_2', 'crystal_3'];
+/** Size of a crystal cluster against the shard table below. */
+const CRYSTAL_SCALE = 1.25;
+/** Half the height of a crystal cluster; its base sits this far below the origin. */
+export const CRYSTAL_HALF = 0.03 * CRYSTAL_SCALE;
 
-/** A paper gem crystal; `index` picks one of three shapes. Origin at its centre. */
+/**
+ * Shards of a crystal cluster, rooted on one base: x, z of the root, lean
+ * towards +X and +Z (radians), radius, prism height, tip height (meters).
+ */
+const SHARDS: number[][] = [
+  [0, -0.002, 0.05, -0.05, 0.0085, 0.036, 0.024],
+  [-0.012, 0.002, -0.45, 0.05, 0.007, 0.024, 0.016],
+  [0.012, 0, 0.5, 0, 0.0065, 0.02, 0.015],
+  [-0.005, -0.009, -0.2, -0.35, 0.006, 0.026, 0.014],
+  [0.007, -0.008, 0.25, -0.3, 0.006, 0.028, 0.016],
+  [-0.006, 0.01, -0.35, 0.5, 0.005, 0.012, 0.01],
+  [0.008, 0.009, 0.5, 0.4, 0.0045, 0.01, 0.009],
+];
+
+/** Light for the folded facets: from the upper left and front, so shade falls to the lower right. */
+const FACET_LIGHT = new Vector3(-0.55, 0.7, 0.45).normalize();
+
+/** Crystal paper: the facet tones are in the vertex colours. */
+let crystalPaper: MeshStandardMaterial | undefined;
+
+/**
+ * A papercraft crystal cluster: pointed prisms of folded paper leaning out
+ * from one base, each flat facet its own tone. `index` varies the cluster so
+ * a row never repeats. Origin at its centre, base `CRYSTAL_HALF` below.
+ */
 export function makeCrystal(color: number, index = 0): Object3D {
-  return staticModel(GEMS[index % GEMS.length], 'crystal', 'lavender', color) ?? proceduralCrystal(color);
+  let seed = index * 7919 + 17;
+  const rand = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const mirror = index % 2 === 1 ? -1 : 1;
+  const sides = index % 3 === 2 ? 5 : 6;
+  const pos: number[] = [];
+  const col: number[] = [];
+  const dark = new Color(shade(shade(color)));
+  const light = new Color(tint(color, 0.45));
+  const b = new Vector3();
+  const n = new Vector3();
+  const tri = (p: Vector3, q: Vector3, r: Vector3) => {
+    n.copy(q).sub(p).cross(b.copy(r).sub(p)).normalize();
+    const lit = Math.max(0, n.dot(FACET_LIGHT) * 0.5 + 0.5);
+    const tone = dark.clone().lerp(light, lit * lit);
+    for (const v of [p, q, r]) {
+      pos.push(v.x, v.y, v.z);
+      col.push(tone.r, tone.g, tone.b);
+    }
+  };
+  for (const [x, z, leanX, leanZ, radius, body, tip] of SHARDS) {
+    const k = 0.8 + rand() * 0.4;
+    const shard = new Object3D();
+    shard.position.set(x * mirror, -0.033, z);
+    shard.rotation.set(leanZ + (rand() - 0.5) * 0.15, rand() * Math.PI, -(leanX * mirror) + (rand() - 0.5) * 0.15, 'XZY');
+    shard.updateMatrix();
+    const ring: Vector3[] = [];
+    const top: Vector3[] = [];
+    for (let i = 0; i < sides; i += 1) {
+      const t = ((i + (rand() - 0.5) * 0.35) / sides) * Math.PI * 2;
+      const r = radius * (0.85 + rand() * 0.3);
+      ring.push(new Vector3(Math.cos(t) * r, 0, Math.sin(t) * r).applyMatrix4(shard.matrix));
+      top.push(new Vector3(Math.cos(t) * r, body * k, Math.sin(t) * r).applyMatrix4(shard.matrix));
+    }
+    // The point sits a little off centre, so the tip reads as folded, not turned.
+    const apex = new Vector3((rand() - 0.5) * radius * 0.6, (body + tip) * k, (rand() - 0.5) * radius * 0.6)
+      .applyMatrix4(shard.matrix);
+    const foot = new Vector3(0, 0, 0).applyMatrix4(shard.matrix);
+    for (let i = 0; i < sides; i += 1) {
+      const j = (i + 1) % sides;
+      tri(ring[i], top[i], top[j]);
+      tri(ring[i], top[j], ring[j]);
+      tri(top[i], apex, top[j]);
+      tri(ring[j], foot, ring[i]);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  crystalPaper ??= new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
+  g.scale(CRYSTAL_SCALE, CRYSTAL_SCALE, CRYSTAL_SCALE);
+  g.computeBoundingBox();
+  const m = new Mesh(g, crystalPaper);
+  m.name = 'crystal';
+  // The nearest point to the player, so a card in front never cuts the paper.
+  m.userData.front = g.boundingBox!.max.z;
+  return m;
 }
 
 /** An orb made from merged crystals; origin at its centre. */
@@ -796,13 +882,6 @@ function paperGoreBalloon(color: number): Group {
     g.add(sheet);
   }
   return g;
-}
-
-function proceduralCrystal(color: number): Mesh {
-  const m = new Mesh(new OctahedronGeometry(0.022, 0), paper(color, { emissive: 0x111111 }));
-  m.scale.set(1, 1.35, 1);
-  m.name = 'crystal';
-  return m;
 }
 
 function proceduralOrb(color: number): Mesh {
