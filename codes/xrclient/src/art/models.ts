@@ -226,11 +226,12 @@ export function makeBook(): Group {
   const book = staticModel('popup_book', 'popup-book') ?? proceduralBook();
   // Faint maths sketched on both pages, like a well-used exercise book.
   for (const side of [-1, 1]) book.add(pageSketch(side));
-  // The portal Foldlings step out of stands at the back edge of the book.
+  // The portal Foldlings step out of stands on the table just behind the
+  // book, a doorway at its back edge rather than a sign stuck on the pages.
   const portal = staticModel('portal_main', 'book-portal');
   if (portal) {
-    portal.position.set(0, 0.012, -0.1);
-    portal.scale.setScalar(0.8);
+    portal.position.set(0, 0, -PAGE_D / 2 - 0.03);
+    portal.scale.setScalar(1.15);
     book.add(portal);
   }
   return book;

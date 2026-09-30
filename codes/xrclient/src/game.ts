@@ -80,7 +80,7 @@ const CRYSTAL_Z = 0.21;
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
 /** The portal at the back of the book, where creatures come from and go home to. */
-const HOME = new Vector3(0, 0.023, -0.18);
+const HOME = new Vector3(0, 0.023, -0.215);
 /**
  * Foldlings show their side to the player, head to the right and turned a
  * little towards them: origami animals read as animals in profile.
@@ -133,6 +133,8 @@ const POKE_INTO_SHARE = 0.5;
 const TIP_SMOOTH_S = 0.1;
 /** The T helper picks the target nearest the pointing direction within this angle. */
 const TOUCH_CONE = (15 * Math.PI) / 180;
+/** The portal's inner ring turns at this rate (radians per second). */
+const PORTAL_SPIN = 0.6;
 /** Hosts where the emulator runs; the T touch helper exists only there. */
 const EMULATOR_HOSTS = ['localhost', '127.0.0.1'];
 /** A joined orb flies to the creature in this long (seconds). */
@@ -205,6 +207,7 @@ export class GameSystem extends createSystem({
   private tipVel = [new Vector3(), new Vector3()];
   private tipNow = new Vector3();
   private lastPoke = '';
+  private portalRing?: Object3D;
   private pokeVel = new Vector3();
   private pokeAxis = new Vector3();
   private lastDelta = 1 / 72;
@@ -371,6 +374,12 @@ export class GameSystem extends createSystem({
       this.tipVel[i].multiplyScalar(keep).addScaledVector(this.b, 1 - keep);
       this.tipPos[i].copy(this.tipNow);
     });
+  }
+
+  /** The book portal's inner ring turns slowly, so the doorway looks alive. */
+  private spinPortal(delta: number): void {
+    if (!this.portalRing) this.portalRing = this.deskEntity()?.object3D?.getObjectByName('ring_inner');
+    if (this.portalRing) this.portalRing.rotation.z += delta * PORTAL_SPIN;
   }
 
   /**
@@ -1102,6 +1111,7 @@ export class GameSystem extends createSystem({
       this.showMenu();
     }
     this.trackTips(delta);
+    this.spinPortal(delta);
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
     if (this.phase === 'opening') this.runOpening(delta);
