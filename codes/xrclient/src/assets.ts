@@ -6,7 +6,7 @@ const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
 
 /** Origami species that walk out of the book, folded in code (art/origami.ts). */
-export const SPECIES = ['fox', 'rabbit', 'crane', 'turtle', 'frog', 'fish', 'cat', 'elephant'] as const;
+export const SPECIES = ['fox', 'rabbit', 'crane', 'chicken', 'frog', 'fish', 'cat', 'elephant'] as const;
 export type Species = (typeof SPECIES)[number];
 
 const model = (file: string, name: string) => ({
@@ -42,6 +42,9 @@ export default defineAssets({
   popup_book: model('book/popup_book.glb', 'Pop-up Book'),
   paper_bird: model('foldlings/paper_bird.glb', 'Paper Bird'),
   flag_small: model('foldlings/flag_small.glb', 'Number Flag'),
+  // Folded from Zia's scanned paper animals: geometry only, coloured and shaded in code.
+  foldling_chicken: model('foldlings/foldling_chicken.glb', 'Paper Chicken'),
+  foldling_cat: model('foldlings/foldling_cat.glb', 'Paper Cat'),
   robot_partner_a: model('characters/robot_partner_a.glb', 'Robot Partner A'),
   robot_partner_b: model('characters/robot_partner_b.glb', 'Robot Partner B'),
 });

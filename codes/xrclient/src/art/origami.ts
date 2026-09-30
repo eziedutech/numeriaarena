@@ -1,11 +1,16 @@
 import {
   AnimationClip,
+  AssetManager,
+  Box3,
   BufferGeometry,
   CircleGeometry,
+  LineBasicMaterial,
+  LineSegments,
   Color,
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -403,52 +408,6 @@ const FISH: OrigamiDesign = {
   },
 };
 
-const TURTLE: OrigamiDesign = {
-  flag: [-0.002, 0.029],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.008, 0.03, 0], [-0.012, 0.029, 0], [-0.002, 0.019, 0.02]],
-      [[0.008, 0.03, 0], [-0.002, 0.019, 0.02], [0.022, 0.012, 0.006]],
-      [[-0.012, 0.029, 0], [-0.026, 0.012, 0.006], [-0.002, 0.019, 0.02]],
-      [[0.022, 0.012, 0.006], [-0.002, 0.019, 0.02], [0.017, 0.007, 0.013]],
-      [[-0.026, 0.012, 0.006], [-0.021, 0.007, 0.013], [-0.002, 0.019, 0.02]],
-      [[-0.002, 0.019, 0.02], [-0.021, 0.007, 0.013], [0.017, 0.007, 0.013]],
-    ],
-    parts: [
-      {
-        name: 'head',
-        pivot: [0.02, 0.012],
-        tris: [
-          { v: [[0.017, 0.017, 0], [0.03, 0.021, 0], [0.032, 0.014, 0.005]], tone: 'paper' },
-          { v: [[0.03, 0.021, 0], [0.043, 0.013, 0], [0.032, 0.014, 0.005]], tone: 'paper' },
-          { v: [[0.017, 0.017, 0], [0.032, 0.014, 0.005], [0.02, 0.006, 0.004]], tone: 'paper' },
-          { v: [[0.032, 0.014, 0.005], [0.043, 0.013, 0], [0.02, 0.006, 0.004]], tone: 'paper' },
-        ],
-        eye: { tri: 1, at: [0.3, 0.3, 0.4] },
-      },
-      {
-        name: 'tail',
-        pivot: [-0.024, 0.009],
-        tris: [{ v: [[-0.023, 0.011, 0], [-0.033, 0.006, 0], [-0.024, 0.006, 0.002]], tone: 'paper' }],
-      },
-      {
-        name: 'legs_front',
-        pivot: [0.012, 0.009],
-        pair: 0.013,
-        tris: [{ v: [[0.008, 0.01, 0.001], [0.019, 0.01, 0.001], [0.027, 0, 0.001]], tone: 'paper' }],
-      },
-      {
-        name: 'legs_back',
-        pivot: [-0.014, 0.009],
-        pair: 0.013,
-        tris: [{ v: [[-0.01, 0.01, 0.001], [-0.021, 0.01, 0.001], [-0.028, 0, 0.001]], tone: 'paper' }],
-      },
-    ],
-  },
-};
-
 const FROG: OrigamiDesign = {
   flag: [-0.002, 0.034],
   body: {
@@ -484,11 +443,11 @@ const FROG: OrigamiDesign = {
   },
 };
 
-export const ORIGAMI: Record<Species, OrigamiDesign> = {
+/** Species folded from panels here; the chicken comes from a model, and the cat's panels are its stand-in. */
+export const ORIGAMI: Record<Exclude<Species, 'chicken'>, OrigamiDesign> = {
   fox: FOX,
   rabbit: RABBIT,
   crane: CRANE,
-  turtle: TURTLE,
   frog: FROG,
   fish: FISH,
   cat: CAT,
@@ -644,17 +603,217 @@ function clips(model: Object3D): AnimationClip[] {
  * An origami animal in `color`, head towards +X, feet at y 0, with its
  * clips and the point on its back where the flag goes.
  */
+/**
+ * Animals folded from Zia's scanned paper models (geometry only): how tall
+ * each stands, the quarter turn that puts its head on +X, where its flag goes
+ * (shares of its length from the tail, and of its height), and where its eye
+ * sits (behind the front of the head and up, as shares of its height).
+ */
+interface Scanned {
+  height: number;
+  turn: number;
+  flag: [number, number];
+  eye: [number, number];
+}
+
+const SCANNED: Partial<Record<Species, Scanned>> = {
+  chicken: { height: 0.075, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.12, 0.925] },
+  cat: { height: 0.052, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.14, 0.8] },
+};
+
+/** The eyes: a soft dark, not black, and small. */
+const SCANNED_EYE = 0x5b4a3c;
+const SCANNED_EYE_R = 0.0017;
+
+let scannedPaper: MeshStandardMaterial | undefined;
+const creaseInks = new Map<number, LineBasicMaterial>();
+
+/** The crease colour for `color`: the paper two shades darker, softly. */
+function creaseInk(color: number): LineBasicMaterial {
+  let m = creaseInks.get(color);
+  if (!m) {
+    m = new LineBasicMaterial({ color: shade(shade(shade(color))), transparent: true, opacity: 0.55 });
+    creaseInks.set(color, m);
+  }
+  return m;
+}
+
+/** Creases: where the paper bends more than this, a thin line one shade darker marks the fold. */
+const CREASE_DEG = 25;
+
+const scannedShapes = new Map<string, { geo: BufferGeometry; creases: BufferGeometry; flag: Vector3; eye: Vector3 }>();
+
+/**
+ * The fold lines of a scanned model: edges where the paper bends more than
+ * `CREASE_DEG`, and the cut edges of the sheet, on the side that faces the
+ * player (+Z) only, so creases on the far side or on the back of the paper
+ * never show through.
+ */
+function creaseLines(pos: number[]): BufferGeometry {
+  const key = (i: number) => `${pos[i].toFixed(5)},${pos[i + 1].toFixed(5)},${pos[i + 2].toFixed(5)}`;
+  const edges = new Map<string, { a: number; b: number; normals: Vector3[] }>();
+  const u = new Vector3();
+  const v = new Vector3();
+  for (let t = 0; t < pos.length; t += 9) {
+    const n = u.fromArray(pos, t + 3).sub(v.fromArray(pos, t)).cross(new Vector3().fromArray(pos, t + 6).sub(v)).normalize().clone();
+    for (const [a, b] of [
+      [t, t + 3],
+      [t + 3, t + 6],
+      [t + 6, t],
+    ]) {
+      const ka = key(a);
+      const kb = key(b);
+      const k = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      const e = edges.get(k) ?? { a, b, normals: [] };
+      e.normals.push(n);
+      edges.set(k, e);
+    }
+  }
+  const cos = Math.cos((CREASE_DEG * Math.PI) / 180);
+  const out: number[] = [];
+  for (const { a, b, normals } of edges.values()) {
+    if (!normals.some((n) => n.z > 0.05)) continue;
+    const bends = normals.length === 1 || normals.some((n) => n.dot(normals[0]) < cos);
+    if (!bends) continue;
+    out.push(pos[a], pos[a + 1], pos[a + 2], pos[b], pos[b + 1], pos[b + 2]);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(out, 3));
+  return g;
+}
+
+/**
+ * An animal folded from a scanned paper model: its shape only. It is turned
+ * head towards +X, stood on the table, sized like the others, and every facet
+ * is toned light or shade in the creature's colour, as the panels of the
+ * other animals are. Null when the model did not load.
+ */
+function scannedShape(
+  species: Species,
+  spec: Scanned,
+  color: number,
+): { geo: BufferGeometry; creases: BufferGeometry; flag: Vector3; eye: Vector3 } | null {
+  const key = `${species}:${color}`;
+  const known = scannedShapes.get(key);
+  if (known) return known;
+  const gltf = AssetManager.getGLTF(`foldling_${species}`);
+  if (!gltf) return null;
+  const pos: number[] = [];
+  gltf.scene.updateMatrixWorld(true);
+  // The body runs along Z in the file; a quarter turn puts the head on +X.
+  const turn = new Matrix4().makeRotationY(spec.turn);
+  gltf.scene.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+    const m = new Matrix4().multiplyMatrices(turn, mesh.matrixWorld);
+    const p = g.getAttribute('position');
+    const v = new Vector3();
+    for (let i = 0; i < p.count; i += 1) {
+      v.fromBufferAttribute(p, i).applyMatrix4(m);
+      pos.push(v.x, v.y, v.z);
+    }
+    g.dispose();
+  });
+  const box = new Box3();
+  for (let i = 0; i < pos.length; i += 3) box.expandByPoint(new Vector3(pos[i], pos[i + 1], pos[i + 2]));
+  const k = spec.height / (box.max.y - box.min.y);
+  const cx = (box.min.x + box.max.x) / 2;
+  const cz = (box.min.z + box.max.z) / 2;
+  for (let i = 0; i < pos.length; i += 3) {
+    pos[i] = (pos[i] - cx) * k;
+    pos[i + 1] = (pos[i + 1] - box.min.y) * k;
+    pos[i + 2] = (pos[i + 2] - cz) * k;
+  }
+  // Each facet's light, from its own winding (its outward side), then
+  // stretched over this model's range: facets on one panel share a tone,
+  // and panels turned only a little from each other still read apart.
+  const lights: number[] = [];
+  const a = new Vector3();
+  const b = new Vector3();
+  const c = new Vector3();
+  for (let i = 0; i < pos.length; i += 9) {
+    a.fromArray(pos, i);
+    b.fromArray(pos, i + 3).sub(a);
+    c.fromArray(pos, i + 6).sub(a);
+    lights.push(b.cross(c).normalize().dot(LIGHT));
+  }
+  const sorted = [...lights].sort((x, y) => x - y);
+  const lo = sorted[Math.floor(sorted.length * 0.05)];
+  const hi = sorted[Math.floor(sorted.length * 0.95)];
+  const col: number[] = [];
+  const dark = new Color(shade(shade(shade(color))));
+  const light = new Color(tint(color, 0.35));
+  for (const l of lights) {
+    const lit = Math.min(1, Math.max(0, (l - lo) / Math.max(1e-3, hi - lo)));
+    const t = dark.clone().lerp(light, lit * lit * (3 - 2 * lit));
+    for (let j = 0; j < 3; j += 1) col.push(t.r, t.g, t.b);
+  }
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const length = (box.max.x - box.min.x) * k;
+  const flag = new Vector3(-length / 2 + length * spec.flag[0], spec.height * spec.flag[1], 0);
+  // The eye sits on the side of the head: below the comb, behind the beak,
+  // on the paper nearest the viewer there.
+  const top = spec.height;
+  let headX = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) if (pos[i + 1] > top * 0.72) headX = Math.max(headX, pos[i]);
+  const eye = new Vector3(headX - top * spec.eye[0], top * spec.eye[1], 0);
+  for (let i = 0; i < pos.length; i += 3) {
+    if (Math.abs(pos[i] - eye.x) < top * 0.03 && Math.abs(pos[i + 1] - eye.y) < top * 0.03) {
+      eye.z = Math.max(eye.z, Math.abs(pos[i + 2]));
+    }
+  }
+  const creases = creaseLines(pos);
+  const shape = { geo, creases, flag, eye };
+  scannedShapes.set(key, shape);
+  return shape;
+}
+
+/**
+ * An origami animal in `color`, head towards +X, feet at y 0, with its
+ * clips and the point on its back where the flag goes.
+ */
 export function makeOrigami(
   species: Species,
   color: number,
 ): { model: Group; flag: Object3D; animations: AnimationClip[] } {
-  const design = ORIGAMI[species];
   const model = new Group();
   model.name = `origami-${species}`;
-  const body = build(species, design.body, color, [0, 0]);
-  model.add(body);
   const flag = new Object3D();
   flag.name = 'flag_anchor';
+  const spec = SCANNED[species];
+  const scanned = spec ? scannedShape(species, spec, color) : null;
+  if (spec && !scanned) console.error(`[art] foldling_${species} is not loaded; folding a fox instead`);
+  if (scanned) {
+    const body = new Group();
+    body.name = 'body';
+    // One side only: the scans are paper with a front and a back surface,
+    // and drawing both would let the back show through the front.
+    scannedPaper ??= new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
+    const mesh = new Mesh(scanned.geo, scannedPaper);
+    mesh.name = `${species}-paper`;
+    body.add(mesh);
+    const creases = new LineSegments(scanned.creases, creaseInk(color));
+    creases.name = `${species}-creases`;
+    body.add(creases);
+    for (const side of [1, -1]) {
+      const eye = new Mesh(new CircleGeometry(SCANNED_EYE_R, 10), paper(SCANNED_EYE));
+      eye.name = 'eye';
+      eye.position.set(scanned.eye.x, scanned.eye.y, side * (scanned.eye.z + 0.0006));
+      if (side < 0) eye.rotation.y = Math.PI;
+      body.add(eye);
+    }
+    model.add(body);
+    flag.position.copy(scanned.flag);
+    body.add(flag);
+    return { model, flag, animations: clips(model) };
+  }
+  const design = species === 'chicken' ? ORIGAMI.fox : ORIGAMI[species];
+  const body = build(species, design.body, color, [0, 0]);
+  model.add(body);
   flag.position.set(design.flag[0], design.flag[1], 0);
   body.add(flag);
   return { model, flag, animations: clips(model) };
