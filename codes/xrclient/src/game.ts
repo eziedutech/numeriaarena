@@ -9,6 +9,7 @@ import {
   PokeInteractable,
   Pressed,
   RayInteractable,
+  UIKitMLAsset,
   Grabbed,
   Group,
   MeshBasicMaterial,
@@ -255,6 +256,7 @@ export class GameSystem extends createSystem({
   private pausedAt?: number;
   private pausedPerf = 0;
   private pausedTotal = 0;
+  private welcomeShown?: boolean;
   private recapIn = -1;
   private stage!: Stage;
   private envelopes = new Map<Entity, Envelope>();
@@ -280,6 +282,12 @@ export class GameSystem extends createSystem({
       const onKey = (ev: KeyboardEvent) => {
         if (ev.repeat) return;
         if (ev.code === 'KeyT') this.emulatorTouch();
+        // 1, 2, 3: open the first, second or third menu envelope, in or out of XR.
+        const pick = ['Digit1', 'Digit2', 'Digit3'].indexOf(ev.code);
+        if (pick >= 0) {
+          const e = [...this.queries.buttons.entities][pick];
+          if (e) this.pressButton(e);
+        }
         // B: as if the headset came off or the system menu opened, and back.
         if (ev.code === 'KeyB') {
           const device = (window as { IWER_DEVICE?: { visibilityState: string; updateVisibilityState(s: string): void } }).IWER_DEVICE;
@@ -1208,8 +1216,24 @@ export class GameSystem extends createSystem({
 
   // ------------------------------------------------------------ frame
 
+  /**
+   * In the browser the welcome card sits over the left of the view, where a
+   * robot window stands during play; it shows only while choosing a game.
+   */
+  private showWelcomeInMenuOnly(): void {
+    const show = this.world.visibilityState.peek() === VisibilityState.NonImmersive && this.phase === 'menu';
+    if (show === this.welcomeShown) return;
+    // A screen-space panel is drawn from its own list, whatever its object's
+    // visibility, so the card's root element is taken out of the layout.
+    const root = this.world.getSceneObject<UIKitMLAsset>('welcome-panel')?.getElementById('welcome-root');
+    if (!root) return;
+    root.setProperties({ display: show ? 'flex' : 'none' });
+    this.welcomeShown = show;
+  }
+
   update(delta: number): void {
     if (this.pausedAt !== undefined) return;
+    this.showWelcomeInMenuOnly();
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     if (this.phase === 'menu' && placed && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {

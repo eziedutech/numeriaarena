@@ -184,8 +184,10 @@ export class DeskSystem extends createSystem({
   private placeForBrowser(): void {
     this.root.position.set(0, 0.8, -0.2);
     this.root.rotation.set(0, 0, 0);
-    // Frame the whole book from the browser camera.
-    this.camera.lookAt(0, 0.86, -0.22);
+    // Frame the whole play area from the browser camera: the scoreboard
+    // above the book, both robot windows at the sides, and the balloons.
+    this.camera.position.set(0, 1.28, 0.62);
+    this.camera.lookAt(0, 0.98, -0.2);
     this.setPlaced(true, 3);
   }
 

@@ -55,7 +55,7 @@
     transform-translate-y: 1px;
   }
 </style>
-<Panel class="panel-root">
+<Panel id="welcome-root" class="panel-root">
   <div class="panel-content">
     <div class="heading">Numeria Arena</div>
     <Divider></Divider>
