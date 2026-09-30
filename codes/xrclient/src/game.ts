@@ -147,7 +147,9 @@ const WRONG_INK = 0xc62828;
 /** The question in dark blue, so it stands out from every other card. */
 const QUESTION_INK = 0x1f4fa3;
 /** Menu envelopes lean back this far (radians) from upright. */
-const ENVELOPE_TILT = 1.15;
+const ENVELOPE_TILT = 1.3;
+/** Envelopes lie this far in front of the book's front edge (desk frame z). */
+const ENVELOPE_Z = 0.16;
 /** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
 const FLAP_S = 0.45;
 const LETTER_S = 0.35;
@@ -470,7 +472,7 @@ export class GameSystem extends createSystem({
     // the book behind them stays in view, faces still towards the player.
     envelope.root.scale.setScalar(1.05);
     envelope.root.rotation.x = -ENVELOPE_TILT;
-    envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), 0.12);
+    envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), ENVELOPE_Z);
     const e = this.add(envelope.root);
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
@@ -499,7 +501,7 @@ export class GameSystem extends createSystem({
   private addButton(game: MenuChoice, title: string, x: number, color: number): void {
     const button = makeButton(color);
     button.name = `menu-${game}`;
-    button.position.set(x, 0.0325 * 1.3, 0.12);
+    button.position.set(x, 0.0325 * 1.3, ENVELOPE_Z);
     button.scale.setScalar(1.3);
     const e = this.add(button);
     e.addComponent(MenuButton, { game });

@@ -86,7 +86,7 @@ export async function seat() {
 
 export async function card(x) {
   // Tapped from above and in front: menu envelopes lean back on the table.
-  for (const k of [1, 0.7, 0.45, 0.3, 0.2, 0.1, 0]) { tip(x, 0.02 + 0.06 * k, 0.12 + 0.05 * k); await sleep(0.1); }
+  for (const k of [1, 0.7, 0.45, 0.3, 0.2, 0.1, 0]) { tip(x, 0.012 + 0.06 * k, 0.16 + 0.05 * k); await sleep(0.1); }
   tip(x, 0.2, 0.35); await sleep(2.5);
 }
 

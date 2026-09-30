@@ -5,6 +5,7 @@ import {
   AssetManager,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
@@ -12,10 +13,12 @@ import {
   LoopOnce,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   OctahedronGeometry,
   PlaneGeometry,
+  SRGBColorSpace,
 } from '@iwsdk/core';
 
 import { SPECIES, type Species } from '../assets.js';
@@ -221,6 +224,8 @@ export function makeBird(color: number): Figure {
  */
 export function makeBook(): Group {
   const book = staticModel('popup_book', 'popup-book') ?? proceduralBook();
+  // Faint maths sketched on both pages, like a well-used exercise book.
+  for (const side of [-1, 1]) book.add(pageSketch(side));
   // The portal Foldlings step out of stands at the back edge of the book.
   const portal = staticModel('portal_main', 'book-portal');
   if (portal) {
@@ -229,6 +234,86 @@ export function makeBook(): Group {
     book.add(portal);
   }
   return book;
+}
+
+/** Page area of the open book (metres) and the height of its paper. */
+const PAGE_W = 0.15;
+const PAGE_D = 0.21;
+const PAGE_TOP = 0.0236;
+
+/**
+ * Soft pencil maths on one page: sums, fractions, a number line, a shared
+ * pie, a dot grid. Drawn faint and slightly blurred so it reads as texture
+ * and never competes with the question. `side` is -1 for the left page.
+ */
+function pageSketch(side: number): Mesh {
+  const px = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = px;
+  canvas.height = Math.round((px * PAGE_D) / PAGE_W);
+  const c = canvas.getContext('2d')!;
+  c.filter = 'blur(1.2px)';
+  c.strokeStyle = c.fillStyle = 'rgba(58, 63, 75, 0.32)';
+  c.lineWidth = 3;
+  c.lineCap = 'round';
+  const text = (s: string, x: number, y: number, size: number, turn: number) => {
+    c.save();
+    c.translate(x, y);
+    c.rotate(turn);
+    c.font = `600 ${size}px sans-serif`;
+    c.fillText(s, 0, 0);
+    c.restore();
+  };
+  const h = canvas.height;
+  if (side < 0) {
+    text('7 × 8 = 56', 40, 90, 44, -0.06);
+    text('3/4', 330, 150, 52, 0.08);
+    text('12 + 9', 60, 250, 40, 0.04);
+    // A number line with ticks.
+    c.beginPath();
+    c.moveTo(40, 360);
+    c.lineTo(470, 360);
+    for (let i = 0; i <= 10; i += 1) {
+      c.moveTo(40 + i * 43, i % 5 === 0 ? 340 : 348);
+      c.lineTo(40 + i * 43, 372);
+    }
+    c.stroke();
+    text('0', 32, 405, 26, 0);
+    text('1', 460, 405, 26, 0);
+    text('0.25', 250, 520, 42, -0.1);
+    text('÷ 4', 70, h - 90, 44, 0.05);
+  } else {
+    // A pie cut into quarters, one shaded.
+    c.beginPath();
+    c.arc(130, 130, 80, 0, Math.PI * 2);
+    c.moveTo(50, 130);
+    c.lineTo(210, 130);
+    c.moveTo(130, 50);
+    c.lineTo(130, 210);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(130, 130);
+    c.arc(130, 130, 80, -Math.PI / 2, 0);
+    c.closePath();
+    c.fill();
+    text('1/2 + 1/4', 250, 140, 44, -0.05);
+    text('100', 330, 300, 48, 0.1);
+    // A small dot grid, like an area model.
+    for (let r = 0; r < 4; r += 1) for (let k = 0; k < 6; k += 1) c.fillRect(60 + k * 30, 300 + r * 30, 7, 7);
+    text('4 × 6', 60, 470, 40, 0.03);
+    text('2.5 cm', 280, 560, 40, -0.08);
+    text('9 - 4', 90, h - 90, 44, -0.04);
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  const sheet = new Mesh(
+    new PlaneGeometry(PAGE_W, PAGE_D),
+    new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }),
+  );
+  sheet.name = 'page-sketch';
+  sheet.rotation.x = -Math.PI / 2;
+  sheet.position.set(side * 0.09, PAGE_TOP, 0);
+  return sheet;
 }
 
 /**
