@@ -341,7 +341,7 @@ export const PORTAL_IDLE = 0xb7a3e0;
  * The doorway behind the book: a twelve-point star of three flat charcoal
  * paper squares turned 30 degrees apart, the same for every creature, and a
  * flat paper disc in its middle that takes the colour of the creature coming
- * through (a soft lighter centre, like paper catching the light). The frame
+ * through (folded once across, one half a shade darker). The frame
  * is `portal-frame`, the disc `portal-disc`, with a material of its own.
  */
 function makeBookPortal(): Group {
@@ -361,15 +361,29 @@ function makeBookPortal(): Group {
     frame.add(sheet);
   });
   face.add(frame);
-  const glow = document.createElement('canvas');
-  glow.width = glow.height = 128;
-  const g = glow.getContext('2d')!;
-  const fade = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  fade.addColorStop(0, '#ffffff');
-  fade.addColorStop(1, '#d6d6d6');
-  g.fillStyle = fade;
-  g.fillRect(0, 0, 128, 128);
-  const map = new CanvasTexture(glow);
+  // A folded paper circle: one diagonal fold from top right to bottom left,
+  // the far half a shade darker, and a thin dark rim. The texture is grey,
+  // so the creature's colour tints both halves and the rim alike.
+  const sheet = document.createElement('canvas');
+  const n = 256;
+  sheet.width = sheet.height = n;
+  const g = sheet.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, n, n);
+  g.fillStyle = '#d8d8d8';
+  g.beginPath();
+  g.moveTo(n * 0.8, 0);
+  g.lineTo(n, 0);
+  g.lineTo(n, n);
+  g.lineTo(n * 0.2, n);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = '#2a2a2a';
+  g.lineWidth = n * 0.012;
+  g.beginPath();
+  g.arc(n / 2, n / 2, n / 2 - g.lineWidth / 2, 0, Math.PI * 2);
+  g.stroke();
+  const map = new CanvasTexture(sheet);
   map.colorSpace = SRGBColorSpace;
   const disc = new Mesh(
     new CircleGeometry(PORTAL_R * PORTAL_DISC, 48),
