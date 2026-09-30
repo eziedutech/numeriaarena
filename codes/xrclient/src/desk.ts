@@ -1,4 +1,17 @@
-import { Box3, Color, createSystem, Group, Object3D, Vector3, VisibilityState, XRMesh } from '@iwsdk/core';
+import {
+  BackSide,
+  Box3,
+  Color,
+  createSystem,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  SphereGeometry,
+  Vector3,
+  VisibilityState,
+  XRMesh,
+} from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
@@ -26,10 +39,18 @@ const PINCH_WAIT_S = 6;
 /** Seated desk: this far below the eyes and this far in front. */
 const SEATED_DROP_M = 0.45;
 const SEATED_REACH_M = 0.45;
+/**
+ * The curtain's radius sits between the card (0.4 m) and the book (about
+ * 0.6 m away), so only the card stays bright. Darker while the player must
+ * wait, lighter when a pinch is expected.
+ */
+const CURTAIN_R = 0.5;
+const CURTAIN_WAIT = 0.55;
+const CURTAIN_ACT = 0.25;
 /** The "Ready!" card stays this long after the book lands (seconds). */
 const READY_S = 1.2;
 /** The placing card floats this far ahead of the eyes and this far below them. */
-const STATUS_AHEAD_M = 0.55;
+const STATUS_AHEAD_M = 0.4;
 const STATUS_DROP_M = 0.1;
 /** Paper cream behind the browser preview; XR keeps the background clear for passthrough. */
 const PREVIEW_BACKGROUND = new Color(0xf6e3c0);
@@ -49,6 +70,8 @@ export class DeskSystem extends createSystem({
   private status!: Group;
   private statusText!: Label;
   private statusStar!: Object3D;
+  private curtain!: Mesh;
+  private curtainMat!: MeshBasicMaterial;
   /** Seconds the "Ready!" card stays up after the book lands. */
   private readyLeft = 0;
   private waited = 0;
@@ -78,12 +101,20 @@ export class DeskSystem extends createSystem({
     this.status = new Group();
     this.status.name = 'placing-status';
     this.status.visible = false;
-    this.statusText = new Label(' ', { height: 0.036 });
-    this.statusText.mesh.position.set(0, -0.042, 0);
+    this.statusText = new Label(' ', { height: 0.05 });
+    this.statusText.mesh.position.set(0, -0.055, 0);
     this.statusStar = makeStar(true);
-    this.statusStar.scale.setScalar(0.9);
+    this.statusStar.scale.setScalar(1.4);
     this.status.add(this.statusText.mesh, this.statusStar);
     this.world.createTransformEntity(this.status);
+
+    // A soft grey curtain around the head while the book is not ready: the
+    // card sits inside it and stays bright, the room and book behind dim.
+    this.curtainMat = new MeshBasicMaterial({ color: 0x1f2433, transparent: true, opacity: 0, side: BackSide, depthWrite: false });
+    this.curtain = new Mesh(new SphereGeometry(CURTAIN_R, 24, 16), this.curtainMat);
+    this.curtain.name = 'placing-curtain';
+    this.curtain.visible = false;
+    this.world.createTransformEntity(this.curtain);
 
     let immersive: boolean | null = null;
     this.cleanupFuncs.push(
@@ -127,8 +158,12 @@ export class DeskSystem extends createSystem({
    * Keeps the placing card about 55 cm in front of the eyes, a little low,
    * facing the player, with its paper star turning while it works.
    */
-  private showStatus(text: string, delta: number, spin: boolean): void {
+  private showStatus(text: string, delta: number, spin: boolean, dim: number): void {
     this.player.head.getWorldPosition(this.head);
+    this.curtain.position.copy(this.head);
+    // Ease towards the wanted dimming instead of snapping.
+    this.curtainMat.opacity += (dim - this.curtainMat.opacity) * Math.min(1, delta * 4);
+    this.curtain.visible = this.curtainMat.opacity > 0.01;
     this.player.head.getWorldDirection(this.forward).negate();
     this.status.position.copy(this.head).addScaledVector(this.forward, STATUS_AHEAD_M);
     this.status.position.y -= STATUS_DROP_M;
@@ -208,14 +243,17 @@ export class DeskSystem extends createSystem({
     if (!e) return;
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
       this.status.visible = false;
+      this.curtain.visible = false;
       return;
     }
     if (e.getValue(DeskRoot, 'placed')) {
       if (this.readyLeft > 0) {
         this.readyLeft -= delta;
-        this.showStatus('Ready!', delta, false);
+        this.showStatus('Ready!', delta, false, 0);
       } else {
         this.status.visible = false;
+        this.curtain.visible = false;
+        this.curtainMat.opacity = 0;
       }
       return;
     }
@@ -223,11 +261,11 @@ export class DeskSystem extends createSystem({
     this.waited += delta;
     if (this.waited < TABLE_WAIT_S) {
       const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
-      this.showStatus(`Finding your table${dots}`, delta, true);
+      this.showStatus(`Finding your table${dots}`, delta, true, CURTAIN_WAIT);
       return;
     }
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true);
+    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT);
 
     // No table: a ghost book follows the right hand; a pinch puts it down.
     // (The hand's ray origin follows a tracked hand everywhere, the emulator included.)
