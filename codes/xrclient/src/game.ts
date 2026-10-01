@@ -15,6 +15,7 @@ import {
   Color,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -59,6 +60,7 @@ import {
   type Verdict,
 } from './game/core.js';
 import { SPECIES, type Species } from './assets.js';
+import { Home, type Device, type PlayMode } from './home/home.js';
 import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
 import { LocalStore } from './storage.js';
@@ -307,6 +309,13 @@ export class GameSystem extends createSystem({
   private pausedPerf = 0;
   private pausedTotal = 0;
   private welcomeShown?: boolean;
+  /** The home page over the browser view; the game shows it while choosing what to play. */
+  private home!: Home;
+  private wantHome = true;
+  /** What to start once the headset session opens, chosen on the home page. */
+  private pendingXr?: PlayMode;
+  private wasImmersive = false;
+  private homeWasShown = false;
   private recapIn = -1;
   private stage!: Stage;
   private envelopes = new Map<Entity, Envelope>();
@@ -334,7 +343,11 @@ export class GameSystem extends createSystem({
         if (ev.code === 'KeyT') this.emulatorTouch();
         // 1, 2, 3: open the first, second or third menu envelope, in or out of XR.
         const pick = ['Digit1', 'Digit2', 'Digit3'].indexOf(ev.code);
-        if (pick >= 0) {
+        // From the home page the keys start a game straight away, in this view.
+        if (pick >= 0 && this.home.visible) {
+          this.wantHome = false;
+          this.start((['race', 'balloon_burst', 'orb_forge'] as MenuChoice[])[pick]);
+        } else if (pick >= 0) {
           const e = [...this.queries.buttons.entities][pick];
           if (e) this.pressButton(e);
         }
@@ -370,6 +383,14 @@ export class GameSystem extends createSystem({
       this.store = store;
       for (const batch of this.unsaved.splice(0)) void store.record(batch.events, batch.mode);
     });
+
+    this.home = new Home(
+      this.world.camera as PerspectiveCamera,
+      () => this.deskEntity()?.object3D?.getObjectByName('popup-book') ?? undefined,
+      this.world.xrEnabled,
+      (mode, device) => this.homePlay(mode, device),
+      () => this.goHome(),
+    );
 
     Core.start(Date.now() >>> 0)
       .then((core) => {
@@ -644,12 +665,16 @@ export class GameSystem extends createSystem({
   /** The paper title stands in for the score line while the menu is up. */
   private showTitle(): void {
     if (!this.title) return;
+    if (this.homeWasShown) {
+      this.title.visible = false;
+      return;
+    }
     const menu = this.phase === 'menu';
     this.title.visible = menu;
     this.score.mesh.visible = !menu && !this.race;
   }
 
-  private showMenu(): void {
+  private showMenu(only: 'all' | 'practice' = 'all'): void {
     this.phase = 'menu';
     this.tintPortal(null);
     const desk = this.deskEntity()!.object3D!;
@@ -673,7 +698,8 @@ export class GameSystem extends createSystem({
       ['orb_forge', T.gameName.orb_forge, 0.135, 0x3469c4],
     ];
     for (const [game, title, x, color] of games) {
-      this.addEnvelope(game, title, x, color);
+      if (only === 'practice' && game === 'race') continue;
+      this.addEnvelope(game, title, only === 'practice' ? x - 0.0675 : x, color);
     }
   }
 
@@ -909,7 +935,74 @@ export class GameSystem extends createSystem({
     this.raceState = undefined;
     this.score.set(T.title);
     this.score.mesh.visible = true;
-    this.showMenu();
+    this.backToMenu();
+  }
+
+  /** After a game: the home page outside the headset, the envelopes in it. */
+  private backToMenu(): void {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      this.phase = 'menu';
+      this.wantHome = true;
+    } else {
+      this.showMenu();
+    }
+  }
+
+  /** A choice on the home page: play here, or open the headset session first. */
+  private homePlay(mode: PlayMode, device: Device): void {
+    if (this.phase !== 'menu') return;
+    this.wantHome = false;
+    if (device === 'xr') {
+      this.pendingXr = mode;
+      void this.world.launchXR();
+      return;
+    }
+    if (mode === 'race') this.start('race');
+    else this.showMenu('practice');
+  }
+
+  /** The Home button over the browser game: leave whatever is on and go back. */
+  private goHome(): void {
+    if (this.race || this.phase === 'recap') {
+      this.endRace();
+    } else {
+      this.clear(this.queries.buttons);
+      this.envelopes.clear();
+      this.opening = undefined;
+      this.clearPlay();
+      this.score.set(T.title);
+    }
+    this.phase = 'menu';
+    this.wantHome = true;
+  }
+
+  /** Shows the home page while choosing, outside the headset, and keeps the 3D menu off it. */
+  private runHome(): void {
+    const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    // Leaving the headset brings the home page back once the game is over.
+    if (this.wasImmersive && !immersive && this.phase === 'menu') this.wantHome = true;
+    this.wasImmersive = immersive;
+    const home = !immersive && this.phase === 'menu' && this.wantHome;
+    if (home) {
+      if (this.queries.buttons.entities.size > 0) {
+        this.clear(this.queries.buttons);
+        this.envelopes.clear();
+      }
+      this.home.show();
+      this.home.update();
+    } else {
+      this.home.hide(!immersive && this.phase !== 'loading');
+    }
+    // The page has its own title; the 3D title and score come back after it.
+    if (home !== this.homeWasShown) {
+      this.homeWasShown = home;
+      if (home) {
+        if (this.title) this.title.visible = false;
+        this.score.mesh.visible = false;
+      } else {
+        this.showTitle();
+      }
+    }
   }
 
   private clearPlay(): void {
@@ -1409,7 +1502,7 @@ export class GameSystem extends createSystem({
     this.played += 1;
     if (this.played >= WAVE) {
       this.score.set(`Wave done! ${this.score.value}`);
-      this.showMenu();
+      this.backToMenu();
       return;
     }
     this.phase = 'playing';
@@ -1455,7 +1548,8 @@ export class GameSystem extends createSystem({
    * robot window stands during play; it shows only while choosing a game.
    */
   private showWelcomeInMenuOnly(): void {
-    const show = this.world.visibilityState.peek() === VisibilityState.NonImmersive && this.phase === 'menu';
+    // The home page replaced the welcome card.
+    const show = false;
     if (show === this.welcomeShown) return;
     // A screen-space panel is drawn from its own list, whatever its object's
     // visibility, so the card's root element is taken out of the layout.
@@ -1471,7 +1565,14 @@ export class GameSystem extends createSystem({
     showStickerBackings(this.world.visibilityState.peek() !== VisibilityState.NonImmersive);
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
-    if (this.phase === 'menu' && placed && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
+    this.runHome();
+    const onHome = this.home.visible;
+    if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
+      const mode = this.pendingXr;
+      this.pendingXr = undefined;
+      if (mode === 'race') this.start('race');
+      else this.showMenu('practice');
+    } else if (this.phase === 'menu' && placed && !onHome && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
       this.showMenu();
     }
     this.trackTips(delta);
