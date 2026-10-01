@@ -1,5 +1,6 @@
 import { CanvasTexture, DoubleSide, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from '@iwsdk/core';
 
+import { drawGlyphs, glyphWidth, hasGlyphs, whenGlyphsLoad } from './glyphs.js';
 import { INK, PAPER } from './palette.js';
 
 export interface LabelOptions {
@@ -53,6 +54,12 @@ export class Label {
     this.mesh = new Mesh(plane, material);
     this.mesh.renderOrder = 10;
     this.set(text);
+    // Labels drawn before the paper letters loaded are drawn again with them.
+    whenGlyphsLoad(() => {
+      const t = this.text;
+      this.text = '';
+      this.set(t);
+    });
   }
 
   get value(): string {
@@ -68,8 +75,16 @@ export class Label {
     const height = this.opts.height * (fraction ? FRACTION_TALL : 1);
     const h = Math.round(height * PX_PER_M);
     const font = (px: number) => `700 ${px}px "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif`;
+    // Numbers and capital labels are cut from the paper letters; anything
+    // with small letters (questions, units) keeps the font.
+    const paperLetters = hasGlyphs(text);
+    const glyphPx = (cap: number) => h * cap;
     let w: number;
-    if (fraction) {
+    if (paperLetters && fraction) {
+      w = Math.max(glyphWidth(fraction[1], glyphPx(0.34)), glyphWidth(fraction[2], glyphPx(0.34))) + h * 0.7;
+    } else if (paperLetters) {
+      w = glyphWidth(text, glyphPx(0.54)) + h * 0.6;
+    } else if (fraction) {
       ctx.font = font(h * 0.42);
       w = Math.max(ctx.measureText(fraction[1]).width, ctx.measureText(fraction[2]).width) + h * 0.7;
     } else {
@@ -111,7 +126,16 @@ export class Label {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     const cx = width / 2;
-    if (fraction) {
+    if (paperLetters && fraction) {
+      const ink = hex(this.opts.ink);
+      const px = glyphPx(0.34);
+      drawGlyphs(c, fraction[1], cx - glyphWidth(fraction[1], px) / 2, h * 0.29 - px / 2, px, ink);
+      drawGlyphs(c, fraction[2], cx - glyphWidth(fraction[2], px) / 2, h * 0.73 - px / 2, px, ink);
+      c.fillRect(cx - width * 0.32, h * 0.49, width * 0.64, Math.max(2, h * 0.045));
+    } else if (paperLetters) {
+      const px = glyphPx(0.54);
+      drawGlyphs(c, text, cx - glyphWidth(text, px) / 2, h * 0.5 - px / 2, px, hex(this.opts.ink));
+    } else if (fraction) {
       c.font = font(h * 0.4);
       c.fillText(fraction[1], cx, h * 0.29);
       c.fillText(fraction[2], cx, h * 0.73);

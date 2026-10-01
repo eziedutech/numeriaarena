@@ -730,7 +730,7 @@ export class GameSystem extends createSystem({
     this.kind = choice;
     this.phase = 'playing';
     // Practice keeps its own running score where the title stood.
-    this.score.set('0 points');
+    this.score.set(T.points(0));
     this.spawnPractice();
   }
 
@@ -1084,7 +1084,7 @@ export class GameSystem extends createSystem({
       this.timerBar.visible = false;
     }
     if (this.race) this.refreshRace();
-    else this.score.set(`${v.total_points} points`);
+    else this.score.set(T.points(v.total_points));
     const creature = this.creature();
     if (!creature) return;
     const obj = creature.object3D!;
