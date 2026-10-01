@@ -1,4 +1,5 @@
 import {
+  Box3,
   createSystem,
   Entity,
   GrabSystem,
@@ -124,13 +125,13 @@ const HOME = new Vector3(0, 0.023, -0.215);
  */
 const LINE_SIZE = 5;
 const LINE_Z = -0.245;
-const LINE_GAP = 0.092;
+/** Space between two animals in the line. */
+const LINE_SPACE = 0.014;
 const LINE_SCALE = 0.68;
 const LINE_PAPER = 0xfbf6ec;
 /** Where an animal goes after its turn: off the back right of the table. */
 const EXIT = new Vector3(0.38, 0.023, LINE_Z);
-/** Place `k` in the line (0 is the front). */
-const linePlace = (k: number) => new Vector3((2 - k) * LINE_GAP, 0.023, LINE_Z);
+
 /**
  * Foldlings show their side to the player, head to the right and turned a
  * little towards them: origami animals read as animals in profile.
@@ -220,6 +221,15 @@ interface Tween {
 }
 
 type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap';
+/** An animal waiting in the line behind the book. */
+interface LineAnimal {
+  species: Species;
+  entity: Entity;
+  offerId: number;
+  /** Its length across the table at line size. */
+  width: number;
+}
+
 /** A balloon's lane and drift: its own pace and where in its swing it is. */
 interface Drift {
   lane: number;
@@ -274,7 +284,7 @@ export class GameSystem extends createSystem({
   private tipNow = new Vector3();
   private lastPoke = '';
   /** The animals waiting their turn behind the book, front of the line first. */
-  private line: { species: Species; entity: Entity; offerId: number }[] = [];
+  private line: LineAnimal[] = [];
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -1011,6 +1021,20 @@ export class GameSystem extends createSystem({
   private lineFrom = 1;
 
   /**
+   * Places along the line for animals of these widths: front on the right,
+   * each one beside the next with a small gap, the whole line centred.
+   */
+  private linePlaces(widths: number[]): Vector3[] {
+    const total = widths.reduce((sum, w) => sum + w, 0) + LINE_SPACE * (widths.length - 1);
+    let right = total / 2;
+    return widths.map((w) => {
+      const at = new Vector3(right - w / 2, 0.023, LINE_Z);
+      right -= w + LINE_SPACE;
+      return at;
+    });
+  }
+
+  /**
    * Makes the line show the animals for offers `from` to `from + 4`, as they
    * stand; rebuilt at once only when it does not match.
    */
@@ -1019,36 +1043,43 @@ export class GameSystem extends createSystem({
     const want = Array.from({ length: LINE_SIZE }, (_, k) => speciesFor(from + k));
     if (this.line.length === LINE_SIZE && this.line.every((a, k) => a.species === want[k] && a.offerId === from + k)) return;
     for (const a of this.line) this.remove(a.entity);
-    this.line = want.map((species, k) => this.lineAnimal(species, from + k, linePlace(k), LINE_SCALE));
+    this.line = want.map((species, k) => this.lineAnimal(species, from + k));
+    const places = this.linePlaces(this.line.map((a) => a.width));
+    this.line.forEach((a, k) => a.entity.object3D!.position.copy(places[k]));
   }
 
-  private lineAnimal(species: Species, offerId: number, at: Vector3, scale: number): { species: Species; entity: Entity; offerId: number } {
+  /** A white paper animal for the line, measured so the line can space it. */
+  private lineAnimal(species: Species, offerId: number): LineAnimal {
     const fig = makeFoldling(LINE_PAPER, species);
     for (const c of fig.root.getObjectByName('flag_anchor')?.children ?? []) c.visible = false;
     fig.root.name = `line-${species}`;
     fig.root.rotation.y = 0;
-    fig.root.position.copy(at);
-    fig.root.scale.setScalar(scale);
-    return { species, entity: this.add(fig.root), offerId };
+    fig.root.scale.setScalar(LINE_SCALE);
+    fig.root.updateMatrixWorld(true);
+    const size = new Box3().setFromObject(fig.root).getSize(new Vector3());
+    return { species, entity: this.add(fig.root), offerId, width: size.x };
   }
 
   /**
    * The front animal leaves the line to bring offer `offerId`; the others
-   * step up one place and a new one joins at the back. Returns where the
-   * caller should start the creature.
+   * step up and a new one joins at the back. Returns where the caller should
+   * start the creature.
    */
   private callFromLine(offerId: number): Vector3 {
     this.syncLine(offerId);
     const front = this.line.shift()!;
     const from = front.entity.object3D!.position.clone();
     this.remove(front.entity);
-    this.line.forEach((a, k) => {
-      a.entity.object3D && this.tween(a.entity.object3D, linePlace(k), 0.6, 0.012, LINE_SCALE);
-    });
     const next = offerId + LINE_SIZE;
-    const joiner = this.lineAnimal(speciesFor(next), next, linePlace(LINE_SIZE - 1).add(new Vector3(-LINE_GAP, 0, 0)), 0.001);
-    this.tween(joiner.entity.object3D!, linePlace(LINE_SIZE - 1), 0.6, 0.012, LINE_SCALE);
+    const joiner = this.lineAnimal(speciesFor(next), next);
     this.line.push(joiner);
+    const places = this.linePlaces(this.line.map((a) => a.width));
+    const obj = joiner.entity.object3D!;
+    obj.position.copy(places[LINE_SIZE - 1]).add(new Vector3(-joiner.width, 0, 0));
+    obj.scale.setScalar(0.001);
+    this.line.forEach((a, k) => {
+      if (a.entity.object3D) this.tween(a.entity.object3D, places[k], 0.6, 0.012, LINE_SCALE);
+    });
     this.lineFrom = offerId + 1;
     return from;
   }

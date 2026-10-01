@@ -296,15 +296,16 @@ interface Scanned {
   eye?: [number, number];
 }
 
+/** Heights rank the animals by size (elephant, cow, dog and chicken, cat and rabbit, bird, fish), not true to life. */
 const SCANNED: Record<Species, Scanned> = {
-  chicken: { height: 0.075, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.8, 0.875] },
-  cat: { height: 0.052, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.86, 0.6] },
-  rabbit: { height: 0.075, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.82, 0.58] },
-  elephant: { height: 0.055, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.9, 0.6] },
+  chicken: { height: 0.062, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.8, 0.875] },
+  cat: { height: 0.05, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.86, 0.6] },
+  rabbit: { height: 0.056, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.82, 0.58] },
+  elephant: { height: 0.085, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.9, 0.6] },
   dog: { height: 0.06, turn: Math.PI, flag: [0.4, 0.7] },
-  cow: { height: 0.058, turn: 0, flag: [0.45, 0.85] },
-  bird: { height: 0.06, turn: Math.PI, flag: [0.4, 0.6] },
-  fish: { height: 0.045, turn: Math.PI / 2, flag: [0.45, 0.85] },
+  cow: { height: 0.072, turn: 0, flag: [0.45, 0.85] },
+  bird: { height: 0.044, turn: Math.PI, flag: [0.4, 0.6] },
+  fish: { height: 0.036, turn: Math.PI / 2, flag: [0.45, 0.85] },
 };
 
 /** Tone of each material suffix: 0 darkest to 4 palest. */
