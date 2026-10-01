@@ -35,6 +35,27 @@ const ICONS: Record<string, string> = {
   watch: '<rect width="54" height="54" fill="#b198ea"/><path d="M5 27q22-20 44 0q-22 20-44 0z" fill="#fff8ec"/><path d="M27 12q11 3 22 15q-11 12-22 15z" fill="#f3e6c9"/><circle cx="27" cy="27" r="7" fill="#3a3f4b"/>',
 };
 
+/** A small paper town: flat folded houses, trees, a bridge and a tower, each with a light and a shaded side. */
+const TOWN = `
+<rect x="0" y="150" width="300" height="30" fill="#c9b07a"/>
+<path d="M0 150h300v8H0z" fill="#b89d66"/>
+<path d="M18 104h40v46H18z" fill="#f2716b"/><path d="M38 104h20v46H38z" fill="#c9554f"/>
+<path d="M14 106 38 80 62 106z" fill="#3a3f4b"/><path d="M38 80 62 106H38z" fill="#2b2f38"/>
+<rect x="31" y="124" width="12" height="26" fill="#fff8ec"/>
+<path d="M74 60h34v90H74z" fill="#3469c4"/><path d="M91 60h17v90H91z" fill="#2a54a0"/>
+<path d="M70 62 91 34 112 62z" fill="#e8b64c"/><path d="M91 34 112 62H91z" fill="#c99a34"/>
+<rect x="80" y="74" width="8" height="10" fill="#fff8ec"/><rect x="94" y="74" width="8" height="10" fill="#f3e6c9"/>
+<rect x="80" y="96" width="8" height="10" fill="#fff8ec"/><rect x="94" y="96" width="8" height="10" fill="#f3e6c9"/>
+<path d="M122 112h46v38h-46z" fill="#3fb6a0"/><path d="M145 112h23v38h-23z" fill="#2f8f7d"/>
+<path d="M118 114 145 92 172 114z" fill="#f2716b"/><path d="M145 92 172 114H145z" fill="#c9554f"/>
+<path d="M186 150 196 104 206 150z" fill="#3fb6a0"/><path d="M196 104 206 150H196z" fill="#2f8f7d"/>
+<path d="M200 150 212 116 224 150z" fill="#3fb6a0"/><path d="M212 116 224 150H212z" fill="#2f8f7d"/>
+<path d="M232 100h44v50h-44z" fill="#b198ea"/><path d="M254 100h22v50h-22z" fill="#8f76c9"/>
+<path d="M228 102 254 76 280 102z" fill="#3469c4"/><path d="M254 76 280 102H254z" fill="#2a54a0"/>
+<rect x="247" y="122" width="12" height="28" fill="#fff8ec"/>
+<path d="M150 150q20-14 40 0" fill="none" stroke="#e8b64c" stroke-width="5"/>
+`;
+
 const SYMBOLS = [
   '<path d="M17 3 21 13 32 13 23 20 26 31 17 24 8 31 11 20 2 13 13 13z" fill="#e8b64c"/>',
   '<circle cx="17" cy="17" r="12" fill="#3469c4"/>',
@@ -74,6 +95,12 @@ const CSS = `
 #home .card svg { width: 54px; height: 54px; flex: none; }
 #home .card.muted { filter: saturate(0.25) brightness(0.92); }
 #home .card .soon { position: absolute; right: -8px; top: -10px; background: ${INK}; padding: 2px 6px; }
+#home .town { position: absolute; left: 40px; top: 36px; width: 350px; background: ${PAPER}; padding: 14px 16px 12px;
+  border: 0; text-align: left; cursor: pointer; transition: transform 0.12s; }
+#home .town:hover { transform: scale(1.03); }
+#home .town .mat { background: #f1e3c4; margin-top: 8px; display: block; }
+#home .town .sub { font-size: 15px; margin-top: 6px; }
+#home .town .soon { position: absolute; right: -8px; top: -10px; background: ${INK}; padding: 2px 6px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
 #home .footer { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; background: ${PAPER}; }
 #home .footer button { padding: 10px 16px; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
@@ -91,6 +118,9 @@ const CSS = `
 #home .seat, #home .sym { background: #f1e3c4; border: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 #home .seat { width: 38px; height: 34px; font-family: inherit; font-weight: 700; font-size: 16px; color: ${INK}; }
 #home .seat.on { background: ${COLORS.sun}; }
+#home .rowlabel { width: 52px; font-size: 14px; }
+#home .seatno { font-size: 15px; font-weight: 700; min-height: 20px; margin: -4px 0 4px; }
+#home .row + .row { margin-top: 6px; }
 #home .sym { width: 48px; height: 48px; }
 #home .sym.on { background: ${COLORS.teal}; }
 #home .btn { padding: 12px 18px; border: 0; cursor: pointer; display: flex; align-items: center; }
@@ -351,6 +381,21 @@ export class Home {
     this.card('right', 2, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
     this.card('right', 3, t.watch, 'watch', COLORS.violet, () => this.message(t.watch[0], t.soonBody.watch), true);
 
+    // The town the player builds with the Folds they earn: a paper mat with a small town on it.
+    const town = el('button', 'town shadow', this.stage);
+    town.appendChild(paperText(t.town[0], 20, INK));
+    const mat = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    mat.setAttribute('viewBox', '0 0 300 180');
+    mat.setAttribute('width', '318');
+    mat.setAttribute('height', '150');
+    mat.classList.add('mat');
+    mat.innerHTML = TOWN;
+    town.appendChild(mat);
+    el('div', 'sub', town).textContent = t.town[1];
+    el('span', 'soon', town).appendChild(paperText(t.soon, 12, PAPER));
+    town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}. ${t.soon}`);
+    town.addEventListener('click', () => this.message(t.town[0], t.soonBody.town));
+
     const footer = el('div', 'footer shadow', this.stage);
     const keys = Object.keys(HOME_TEXT.en.pages) as (keyof HomeText['pages'])[];
     t.footer.forEach((label, i) => {
@@ -466,15 +511,27 @@ export class Home {
       box.addEventListener('input', () => (box.nextElementSibling as HTMLInputElement | null)?.focus());
     }
     el('div', 'step', body).textContent = t.seat;
-    const seats = el('div', 'row', body);
-    for (let n = 1; n <= 12; n += 1) {
-      const s = el('button', 'seat', seats);
-      s.textContent = String(n);
-      s.addEventListener('click', () => {
-        seats.querySelectorAll('.seat').forEach((o) => o.classList.remove('on'));
-        s.classList.add('on');
-      });
-    }
+    // Two rows of 0 to 9: tens, then ones (seat 1 is 0 then 1, seat 40 is 4 then 0).
+    const digits = [-1, -1];
+    const shown = el('div', 'seatno', body);
+    const showSeat = () => {
+      shown.textContent = digits.every((d) => d >= 0) ? `${t.seatIs} ${digits[0] * 10 + digits[1]}` : '';
+    };
+    [t.tens, t.ones].forEach((rowLabel, r) => {
+      const row = el('div', 'row', body);
+      el('span', 'rowlabel', row).textContent = rowLabel;
+      for (let n = 0; n <= 9; n += 1) {
+        const b = el('button', 'seat', row);
+        b.textContent = String(n);
+        b.setAttribute('aria-label', `${rowLabel} ${n}`);
+        b.addEventListener('click', () => {
+          row.querySelectorAll('.seat').forEach((o) => o.classList.remove('on'));
+          b.classList.add('on');
+          digits[r] = n;
+          showSeat();
+        });
+      }
+    });
     el('div', 'step', body).textContent = t.picture;
     const pics = el('div', 'row', body);
     SYMBOLS.forEach((sym) => {

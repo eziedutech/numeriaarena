@@ -26,6 +26,7 @@ const EN = {
   teacher: ['TEACHER SIGN IN', 'Classes, rooms and reports'],
   tips: ['MATH TIPS', 'Ways to understand primary maths'],
   watch: ['WATCH A MATCH', 'With a watch code, or the demo match'],
+  town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
   soon: 'SOON',
   footer: ['How to play', 'For parents', 'Privacy', 'Credits and licenses', 'About'],
   close: 'CLOSE',
@@ -33,6 +34,9 @@ const EN = {
   go: 'GO',
   classCode: '1. Class code (on your card or the class screen)',
   seat: '2. Your seat number',
+  tens: 'Tens',
+  ones: 'Ones',
+  seatIs: 'Seat',
   picture: '3. Your picture password (3 pictures)',
   serverSoon:
     'Class sign-in opens when the class server is ready. Until then you can practise and race the robots without signing in.',
@@ -42,6 +46,7 @@ const EN = {
   email: 'EMAIL ME A SIGN-IN LINK',
   soonBody: {
     tips: 'Short lessons and tips for every topic in the game are on their way.',
+    town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
     watch: 'Watching a class match with a watch code, and the always-on demo match, come with the class server.',
     smartboard: 'On a smartboard the whole class helps the headset players. This mode is coming in a later update.',
     accessibility:
@@ -82,6 +87,7 @@ const ID: typeof EN = {
   teacher: ['MASUK SEBAGAI GURU', 'Kelas, ruang main, dan laporan'],
   tips: ['TIPS MATEMATIKA', 'Cara memahami matematika SD'],
   watch: ['TONTON PERTANDINGAN', 'Dengan kode tonton, atau pertandingan demo'],
+  town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
   soon: 'SEGERA',
   footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Kredit dan lisensi', 'Tentang'],
   close: 'TUTUP',
@@ -89,6 +95,9 @@ const ID: typeof EN = {
   go: 'MASUK',
   classCode: '1. Kode kelas (di kartumu atau di layar kelas)',
   seat: '2. Nomor kursimu',
+  tens: 'Puluhan',
+  ones: 'Satuan',
+  seatIs: 'Kursi',
   picture: '3. Sandi gambarmu (3 gambar)',
   serverSoon:
     'Masuk kelas dibuka saat server kelas siap. Sampai saat itu kamu tetap bisa berlatih dan lomba melawan robot tanpa masuk.',
@@ -98,6 +107,7 @@ const ID: typeof EN = {
   email: 'KIRIM TAUTAN MASUK KE EMAIL',
   soonBody: {
     tips: 'Pelajaran singkat dan tips untuk setiap topik di game sedang disiapkan.',
+    town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
     watch: 'Menonton pertandingan kelas dengan kode tonton, dan pertandingan demo, hadir bersama server kelas.',
     smartboard: 'Di smartboard, seluruh kelas membantu pemain headset. Mode ini hadir di pembaruan berikutnya.',
     accessibility:
