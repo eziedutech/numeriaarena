@@ -3,7 +3,7 @@ import { Entity, Group, Object3D, Vector3 } from '@iwsdk/core';
 import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
 import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
-import type { Emote, RaceState, Recap } from './game/core.js';
+import type { Emote, Highlight, RaceState, Recap } from './game/core.js';
 import { T } from './text.js';
 
 /**
@@ -22,6 +22,22 @@ const BOARD_Z = -0.15;
 /** Results rows: text height and spacing, larger than the live scoreboard's. */
 const RECAP_TEXT = 0.036;
 const RECAP_ROW = 0.052;
+/** Each highlight's paper ribbon in the results, its size, and its width over height. */
+const RIBBON: Record<Highlight, UiName> = {
+  best_save: 'badge_label_best_comeback',
+  most_improved: 'badge_label_most_improved',
+  sharpest_aim: 'badge_label_sharpest_aim',
+  steady_streak: 'badge_label_steady_streak',
+  brave_try: 'badge_label_brave_try',
+};
+const RIBBON_SCALE = 1.6;
+const RIBBON_ASPECT: Record<string, number> = {
+  badge_label_best_comeback: 5.286,
+  badge_label_brave_try: 4.071,
+  badge_label_most_improved: 5.161,
+  badge_label_sharpest_aim: 4.821,
+  badge_label_steady_streak: 5.214,
+};
 /** The countdown turns red for the last this many ms of a round. */
 const CLOCK_WARN_MS = 10000;
 /** The countdown sits this far left of the scoreboard's centre. */
@@ -269,12 +285,23 @@ export class RaceScene {
     const rows = [...recap.players].sort((a, b) => a.place - b.place);
     rows.forEach((p, i) => {
       const who = p.bot ? T.bot(p.name) : playerName;
-      const what = p.highlight ? `, ${T.highlight[p.highlight]}` : '';
       const y = 0.014 - i * RECAP_ROW;
-      const row = this.stage.label(`${T.place(p.place)}  ${who}: ${p.points}${what}`, RECAP_TEXT, card, y, 0.004, false);
-      const badge = p.highlight ? makeBadge(p.highlight) : null;
+      const row = this.stage.label(`${T.place(p.place)}  ${who}: ${p.points}`, RECAP_TEXT, card, y, 0.004, false);
+      if (!p.highlight) return;
+      // The highlight is a paper ribbon to the right of the row and its
+      // badge to the left; the row shifts so the three stay centred.
+      const ribbon = RIBBON[p.highlight];
+      const ribbonW = UI_HEIGHT[ribbon] * RIBBON_SCALE * RIBBON_ASPECT[ribbon];
+      const rowW = row.mesh.scale.x;
+      row.mesh.position.x = -ribbonW / 2 - 0.004;
+      placeUiImage(ribbon, card, [rowW / 2 + 0.008, y, 0.005], {
+        scale: RIBBON_SCALE,
+        fallback: () =>
+          this.stage.label(T.highlight[p.highlight!], RECAP_TEXT * 0.8, card, y, 0.005, false).mesh,
+      });
+      const badge = makeBadge(p.highlight);
       if (badge) {
-        badge.position.set(-row.mesh.scale.x / 2 - 0.028, y + 0.008, 0.004);
+        badge.position.set(-ribbonW / 2 - rowW / 2 - 0.028, y + 0.008, 0.004);
         badge.scale.setScalar(0.75);
         card.add(badge);
       }
