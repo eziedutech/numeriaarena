@@ -12,9 +12,7 @@ import {
   UIKitMLAsset,
   Grabbed,
   Group,
-  Color,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
@@ -35,7 +33,6 @@ import {
   BALLOON_TAG_TOP,
   CRYSTAL_HALF,
   ENVELOPE_FLAP_REST,
-  PORTAL_IDLE,
   makeEnvelope,
   makeFoldling,
   setOpacity,
@@ -46,7 +43,7 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
-import { ACCENTS, accentForSkill, CORRECT, paper, shade, tint, TRY_AGAIN } from './art/palette.js';
+import { ACCENTS, accentForSkill, CORRECT, paper, TRY_AGAIN } from './art/palette.js';
 import { placeUiImage, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
@@ -118,7 +115,22 @@ const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fr
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
 /** The portal at the back of the book, where creatures come from and go home to. */
+/** Behind the book, where the paper bird of the old stand-in flies to. */
 const HOME = new Vector3(0, 0.023, -0.215);
+/**
+ * The line of animals waiting behind the book: five places across the back
+ * of the table, front of the line on the right (they face +X, in profile).
+ * They are plain white paper until called, then take the question's colour.
+ */
+const LINE_SIZE = 5;
+const LINE_Z = -0.245;
+const LINE_GAP = 0.092;
+const LINE_SCALE = 0.68;
+const LINE_PAPER = 0xfbf6ec;
+/** Where an animal goes after its turn: off the back right of the table. */
+const EXIT = new Vector3(0.38, 0.023, LINE_Z);
+/** Place `k` in the line (0 is the front). */
+const linePlace = (k: number) => new Vector3((2 - k) * LINE_GAP, 0.023, LINE_Z);
 /**
  * Foldlings show their side to the player, head to the right and turned a
  * little towards them: origami animals read as animals in profile.
@@ -157,8 +169,6 @@ const BOB_LOW = 0.005;
 const RISE_SPEED = 0.035;
 const RISE_GROW_M = 0.025;
 const RISE_FADE_M = 0.035;
-/** Balloons fade over this much below the line of sight, if the eye line comes lower than their drift. */
-const FADE_M = 0.06;
 /** A fading balloon's top may pass the line of sight to the question by this much. */
 const FADE_PAST_M = 0.015;
 /** More lanes than balloons, so a balloon always finds a free one. */
@@ -175,10 +185,6 @@ const POKE_INTO_SHARE = 0.5;
 const TIP_SMOOTH_S = 0.1;
 /** The T helper picks the target nearest the pointing direction within this angle. */
 const TOUCH_CONE = (15 * Math.PI) / 180;
-/** How quickly the portal's disc takes a new creature's colour (per second, about 0.5 s). */
-const PORTAL_TINT_RATE = 6;
-/** The portal's inner ring turns at this rate (radians per second). */
-const PORTAL_SPIN = 0.6;
 /** Hosts where the emulator runs; the T touch helper exists only there. */
 const EMULATOR_HOSTS = ['localhost', '127.0.0.1'];
 /** A joined orb flies to the creature in this long (seconds). */
@@ -267,10 +273,8 @@ export class GameSystem extends createSystem({
   private tipVel = [new Vector3(), new Vector3()];
   private tipNow = new Vector3();
   private lastPoke = '';
-  private portalRing?: Object3D;
-  /** The portal's paper disc, which takes the colour of the creature coming through. */
-  private portalDisc?: MeshStandardMaterial;
-  private portalTo = new Color(PORTAL_IDLE);
+  /** The animals waiting their turn behind the book, front of the line first. */
+  private line: { species: Species; entity: Entity; offerId: number }[] = [];
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -502,23 +506,6 @@ export class GameSystem extends createSystem({
     });
   }
 
-  /** Eases the portal's paper disc towards `color` (the creature's), or its idle colour when null. */
-  private tintPortal(color: number | null): void {
-    if (!this.portalDisc) {
-      const disc = this.deskEntity()?.object3D?.getObjectByName('portal-disc') as Mesh | undefined;
-      if (!disc) return;
-      this.portalDisc = disc.material as MeshStandardMaterial;
-    }
-    this.portalTo.setHex(color ?? PORTAL_IDLE);
-  }
-
-  /** The portal's star frame turns slowly, so the doorway looks alive. */
-  private spinPortal(delta: number): void {
-    if (!this.portalRing) this.portalRing = this.deskEntity()?.object3D?.getObjectByName('portal-frame');
-    if (this.portalRing) this.portalRing.rotation.z += delta * PORTAL_SPIN;
-    this.portalDisc?.color.lerp(this.portalTo, Math.min(1, delta * PORTAL_TINT_RATE));
-  }
-
   /**
    * Emulator helper, only on this computer (localhost): T touches whatever
    * a hand highlights or points at, as if the fingertip reached it. Moving an
@@ -676,7 +663,7 @@ export class GameSystem extends createSystem({
 
   private showMenu(only: 'all' | 'practice' = 'all'): void {
     this.phase = 'menu';
-    this.tintPortal(null);
+    this.syncLine(this.lineFrom);
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
     if (!this.title && !this.titleAsked) {
@@ -990,6 +977,7 @@ export class GameSystem extends createSystem({
       }
       this.home.show();
       this.home.update();
+      if (this.line.length === 0 && this.deskEntity()) this.syncLine(this.lineFrom);
     } else {
       this.home.hide(!immersive && this.phase !== 'loading');
     }
@@ -1021,6 +1009,52 @@ export class GameSystem extends createSystem({
     this.spawnOffer(this.core.next(this.kind));
   }
 
+  /** The offer the front of the line is waiting for. */
+  private lineFrom = 1;
+
+  /**
+   * Makes the line show the animals for offers `from` to `from + 4`, as they
+   * stand; rebuilt at once only when it does not match.
+   */
+  private syncLine(from: number): void {
+    this.lineFrom = from;
+    const want = Array.from({ length: LINE_SIZE }, (_, k) => speciesFor(from + k));
+    if (this.line.length === LINE_SIZE && this.line.every((a, k) => a.species === want[k] && a.offerId === from + k)) return;
+    for (const a of this.line) this.remove(a.entity);
+    this.line = want.map((species, k) => this.lineAnimal(species, from + k, linePlace(k), LINE_SCALE));
+  }
+
+  private lineAnimal(species: Species, offerId: number, at: Vector3, scale: number): { species: Species; entity: Entity; offerId: number } {
+    const fig = makeFoldling(LINE_PAPER, species);
+    for (const c of fig.root.getObjectByName('flag_anchor')?.children ?? []) c.visible = false;
+    fig.root.name = `line-${species}`;
+    fig.root.rotation.y = 0;
+    fig.root.position.copy(at);
+    fig.root.scale.setScalar(scale);
+    return { species, entity: this.add(fig.root), offerId };
+  }
+
+  /**
+   * The front animal leaves the line to bring offer `offerId`; the others
+   * step up one place and a new one joins at the back. Returns where the
+   * caller should start the creature.
+   */
+  private callFromLine(offerId: number): Vector3 {
+    this.syncLine(offerId);
+    const front = this.line.shift()!;
+    const from = front.entity.object3D!.position.clone();
+    this.remove(front.entity);
+    this.line.forEach((a, k) => {
+      a.entity.object3D && this.tween(a.entity.object3D, linePlace(k), 0.6, 0.012, LINE_SCALE);
+    });
+    const next = offerId + LINE_SIZE;
+    const joiner = this.lineAnimal(speciesFor(next), next, linePlace(LINE_SIZE - 1).add(new Vector3(-LINE_GAP, 0, 0)), 0.001);
+    this.tween(joiner.entity.object3D!, linePlace(LINE_SIZE - 1), 0.6, 0.012, LINE_SCALE);
+    this.line.push(joiner);
+    this.lineFrom = offerId + 1;
+    return from;
+  }
+
   private spawnOffer(offer: Offer | RaceOffer): void {
     this.offer = offer;
     this.kind = offer.game;
@@ -1033,14 +1067,15 @@ export class GameSystem extends createSystem({
         (boss ? ' | boss' : ''),
     );
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
-    this.tintPortal(color);
     this.species = boss ? 'elephant' : speciesFor(offer.offer_id);
     const figure = makeFoldling(color, this.species);
     this.figure = figure;
     const { root } = figure;
+    // It steps out of the front of the line behind the book.
+    const from = this.callFromLine(offer.offer_id);
     root.rotation.y = CREATURE_YAW;
-    root.scale.setScalar(0.2);
-    root.position.copy(HOME);
+    root.scale.setScalar(LINE_SCALE);
+    root.position.copy(from);
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
     // The card above the creature says what to do: the question in Balloon
@@ -1228,7 +1263,7 @@ export class GameSystem extends createSystem({
       this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
       this.phase = 'between';
       // Missed twice: it walks home without points.
-      this.tween(obj, HOME, 1.4, 0.02, 0.2, () => {
+      this.tween(obj, EXIT, 1.4, 0.02, 0.2, () => {
         this.remove(creature);
         this.next();
       });
@@ -1439,8 +1474,8 @@ export class GameSystem extends createSystem({
     }
     // A tween that stays in place waits out the cheer.
     this.tween(obj, obj.position.clone(), cheer.getClip().duration, 0, obj.scale.x, () => {
-      // Head (+X) towards the portal at the back of the book.
-      obj.rotation.y = Math.PI / 2;
+      // Head (+X) off the back right of the table, past the line.
+      obj.rotation.y = 0;
       const style =
         this.species === 'fish'
           ? { arc: 0.06, clip: 'idle', dur: 1.3 }
@@ -1448,7 +1483,7 @@ export class GameSystem extends createSystem({
             ? { arc: 0.12, clip: 'idle', dur: 1.1 }
             : { arc: 0.025, clip: 'hop', dur: 1.4 };
       this.figure?.play(style.clip);
-      this.tween(obj, HOME, style.dur, style.arc, this.creatureScale * 0.25, () => {
+      this.tween(obj, EXIT, style.dur, style.arc, this.creatureScale * 0.25, () => {
         this.remove(creature);
         this.next();
       });
@@ -1576,7 +1611,6 @@ export class GameSystem extends createSystem({
       this.showMenu();
     }
     this.trackTips(delta);
-    this.spinPortal(delta);
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
     if (this.phase === 'opening') this.runOpening(delta);
