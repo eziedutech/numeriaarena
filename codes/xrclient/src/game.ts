@@ -138,13 +138,11 @@ const HINTED = 3;
 /** Balloons in the mission-free paper colours: coral, cobalt, teal, sunflower. */
 const BALLOON_COLORS = [0xf2716b, 0x3469c4, 0x3fb6a0, 0xf9c74f];
 /**
- * Rising balloons. A seated child's eye is about 0.35 to 0.45 m above the
+ * Drifting balloons. A seated child's eye is about 0.35 to 0.45 m above the
  * table; the line from there to the bottom of the question card crosses the
- * balloon row at about 0.35 m. A balloon (0.117 m tall) rises until its top
- * meets that line and fades out on the way, so it never covers the question
- * while it can still be read.
+ * balloon row at about 0.35 m. A balloon (0.117 m tall) drifts no higher than
+ * where its top meets that line, so it never covers the question.
  */
-const RISE_FROM = 0.0;
 /** Upper bound; the live eye line usually sets a lower one (`balloonCeiling`). */
 const RISE_TO = 0.32;
 /** Balloon height from its origin (the old basket's foot) to its crown, and the gap kept below the eye line. */
@@ -152,14 +150,15 @@ const BALLOON_H = 0.117;
 const SIGHT_MARGIN = 0.005;
 /** Balloons always rise at least this far, even for an unusual viewpoint. */
 const MIN_CEILING = 0.07;
-/** Balloons grow in over their first few cm. */
-const GROW_M = 0.03;
-/** Balloons fade out over the last few cm of their rise instead of shrinking. */
+/** The bottom of a balloon's climb, just above the table, its speed, and how fast it grows in and fades out. */
+const BOB_LOW = 0.005;
+const RISE_SPEED = 0.035;
+const RISE_GROW_M = 0.025;
+const RISE_FADE_M = 0.035;
+/** Balloons fade over this much below the line of sight, if the eye line comes lower than their drift. */
 const FADE_M = 0.06;
 /** A fading balloon's top may pass the line of sight to the question by this much. */
 const FADE_PAST_M = 0.015;
-/** Metres per second; each rise varies from 80% to 130% of it. */
-const RISE_SPEED = 0.03;
 /** More lanes than balloons, so a balloon always finds a free one. */
 const BALLOON_LANES = 6;
 /**
@@ -213,6 +212,16 @@ interface Tween {
 }
 
 type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap';
+/** A balloon's lane and drift: its own pace and where in its swing it is. */
+interface Drift {
+  lane: number;
+  wait: number;
+  count: number;
+  t: number;
+  rate: number;
+  phase: number;
+}
+
 type MenuChoice = GameKind | 'race';
 
 export class GameSystem extends createSystem({
@@ -985,7 +994,7 @@ export class GameSystem extends createSystem({
     offer.balloons.forEach((b, i) => {
       const g = makeBalloon(BALLOON_COLORS[i % BALLOON_COLORS.length]);
       g.name = `balloon-${i}`;
-      g.position.set(0, RISE_FROM, BALLOON_Z);
+      g.position.set(0, BOB_LOW, BALLOON_Z);
       g.scale.setScalar(0.001);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
@@ -995,7 +1004,7 @@ export class GameSystem extends createSystem({
       // balloon never covers the number; a taller fraction card hangs lower.
       this.label(b.text, 0.034, g, BALLOON_TAG_TOP.y, BALLOON_TAG_TOP.z, true, 'top');
       // The first rise is staggered so the balloons do not all come up together.
-      this.launch(g, n, i * 0.6 + Math.random() * 0.4);
+      this.launch(g, n, i, 0.2);
     });
   }
 
@@ -1201,10 +1210,10 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Sends a balloon up again from the table in a lane no other balloon is
-   * using, after `wait` seconds, at its own speed.
+   * Puts balloon `index` of `count` in a lane no other balloon is using, at
+   * its own height along the climb; after `wait` seconds it starts rising.
    */
-  private launch(obj: Object3D, count: number, wait: number): void {
+  private launch(obj: Object3D, count: number, index: number, wait: number): void {
     const taken = new Set<number>();
     for (const e of this.queries.balloons.entities) {
       const lane = e.object3D?.userData.rise?.lane as number | undefined;
@@ -1212,8 +1221,18 @@ export class GameSystem extends createSystem({
     }
     const free = [...Array(BALLOON_LANES).keys()].filter((l) => !taken.has(l));
     const lane = free[Math.floor(Math.random() * free.length)] ?? 0;
-    obj.userData.rise = { lane, wait, speed: RISE_SPEED * (0.8 + 0.5 * Math.random()), count };
-    obj.position.set((lane - (BALLOON_LANES - 1) / 2) * BALLOON_GAP, RISE_FROM, BALLOON_Z);
+    const drift: Drift = {
+      lane,
+      wait,
+      count,
+      t: 0,
+      // Metres per second, each balloon at its own pace.
+      rate: RISE_SPEED * (0.8 + 0.4 * Math.random()),
+      // Spread along the climb, so they never all start over together.
+      phase: (index + 0.3 * Math.random()) / count,
+    };
+    obj.userData.rise = drift;
+    obj.position.set((lane - (BALLOON_LANES - 1) / 2) * BALLOON_GAP, BOB_LOW, BALLOON_Z);
     obj.scale.setScalar(0.001);
   }
 
@@ -1263,31 +1282,37 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Balloons rise from the table, grow in, and fade out as the top of the
-   * balloon reaches the line of sight to the question, then come back up
-   * in another free lane: the player reaches for a moving answer.
+   * Balloons rise in their own lanes from just above the table to the line
+   * of sight to the question, and on reaching it come up again from the
+   * bottom straight away: a quick fade at the top, a quick grow at the
+   * bottom. Each starts at a different height, so the others stay in view
+   * while one starts over. A balloon held by a pointer or fingertip pauses
+   * (see `hoverTargets`).
    */
   private floatBalloons(delta: number): void {
     const ceiling = this.balloonCeiling();
+    const top = Math.max(BOB_LOW + 0.05, ceiling - FADE_PAST_M);
+    const span = top - BOB_LOW;
     for (const e of this.queries.balloons.entities) {
       const obj = e.object3D;
-      const r = obj?.userData.rise as { lane: number; wait: number; speed: number; count: number } | undefined;
+      const r = obj?.userData.rise as Drift | undefined;
       if (!obj || !r || this.tweens.some((t) => t.obj === obj)) continue;
       if (r.wait > 0) {
         r.wait -= delta;
         continue;
       }
-      // A balloon being pointed at or touched holds still, so it is easy to pop.
       const hover = (obj.userData.hover as number | undefined) ?? 0;
-      if (!obj.userData.hovered) obj.position.y += r.speed * delta;
-      const grown = Math.min(1, (obj.position.y - RISE_FROM) / GROW_M);
-      const opacity = Math.max(0, Math.min(1, (ceiling - obj.position.y) / FADE_M));
-      if (obj.userData.opacity !== opacity) {
-        obj.userData.opacity = opacity;
-        setOpacity(obj, opacity);
+      if (!obj.userData.hovered) r.t += (delta * r.rate) / span;
+      // Where it is in its climb, 0 at the bottom and 1 at the top.
+      const k = (r.t + r.phase) % 1;
+      obj.position.y = BOB_LOW + span * k;
+      const grow = Math.min(1, (k * span) / RISE_GROW_M);
+      const fade = Math.min(1, ((1 - k) * span) / RISE_FADE_M);
+      if (obj.userData.opacity !== fade) {
+        obj.userData.opacity = fade;
+        setOpacity(obj, fade);
       }
-      obj.scale.setScalar(Math.max(0.001, grown) * (1 + HOVER_GROW * hover));
-      if (obj.position.y >= ceiling) this.launch(obj, r.count, 0.2 + Math.random() * 0.8);
+      obj.scale.setScalar(Math.max(0.001, grow) * (1 + HOVER_GROW * hover));
     }
   }
 
