@@ -242,3 +242,7 @@ if (process.argv[2] === 'balloon') {
     console.log(`${line.replace(/^\[game\] /, '')}\n  -> ${await balloonRound(line)}`);
   }
 }
+
+// A finished run leaves no XR session behind: an idle emulated session keeps
+// rendering the room and the game for both eyes and loads the machine.
+if (['race', 'orb', 'balloon'].includes(process.argv[2])) cli('xr', 'exit');
