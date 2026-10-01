@@ -71,6 +71,14 @@ const PRESS_GRACE_MS = 300;
 const MERGE_DIST = 0.05;
 /** Space between crystals in the row; wider than the merge distance. */
 const CRYSTAL_GAP = 0.095;
+/**
+ * Anything the player can act on grows this much while it is pointed at or a
+ * fingertip is within `HOVER_REACH` of it, and a rising balloon holds still.
+ */
+const HOVER_GROW = 0.12;
+const HOVER_REACH = 0.07;
+/** How quickly the hover grows in and out (per second). */
+const HOVER_RATE = 10;
 /** Seconds a held crystal must stay beside the same crystal before they merge. */
 const MERGE_DWELL_S = 0.4;
 /**
@@ -1201,6 +1209,36 @@ export class GameSystem extends createSystem({
   }
 
   /**
+   * Marks what the player is about to act on: pointed at (mouse or hand ray)
+   * or within reach of a fingertip. Envelopes, the Done card and crystals
+   * grow a little; balloons grow and hold still (in `floatBalloons`).
+   */
+  private hoverTargets(delta: number): void {
+    const step = Math.min(1, delta * HOVER_RATE);
+    const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    const near = (obj: Object3D) => {
+      if (!immersive) return false;
+      obj.getWorldPosition(this.a);
+      return this.tipPos.some((t) => t.distanceTo(this.a) < HOVER_REACH);
+    };
+    const ease = (e: Entity, apply: boolean) => {
+      const obj = e.object3D;
+      if (!obj) return;
+      const on = e.hasComponent(Hovered) || near(obj);
+      obj.userData.hovered = on;
+      const h = (obj.userData.hover as number | undefined) ?? 0;
+      const next = h + ((on ? 1 : 0) - h) * step;
+      obj.userData.hover = next;
+      if (!apply || this.tweens.some((t) => t.obj === obj)) return;
+      obj.userData.hoverBase ??= obj.scale.x;
+      obj.scale.setScalar((obj.userData.hoverBase as number) * (1 + HOVER_GROW * next));
+    };
+    for (const e of this.queries.balloons.entities) ease(e, false);
+    for (const e of this.queries.buttons.entities) ease(e, true);
+    for (const e of this.queries.crystals.entities) ease(e, !e.hasComponent(Grabbed));
+  }
+
+  /**
    * Balloons rise from the table, grow in, and fade out as the top of the
    * balloon reaches the line of sight to the question, then come back up
    * in another free lane: the player reaches for a moving answer.
@@ -1215,14 +1253,16 @@ export class GameSystem extends createSystem({
         r.wait -= delta;
         continue;
       }
-      obj.position.y += r.speed * delta;
+      // A balloon being pointed at or touched holds still, so it is easy to pop.
+      const hover = (obj.userData.hover as number | undefined) ?? 0;
+      if (!obj.userData.hovered) obj.position.y += r.speed * delta;
       const grown = Math.min(1, (obj.position.y - RISE_FROM) / GROW_M);
       const opacity = Math.max(0, Math.min(1, (ceiling - obj.position.y) / FADE_M));
       if (obj.userData.opacity !== opacity) {
         obj.userData.opacity = opacity;
         setOpacity(obj, opacity);
       }
-      obj.scale.setScalar(Math.max(0.001, grown));
+      obj.scale.setScalar(Math.max(0.001, grown) * (1 + HOVER_GROW * hover));
       if (obj.position.y >= ceiling) this.launch(obj, r.count, 0.2 + Math.random() * 0.8);
     }
   }
@@ -1391,6 +1431,7 @@ export class GameSystem extends createSystem({
     if (this.phase === 'opening') this.runOpening(delta);
     this.runTimer();
     this.runPops(delta);
+    this.hoverTargets(delta);
     this.floatBalloons(delta);
     if (this.race) this.updateRace(delta);
 
