@@ -228,7 +228,7 @@ Planned, not built. Nothing here is a result.
 - **React Router**, **React**, **Tailwind CSS**, **Vite** (MIT), **TypeScript** (Apache-2.0).
 - **serde**, **serde_json**, **sha2**, **wasm-bindgen** (MIT or Apache-2.0), **jsonschema** (MIT).
 - **Bun** (MIT) as package manager and script runner.
-- **Origami models** (book, paper bird, flag, partner robots) from [orimathassets](https://github.com/sayazia/orimathassets), made by the same owner for this game, CC0 1.0. Copied by `scripts/sync-assets.mjs`, which records the source commit in `public/models/manifest.json`. The folded animals, crystals, balloons, portal, stars, badges, orb, buttons and rival windows are drawn in code (`src/art/`). The chicken and the cat are the project owner's own paper models, reduced to their shape (textures and normals removed, welded and simplified to about 4,200 and 4,600 triangles) and coloured in code.
+- **Origami models** (book, paper bird, flag, partner robots) from [orimathassets](https://github.com/sayazia/orimathassets), made by the same owner for this game, CC0 1.0. Copied by `scripts/sync-assets.mjs`, which records the source commit in `public/models/manifest.json`. The folded animals, crystals, balloons, portal, stars, badges, orb, buttons and rival windows are drawn in code (`src/art/`). The chicken, cat, rabbit and elephant are the project owner's own paper models (about 3,500 to 5,000 triangles each, 72 to 75 KB); their panels come sorted into five tones, which the game repaints evenly from one paper colour.
 
 ## How this was built
 
