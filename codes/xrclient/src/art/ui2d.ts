@@ -1,4 +1,4 @@
-import { AssetManager, DoubleSide, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, SRGBColorSpace, Texture } from '@iwsdk/core';
+import { AssetManager, Color, DoubleSide, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, SRGBColorSpace, Texture } from '@iwsdk/core';
 
 /**
  * Paper UI from the asset set (batch U1): banners, labels and buttons drawn
@@ -101,7 +101,49 @@ export function uiImage(name: UiName, scale = 1, maxWidth = Infinity): Mesh | nu
   const mesh = new Mesh(new PlaneGeometry(w, h), material);
   mesh.name = `ui-${name}`;
   mesh.renderOrder = 10;
+  if (FLOATING.has(name)) {
+    // A clear sticker floating in the room gets a sheet of sand paper behind
+    // it in the headset, the same colour as the browser backdrop, so its
+    // cream letters read against any wall. Hidden outside the headset.
+    const back = new Mesh(new PlaneGeometry(w * BACKING_W, h * BACKING_H), backingPaper);
+    back.name = 'sticker-backing';
+    back.position.set(0, h * BACKING_DROP, -0.0008);
+    back.renderOrder = 9;
+    back.visible = backingsShown;
+    mesh.add(back);
+    backings.add(back);
+  }
   return mesh;
+}
+
+/** Clear stickers that float with nothing behind them. */
+const FLOATING = new Set<UiName>([
+  'title_numeria_arena',
+  'status_finding_table',
+  'status_pinch_to_place',
+  'race_wave_1',
+  'race_wave_2',
+  'race_wave_3',
+  'hint_pop_right_answer',
+  'recap_title',
+]);
+/** The backing covers the letters, not the image's empty shadow room. */
+const BACKING_W = 0.94;
+const BACKING_H = 0.78;
+const BACKING_DROP = 0.03;
+const backingPaper = new MeshBasicMaterial({ color: new Color(0xe0c780), side: DoubleSide });
+const backings = new Set<Mesh>();
+let backingsShown = false;
+
+/** Shows the sand-paper backings behind floating stickers (in the headset) or hides them. */
+export function showStickerBackings(on: boolean): void {
+  if (on === backingsShown) return;
+  backingsShown = on;
+  for (const b of backings) {
+    // A sticker that left the scene takes its backing with it.
+    if (!b.parent?.parent) backings.delete(b);
+    else b.visible = on;
+  }
 }
 
 /**

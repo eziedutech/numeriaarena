@@ -46,7 +46,7 @@ import {
   type Figure,
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, paper, shade, tint, TRY_AGAIN } from './art/palette.js';
-import { placeUiImage, uiImage, type UiName } from './art/ui2d.js';
+import { placeUiImage, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
   Race,
@@ -77,6 +77,15 @@ const CRYSTAL_GAP = 0.095;
  */
 const HOVER_GROW = 0.12;
 const HOVER_REACH = 0.07;
+/**
+ * A balloon holds still only for a fingertip within this distance of the
+ * middle of its envelope (which sits `BALLOON_MIDDLE` above its knot), and
+ * for at most `BALLOON_HOLD_S` at a time, so a hand resting nearby never
+ * keeps it stuck. The poke hover (20 cm) is too wide for this.
+ */
+const BALLOON_REACH = 0.06;
+const BALLOON_MIDDLE = 0.07;
+const BALLOON_HOLD_S = 2.5;
 /** How quickly the hover grows in and out (per second). */
 const HOVER_RATE = 10;
 /** Seconds a held crystal must stay beside the same crystal before they merge. */
@@ -1221,10 +1230,25 @@ export class GameSystem extends createSystem({
       obj.getWorldPosition(this.a);
       return this.tipPos.some((t) => t.distanceTo(this.a) < HOVER_REACH);
     };
+    const nearBalloon = (obj: Object3D) => {
+      if (!immersive) return false;
+      this.a.set(0, BALLOON_MIDDLE, 0);
+      obj.localToWorld(this.a);
+      return this.tipPos.some((t) => t.distanceTo(this.a) < BALLOON_REACH);
+    };
     const ease = (e: Entity, apply: boolean) => {
       const obj = e.object3D;
       if (!obj) return;
-      const on = e.hasComponent(Hovered) || near(obj);
+      let on: boolean;
+      if (e.hasComponent(Balloon)) {
+        // Pointed at with the mouse outside the headset, or a fingertip at the envelope in it.
+        on = immersive ? nearBalloon(obj) : e.hasComponent(Hovered);
+        const held = on ? ((obj.userData.held as number | undefined) ?? 0) + delta : 0;
+        obj.userData.held = held;
+        if (held > BALLOON_HOLD_S) on = false;
+      } else {
+        on = e.hasComponent(Hovered) || near(obj);
+      }
       obj.userData.hovered = on;
       const h = (obj.userData.hover as number | undefined) ?? 0;
       const next = h + ((on ? 1 : 0) - h) * step;
@@ -1419,6 +1443,7 @@ export class GameSystem extends createSystem({
   update(delta: number): void {
     if (this.pausedAt !== undefined) return;
     this.showWelcomeInMenuOnly();
+    showStickerBackings(this.world.visibilityState.peek() !== VisibilityState.NonImmersive);
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     if (this.phase === 'menu' && placed && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
