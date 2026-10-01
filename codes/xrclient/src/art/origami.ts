@@ -609,8 +609,9 @@ function clips(model: Object3D): AnimationClip[] {
  * evenly from one paper colour, with no lines between them.
  *
  * Per species: how tall it stands, the quarter turn that puts its head on
- * +X, where its flag goes (shares of its length from the tail, and of its
- * height), and where its eye sits (behind the front of the head and up).
+ * +X, where its flag goes and where its eye sits, both as shares of its
+ * length from the tail and of its height from the feet (read off a side
+ * view of each model).
  */
 interface Scanned {
   height: number;
@@ -620,10 +621,10 @@ interface Scanned {
 }
 
 const SCANNED: Partial<Record<Species, Scanned>> = {
-  chicken: { height: 0.075, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.12, 0.925] },
-  cat: { height: 0.052, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.14, 0.8] },
-  rabbit: { height: 0.075, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.12, 0.62] },
-  elephant: { height: 0.055, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.16, 0.72] },
+  chicken: { height: 0.075, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.8, 0.875] },
+  cat: { height: 0.052, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.86, 0.6] },
+  rabbit: { height: 0.075, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.82, 0.58] },
+  elephant: { height: 0.055, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.9, 0.6] },
 };
 
 /** Tone of each material suffix, darkest first. */
@@ -657,7 +658,10 @@ const SCANNED_EYE_R = 0.0017;
 
 let scannedPaper: MeshStandardMaterial | undefined;
 
-const scannedShapes = new Map<string, { geo: BufferGeometry; flag: Vector3; eye: Vector3 }>();
+const scannedShapes = new Map<
+  string,
+  { geo: BufferGeometry; flag: Vector3; eye: Vector3; front: number; back: number }
+>();
 
 /**
  * An animal from one of Zia's paper models, turned head towards +X, stood
@@ -669,7 +673,7 @@ function scannedShape(
   species: Species,
   spec: Scanned,
   color: number | null,
-): { geo: BufferGeometry; flag: Vector3; eye: Vector3 } | null {
+): { geo: BufferGeometry; flag: Vector3; eye: Vector3; front: number; back: number } | null {
   const key = `${species}:${color}`;
   const known = scannedShapes.get(key);
   if (known) return known;
@@ -717,18 +721,27 @@ function scannedShape(
   geo.computeVertexNormals();
   const length = (box.max.x - box.min.x) * k;
   const flag = new Vector3(-length / 2 + length * spec.flag[0], spec.height * spec.flag[1], 0);
-  // The eye sits on the side of the head: behind its front, at its height,
-  // on the paper nearest the viewer there.
+  // The eye sits on the side of the head, on the paper nearest the viewer there.
   const top = spec.height;
-  let headX = -Infinity;
-  for (let i = 0; i < pos.length; i += 3) if (pos[i + 1] > top * (spec.eye[1] - 0.1)) headX = Math.max(headX, pos[i]);
-  const eye = new Vector3(headX - top * spec.eye[0], top * spec.eye[1], 0);
-  for (let i = 0; i < pos.length; i += 3) {
-    if (Math.abs(pos[i] - eye.x) < top * 0.03 && Math.abs(pos[i + 1] - eye.y) < top * 0.03) {
-      eye.z = Math.max(eye.z, Math.abs(pos[i + 2]));
-    }
+  const eye = new Vector3(-length / 2 + length * spec.eye[0], top * spec.eye[1], 0);
+  // How far out the paper is at the eye on each side: the nearest facet
+  // that covers that point, seen from the player and from behind.
+  let near = -Infinity;
+  let far = Infinity;
+  for (let i = 0; i < pos.length; i += 9) {
+    const [ax, ay, az, bx, by, bz, cx2, cy, cz2] = pos.slice(i, i + 9);
+    const det = (by - cy) * (ax - cx2) + (cx2 - bx) * (ay - cy);
+    if (Math.abs(det) < 1e-12) continue;
+    const u = ((by - cy) * (eye.x - cx2) + (cx2 - bx) * (eye.y - cy)) / det;
+    const v = ((cy - ay) * (eye.x - cx2) + (ax - cx2) * (eye.y - cy)) / det;
+    if (u < 0 || v < 0 || u + v > 1) continue;
+    const z = u * az + v * bz + (1 - u - v) * cz2;
+    near = Math.max(near, z);
+    far = Math.min(far, z);
   }
-  const shape = { geo, flag, eye };
+  const front = Number.isFinite(near) ? near : 0;
+  const back = Number.isFinite(far) ? far : 0;
+  const shape = { geo, flag, eye, front, back };
   scannedShapes.set(key, shape);
   return shape;
 }
@@ -772,7 +785,7 @@ export function makeOrigami(
     for (const side of [1, -1]) {
       const eye = new Mesh(new CircleGeometry(SCANNED_EYE_R, 10), paper(SCANNED_EYE));
       eye.name = 'eye';
-      eye.position.set(scanned.eye.x, scanned.eye.y, side * (scanned.eye.z + 0.0006));
+      eye.position.set(scanned.eye.x, scanned.eye.y, side > 0 ? scanned.front + 0.0006 : scanned.back - 0.0006);
       if (side < 0) eye.rotation.y = Math.PI;
       body.add(eye);
     }
