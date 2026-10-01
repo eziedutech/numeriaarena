@@ -751,7 +751,7 @@ function scannedShape(
  * rabbit, blue elephant) when this is true; otherwise they take the
  * mission colour like the panel-folded animals.
  */
-const SCANNED_OWN_COLOURS = true;
+const SCANNED_OWN_COLOURS = false;
 
 /**
  * An origami animal in `color`, head towards +X, feet at y 0, with its
