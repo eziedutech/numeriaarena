@@ -390,7 +390,6 @@ export class GameSystem extends createSystem({
 
     this.home = new Home(
       this.world.camera as PerspectiveCamera,
-      () => this.deskEntity()?.object3D?.getObjectByName('popup-book') ?? undefined,
       this.world.xrEnabled,
       (mode, device) => this.homePlay(mode, device),
       () => this.goHome(),
@@ -976,7 +975,6 @@ export class GameSystem extends createSystem({
         this.envelopes.clear();
       }
       this.home.show();
-      this.home.update();
       if (this.line.length === 0 && this.deskEntity()) this.syncLine(this.lineFrom);
     } else {
       this.home.hide(!immersive && this.phase !== 'loading');

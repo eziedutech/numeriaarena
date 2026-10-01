@@ -1,13 +1,14 @@
-import { Box3, Quaternion, Vector3, type Object3D, type PerspectiveCamera } from '@iwsdk/core';
+import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 
 import { drawGlyphs, glyphWidth, whenGlyphsLoad } from '../art/glyphs.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
+import { townSticker } from './town-sticker.js';
 
 /**
  * The home page: a flat paper page over the browser view of the book. Where
  * to play and the language at the top, ways to play on the left, sign-in and
- * information on the right, a footer below, and a straight paper line from
- * every card to the book. Shown outside the headset only.
+ * information on the right, and a footer below. Shown outside the headset
+ * only.
  */
 export type Device = 'computer' | 'xr' | 'smartboard';
 export type PlayMode = 'practice' | 'race';
@@ -35,27 +36,6 @@ const ICONS: Record<string, string> = {
   watch: '<rect width="54" height="54" fill="#b198ea"/><path d="M5 27q22-20 44 0q-22 20-44 0z" fill="#fff8ec"/><path d="M27 12q11 3 22 15q-11 12-22 15z" fill="#f3e6c9"/><circle cx="27" cy="27" r="7" fill="#3a3f4b"/>',
 };
 
-/** A small paper town: flat folded houses, trees, a bridge and a tower, each with a light and a shaded side. */
-const TOWN = `
-<rect x="0" y="150" width="300" height="30" fill="#c9b07a"/>
-<path d="M0 150h300v8H0z" fill="#b89d66"/>
-<path d="M18 104h40v46H18z" fill="#f2716b"/><path d="M38 104h20v46H38z" fill="#c9554f"/>
-<path d="M14 106 38 80 62 106z" fill="#3a3f4b"/><path d="M38 80 62 106H38z" fill="#2b2f38"/>
-<rect x="31" y="124" width="12" height="26" fill="#fff8ec"/>
-<path d="M74 60h34v90H74z" fill="#3469c4"/><path d="M91 60h17v90H91z" fill="#2a54a0"/>
-<path d="M70 62 91 34 112 62z" fill="#e8b64c"/><path d="M91 34 112 62H91z" fill="#c99a34"/>
-<rect x="80" y="74" width="8" height="10" fill="#fff8ec"/><rect x="94" y="74" width="8" height="10" fill="#f3e6c9"/>
-<rect x="80" y="96" width="8" height="10" fill="#fff8ec"/><rect x="94" y="96" width="8" height="10" fill="#f3e6c9"/>
-<path d="M122 112h46v38h-46z" fill="#3fb6a0"/><path d="M145 112h23v38h-23z" fill="#2f8f7d"/>
-<path d="M118 114 145 92 172 114z" fill="#f2716b"/><path d="M145 92 172 114H145z" fill="#c9554f"/>
-<path d="M186 150 196 104 206 150z" fill="#3fb6a0"/><path d="M196 104 206 150H196z" fill="#2f8f7d"/>
-<path d="M200 150 212 116 224 150z" fill="#3fb6a0"/><path d="M212 116 224 150H212z" fill="#2f8f7d"/>
-<path d="M232 100h44v50h-44z" fill="#b198ea"/><path d="M254 100h22v50h-22z" fill="#8f76c9"/>
-<path d="M228 102 254 76 280 102z" fill="#3469c4"/><path d="M254 76 280 102H254z" fill="#2a54a0"/>
-<rect x="247" y="122" width="12" height="28" fill="#fff8ec"/>
-<path d="M150 150q20-14 40 0" fill="none" stroke="#e8b64c" stroke-width="5"/>
-`;
-
 const SYMBOLS = [
   '<path d="M17 3 21 13 32 13 23 20 26 31 17 24 8 31 11 20 2 13 13 13z" fill="#e8b64c"/>',
   '<circle cx="17" cy="17" r="12" fill="#3469c4"/>',
@@ -73,7 +53,6 @@ const CSS = `
   font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif; color: ${INK}; }
 #home .stage { position: absolute; left: 0; top: 0; width: ${STAGE_W}px; height: ${STAGE_H}px; transform-origin: 0 0; }
 #home .stage > * { pointer-events: auto; }
-#home svg.lines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 #home .title { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 430px; }
 #home .shadow { box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); }
 #home .tabs { position: absolute; left: 50%; top: 112px; transform: translateX(-50%); display: flex; }
@@ -95,12 +74,13 @@ const CSS = `
 #home .card svg { width: 54px; height: 54px; flex: none; }
 #home .card.muted { filter: saturate(0.25) brightness(0.92); }
 #home .card .soon { position: absolute; right: -8px; top: -10px; background: ${INK}; padding: 2px 6px; }
-#home .town { position: absolute; left: 40px; top: 36px; width: 350px; background: ${PAPER}; padding: 14px 16px 12px;
-  border: 0; text-align: left; cursor: pointer; transition: transform 0.12s; }
-#home .town:hover { transform: scale(1.03); }
-#home .town .mat { background: #f1e3c4; margin-top: 8px; display: block; }
-#home .town .sub { font-size: 15px; margin-top: 6px; }
-#home .town .soon { position: absolute; right: -8px; top: -10px; background: ${INK}; padding: 2px 6px; }
+#home .town { position: absolute; left: 34px; top: 6px; width: 300px; background: none; border: 0; padding: 0;
+  text-align: left; cursor: pointer; transition: transform 0.12s; }
+#home .town:hover { transform: scale(1.04); }
+#home .town svg { display: block; overflow: visible; }
+#home .townlabel { position: absolute; left: 70px; top: 196px; background: ${PAPER}; padding: 6px 12px 8px; }
+#home .town .sub { font-size: 13px; margin-top: 2px; }
+#home .town .soon { position: absolute; right: 10px; top: 60px; background: ${INK}; padding: 2px 6px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
 #home .footer { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; background: ${PAPER}; }
 #home .footer button { padding: 10px 16px; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
@@ -176,29 +156,18 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', parent?: HT
   return e;
 }
 
-interface Linked {
-  card: HTMLElement;
-  side: 'left' | 'right';
-  color: string;
-}
-
 export class Home {
   private root: HTMLDivElement;
   private stage!: HTMLDivElement;
-  private lines!: SVGSVGElement;
   private back: HTMLButtonElement;
-  private linked: Linked[] = [];
   private lang: Lang;
   private device: Device;
   private scale = 1;
   private shown = false;
   private savedEye?: { p: Vector3; q: Quaternion };
-  private box = new Box3();
-  private corner = new Vector3();
 
   constructor(
     private camera: PerspectiveCamera,
-    private findBook: () => Object3D | undefined,
     private xrAvailable: boolean,
     private onPlay: (mode: PlayMode, device: Device) => void,
     private onBack: () => void,
@@ -256,70 +225,16 @@ export class Home {
     this.back.style.display = inGame ? 'block' : 'none';
   }
 
-  /** Keeps the paper lines meeting the book; called every frame while shown. */
-  update(): void {
-    if (!this.shown) return;
-    const book = this.findBook();
-    if (!book) return;
-    // The camera moved for the page; project with where it is now.
-    this.camera.updateMatrixWorld();
-    // The book model only: the portal standing behind it is not part of the cover.
-    this.box.setFromObject(book.children[0] ?? book);
-    const { min, max } = this.box;
-    // The covers' outer edges run from the back corner to the front corner.
-    const at = (x: number, z: number): [number, number] => {
-      this.corner.set(x, max.y, z).project(this.camera);
-      const offX = (window.innerWidth - STAGE_W * this.scale) / 2;
-      return [
-        ((this.corner.x * 0.5 + 0.5) * window.innerWidth - offX) / this.scale,
-        ((-this.corner.y * 0.5 + 0.5) * window.innerHeight) / this.scale,
-      ];
-    };
-    this.drawLines({
-      left: [at(min.x, min.z), at(min.x, max.z)],
-      right: [at(max.x, min.z), at(max.x, max.z)],
-    });
-  }
-
   private fit(): void {
     this.scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
     const offX = (window.innerWidth - STAGE_W * this.scale) / 2;
     this.stage.style.transform = `translate(${offX}px, 0) scale(${this.scale})`;
   }
 
-  /** Straight paper lines: out of the card, down or up, then into the cover's edge. */
-  private drawLines(edges: { left: [number, number][]; right: [number, number][] }): void {
-    let svg = '';
-    const bySide = { left: 0, right: 0 };
-    for (const { card, side, color } of this.linked) {
-      const i = bySide[side]++;
-      const cy = card.offsetTop + card.offsetHeight / 2;
-      // Spread from the back of the cover towards the front.
-      const k = 0.3 + i * 0.2;
-      const [[bx, by], [fx, fy]] = edges[side];
-      const px = bx + (fx - bx) * k;
-      const py = by + (fy - by) * k;
-      const out = side === 'left' ? 1 : -1;
-      const cx = side === 'left' ? card.offsetLeft + card.offsetWidth : card.offsetLeft;
-      const vx = cx + out * (40 - i * 8);
-      svg += `<path d="M${cx} ${cy}H${vx}V${py}H${px}"/>`;
-      svg += `<rect x="${px - 5}" y="${py - 5}" width="10" height="10" fill="${color}" stroke="none"/>`;
-    }
-    this.lines.innerHTML =
-      '<defs><filter id="home-sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="2" dy="3" stdDeviation="1.5" flood-color="#46321a" flood-opacity="0.3"/></filter></defs>' +
-      `<g fill="none" stroke="${PAPER}" stroke-width="3" filter="url(#home-sh)">${svg}</g>`;
-  }
-
   private render(): void {
     const t = this.t;
     this.root.innerHTML = '';
-    this.linked = [];
     this.stage = el('div', 'stage', this.root);
-    this.lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    this.lines.classList.add('lines');
-    this.lines.setAttribute('width', String(STAGE_W));
-    this.lines.setAttribute('height', String(STAGE_H));
-    this.stage.appendChild(this.lines);
 
     const title = el('img', 'title', this.stage);
     title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.png`;
@@ -381,17 +296,13 @@ export class Home {
     this.card('right', 2, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
     this.card('right', 3, t.watch, 'watch', COLORS.violet, () => this.message(t.watch[0], t.soonBody.watch), true);
 
-    // The town the player builds with the Folds they earn: a paper mat with a small town on it.
-    const town = el('button', 'town shadow', this.stage);
-    town.appendChild(paperText(t.town[0], 20, INK));
-    const mat = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    mat.setAttribute('viewBox', '0 0 300 180');
-    mat.setAttribute('width', '318');
-    mat.setAttribute('height', '150');
-    mat.classList.add('mat');
-    mat.innerHTML = TOWN;
-    town.appendChild(mat);
-    el('div', 'sub', town).textContent = t.town[1];
+    // The town the player builds with the Folds they earn: a small round
+    // paper sticker with the town standing up on it.
+    const town = el('button', 'town', this.stage);
+    town.insertAdjacentHTML('beforeend', townSticker(300));
+    const label = el('div', 'townlabel shadow', town);
+    label.appendChild(paperText(t.town[0], 18, INK));
+    el('div', 'sub', label).textContent = t.town[1];
     el('span', 'soon', town).appendChild(paperText(t.soon, 12, PAPER));
     town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}. ${t.soon}`);
     town.addEventListener('click', () => this.message(t.town[0], t.soonBody.town));
@@ -442,7 +353,6 @@ export class Home {
     }
     card.setAttribute('aria-label', `${title}. ${sub}${soon ? `. ${this.t.soon}` : ''}`);
     card.addEventListener('click', onClick);
-    this.linked.push({ card, side, color });
     return card;
   }
 
