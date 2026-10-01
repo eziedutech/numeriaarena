@@ -123,334 +123,8 @@ const FOX: OrigamiDesign = {
   },
 };
 
-const ELEPHANT: OrigamiDesign = {
-  flag: [-0.004, 0.049],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.018, 0.051, 0], [-0.024, 0.049, 0], [-0.003, 0.038, 0.016]],
-      [[0.018, 0.051, 0], [-0.003, 0.038, 0.016], [0.027, 0.036, 0.008]],
-      [[0.027, 0.036, 0.008], [-0.003, 0.038, 0.016], [0.018, 0.022, 0.006]],
-      [[-0.024, 0.049, 0], [-0.031, 0.036, 0.008], [-0.003, 0.038, 0.016]],
-      [[-0.031, 0.036, 0.008], [-0.022, 0.022, 0.006], [-0.003, 0.038, 0.016]],
-      [[-0.003, 0.038, 0.016], [-0.022, 0.022, 0.006], [0.018, 0.022, 0.006]],
-    ],
-    parts: [
-      {
-        name: 'head',
-        pivot: [0.024, 0.048],
-        tris: [
-          [[0.016, 0.057, 0], [0.031, 0.06, 0], [0.036, 0.045, 0.011]],
-          [[0.031, 0.06, 0], [0.045, 0.051, 0.003], [0.036, 0.045, 0.011]],
-          [[0.036, 0.045, 0.011], [0.045, 0.051, 0.003], [0.039, 0.033, 0.005]],
-          [[0.016, 0.057, 0], [0.036, 0.045, 0.011], [0.025, 0.03, 0.006]],
-          [[0.036, 0.045, 0.011], [0.039, 0.033, 0.005], [0.025, 0.03, 0.006]],
-        ],
-        eye: { tri: 1, at: [0.2, 0.5, 0.3] },
-        parts: [
-          {
-            name: 'trunk',
-            pivot: [0.043, 0.042],
-            tris: [
-              [[0.045, 0.05, 0.003], [0.039, 0.036, 0.004], [0.054, 0.033, 0.003]],
-              [[0.039, 0.036, 0.004], [0.047, 0.027, 0.003], [0.054, 0.033, 0.003]],
-              [[0.054, 0.033, 0.003], [0.047, 0.027, 0.003], [0.059, 0.011, 0.0025]],
-              [[0.047, 0.027, 0.003], [0.052, 0.011, 0.0025], [0.059, 0.011, 0.0025]],
-            ],
-          },
-          {
-            name: 'ears',
-            pivot: [0.026, 0.05],
-            pair: 0.0125,
-            tris: [
-              [[0.021, 0.06, 0.001], [0.031, 0.055, 0.001], [0.03, 0.031, 0.001]],
-              [[0.021, 0.06, 0.001], [0.03, 0.031, 0.001], [0.013, 0.036, 0.001]],
-            ],
-          },
-        ],
-      },
-      {
-        name: 'tail',
-        pivot: [-0.03, 0.042],
-        tris: [[[-0.029, 0.043, 0], [-0.036, 0.022, 0.001], [-0.032, 0.022, 0.001]]],
-      },
-      {
-        name: 'legs_front',
-        pivot: [0.015, 0.03],
-        pair: 0.008,
-        tris: [
-          [[0.008, 0.031, 0.004], [0.021, 0.031, 0.004], [0.0185, 0, 0.0035]],
-          [[0.008, 0.031, 0.004], [0.0185, 0, 0.0035], [0.0105, 0, 0.0035]],
-        ],
-      },
-      {
-        name: 'legs_back',
-        pivot: [-0.017, 0.03],
-        pair: 0.008,
-        tris: [
-          [[-0.024, 0.031, 0.004], [-0.01, 0.031, 0.004], [-0.0125, 0, 0.0035]],
-          [[-0.024, 0.031, 0.004], [-0.0125, 0, 0.0035], [-0.0205, 0, 0.0035]],
-        ],
-      },
-    ],
-  },
-};
-
-/** Four panels meeting at `mid`, for a leg or flap drawn as a quad (a, b top; c, d foot). */
-function quad(a: P, b: P, c: P, d: P): [P, P, P][] {
-  return [
-    [a, b, c],
-    [a, c, d],
-  ];
-}
-
-/** A pointed head seen from the side: neck top, crown, nose, cheek, jaw, throat. */
-function head(nT: P, cr: P, ns: P, ck: P, jw: P, nB: P, chin?: 'paper'): (Tri | [P, P, P])[] {
-  return [
-    [nT, cr, ck],
-    [cr, ns, ck],
-    { v: [ck, ns, jw], tone: chin },
-    [nT, ck, nB],
-    { v: [ck, jw, nB], tone: chin },
-  ];
-}
-
-const RABBIT: OrigamiDesign = {
-  flag: [-0.008, 0.037],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.012, 0.042, 0], [-0.012, 0.036, 0], [-0.004, 0.02, 0.015]],
-      [[-0.012, 0.036, 0], [-0.024, 0.016, 0.008], [-0.004, 0.02, 0.015]],
-      [[-0.024, 0.016, 0.008], [-0.016, 0.002, 0.01], [-0.004, 0.02, 0.015]],
-      [[-0.016, 0.002, 0.01], [0.012, 0.002, 0.006], [-0.004, 0.02, 0.015]],
-      [[0.012, 0.002, 0.006], [0.018, 0.026, 0.006], [-0.004, 0.02, 0.015]],
-      [[0.018, 0.026, 0.006], [0.012, 0.042, 0], [-0.004, 0.02, 0.015]],
-    ],
-    parts: [
-      {
-        name: 'head',
-        pivot: [0.016, 0.042],
-        tris: head(
-          [0.009, 0.047, 0],
-          [0.022, 0.054, 0],
-          [0.037, 0.043, 0.002],
-          [0.024, 0.044, 0.009],
-          [0.027, 0.034, 0.004],
-          [0.014, 0.034, 0.005],
-          'paper',
-        ),
-        eye: { tri: 1, at: [0.35, 0.25, 0.4] },
-        parts: [
-          {
-            name: 'ears',
-            pivot: [0.019, 0.053],
-            pair: 0.004,
-            tris: [
-              [[0.015, 0.052, 0.001], [0.024, 0.054, 0.001], [0.009, 0.083, 0]],
-              { v: [[0.017, 0.055, 0.0013], [0.021, 0.056, 0.0013], [0.012, 0.076, 0.0008]], tone: 'paper' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'tail',
-        pivot: [-0.024, 0.016],
-        tris: [
-          { v: [[-0.022, 0.021, 0], [-0.031, 0.018, 0.004], [-0.024, 0.01, 0]], tone: 'paper' },
-          { v: [[-0.022, 0.021, 0], [-0.027, 0.025, 0.002], [-0.031, 0.018, 0.004]], tone: 'paper' },
-        ],
-      },
-      {
-        name: 'legs_front',
-        pivot: [0.014, 0.02],
-        pair: 0.005,
-        tris: quad([0.01, 0.024, 0.002], [0.018, 0.022, 0.002], [0.021, 0, 0.001], [0.013, 0, 0.001]),
-      },
-      {
-        name: 'legs_back',
-        pivot: [-0.01, 0.01],
-        pair: 0.012,
-        tris: quad([-0.021, 0.012, 0.002], [-0.004, 0.006, 0.002], [0.007, 0, 0.001], [-0.021, 0, 0.001]),
-      },
-    ],
-  },
-};
-
-const CAT: OrigamiDesign = {
-  flag: [-0.004, 0.04],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.016, 0.042, 0], [-0.02, 0.041, 0], [-0.002, 0.033, 0.01]],
-      [[0.016, 0.042, 0], [-0.002, 0.033, 0.01], [0.025, 0.033, 0.004]],
-      [[0.025, 0.033, 0.004], [-0.002, 0.033, 0.01], [0.018, 0.023, 0.003]],
-      [[-0.02, 0.041, 0], [-0.026, 0.033, 0.004], [-0.002, 0.033, 0.01]],
-      [[-0.026, 0.033, 0.004], [-0.018, 0.024, 0.003], [-0.002, 0.033, 0.01]],
-      [[-0.002, 0.033, 0.01], [-0.018, 0.024, 0.003], [0.018, 0.023, 0.003]],
-    ],
-    parts: [
-      {
-        name: 'head',
-        pivot: [0.02, 0.044],
-        tris: head(
-          [0.015, 0.049, 0],
-          [0.027, 0.057, 0],
-          [0.045, 0.045, 0.002],
-          [0.032, 0.047, 0.009],
-          [0.035, 0.036, 0.004],
-          [0.021, 0.034, 0.004],
-          'paper',
-        ),
-        eye: { tri: 1, at: [0.35, 0.25, 0.4] },
-        parts: [
-          {
-            name: 'ears',
-            pivot: [0.026, 0.056],
-            pair: 0.005,
-            tris: [[[0.021, 0.055, 0.001], [0.031, 0.057, 0.001], [0.022, 0.069, 0]]],
-          },
-        ],
-      },
-      {
-        name: 'tail',
-        pivot: [-0.023, 0.041],
-        tris: [
-          [[-0.02, 0.044, 0.003], [-0.026, 0.037, 0.003], [-0.037, 0.05, 0.0025]],
-          [[-0.02, 0.044, 0.003], [-0.037, 0.05, 0.0025], [-0.03, 0.054, 0.0025]],
-          [[-0.03, 0.054, 0.0025], [-0.037, 0.05, 0.0025], [-0.036, 0.066, 0.002]],
-          [[-0.03, 0.054, 0.0025], [-0.036, 0.066, 0.002], [-0.029, 0.066, 0.002]],
-          [[-0.029, 0.066, 0.002], [-0.036, 0.066, 0.002], [-0.027, 0.075, 0.001]],
-        ],
-      },
-      {
-        name: 'legs_front',
-        pivot: [0.013, 0.028],
-        pair: 0.005,
-        tris: quad([0.008, 0.03, 0.0025], [0.019, 0.029, 0.0025], [0.017, 0, 0.0012], [0.012, 0, 0.0012]),
-      },
-      {
-        name: 'legs_back',
-        pivot: [-0.015, 0.029],
-        pair: 0.005,
-        tris: quad([-0.023, 0.033, 0.0025], [-0.01, 0.03, 0.0025], [-0.013, 0, 0.0012], [-0.018, 0, 0.0012]),
-      },
-    ],
-  },
-};
-
-const CRANE: OrigamiDesign = {
-  flag: [-0.002, 0.026],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[-0.014, 0.026, 0], [0.014, 0.026, 0], [0, 0.017, 0.012]],
-      [[0.014, 0.026, 0], [0, 0.003, 0], [0, 0.017, 0.012]],
-      [[0, 0.003, 0], [-0.014, 0.026, 0], [0, 0.017, 0.012]],
-    ],
-    parts: [
-      {
-        name: 'head',
-        pivot: [0.012, 0.024],
-        tris: [
-          [[0.009, 0.027, 0], [0.016, 0.021, 0.002], [0.043, 0.062, 0]],
-          [[0.043, 0.062, 0], [0.041, 0.056, 0.0015], [0.056, 0.053, 0]],
-        ],
-        eye: { tri: 1, at: [0.45, 0.35, 0.2] },
-      },
-      {
-        name: 'tail',
-        pivot: [-0.012, 0.024],
-        tris: [[[-0.009, 0.027, 0], [-0.016, 0.021, 0.002], [-0.045, 0.058, 0]]],
-      },
-      {
-        name: 'wings',
-        pivot: [0, 0.026],
-        tris: [
-          [[-0.013, 0.026, 0.002], [0.013, 0.026, 0.002], [-0.003, 0.058, 0.032]],
-          { v: [[-0.013, 0.026, 0.002], [-0.003, 0.058, 0.032], [-0.02, 0.05, 0.02]], tone: 'paper' },
-        ],
-      },
-    ],
-  },
-};
-
-const FISH: OrigamiDesign = {
-  flag: [-0.004, 0.038],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.035, 0.022, 0], [0.004, 0.04, 0], [0.006, 0.023, 0.011]],
-      [[0.004, 0.04, 0], [-0.022, 0.026, 0], [0.006, 0.023, 0.011]],
-      [[-0.022, 0.026, 0], [0, 0.006, 0], [0.006, 0.023, 0.011]],
-      { v: [[0, 0.006, 0], [0.035, 0.022, 0], [0.006, 0.023, 0.011]], tone: 'paper' },
-      [[0.001, 0.039, 0], [-0.011, 0.035, 0], [-0.013, 0.048, 0]],
-      [[0.013, 0.017, 0.0115], [0.005, 0.019, 0.0115], [-0.002, 0.009, 0.013]],
-    ],
-    eye: { tri: 0, at: [0.55, 0.15, 0.3] },
-    parts: [
-      {
-        name: 'tail',
-        pivot: [-0.021, 0.024],
-        tris: [
-          [[-0.02, 0.029, 0.0015], [-0.021, 0.019, 0.0015], [-0.041, 0.043, 0.001]],
-          [[-0.02, 0.029, 0.0015], [-0.04, 0.007, 0.001], [-0.021, 0.019, 0.0015]],
-        ],
-      },
-    ],
-  },
-};
-
-const FROG: OrigamiDesign = {
-  flag: [-0.002, 0.034],
-  body: {
-    name: 'body',
-    pivot: [0, 0],
-    tris: [
-      [[0.029, 0.024, 0], [0.018, 0.034, 0], [0.004, 0.021, 0.016]],
-      [[0.018, 0.034, 0], [-0.004, 0.034, 0], [0.004, 0.021, 0.016]],
-      [[-0.004, 0.034, 0], [-0.02, 0.016, 0.006], [0.004, 0.021, 0.016]],
-      [[-0.02, 0.016, 0.006], [-0.014, 0.004, 0.008], [0.004, 0.021, 0.016]],
-      { v: [[-0.014, 0.004, 0.008], [0.022, 0.012, 0.006], [0.004, 0.021, 0.016]], tone: 'paper' },
-      { v: [[0.022, 0.012, 0.006], [0.029, 0.024, 0], [0.004, 0.021, 0.016]], tone: 'paper' },
-      [[0.013, 0.033, 0.004], [0.021, 0.032, 0.004], [0.016, 0.04, 0.005]],
-    ],
-    eye: { tri: 6, at: [0.3, 0.3, 0.4] },
-    parts: [
-      {
-        name: 'legs_front',
-        pivot: [0.018, 0.012],
-        pair: 0.008,
-        tris: quad([0.015, 0.013, 0.002], [0.022, 0.012, 0.002], [0.027, 0, 0.001], [0.02, 0, 0.001]),
-      },
-      {
-        name: 'legs_back',
-        pivot: [-0.012, 0.014],
-        pair: 0.016,
-        tris: [
-          [[-0.019, 0.021, 0.001], [-0.002, 0.013, 0.001], [-0.021, 0.004, 0.001]],
-          [[-0.021, 0.004, 0.001], [-0.004, 0.004, 0.001], [0.007, 0, 0.001]],
-        ],
-      },
-    ],
-  },
-};
-
-/** Species folded from panels; for Zia's modelled animals (SCANNED) these are only the stand-ins. */
-export const ORIGAMI: Record<Exclude<Species, 'chicken'>, OrigamiDesign> = {
-  fox: FOX,
-  rabbit: RABBIT,
-  crane: CRANE,
-  frog: FROG,
-  fish: FISH,
-  cat: CAT,
-  elephant: ELEPHANT,
-};
+/** The folded animal shown when a model did not load. */
+const STAND_IN = FOX;
 
 let foldPaper: MeshStandardMaterial | undefined;
 
@@ -602,33 +276,47 @@ function clips(model: Object3D): AnimationClip[] {
  * clips and the point on its back where the flag goes.
  */
 /**
- * Animals folded from Zia's own paper models. Each model's panels are
- * already sorted into five tones by its material names (`_deep`, `_warm`,
- * the plain one, `_light`, `_pale`), like the light and shaded halves of
- * the portal disc. The game keeps that sorting and repaints the five tones
- * evenly from one paper colour, with no lines between them.
+ * Animals from Zia's own paper models. Their panels come in tones of one
+ * paper colour, marked one of two ways: by material name (`_deep`, `_dark`,
+ * `_warm`, the plain one, `_mid`, `_light`, `_pale`), or by the colour of
+ * each panel in a single material. The game keeps that sorting and repaints
+ * the tones evenly from the creature's colour, like the light and shaded
+ * halves of the portal disc, with no lines between them. Black and white
+ * paper (eyes, noses, muzzles, a cow's patches) keeps its own colour.
  *
- * Per species: how tall it stands, the quarter turn that puts its head on
- * +X, where its flag goes and where its eye sits, both as shares of its
- * length from the tail and of its height from the feet (read off a side
- * view of each model).
+ * Per species: how tall it stands, the turn about the vertical that puts
+ * its head on +X, where its flag goes and, for a model without eyes of its
+ * own, where its eye sits: shares of its length from the tail and of its
+ * height from the feet (read off a side view of each model).
  */
 interface Scanned {
   height: number;
   turn: number;
   flag: [number, number];
-  eye: [number, number];
+  eye?: [number, number];
 }
 
-const SCANNED: Partial<Record<Species, Scanned>> = {
+const SCANNED: Record<Species, Scanned> = {
   chicken: { height: 0.075, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.8, 0.875] },
   cat: { height: 0.052, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.86, 0.6] },
   rabbit: { height: 0.075, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.82, 0.58] },
   elephant: { height: 0.055, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.9, 0.6] },
+  dog: { height: 0.06, turn: Math.PI, flag: [0.4, 0.7] },
+  cow: { height: 0.058, turn: 0, flag: [0.45, 0.85] },
+  bird: { height: 0.06, turn: Math.PI, flag: [0.4, 0.6] },
+  fish: { height: 0.045, turn: Math.PI / 2, flag: [0.45, 0.85] },
 };
 
-/** Tone of each material suffix, darkest first. */
-const TONE_ORDER = ['_deep', '_warm', '', '_light', '_pale'];
+/** Tone of each material suffix: 0 darkest to 4 palest. */
+const SUFFIX_TONE: [string, number][] = [
+  ['_deep', 0],
+  ['_dark', 0],
+  ['_warm', 1],
+  ['_beak', 1],
+  ['_mid', 2],
+  ['_light', 3],
+  ['_pale', 4],
+];
 
 /**
  * The five paper tones from one colour, evenly apart: two shades darker,
@@ -644,64 +332,89 @@ function fiveTones(color: number): Color[] {
   ];
 }
 
-/** Which of the five tones a model material stands for. */
-function toneOf(name: string): number {
-  for (let i = TONE_ORDER.length - 1; i >= 0; i -= 1) {
-    if (TONE_ORDER[i] && name.endsWith(TONE_ORDER[i])) return i;
-  }
-  return 2;
+/** Black, white and grey paper (eyes, noses, a cow's patches) is not recoloured. */
+function neutral(c: Color): boolean {
+  const max = Math.max(c.r, c.g, c.b);
+  return max < 0.06 || (max - Math.min(c.r, c.g, c.b)) / max < 0.2;
 }
 
-/** The eyes: a soft dark, not black, and small. */
+/** The eyes added to a model without its own: a soft dark, not black, and small. */
 const SCANNED_EYE = 0x5b4a3c;
 const SCANNED_EYE_R = 0.0017;
 
 let scannedPaper: MeshStandardMaterial | undefined;
 
-const scannedShapes = new Map<
-  string,
-  { geo: BufferGeometry; flag: Vector3; eye: Vector3; front: number; back: number }
->();
+interface ScannedShape {
+  geo: BufferGeometry;
+  flag: Vector3;
+  /** Where to add eyes, or null when the model has its own. */
+  eye: Vector3 | null;
+  front: number;
+  back: number;
+}
+
+const scannedShapes = new Map<string, ScannedShape>();
 
 /**
  * An animal from one of Zia's paper models, turned head towards +X, stood
- * on the table and sized like the others, every panel in its tone of
- * `color` (or of the model's own paper colour when `color` is null). Null
- * when the model did not load.
+ * on the table and sized like the others, every coloured panel in its tone
+ * of `color`. Null when the model did not load.
  */
-function scannedShape(
-  species: Species,
-  spec: Scanned,
-  color: number | null,
-): { geo: BufferGeometry; flag: Vector3; eye: Vector3; front: number; back: number } | null {
+function scannedShape(species: Species, spec: Scanned, color: number): ScannedShape | null {
   const key = `${species}:${color}`;
   const known = scannedShapes.get(key);
   if (known) return known;
   const gltf = AssetManager.getGLTF(`foldling_${species}`);
   if (!gltf) return null;
   const pos: number[] = [];
+  // Per triangle: a material tone (0 to 4), -1 to keep `keep`, or -2 to be
+  // toned from its own colour's lightness below.
   const tone: number[] = [];
-  let own = 0xffffff;
+  const keep: Color[] = [];
+  const light: number[] = [];
   gltf.scene.updateMatrixWorld(true);
-  // The body runs along Z in the file; a quarter turn puts the head on +X.
   const turn = new Matrix4().makeRotationY(spec.turn);
+  const c = new Color();
   gltf.scene.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;
     const mat = mesh.material as MeshStandardMaterial;
-    const t = toneOf(mat.name ?? '');
-    if (t === 2) own = mat.color.getHex();
+    const name = mat.name ?? '';
     const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
     const m = new Matrix4().multiplyMatrices(turn, mesh.matrixWorld);
     const p = g.getAttribute('position');
+    const vc = g.getAttribute('color');
     const v = new Vector3();
+    const suffix = SUFFIX_TONE.find(([s]) => name.endsWith(s));
     for (let i = 0; i < p.count; i += 1) {
       v.fromBufferAttribute(p, i).applyMatrix4(m);
       pos.push(v.x, v.y, v.z);
-      tone.push(t);
+      if (i % 3 !== 0) continue;
+      if (vc) c.setRGB(vc.getX(i), vc.getY(i), vc.getZ(i));
+      else c.copy(mat.color);
+      if (neutral(c)) {
+        tone.push(-1);
+        keep.push(c.clone());
+      } else if (!vc) {
+        tone.push(suffix ? suffix[1] : 2);
+        keep.push(c.clone());
+      } else {
+        tone.push(-2);
+        keep.push(c.clone());
+      }
+      light.push(c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722);
     }
     g.dispose();
   });
+  // Panels told apart only by their colour: their lightness, ranked, picks
+  // one of the five tones, so each model uses all five evenly.
+  const ranked = tone.map((t, i) => (t === -2 ? light[i] : NaN)).filter((l) => !Number.isNaN(l));
+  ranked.sort((a, b) => a - b);
+  const toneOfLight = (l: number) => {
+    let below = 0;
+    while (below < ranked.length && ranked[below] < l) below += 1;
+    return Math.min(4, Math.floor((below / Math.max(1, ranked.length)) * 5));
+  };
   const box = new Box3();
   for (let i = 0; i < pos.length; i += 3) box.expandByPoint(new Vector3(pos[i], pos[i + 1], pos[i + 2]));
   const k = spec.height / (box.max.y - box.min.y);
@@ -712,50 +425,51 @@ function scannedShape(
     pos[i + 1] = (pos[i + 1] - box.min.y) * k;
     pos[i + 2] = (pos[i + 2] - cz) * k;
   }
-  const tones = fiveTones(color ?? own);
+  const tones = fiveTones(color);
   const col: number[] = [];
-  for (const t of tone) col.push(tones[t].r, tones[t].g, tones[t].b);
+  tone.forEach((t, i) => {
+    const out = t === -1 ? keep[i] : tones[t === -2 ? toneOfLight(light[i]) : t];
+    for (let j = 0; j < 3; j += 1) col.push(out.r, out.g, out.b);
+  });
   const geo = new BufferGeometry();
   geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new Float32BufferAttribute(col, 3));
   geo.computeVertexNormals();
   const length = (box.max.x - box.min.x) * k;
   const flag = new Vector3(-length / 2 + length * spec.flag[0], spec.height * spec.flag[1], 0);
-  // The eye sits on the side of the head, on the paper nearest the viewer there.
-  const top = spec.height;
-  const eye = new Vector3(-length / 2 + length * spec.eye[0], top * spec.eye[1], 0);
+  const eye = spec.eye ? new Vector3(-length / 2 + length * spec.eye[0], spec.height * spec.eye[1], 0) : null;
   // How far out the paper is at the eye on each side: the nearest facet
   // that covers that point, seen from the player and from behind.
   let near = -Infinity;
   let far = Infinity;
-  for (let i = 0; i < pos.length; i += 9) {
-    const [ax, ay, az, bx, by, bz, cx2, cy, cz2] = pos.slice(i, i + 9);
-    const det = (by - cy) * (ax - cx2) + (cx2 - bx) * (ay - cy);
-    if (Math.abs(det) < 1e-12) continue;
-    const u = ((by - cy) * (eye.x - cx2) + (cx2 - bx) * (eye.y - cy)) / det;
-    const v = ((cy - ay) * (eye.x - cx2) + (ax - cx2) * (eye.y - cy)) / det;
-    if (u < 0 || v < 0 || u + v > 1) continue;
-    const z = u * az + v * bz + (1 - u - v) * cz2;
-    near = Math.max(near, z);
-    far = Math.min(far, z);
+  if (eye) {
+    for (let i = 0; i < pos.length; i += 9) {
+      const [ax, ay, az, bx, by, bz, qx, qy, qz] = pos.slice(i, i + 9);
+      const det = (by - qy) * (ax - qx) + (qx - bx) * (ay - qy);
+      if (Math.abs(det) < 1e-12) continue;
+      const u = ((by - qy) * (eye.x - qx) + (qx - bx) * (eye.y - qy)) / det;
+      const v = ((qy - ay) * (eye.x - qx) + (ax - qx) * (eye.y - qy)) / det;
+      if (u < 0 || v < 0 || u + v > 1) continue;
+      const z = u * az + v * bz + (1 - u - v) * qz;
+      near = Math.max(near, z);
+      far = Math.min(far, z);
+    }
   }
-  const front = Number.isFinite(near) ? near : 0;
-  const back = Number.isFinite(far) ? far : 0;
-  const shape = { geo, flag, eye, front, back };
+  const shape = {
+    geo,
+    flag,
+    eye,
+    front: Number.isFinite(near) ? near : 0,
+    back: Number.isFinite(far) ? far : 0,
+  };
   scannedShapes.set(key, shape);
   return shape;
 }
 
 /**
- * Zia's animals keep their own paper colour (orange chicken and cat, brown
- * rabbit, blue elephant) when this is true; otherwise they take the
- * mission colour like the panel-folded animals.
- */
-const SCANNED_OWN_COLOURS = false;
-
-/**
  * An origami animal in `color`, head towards +X, feet at y 0, with its
- * clips and the point on its back where the flag goes.
+ * clips and the point on its back where the flag goes. When its model did
+ * not load, a fox folded from panels stands in.
  */
 export function makeOrigami(
   species: Species,
@@ -765,9 +479,7 @@ export function makeOrigami(
   model.name = `origami-${species}`;
   const flag = new Object3D();
   flag.name = 'flag_anchor';
-  const spec = SCANNED[species];
-  const scanned = spec ? scannedShape(species, spec, SCANNED_OWN_COLOURS ? null : color) : null;
-  if (spec && !scanned) console.error(`[art] foldling_${species} is not loaded; folding it from panels instead`);
+  const scanned = scannedShape(species, SCANNED[species], color);
   if (scanned) {
     const body = new Group();
     body.name = 'body';
@@ -782,22 +494,24 @@ export function makeOrigami(
     const mesh = new Mesh(scanned.geo, scannedPaper);
     mesh.name = `${species}-paper`;
     body.add(mesh);
-    for (const side of [1, -1]) {
-      const eye = new Mesh(new CircleGeometry(SCANNED_EYE_R, 10), paper(SCANNED_EYE));
-      eye.name = 'eye';
-      eye.position.set(scanned.eye.x, scanned.eye.y, side > 0 ? scanned.front + 0.0006 : scanned.back - 0.0006);
-      if (side < 0) eye.rotation.y = Math.PI;
-      body.add(eye);
+    if (scanned.eye) {
+      for (const side of [1, -1]) {
+        const eye = new Mesh(new CircleGeometry(SCANNED_EYE_R, 10), paper(SCANNED_EYE));
+        eye.name = 'eye';
+        eye.position.set(scanned.eye.x, scanned.eye.y, side > 0 ? scanned.front + 0.0006 : scanned.back - 0.0006);
+        if (side < 0) eye.rotation.y = Math.PI;
+        body.add(eye);
+      }
     }
     model.add(body);
     flag.position.copy(scanned.flag);
     body.add(flag);
     return { model, flag, animations: clips(model) };
   }
-  const design = species === 'chicken' ? ORIGAMI.fox : ORIGAMI[species];
-  const body = build(species, design.body, color, [0, 0]);
+  console.error(`[art] foldling_${species} is not loaded; folding a paper fox instead`);
+  const body = build(species, STAND_IN.body, color, [0, 0]);
   model.add(body);
-  flag.position.set(design.flag[0], design.flag[1], 0);
+  flag.position.set(STAND_IN.flag[0], STAND_IN.flag[1], 0);
   body.add(flag);
   return { model, flag, animations: clips(model) };
 }

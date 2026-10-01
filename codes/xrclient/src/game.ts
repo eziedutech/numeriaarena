@@ -239,7 +239,7 @@ export class GameSystem extends createSystem({
   private figure?: Figure;
   /** Feedback words rising from the creature and fading out. */
   private pops: { entity: Entity; mesh: Mesh; t: number }[] = [];
-  private species: Species = 'fox';
+  private species: Species = 'dog';
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
   private touchQuat = new Quaternion();
@@ -1302,7 +1302,7 @@ export class GameSystem extends createSystem({
       const style =
         this.species === 'fish'
           ? { arc: 0.06, clip: 'idle', dur: 1.3 }
-          : this.species === 'crane'
+          : this.species === 'bird'
             ? { arc: 0.12, clip: 'idle', dur: 1.1 }
             : { arc: 0.025, clip: 'hop', dur: 1.4 };
       this.figure?.play(style.clip);

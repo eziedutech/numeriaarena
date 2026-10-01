@@ -160,7 +160,7 @@ function staticModel(id: string, name: string, from?: string, color?: number): G
  * the table. The body is folded in code (`origami.ts`); the flag is the
  * origami `flag_small`.
  */
-export function makeFoldling(color: number, species: Species = 'fox'): Figure {
+export function makeFoldling(color: number, species: Species = 'dog'): Figure {
   const folded = makeOrigami(species, color);
   const flagModel = loadModel('flag_small');
   if (!flagModel) return proceduralFoldlingFigure(color);

@@ -6,7 +6,7 @@ const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
 
 /** Origami species that walk out of the book, folded in code (art/origami.ts). */
-export const SPECIES = ['fox', 'rabbit', 'crane', 'chicken', 'frog', 'fish', 'cat', 'elephant'] as const;
+export const SPECIES = ['dog', 'rabbit', 'bird', 'chicken', 'cow', 'fish', 'cat', 'elephant'] as const;
 export type Species = (typeof SPECIES)[number];
 
 const model = (file: string, name: string) => ({
@@ -43,9 +43,13 @@ export default defineAssets({
   paper_bird: model('foldlings/paper_bird.glb', 'Paper Bird'),
   flag_small: model('foldlings/flag_small.glb', 'Number Flag'),
   // Zia's own paper animals: shape and panel tones, painted in code.
-  foldling_chicken: model('foldlings/foldling_chicken.glb', 'Paper Chicken'),
-  foldling_cat: model('foldlings/foldling_cat.glb', 'Paper Cat'),
+  foldling_dog: model('foldlings/foldling_dog.glb', 'Paper Dog'),
   foldling_rabbit: model('foldlings/foldling_rabbit.glb', 'Paper Rabbit'),
+  foldling_bird: model('foldlings/foldling_bird.glb', 'Paper Bird'),
+  foldling_chicken: model('foldlings/foldling_chicken.glb', 'Paper Chicken'),
+  foldling_cow: model('foldlings/foldling_cow.glb', 'Paper Cow'),
+  foldling_fish: model('foldlings/foldling_fish.glb', 'Paper Fish'),
+  foldling_cat: model('foldlings/foldling_cat.glb', 'Paper Cat'),
   foldling_elephant: model('foldlings/foldling_elephant.glb', 'Paper Elephant'),
   robot_partner_a: model('characters/robot_partner_a.glb', 'Robot Partner A'),
   robot_partner_b: model('characters/robot_partner_b.glb', 'Robot Partner B'),
