@@ -2158,6 +2158,7 @@ export class GameSystem extends createSystem({
   private hoverTargets(delta: number): void {
     const step = Math.min(1, delta * HOVER_RATE);
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    const controllers = this.wasControllers;
     const near = (obj: Object3D) => {
       if (!immersive) return false;
       obj.getWorldPosition(this.a);
@@ -2174,11 +2175,18 @@ export class GameSystem extends createSystem({
       if (!obj) return;
       let on: boolean;
       if (e.hasComponent(Balloon)) {
-        // Pointed at with the mouse outside the headset, or a fingertip at the envelope in it.
-        on = immersive ? nearBalloon(obj) : e.hasComponent(Hovered);
-        const held = on ? ((obj.userData.held as number | undefined) ?? 0) + delta : 0;
-        obj.userData.held = held;
-        if (held > BALLOON_HOLD_S) on = false;
+        if (!immersive || controllers) {
+          // Pointed at with the mouse, or with a controller's ray: it waits under the
+          // pointer (and grows a little) for as long as it is pointed at, so the
+          // cursor stays on it until the click.
+          on = e.hasComponent(Hovered);
+        } else {
+          // A fingertip at the envelope, for a while: a hand resting there must not hold it forever.
+          on = nearBalloon(obj);
+          const held = on ? ((obj.userData.held as number | undefined) ?? 0) + delta : 0;
+          obj.userData.held = held;
+          if (held > BALLOON_HOLD_S) on = false;
+        }
       } else {
         on = e.hasComponent(Hovered) || near(obj);
       }

@@ -357,6 +357,13 @@ if (mode === 'click') {
   };
   const before = await lastLog('\\[game\\] balloon ');
   for (let k = 0; k < 6; k++) { await aim(); await sleep(0.25); }
+  // Under the ray the balloon waits: its height stays put while the controller holds still.
+  const y0 = (await posOf('^balloon-0$'))?.y;
+  await sleep(1.5);
+  const y1 = (await posOf('^balloon-0$'))?.y;
+  console.log(y0 !== undefined && y1 !== undefined
+    ? `under the ray for 1.5 s the balloon moved ${((y1 - y0) * 100).toFixed(1)} cm`
+    : 'balloon not found');
   console.log((await lastLog('\\[game\\] balloon ')) === before ? 'ray on a balloon, no trigger: nothing popped' : 'popped without the trigger (wrong)');
   await aim();
   await cli('xr', 'set-select-value', { device: 'controller-right', value: 1 }); await sleep(0.2);
