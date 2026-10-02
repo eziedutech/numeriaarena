@@ -18,7 +18,7 @@ pub const TERMS_VERSION: &str = "organizer-2026-10-02";
 
 const ORG_KINDS: [&str; 5] = ["school", "tutoring", "community", "event", "personal"];
 
-pub struct ApiError(StatusCode, &'static str);
+pub struct ApiError(pub StatusCode, pub &'static str);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
@@ -87,11 +87,11 @@ pub struct Me {
     terms_version: &'static str,
 }
 
-struct User {
-    id: i64,
-    adult: Adult,
-    name: String,
-    admin: bool,
+pub(crate) struct User {
+    pub(crate) id: i64,
+    pub(crate) adult: Adult,
+    pub(crate) name: String,
+    pub(crate) admin: bool,
 }
 
 fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
@@ -106,7 +106,7 @@ fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
 
 /// Checks the token and records the sign-in. Admin follows the environment's
 /// list on every sign-in, so removing an email there takes the role away.
-async fn signed_in(state: &State, headers: &HeaderMap) -> Result<User, ApiError> {
+pub(crate) async fn signed_in(state: &State, headers: &HeaderMap) -> Result<User, ApiError> {
     let adult = state.verifier.verify(bearer(headers)?).await?;
     let admin = adult.email_verified
         && state

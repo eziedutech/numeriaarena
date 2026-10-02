@@ -1,6 +1,7 @@
 //! Numeria Arena API. For now: health, and the adult side of sign-in
 //! (organizers and admins, docs/SKEMA-PENGGUNA.md). Rooms come later.
 
+mod admin;
 mod auth;
 mod organizer;
 
@@ -47,6 +48,8 @@ pub fn router(state: State) -> Router {
         .route("/api/health", get(organizer::health))
         .route("/api/me", get(organizer::me))
         .route("/api/organizer", post(organizer::register))
+        .route("/api/admin/organizers", get(admin::list))
+        .route("/api/admin/organizers/{id}", post(admin::decide))
         .with_state(state)
 }
 
