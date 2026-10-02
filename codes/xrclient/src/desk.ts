@@ -60,8 +60,8 @@ const STATUS_DROP_M = 0.1;
  * the card (drawn 5.5 cm under the star) clear of the portal behind.
  */
 const READY_ON_BOOK = new Vector3(0, 0.15, 0.06);
-/** While the ghost book follows the hand, the card rides this far above it, over its portal. */
-const STATUS_ABOVE_GHOST_M = 0.3;
+/** While the ghost book waits in front of the player, the card rides this far above it. */
+const STATUS_ABOVE_GHOST_M = 0.34;
 /**
  * Behind the browser preview: a matte warm sand with soft out-of-focus
  * paper shapes, like a blurred desk behind the book, dark enough for cream
@@ -162,7 +162,6 @@ export class DeskSystem extends createSystem({
   private box = new Box3();
   private corner = new Vector3();
   private head = new Vector3();
-  private tip = new Vector3();
   private forward = new Vector3();
 
   init(): void {
@@ -309,7 +308,8 @@ export class DeskSystem extends createSystem({
     this.setPlaced(true, 3);
   }
 
-  private placeInFront(): void {
+  /** A seated desk in front of the player: where the book goes without a table. */
+  private frontOf(target: Object3D): void {
     this.player.head.getWorldPosition(this.head);
     // The head looks down its -Z axis; keep only the horizontal part.
     this.player.head.getWorldDirection(this.forward).negate();
@@ -318,8 +318,12 @@ export class DeskSystem extends createSystem({
     this.forward.normalize();
     const x = this.head.x + this.forward.x * SEATED_REACH_M;
     const z = this.head.z + this.forward.z * SEATED_REACH_M;
-    this.root.position.set(x, this.head.y - SEATED_DROP_M, z);
-    this.root.rotation.set(0, Math.atan2(this.head.x - x, this.head.z - z), 0);
+    target.position.set(x, this.head.y - SEATED_DROP_M, z);
+    target.rotation.set(0, Math.atan2(this.head.x - x, this.head.z - z), 0);
+  }
+
+  private placeInFront(): void {
+    this.frontOf(this.root);
     this.setPlaced(true, 4);
     console.info('[desk] no reachable table and no pinch: placed in front of the player');
   }
@@ -398,13 +402,12 @@ export class DeskSystem extends createSystem({
       });
       return;
     }
-    // No table: a ghost book follows the right hand; a pinch puts it down.
-    // (The hand's ray origin follows a tracked hand everywhere, the emulator included.)
+    // No table: a ghost book waits in the middle, in front of the player at
+    // seated desk height, turning with the head; a pinch with either hand
+    // puts it down there. It is where the book lands anyway when the wait
+    // runs out, so the book never jumps from the side to the middle.
     this.ghost.visible = true;
-    this.player.raySpaces.right.getWorldPosition(this.tip);
-    this.player.head.getWorldPosition(this.head);
-    this.ghost.position.copy(this.tip);
-    this.ghost.rotation.set(0, Math.atan2(this.head.x - this.tip.x, this.head.z - this.tip.z), 0);
+    this.frontOf(this.ghost);
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
     this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT, this.ghost.position, {
       name: 'status_pinch_to_place',
