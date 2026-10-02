@@ -53,19 +53,19 @@ const CSS = `
   font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif; color: ${INK}; }
 #home .stage { position: absolute; left: 0; top: 0; width: ${STAGE_W}px; height: ${STAGE_H}px; transform-origin: 0 0; }
 #home .stage > * { pointer-events: auto; }
-#home .title { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 430px; }
+#home .title { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: 430px; }
 #home .shadow { box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); }
-#home .tabs { position: absolute; left: 50%; top: 112px; transform: translateX(-50%); display: flex; }
+#home .tabs { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; }
 #home .tab { padding: 10px 18px; background: ${PAPER}; display: flex; align-items: center; cursor: pointer; border: 0; }
 #home .tab.label { cursor: default; }
 #home .tab.on { background: ${COLORS.teal}; }
 #home .tab.off { opacity: 0.45; cursor: not-allowed; }
-#home .chips { position: absolute; left: 50%; top: 172px; transform: translateX(-50%); display: flex; gap: 46px; }
+#home .chips { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); display: flex; gap: 46px; }
 #home .chip { padding: 9px 16px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
-#home .hint { position: absolute; left: 50%; top: 228px; transform: translateX(-50%); font-size: 15px;
-  background: rgba(255, 248, 236, 0.86); padding: 4px 10px; white-space: nowrap; }
+#home .hint { position: absolute; left: 50%; top: 266px; transform: translateX(-50%); font-size: 15px; color: ${PAPER};
+  background: rgba(92, 66, 24, 0.42); padding: 5px 12px; white-space: nowrap; }
 #home .head { position: absolute; top: 312px; }
 #home .card { position: absolute; width: 350px; height: 78px; display: flex; align-items: center; gap: 14px;
   padding: 12px 18px 12px 12px; cursor: pointer; transition: transform 0.12s; }
