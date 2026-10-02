@@ -103,7 +103,7 @@ export type Emote = 'thumbs_up' | 'clap';
 
 export type RaceEvent =
   | { type: 'wave_start'; at_ms: number; wave: number; game: GameKind; ends_at_ms: number }
-  | { type: 'bot_working'; at_ms: number; desk: number; prompt: string }
+  | { type: 'bot_working'; at_ms: number; desk: number; prompt: { en: string; id: string } }
   | { type: 'bot_answer'; at_ms: number; desk: number; correct: boolean; attempt: number; points: number }
   | { type: 'emote'; at_ms: number; desk: number; emote: Emote }
   | { type: 'time_up'; at_ms: number; wave: number | null; player_cut: boolean }

@@ -23,7 +23,7 @@ use crate::fairness::{
 };
 use crate::rng::Rng;
 use crate::session::{Offer, SessionConfig, SessionError, SoloSession, Verdict};
-use crate::template::ItemTemplate;
+use crate::template::{I18n, ItemTemplate};
 
 /// Desk index of the player; the bots sit at 1 and 2.
 pub const PLAYER: usize = 0;
@@ -106,11 +106,11 @@ pub enum RaceEvent {
         game: GameType,
         ends_at_ms: f64,
     },
-    /// A bot started on a creature; `prompt` is shown in its window.
+    /// A bot started on a creature; `prompt` is shown in its window, in the player's language.
     BotWorking {
         at_ms: f64,
         desk: usize,
-        prompt: String,
+        prompt: I18n,
     },
     BotAnswer {
         at_ms: f64,
@@ -652,7 +652,7 @@ impl RaceMatch {
         self.events.push(RaceEvent::BotWorking {
             at_ms: at,
             desk: d + 1,
-            prompt: item.prompt.en.clone(),
+            prompt: item.prompt.clone(),
         });
         self.bots[d].work = Some(Work {
             b: item.b,

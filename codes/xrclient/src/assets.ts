@@ -1,6 +1,6 @@
 import { AssetType, defineAssets } from '@iwsdk/core';
 
-import { UI_FILES, UI_FIRST, UI_PLACEMENT, type UiName } from './art/ui2d.js';
+import { UI_FIRST, UI_PLACEMENT, UI_TEXTURES, type UiName } from './art/ui2d.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -18,20 +18,27 @@ const model = (file: string, name: string) => ({
 });
 
 /**
- * Paper UI images (public/ui2d), keyed `ui_<name>`: the menu's before the
- * game starts, the book placement's in the background, the rest on demand
- * (fetched one by one once the home page is up, see `prefetchUi`).
+ * Paper UI images (public/ui2d), keyed `ui_<name>` and `ui_<name>_id` for the
+ * Indonesian version: the menu's before the game starts, the book
+ * placement's in the background, the rest on demand (fetched one by one in
+ * the current language once the home page is up, see `prefetchUi`).
  */
-const uiPriority = (name: UiName) =>
-  UI_FIRST.includes(name) ? ('critical' as const) : UI_PLACEMENT.includes(name) ? ('background' as const) : ('lazy' as const);
+const uiPriority = (key: string, name: UiName) =>
+  key.endsWith('_id')
+    ? ('lazy' as const)
+    : UI_FIRST.includes(name)
+      ? ('critical' as const)
+      : UI_PLACEMENT.includes(name)
+        ? ('background' as const)
+        : ('lazy' as const);
 const uiTextures = Object.fromEntries(
-  (Object.keys(UI_FILES) as UiName[]).map((name) => [
-    `ui_${name}`,
+  UI_TEXTURES.map(({ key, name, file }) => [
+    key,
     {
-      url: publicAssetUrl(UI_FILES[name]),
+      url: publicAssetUrl(file),
       type: AssetType.Texture,
-      name: `UI ${name}`,
-      priority: uiPriority(name),
+      name: `UI ${key.slice(3)}`,
+      priority: uiPriority(key, name),
     },
   ]),
 );

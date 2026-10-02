@@ -50,7 +50,7 @@ import {
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { makePaperHand } from './art/paper-hand.js';
-import { placeUiImage, prefetchUi, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
+import { placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
 import {
   Core,
   Race,
@@ -495,10 +495,13 @@ export class GameSystem extends createSystem({
         .catch(() => this.home.setXrAvailable(false));
 
     useLanguage(getLang());
-    // A setting changed on the desk or the home page: new text from now on,
-    // and the desk menu redrawn so its cards show the new choice.
+    useUiLanguage(getLang());
+    // A setting changed on the desk or the home page: new text and stickers
+    // from now on, and the desk menu redrawn so its cards show the new choice.
     onSettings(() => {
       useLanguage(getLang());
+      useUiLanguage(getLang());
+      void prefetchUi();
       if (this.phase === 'menu' && this.queries.buttons.entities.size > 0) {
         this.clearMenu();
         this.showMenu(this.menuOnly);
@@ -1360,7 +1363,7 @@ export class GameSystem extends createSystem({
         break;
       }
       case 'bot_working':
-        scene.working(ev.desk, ev.prompt);
+        scene.working(ev.desk, ev.prompt[getLang()]);
         break;
       case 'bot_answer':
         scene.answered(ev.desk, ev.correct);

@@ -75,27 +75,85 @@ export const UI_FILES: Record<UiName, string> = {
 };
 
 
+/**
+ * Stickers with an Indonesian version beside them (`<file>_id.webp`, made by
+ * scripts/ui-id.py from the English sticker and the asset set's glyphs).
+ * Game names, CLIP and CREASE read the same in both languages.
+ */
+const HAS_ID: ReadonlySet<UiName> = new Set<UiName>([
+  'status_finding_table',
+  'status_pinch_to_place',
+  'status_ready',
+  'race_wave_1',
+  'race_wave_2',
+  'race_wave_3',
+  'race_boss_round',
+  'race_double_points',
+  'race_times_up',
+  'robot_nice_cobalt',
+  'robot_nice_teal',
+  'robot_yay_cobalt',
+  'robot_yay_teal',
+  'robot_got_it_cobalt',
+  'robot_got_it_teal',
+  'hint_pop_right_answer',
+  'feedback_try_again',
+  'recap_title',
+  'badge_label_best_comeback',
+  'badge_label_most_improved',
+  'badge_label_sharpest_aim',
+  'badge_label_steady_streak',
+  'badge_label_brave_try',
+  'button_done',
+]);
+
+/** Asset manifest entries: `ui_<name>` for each sticker, `ui_<name>_id` for its Indonesian version. */
+export const UI_TEXTURES: readonly { key: string; name: UiName; file: string }[] = (Object.keys(UI_FILES) as UiName[]).flatMap(
+  (name) => {
+    const file = UI_FILES[name];
+    const own = { key: `ui_${name}`, name, file };
+    return HAS_ID.has(name) ? [own, { key: `ui_${name}_id`, name, file: file.replace(/\.webp$/u, '_id.webp') }] : [own];
+  },
+);
+
+let uiLang: 'en' | 'id' = 'en';
+
+/** The language the stickers are drawn in from now on (the game calls this with every settings change). */
+export function useUiLanguage(lang: 'en' | 'id'): void {
+  uiLang = lang;
+}
+
+/** The texture for `name` in the current language. */
+function key(name: UiName): string {
+  return uiLang === 'id' && HAS_ID.has(name) ? `ui_${name}_id` : `ui_${name}`;
+}
+
 /** Shown on the menu, so loaded before the game starts. */
 export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forge', 'menu_robot_race', 'title_numeria_arena'];
 /** Shown while the book is placed in the headset: loaded in the background right away. */
 export const UI_PLACEMENT: readonly UiName[] = ['status_finding_table', 'status_pinch_to_place', 'status_ready'];
 
-let prefetching = false;
+const prefetched = new Set<'en' | 'id'>();
 
 /**
- * Fetches the rest (race, robots, results) one at a time once the home page
- * is up, so on a slow network they do not crowd out what the page needs
- * first and none waits long enough to time out. Anything shown before it
- * arrives keeps its text card until then (see `placeUiImage`).
+ * Fetches the rest (race, robots, results) in the current language one at a
+ * time once the home page is up, so on a slow network they do not crowd out
+ * what the page needs first and none waits long enough to time out. Called
+ * again when the language changes. Anything shown before it arrives keeps
+ * its text card until then (see `placeUiImage`).
  */
 export async function prefetchUi(): Promise<void> {
-  if (prefetching) return;
-  prefetching = true;
-  for (const name of Object.keys(UI_FILES) as UiName[]) {
-    if (UI_FIRST.includes(name) || UI_PLACEMENT.includes(name)) continue;
-    if (AssetManager.getTexture(`ui_${name}`)) continue;
+  if (prefetched.has(uiLang)) return;
+  prefetched.add(uiLang);
+  // In Indonesian the placement stickers' own versions come first: the manifest only preloads the English ones.
+  const names = Object.keys(UI_FILES) as UiName[];
+  const order = [...names.filter((n) => UI_PLACEMENT.includes(n)), ...names.filter((n) => !UI_PLACEMENT.includes(n))];
+  for (const name of order) {
+    if (UI_FIRST.includes(name) || (UI_PLACEMENT.includes(name) && key(name) === `ui_${name}`)) continue;
+    const id = key(name);
+    if (AssetManager.getTexture(id)) continue;
     try {
-      await AssetManager.loadTextureById(`ui_${name}`);
+      await AssetManager.loadTextureById(id);
     } catch (error) {
       console.warn(`[ui] ${name} did not prefetch; it loads when shown`, error);
     }
@@ -108,7 +166,8 @@ export async function prefetchUi(): Promise<void> {
  * keeps its text card instead.
  */
 export function uiImage(name: UiName, scale = 1, maxWidth = Infinity): Mesh | null {
-  const shared = AssetManager.getTexture(`ui_${name}`) as Texture | undefined;
+  // Only the current language: an English sticker never stands in for an Indonesian text card.
+  const shared = AssetManager.getTexture(key(name)) as Texture | undefined;
   const image = shared?.image as { width: number; height: number } | undefined;
   if (!shared || !image?.width) return null;
   // A clone shares the image, and can be disposed with its mesh on its own.
@@ -192,7 +251,7 @@ export function placeUiImage(
   const now = put();
   if (now) return now;
   const stand = opts.fallback?.();
-  AssetManager.loadTextureById(`ui_${name}`)
+  AssetManager.loadTextureById(key(name))
     .then(() => {
       // The card may have gone meanwhile (the menu closed); then so do we.
       if (stand && !stand.parent) return;
