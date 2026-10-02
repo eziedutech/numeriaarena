@@ -40,6 +40,8 @@ export class Label {
   private text = '';
   /** How far the plane is shifted up (in plane units) for its anchor. */
   private shift = 0;
+  private baseX = 1;
+  private baseY = 1;
   private opts: Required<LabelOptions>;
 
   constructor(text: string, opts: LabelOptions = {}) {
@@ -155,6 +157,13 @@ export class Label {
       this.shift = shift;
     }
     // The mesh covers the shadow room too, so the card stays `height` tall.
-    this.mesh.scale.set(height * (this.canvas.width / h), height * (this.canvas.height / h), 1);
+    this.baseX = height * (this.canvas.width / h);
+    this.baseY = height * (this.canvas.height / h);
+    this.mesh.scale.set(this.baseX, this.baseY, 1);
+  }
+
+  /** Grows the card by `k` around its anchor (1 is its own size), for a gentle pulse. */
+  pulse(k: number): void {
+    this.mesh.scale.set(this.baseX * k, this.baseY * k, 1);
   }
 }

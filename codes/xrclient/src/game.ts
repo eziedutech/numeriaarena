@@ -194,6 +194,14 @@ const ORB_FLIGHT_S = 0.45;
 const SELECT_LIFT = 0.025;
 /** Feedback pops rise and fade over this long (seconds). */
 const POP_S = 1.8;
+/** The question card breathes while it waits for an answer: this much bigger, once per this many seconds. */
+const PROMPT_PULSE = 0.05;
+const PROMPT_PULSE_S = 1.1;
+/** Where the points are shown: the practice score, or the race scoreboard's middle row. */
+const SCORE_AT = new Vector3(0, 0.36, -0.15);
+const BOARD_AT = new Vector3(0, 0.424, -0.15);
+/** A right answer's creature flies up to the points in this many seconds. */
+const TO_SCORE_S = 1.0;
 const RIGHT_INK = 0x2f7d32;
 /** A clear red for wrong answers; the words stay friendly ("Try again!"). */
 const WRONG_INK = 0xc62828;
@@ -660,14 +668,11 @@ export class GameSystem extends createSystem({
 
   /** The paper title stands in for the score line while the menu is up. */
   private showTitle(): void {
-    if (!this.title) return;
-    if (this.homeWasShown) {
-      this.title.visible = false;
-      return;
-    }
     const menu = this.phase === 'menu';
-    this.title.visible = menu;
-    this.score.mesh.visible = !menu && !this.race;
+    // The score shows during play even when the title never loaded (a game started from the home page).
+    this.score.mesh.visible = !this.homeWasShown && !menu && !this.race;
+    if (!this.title) return;
+    this.title.visible = !this.homeWasShown && menu;
   }
 
   private showMenu(only: 'all' | 'practice' = 'all'): void {
@@ -763,6 +768,9 @@ export class GameSystem extends createSystem({
 
   private start(choice: MenuChoice): void {
     this.phase = 'loading';
+    // Started from the home page, the 3D menu (which puts the score on the desk) never showed.
+    const desk = this.deskEntity()?.object3D;
+    if (desk && !this.score.mesh.parent) desk.add(this.score.mesh);
     this.showTitle();
     this.clear(this.queries.buttons);
     this.envelopes.clear();
@@ -1266,19 +1274,20 @@ export class GameSystem extends createSystem({
       this.timing = false;
       this.timerBar.visible = false;
     }
+    // Practice points go up when the creature reaches them (see `foldHome`).
     if (this.race) this.refreshRace();
-    else this.score.set(T.points(v.total_points));
+    else if (!v.correct) this.score.set(T.points(v.total_points));
     const creature = this.creature();
     if (!creature) return;
     const obj = creature.object3D!;
     if (v.correct) {
       this.figure?.mark?.('right');
       this.solveCard();
-      this.pop(T.earned('race_points' in v ? v.race_points : v.points), RIGHT_INK);
       this.clear(this.queries.balloons);
       this.clear(this.queries.crystals);
       this.clear(this.queries.orbs);
-      this.foldHome(creature, this.offer ? accentForSkill(this.offer.skill) : 0xffffff);
+      const gained = 'race_points' in v ? v.race_points : v.points;
+      this.foldHome(creature, this.offer ? accentForSkill(this.offer.skill) : 0xffffff, gained, v.total_points);
       return;
     }
     // Wrong: the flag turns red and the creature bounces. With a second try
@@ -1334,12 +1343,12 @@ export class GameSystem extends createSystem({
    * turns red or green with the answer.
    */
   /** `paper`: a paper banner to show instead of the text card, once loaded. */
-  private pop(text: string, ink: number, paper?: UiName): void {
-    const mesh = (paper && uiImage(paper, 0.9)) || new Label(text, { height: 0.034, ink }).mesh;
+  private pop(text: string, ink: number, paper?: UiName, at?: Vector3, height = 0.034): void {
+    const mesh = (paper && uiImage(paper, 0.9)) || new Label(text, { height, ink }).mesh;
     mesh.name = 'feedback-pop';
     const holder = new Group();
     holder.name = 'feedback-pop';
-    holder.position.copy(STAND).add(new Vector3(0.11, 0.09, 0.02));
+    holder.position.copy(at ?? STAND.clone().add(new Vector3(0.11, 0.09, 0.02)));
     holder.add(mesh);
     this.labels.add(mesh);
     const entity = this.add(holder);
@@ -1493,7 +1502,7 @@ export class GameSystem extends createSystem({
    * into the portal. Only the procedural stand-in, which has no clips, still
    * folds into a paper bird.
    */
-  private foldHome(creature: Entity, color: number): void {
+  private foldHome(creature: Entity, color: number, gained: number, total: number): void {
     this.phase = 'between';
     const obj = creature.object3D!;
     const cheer = this.figure?.play('cheer', true);
@@ -1501,19 +1510,16 @@ export class GameSystem extends createSystem({
       this.fly(creature, color);
       return;
     }
-    // A tween that stays in place waits out the cheer.
+    // A tween that stays in place waits out the cheer, then the creature
+    // floats up to the points and the points go up as it arrives.
     this.tween(obj, obj.position.clone(), cheer.getClip().duration, 0, obj.scale.x, () => {
-      // Head (+X) off the back right of the table, past the line.
-      obj.rotation.y = 0;
-      const style =
-        this.species === 'fish'
-          ? { arc: 0.06, clip: 'idle', dur: 1.3 }
-          : this.species === 'bird'
-            ? { arc: 0.12, clip: 'idle', dur: 1.1 }
-            : { arc: 0.025, clip: 'hop', dur: 1.4 };
-      this.figure?.play(style.clip);
-      this.tween(obj, EXIT, style.dur, style.arc, this.creatureScale * 0.25, () => {
+      const to = this.race ? BOARD_AT : SCORE_AT;
+      this.figure?.play('idle');
+      this.tween(obj, to, TO_SCORE_S, 0.05, this.creatureScale * 0.2, () => {
         this.remove(creature);
+        if (!this.race) this.score.set(T.points(total));
+        // A small +N rises beside the points and fades.
+        this.pop(`+${gained}`, RIGHT_INK, undefined, to.clone().add(new Vector3(0.11, 0, 0.01)), 0.024);
         this.next();
       });
     });
@@ -1653,6 +1659,11 @@ export class GameSystem extends createSystem({
     // the browser camera outside it).
     this.camera.getWorldPosition(this.head);
     for (const m of this.labels) if (m.parent) m.lookAt(this.head);
+    // The question breathes while it waits, so the eye finds it.
+    if (this.prompt && this.phase === 'playing') {
+      const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PROMPT_PULSE_S) * Math.PI * 2);
+      this.prompt.pulse(1 + PROMPT_PULSE * k);
+    }
 
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();
