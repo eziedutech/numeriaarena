@@ -31,7 +31,7 @@ void (async () => {
   try {
     const json = (await (await fetch(`${BASE}ui2d/font/paper_glyphs.json`)).json()) as Atlas;
     const image = new Image();
-    image.src = `${BASE}ui2d/font/paper_glyphs_K.png`;
+    image.src = `${BASE}ui2d/font/paper_glyphs_K.webp`;
     await image.decode();
     atlas = json;
     sheet = image;

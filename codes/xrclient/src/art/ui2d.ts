@@ -42,41 +42,65 @@ export type UiName = keyof typeof UI_HEIGHT;
 
 /** Published files, for the asset manifest. */
 export const UI_FILES: Record<UiName, string> = {
-  title_numeria_arena: 'ui2d/brand/title_numeria_arena.png',
-  menu_robot_race: 'ui2d/menu/menu_robot_race.png',
-  menu_balloon_burst: 'ui2d/menu/menu_balloon_burst.png',
-  menu_orb_forge: 'ui2d/menu/menu_orb_forge.png',
-  status_finding_table: 'ui2d/placement/status_finding_table.png',
-  status_pinch_to_place: 'ui2d/placement/status_pinch_to_place.png',
-  status_ready: 'ui2d/placement/status_ready.png',
-  race_wave_1: 'ui2d/race/race_wave_1.png',
-  race_wave_2: 'ui2d/race/race_wave_2.png',
-  race_wave_3: 'ui2d/race/race_wave_3.png',
-  race_boss_round: 'ui2d/race/race_boss_round.png',
-  race_double_points: 'ui2d/race/race_double_points.png',
-  race_times_up: 'ui2d/race/race_times_up.png',
-  race_name_clip: 'ui2d/race/race_name_clip.png',
-  race_name_crease: 'ui2d/race/race_name_crease.png',
-  robot_nice_cobalt: 'ui2d/race/robot_nice_cobalt.png',
-  robot_nice_teal: 'ui2d/race/robot_nice_teal.png',
-  robot_yay_cobalt: 'ui2d/race/robot_yay_cobalt.png',
-  robot_yay_teal: 'ui2d/race/robot_yay_teal.png',
-  robot_got_it_cobalt: 'ui2d/race/robot_got_it_cobalt.png',
-  robot_got_it_teal: 'ui2d/race/robot_got_it_teal.png',
-  hint_pop_right_answer: 'ui2d/question/hint_pop_right_answer.png',
-  feedback_try_again: 'ui2d/question/feedback_try_again.png',
-  recap_title: 'ui2d/recap/recap_title.png',
-  badge_label_best_comeback: 'ui2d/recap/badge_label_best_comeback.png',
-  badge_label_most_improved: 'ui2d/recap/badge_label_most_improved.png',
-  badge_label_sharpest_aim: 'ui2d/recap/badge_label_sharpest_aim.png',
-  badge_label_steady_streak: 'ui2d/recap/badge_label_steady_streak.png',
-  badge_label_brave_try: 'ui2d/recap/badge_label_brave_try.png',
-  button_done: 'ui2d/recap/button_done.png',
+  title_numeria_arena: 'ui2d/brand/title_numeria_arena.webp',
+  menu_robot_race: 'ui2d/menu/menu_robot_race.webp',
+  menu_balloon_burst: 'ui2d/menu/menu_balloon_burst.webp',
+  menu_orb_forge: 'ui2d/menu/menu_orb_forge.webp',
+  status_finding_table: 'ui2d/placement/status_finding_table.webp',
+  status_pinch_to_place: 'ui2d/placement/status_pinch_to_place.webp',
+  status_ready: 'ui2d/placement/status_ready.webp',
+  race_wave_1: 'ui2d/race/race_wave_1.webp',
+  race_wave_2: 'ui2d/race/race_wave_2.webp',
+  race_wave_3: 'ui2d/race/race_wave_3.webp',
+  race_boss_round: 'ui2d/race/race_boss_round.webp',
+  race_double_points: 'ui2d/race/race_double_points.webp',
+  race_times_up: 'ui2d/race/race_times_up.webp',
+  race_name_clip: 'ui2d/race/race_name_clip.webp',
+  race_name_crease: 'ui2d/race/race_name_crease.webp',
+  robot_nice_cobalt: 'ui2d/race/robot_nice_cobalt.webp',
+  robot_nice_teal: 'ui2d/race/robot_nice_teal.webp',
+  robot_yay_cobalt: 'ui2d/race/robot_yay_cobalt.webp',
+  robot_yay_teal: 'ui2d/race/robot_yay_teal.webp',
+  robot_got_it_cobalt: 'ui2d/race/robot_got_it_cobalt.webp',
+  robot_got_it_teal: 'ui2d/race/robot_got_it_teal.webp',
+  hint_pop_right_answer: 'ui2d/question/hint_pop_right_answer.webp',
+  feedback_try_again: 'ui2d/question/feedback_try_again.webp',
+  recap_title: 'ui2d/recap/recap_title.webp',
+  badge_label_best_comeback: 'ui2d/recap/badge_label_best_comeback.webp',
+  badge_label_most_improved: 'ui2d/recap/badge_label_most_improved.webp',
+  badge_label_sharpest_aim: 'ui2d/recap/badge_label_sharpest_aim.webp',
+  badge_label_steady_streak: 'ui2d/recap/badge_label_steady_streak.webp',
+  badge_label_brave_try: 'ui2d/recap/badge_label_brave_try.webp',
+  button_done: 'ui2d/recap/button_done.webp',
 };
 
 
 /** Shown on the menu, so loaded before the game starts. */
 export const UI_FIRST: readonly UiName[] = ['menu_balloon_burst', 'menu_orb_forge', 'menu_robot_race', 'title_numeria_arena'];
+/** Shown while the book is placed in the headset: loaded in the background right away. */
+export const UI_PLACEMENT: readonly UiName[] = ['status_finding_table', 'status_pinch_to_place', 'status_ready'];
+
+let prefetching = false;
+
+/**
+ * Fetches the rest (race, robots, results) one at a time once the home page
+ * is up, so on a slow network they do not crowd out what the page needs
+ * first and none waits long enough to time out. Anything shown before it
+ * arrives keeps its text card until then (see `placeUiImage`).
+ */
+export async function prefetchUi(): Promise<void> {
+  if (prefetching) return;
+  prefetching = true;
+  for (const name of Object.keys(UI_FILES) as UiName[]) {
+    if (UI_FIRST.includes(name) || UI_PLACEMENT.includes(name)) continue;
+    if (AssetManager.getTexture(`ui_${name}`)) continue;
+    try {
+      await AssetManager.loadTextureById(`ui_${name}`);
+    } catch (error) {
+      console.warn(`[ui] ${name} did not prefetch; it loads when shown`, error);
+    }
+  }
+}
 
 /**
  * A paper UI image on a plane, `scale` times its asset size and never wider

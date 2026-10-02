@@ -300,7 +300,7 @@ export class Home {
     this.stage = el('div', 'stage', this.root);
 
     const title = el('img', 'title', this.stage);
-    title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.png`;
+    title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.webp`;
     title.alt = 'Numeria Arena';
 
     // Where to play: one of three.

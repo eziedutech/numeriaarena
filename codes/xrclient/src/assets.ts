@@ -1,6 +1,6 @@
 import { AssetType, defineAssets } from '@iwsdk/core';
 
-import { UI_FILES, UI_FIRST, type UiName } from './art/ui2d.js';
+import { UI_FILES, UI_FIRST, UI_PLACEMENT, type UiName } from './art/ui2d.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -17,7 +17,13 @@ const model = (file: string, name: string) => ({
   priority: 'critical' as const,
 });
 
-/** Paper UI images (public/ui2d), keyed `ui_<name>`; the menu's come first. */
+/**
+ * Paper UI images (public/ui2d), keyed `ui_<name>`: the menu's before the
+ * game starts, the book placement's in the background, the rest on demand
+ * (fetched one by one once the home page is up, see `prefetchUi`).
+ */
+const uiPriority = (name: UiName) =>
+  UI_FIRST.includes(name) ? ('critical' as const) : UI_PLACEMENT.includes(name) ? ('background' as const) : ('lazy' as const);
 const uiTextures = Object.fromEntries(
   (Object.keys(UI_FILES) as UiName[]).map((name) => [
     `ui_${name}`,
@@ -25,7 +31,7 @@ const uiTextures = Object.fromEntries(
       url: publicAssetUrl(UI_FILES[name]),
       type: AssetType.Texture,
       name: `UI ${name}`,
-      priority: UI_FIRST.includes(name) ? ('critical' as const) : ('background' as const),
+      priority: uiPriority(name),
     },
   ]),
 );

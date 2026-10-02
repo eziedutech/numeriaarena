@@ -119,3 +119,5 @@ writeFileSync(
   `${JSON.stringify({ source: 'https://github.com/sayazia/orimathassets', commit, license: 'CC0-1.0', assets: uiPicked }, null, 2)}\n`,
 );
 console.log(`copied ${uiPicked.length} UI images and the paper glyphs to ${join(uiDest, 'ui2d')}`);
+// The game loads the UI images as lossless WebP (a third of the PNG size).
+execFileSync('python', [new URL('./ui-webp.py', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], { stdio: 'inherit' });

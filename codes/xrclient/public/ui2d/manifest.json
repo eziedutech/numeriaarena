@@ -5,7 +5,7 @@
   "assets": [
     {
       "name": "title_numeria_arena",
-      "file": "ui2d/brand/title_numeria_arena.png",
+      "file": "ui2d/brand/title_numeria_arena.webp",
       "text": "NUMERIA ARENA",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -21,7 +21,7 @@
     },
     {
       "name": "menu_robot_race",
-      "file": "ui2d/menu/menu_robot_race.png",
+      "file": "ui2d/menu/menu_robot_race.webp",
       "text": "ROBOT RACE",
       "shape": "parallelogram",
       "treatment": "emboss",
@@ -37,7 +37,7 @@
     },
     {
       "name": "menu_balloon_burst",
-      "file": "ui2d/menu/menu_balloon_burst.png",
+      "file": "ui2d/menu/menu_balloon_burst.webp",
       "text": "BALLOON BURST",
       "shape": "parallelogram",
       "treatment": "emboss",
@@ -53,7 +53,7 @@
     },
     {
       "name": "menu_orb_forge",
-      "file": "ui2d/menu/menu_orb_forge.png",
+      "file": "ui2d/menu/menu_orb_forge.webp",
       "text": "ORB FORGE",
       "shape": "parallelogram",
       "treatment": "emboss",
@@ -69,7 +69,7 @@
     },
     {
       "name": "status_finding_table",
-      "file": "ui2d/placement/status_finding_table.png",
+      "file": "ui2d/placement/status_finding_table.webp",
       "text": "FINDING YOUR TABLE",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -85,7 +85,7 @@
     },
     {
       "name": "status_pinch_to_place",
-      "file": "ui2d/placement/status_pinch_to_place.png",
+      "file": "ui2d/placement/status_pinch_to_place.webp",
       "text": "PINCH TO PLACE THE BOOK",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -101,7 +101,7 @@
     },
     {
       "name": "status_ready",
-      "file": "ui2d/placement/status_ready.png",
+      "file": "ui2d/placement/status_ready.webp",
       "text": "READY!",
       "shape": "circle",
       "treatment": "on_color",
@@ -117,7 +117,7 @@
     },
     {
       "name": "race_wave_1",
-      "file": "ui2d/race/race_wave_1.png",
+      "file": "ui2d/race/race_wave_1.webp",
       "text": "WAVE 1 OF 3",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -133,7 +133,7 @@
     },
     {
       "name": "race_wave_2",
-      "file": "ui2d/race/race_wave_2.png",
+      "file": "ui2d/race/race_wave_2.webp",
       "text": "WAVE 2 OF 3",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -149,7 +149,7 @@
     },
     {
       "name": "race_wave_3",
-      "file": "ui2d/race/race_wave_3.png",
+      "file": "ui2d/race/race_wave_3.webp",
       "text": "WAVE 3 OF 3",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -165,7 +165,7 @@
     },
     {
       "name": "race_boss_round",
-      "file": "ui2d/race/race_boss_round.png",
+      "file": "ui2d/race/race_boss_round.webp",
       "text": "BOSS ROUND",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -181,7 +181,7 @@
     },
     {
       "name": "race_double_points",
-      "file": "ui2d/race/race_double_points.png",
+      "file": "ui2d/race/race_double_points.webp",
       "text": "DOUBLE POINTS!",
       "shape": "parallelogram",
       "treatment": "on_color",
@@ -198,7 +198,7 @@
     },
     {
       "name": "race_times_up",
-      "file": "ui2d/race/race_times_up.png",
+      "file": "ui2d/race/race_times_up.webp",
       "text": "TIME'S UP!",
       "shape": "circle",
       "treatment": "on_color",
@@ -214,7 +214,7 @@
     },
     {
       "name": "race_name_clip",
-      "file": "ui2d/race/race_name_clip.png",
+      "file": "ui2d/race/race_name_clip.webp",
       "text": "CLIP (BOT)",
       "shape": "rectangle",
       "treatment": "on_color",
@@ -231,7 +231,7 @@
     },
     {
       "name": "race_name_crease",
-      "file": "ui2d/race/race_name_crease.png",
+      "file": "ui2d/race/race_name_crease.webp",
       "text": "CREASE (BOT)",
       "shape": "rectangle",
       "treatment": "on_color",
@@ -247,7 +247,7 @@
     },
     {
       "name": "robot_nice_cobalt",
-      "file": "ui2d/race/robot_nice_cobalt.png",
+      "file": "ui2d/race/robot_nice_cobalt.webp",
       "text": "NICE!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -264,7 +264,7 @@
     },
     {
       "name": "robot_nice_teal",
-      "file": "ui2d/race/robot_nice_teal.png",
+      "file": "ui2d/race/robot_nice_teal.webp",
       "text": "NICE!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -281,7 +281,7 @@
     },
     {
       "name": "robot_yay_cobalt",
-      "file": "ui2d/race/robot_yay_cobalt.png",
+      "file": "ui2d/race/robot_yay_cobalt.webp",
       "text": "YAY!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -298,7 +298,7 @@
     },
     {
       "name": "robot_yay_teal",
-      "file": "ui2d/race/robot_yay_teal.png",
+      "file": "ui2d/race/robot_yay_teal.webp",
       "text": "YAY!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -315,7 +315,7 @@
     },
     {
       "name": "robot_got_it_cobalt",
-      "file": "ui2d/race/robot_got_it_cobalt.png",
+      "file": "ui2d/race/robot_got_it_cobalt.webp",
       "text": "GOT IT!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -332,7 +332,7 @@
     },
     {
       "name": "robot_got_it_teal",
-      "file": "ui2d/race/robot_got_it_teal.png",
+      "file": "ui2d/race/robot_got_it_teal.webp",
       "text": "GOT IT!",
       "shape": "speech_bubble",
       "treatment": "on_color",
@@ -349,7 +349,7 @@
     },
     {
       "name": "hint_pop_right_answer",
-      "file": "ui2d/question/hint_pop_right_answer.png",
+      "file": "ui2d/question/hint_pop_right_answer.webp",
       "text": "POP THE RIGHT ANSWER",
       "shape": "rectangle",
       "treatment": "emboss",
@@ -365,7 +365,7 @@
     },
     {
       "name": "feedback_try_again",
-      "file": "ui2d/question/feedback_try_again.png",
+      "file": "ui2d/question/feedback_try_again.webp",
       "text": "TRY AGAIN!",
       "shape": "parallelogram",
       "treatment": "on_color",
@@ -381,7 +381,7 @@
     },
     {
       "name": "recap_title",
-      "file": "ui2d/recap/recap_title.png",
+      "file": "ui2d/recap/recap_title.webp",
       "text": "RACE RESULTS",
       "shape": "ribbon",
       "treatment": "emboss",
@@ -397,7 +397,7 @@
     },
     {
       "name": "badge_label_best_comeback",
-      "file": "ui2d/recap/badge_label_best_comeback.png",
+      "file": "ui2d/recap/badge_label_best_comeback.webp",
       "text": "BEST COMEBACK",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -414,7 +414,7 @@
     },
     {
       "name": "badge_label_most_improved",
-      "file": "ui2d/recap/badge_label_most_improved.png",
+      "file": "ui2d/recap/badge_label_most_improved.webp",
       "text": "MOST IMPROVED",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -431,7 +431,7 @@
     },
     {
       "name": "badge_label_sharpest_aim",
-      "file": "ui2d/recap/badge_label_sharpest_aim.png",
+      "file": "ui2d/recap/badge_label_sharpest_aim.webp",
       "text": "SHARPEST AIM",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -448,7 +448,7 @@
     },
     {
       "name": "badge_label_steady_streak",
-      "file": "ui2d/recap/badge_label_steady_streak.png",
+      "file": "ui2d/recap/badge_label_steady_streak.webp",
       "text": "STEADY STREAK",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -465,7 +465,7 @@
     },
     {
       "name": "badge_label_brave_try",
-      "file": "ui2d/recap/badge_label_brave_try.png",
+      "file": "ui2d/recap/badge_label_brave_try.webp",
       "text": "BRAVE TRY",
       "shape": "ribbon",
       "treatment": "on_color",
@@ -482,7 +482,7 @@
     },
     {
       "name": "button_done",
-      "file": "ui2d/recap/button_done.png",
+      "file": "ui2d/recap/button_done.webp",
       "text": "DONE",
       "shape": "rectangle",
       "treatment": "emboss",
