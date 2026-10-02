@@ -522,6 +522,21 @@ export class Home {
       setBigText(!bigText());
       draw();
     });
+    // Shows the paper hand's how-to again on each game's next first creature.
+    const again = el('button', 'btn wide shadow', body);
+    again.appendChild(paperText(t.howtoAgain, 17, INK));
+    again.setAttribute('aria-label', t.howtoAgain);
+    const done = el('p', '', body);
+    again.addEventListener('click', () => {
+      try {
+        for (const k of Object.keys(localStorage)) {
+          if (k.startsWith('numeria.howto.') || k === 'numeria.menuHintSeen') localStorage.removeItem(k);
+        }
+      } catch {
+        // Without storage the how-to shows every time anyway.
+      }
+      done.textContent = t.howtoReset;
+    });
     el('p', '', body).textContent = t.soonBody.accessibility;
     this.actions(body, veil);
   }

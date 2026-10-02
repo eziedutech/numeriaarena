@@ -10,6 +10,8 @@ const EN = {
   language: 'LANGUAGE',
   accessibility: 'ACCESSIBILITY',
   bigNumbers: (on: boolean) => `BIG NUMBERS: ${on ? 'ON' : 'OFF'}`,
+  howtoAgain: 'SHOW THE HOW-TO AGAIN',
+  howtoReset: 'Done. The paper hand will show each game again the next time it comes up.',
   hint: {
     computer: 'Pick where you play first. This computer plays with the mouse; the headset opens the game on your real desk.',
     xr: 'The game opens on your real desk. Put the headset on and play with your hands.',
@@ -118,6 +120,8 @@ const ID: typeof EN = {
   language: 'BAHASA',
   accessibility: 'AKSESIBILITAS',
   bigNumbers: (on: boolean) => `ANGKA BESAR: ${on ? 'NYALA' : 'MATI'}`,
+  howtoAgain: 'TAMPILKAN PETUNJUK LAGI',
+  howtoReset: 'Selesai. Tangan kertas akan memperagakan setiap game lagi saat game itu muncul.',
   hint: {
     computer: 'Pilih dulu tempat bermain. Komputer ini dimainkan dengan mouse; headset membuka game di mejamu sendiri.',
     xr: 'Game terbuka di mejamu sendiri. Pakai headset dan bermain dengan tangan.',
