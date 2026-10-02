@@ -106,7 +106,7 @@ const CSS = `
 #home .town.board .soon { right: auto; left: 10px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
 #home .footer { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; background: ${PAPER}; }
-#home .footer button { padding: 10px 16px; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
+#home .footer button { padding: 10px 14px; white-space: nowrap; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
   border: 0; cursor: pointer; letter-spacing: 0.03em; }
 #home .footer button + button, #home .footer span { border-left: 2px solid rgba(58, 63, 75, 0.12); }
 #home .footer span { padding: 10px 16px; font-size: 15px; }
@@ -413,6 +413,10 @@ export class Home {
       const policy = keys[i] === 'Privacy' || keys[i] === 'For parents' ? { href: '/privacy', label: t.fullPolicy } : undefined;
       b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]], policy));
     });
+    // Teachers and admins: the full teacher page on the site.
+    const teachers = el('button', '', footer);
+    teachers.textContent = t.teacherPage;
+    teachers.addEventListener('click', () => window.location.assign('/manage'));
     el('span', '', footer).textContent = VERSION;
 
     this.back.innerHTML = '';
@@ -653,6 +657,10 @@ export class Home {
           .catch((e) => showError(authErrorCode(e)));
       }),
     );
+    const more = el('a', '', el('p', '', body));
+    more.href = '/manage';
+    more.textContent = t.manageInstead;
+    more.style.color = COLORS.cobalt;
     this.actions(body, veil);
   }
 

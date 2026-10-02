@@ -72,6 +72,8 @@ const EN = {
     'I am a teacher or organizer responsible for the children in my groups, and I will get parental permission as my local rules require.',
   account: 'TEACHER ACCOUNT',
   manageLink: 'Open the teacher page on this site',
+  manageInstead: 'Or open the full teacher page',
+  teacherPage: 'Teacher page',
   errors: {
     'auth/popup-closed-by-user': 'The sign-in window was closed before it finished.',
     'auth/cancelled-popup-request': 'The sign-in window was closed before it finished.',
@@ -184,6 +186,8 @@ const ID: typeof EN = {
     'Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat.',
   account: 'AKUN GURU',
   manageLink: 'Buka halaman guru di situs ini',
+  manageInstead: 'Atau buka halaman guru lengkap',
+  teacherPage: 'Halaman guru',
   errors: {
     'auth/popup-closed-by-user': 'Jendela masuk ditutup sebelum selesai.',
     'auth/cancelled-popup-request': 'Jendela masuk ditutup sebelum selesai.',
