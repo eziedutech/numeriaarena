@@ -43,6 +43,8 @@ fn required(name: &str) -> String {
 pub fn router(state: State) -> Router {
     Router::new()
         .route("/health", get(organizer::health))
+        // The public domain sends only /api here, so the deploy proof lives there too.
+        .route("/api/health", get(organizer::health))
         .route("/api/me", get(organizer::me))
         .route("/api/organizer", post(organizer::register))
         .with_state(state)
