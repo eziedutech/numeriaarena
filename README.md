@@ -182,9 +182,9 @@ places 1st / 2nd / 3rd:
 
 | Time per answer | right 50% | right 75% | right 90% |
 |---|---|---|---|
-| 4 s | 7 / 28 / 65 | 90 / 8 / 2 | 100 / 0 / 0 |
-| 6 s | 8 / 20 / 72 | 66 / 27 / 7 | 93 / 7 / 0 |
-| 10 s | 2 / 8 / 90 | 24 / 38 / 38 | 64 / 31 / 5 |
+| 4 s | 9 / 27 / 64 | 89 / 9 / 2 | 100 / 0 / 0 |
+| 6 s | 8 / 20 / 72 | 65 / 27 / 8 | 93 / 7 / 0 |
+| 10 s | 2 / 8 / 90 | 24 / 37 / 39 | 64 / 31 / 5 |
 
 - Being right matters most: at any pace, a player right 90% of the time usually wins and a player right half the time usually comes last.
 - Speed helps without deciding everything. In an earlier run (with the first ten templates) where the robots did not follow the player's pace, a 10 s player right 75% of the time won only 11 of 100 races and a 4 s player always won.

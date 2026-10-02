@@ -360,8 +360,20 @@ impl SoloSession {
         if usable.is_empty() {
             return Err(SessionError::NoItemForGame(game));
         }
-        let (skill, mut items) =
-            Self::draw(&self.templates, &usable, self.cfg.candidates, &mut self.rng);
+        // Orb Forge asks for two crystals joined, so an answer that cannot be
+        // cut in two (16 - 3 x 5 = 1) is left out, and the draw tried again.
+        let mut draws = 0;
+        let (skill, mut items) = loop {
+            let (skill, mut items) =
+                Self::draw(&self.templates, &usable, self.cfg.candidates, &mut self.rng);
+            if game == GameType::OrbForge {
+                items.retain(|(ti, item)| orb_buildable(&self.templates[*ti], item));
+            }
+            draws += 1;
+            if !items.is_empty() || draws >= 8 {
+                break (skill, items);
+            }
+        };
         if items.is_empty() {
             return Err(SessionError::NoItemForGame(game));
         }
@@ -483,14 +495,9 @@ impl SoloSession {
             GameType::OrbForge => {
                 let max = adapter_u32(&ct.source, game, "max_crystals", 2).clamp(2, 4);
                 let decoys = adapter_u32(&ct.source, game, "decoys", 3) as usize;
-                // Decoys step by `step`; the two exact parts use a step that
-                // divides the answer, so 886 splits into whole numbers, not tens.
-                let step = unit_step(&expected, raw_den, fmt);
-                let split = match expected.checked_div(&step) {
-                    Ok(u) if u.is_integer() => step,
-                    _ => Rational::ONE,
-                };
-                let units = expected.checked_div(&split).map(|u| u.floor()).unwrap_or(1);
+                // Decoys step by `step`; the two exact parts by `split`.
+                let step = orb_step(&expected, raw_den, fmt);
+                let (split, units) = orb_split(&expected, raw_den, fmt);
                 let mut values: Vec<Rational> = Vec::new();
                 if units >= 2 {
                     let k = self.rng.int_between(1, units - 1).unwrap_or(1);
@@ -764,6 +771,51 @@ impl SoloSession {
     pub fn close(&mut self, offer_id: u32) -> bool {
         self.open.remove(&offer_id).is_some()
     }
+}
+
+/// How Orb Forge cuts an answer into two crystals: the size of one part
+/// (a step that divides the answer, so 886 splits into whole numbers, not
+/// tens) and how many such parts the answer holds. Fewer than two parts
+/// (an answer of 1, or 1/8 in eighths) cannot be built from two crystals.
+fn orb_split(expected: &Rational, raw_den: i128, fmt: Option<NumberFormat>) -> (Rational, i128) {
+    let step = orb_step(expected, raw_den, fmt);
+    let split = match expected.checked_div(&step) {
+        Ok(u) if u.is_integer() => step,
+        _ => Rational::ONE,
+    };
+    let units = expected.checked_div(&split).map(|u| u.floor()).unwrap_or(1);
+    (split, units)
+}
+
+/// Orb Forge's step for crystals: crystals read like the target, so a whole
+/// answer from a fraction template (4 x 1 1/2 = 6) steps by whole numbers,
+/// not halves.
+fn orb_step(expected: &Rational, raw_den: i128, fmt: Option<NumberFormat>) -> Rational {
+    let fraction = matches!(
+        fmt,
+        Some(NumberFormat::Fraction { .. }) | Some(NumberFormat::Mixed { .. })
+    );
+    if fraction && expected.is_integer() {
+        unit_step(expected, 1, None)
+    } else {
+        unit_step(expected, raw_den, fmt)
+    }
+}
+
+/// Whether an item's answer can be joined from two crystals.
+fn orb_buildable(ct: &CompiledTemplate, item: &Item) -> bool {
+    let Some(answer) = item.answer.as_ref() else {
+        return false;
+    };
+    let Ok(expected) = Rational::new(answer.num.unwrap_or(0), answer.den.unwrap_or(1)) else {
+        return false;
+    };
+    orb_split(
+        &expected,
+        answer.raw_den.unwrap_or(1),
+        ct.distractor_format(),
+    )
+    .1 >= 2
 }
 
 /// Smallest natural step for near-miss values in the answer's own terms:

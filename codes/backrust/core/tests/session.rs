@@ -205,12 +205,10 @@ fn orb_forge_always_has_an_exact_pair() {
                 target.text
             );
         }
+        // Two crystals, as the game asks ("join 2 crystals"): never the
+        // target alone, which the browser cannot even give.
         let mut pair = None;
         'outer: for i in 0..vals.len() {
-            if vals[i] == t {
-                pair = Some(vec![i]);
-                break;
-            }
             for j in i + 1..vals.len() {
                 if vals[i].checked_add(&vals[j]).unwrap() == t {
                     pair = Some(vec![i, j]);
