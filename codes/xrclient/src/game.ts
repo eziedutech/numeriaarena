@@ -180,7 +180,7 @@ const HOME_CARD_X = 0.26;
 const QUIT_POS = new Vector3(0.395, 0.345, 0.08);
 const QUIT_YAW = -0.65;
 /** A small card for one word: narrower than it is scaled tall, its word kept 2 cm high. */
-const QUIT_SCALE = { x: 0.6, y: 0.72 };
+const QUIT_SCALE = { x: 0.6, y: 0.5 };
 const QUIT_TEXT_H = 0.02;
 const QUIT_ASK_MS = 4000;
 /** How far and how long a pressed desk card sinks. */
@@ -569,8 +569,12 @@ export class GameSystem extends createSystem({
     );
   }
 
-  private pressButton(e: Entity): void {
+  private pressButton(e: Entity, deliberate = false): void {
     console.info(`[menu] pressed ${e.getValue(MenuButton, 'game')} (${e.object3D?.name}) while ${this.phase}`);
+    if (!deliberate && !this.pressMeant()) {
+      console.info('[menu] brushed by a controller without its trigger: ignored');
+      return;
+    }
     // Envelopes open with their own move; the paper cards sink.
     if (e.object3D && !this.envelopes.has(e)) this.dip(e.object3D);
     if (e.getValue(MenuButton, 'game') === 'quit') {
@@ -786,7 +790,7 @@ export class GameSystem extends createSystem({
     if (!e) return;
     if (e.hasComponent(Balloon)) this.popBalloon(e, true);
     else if (e.hasComponent(Crystal)) this.clickCrystal(e);
-    else if (e.hasComponent(MenuButton)) this.pressButton(e);
+    else if (e.hasComponent(MenuButton)) this.pressButton(e, true);
   }
 
   private deskEntity(): Entity | undefined {
@@ -1510,7 +1514,22 @@ export class GameSystem extends createSystem({
     }, PRESS_DIP_MS);
   }
 
-  /** A QUIT card on the desk while a game is on in the headset (see QUIT_X). */
+  /**
+   * Whether a press on a desk card was meant. A click outside the headset and
+   * a fingertip of a tracked hand always are. With controllers, IWSDK also
+   * counts the controller passing through a card as a poke, which a hand
+   * swinging past does by accident (and the emulator's controllers move with
+   * the mouse): there only a press with a trigger held counts, as a ray click is.
+   */
+  private pressMeant(): boolean {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return true;
+    const session = this.world.renderer.xr.getSession();
+    if (session && [...session.inputSources].some((s) => s.hand)) return true;
+    const pads = this.input.xr.gamepads;
+    return Boolean(pads.right?.getSelecting() || pads.left?.getSelecting());
+  }
+
+  /** A QUIT card over the race card while a game is on in the headset (see QUIT_POS). */
   private addQuitCard(): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     this.removeQuitCard();

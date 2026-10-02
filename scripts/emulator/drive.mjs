@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -317,9 +317,41 @@ if (mode === 'quit') {
   console.log(left ? 'after two presses: back at the desk menu' : 'after two presses: still in the game');
 }
 
+// A controller swept through the HOME card must not press it; with its trigger held it must.
+if (mode === 'brush') {
+  await fresh();
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(1.5);
+  const home = await posOf('^menu-home$');
+  if (!home) throw new Error('no HOME card on the desk menu');
+  const at = (dz) => ({ device: 'controller-right', position: w(home.x, home.y, home.z + dz), orientation: ID });
+  for (const dz of [0.12, 0.06, 0.02, -0.01, -0.04, 0.12]) { await cli('xr', 'set-transform', at(dz)); await sleep(0.15); }
+  await sleep(1);
+  console.log((await lastLog('brushed by a controller')) ? 'swept without the trigger: ignored' : 'swept without the trigger: no ignore logged');
+  console.log((await find('^menu-home$')).length > 0 ? 'still in the headset' : 'left the headset (wrong)');
+  await cli('xr', 'set-transform', at(0.12)); await sleep(0.3);
+  // The ray reaches the card first: the press ends the session, and the moves after it have nothing to move.
+  try {
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 1 });
+    for (const dz of [0.06, 0.02, -0.01]) { await cli('xr', 'set-transform', at(dz)); await sleep(0.15); }
+    await sleep(1);
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 0 });
+  } catch (error) {
+    if (!/No active XR session/.test(String(error))) throw error;
+  }
+  await sleep(2);
+  console.log('after a press with the trigger:', (await lastLog('pressed home')) && (await find('^menu-home$')).length === 0 ? 'left the headset' : 'still in the headset');
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
-if (['race', 'orb', 'balloon', 'quit'].includes(mode)) {
-  await cli('xr', 'exit');
+// It also hands the page back as it found it: Y off again (hand touches on
+// balloons are ignored in the emulator; left on, a controller swept by the
+// mouse pops them) and controllers instead of hands.
+if (['race', 'orb', 'balloon', 'quit', 'brush'].includes(mode)) {
+  await allowPokes();
+  // A run that ended the session itself (brush) has nothing left to switch or close.
+  await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
+  await cli('xr', 'exit').catch(() => {});
   console.log(`done in ${Math.round((Date.now() - t0) / 1000)} s`);
 }
