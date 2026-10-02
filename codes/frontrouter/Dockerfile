@@ -6,6 +6,11 @@ WORKDIR /app
 COPY codes/frontrouter/package.json codes/frontrouter/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY codes/frontrouter ./
+# The admin page signs in with Firebase; its web config is public by design.
+ARG VITE_FIREBASE_API_KEY
+ARG VITE_FIREBASE_AUTH_DOMAIN
+ARG VITE_FIREBASE_PROJECT_ID
+ARG VITE_FIREBASE_APP_ID
 RUN bun run build
 
 FROM nginx:1.31.6-alpine

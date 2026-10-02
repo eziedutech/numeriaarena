@@ -785,6 +785,11 @@ export class Home {
     if (org && org.kind !== 'personal') el('p', '', body).textContent = `${org.name}, ${org.country}`;
     el('div', 'step', body).textContent = t.status[me.organizer.status];
     if (me.organizer.status === 'pending') el('p', '', body).textContent = t.pendingBody;
+    // The full teacher page (classes, rooms, and for admins the organizer gate) is on the site.
+    const manage = el('a', '', el('p', '', body));
+    manage.href = '/manage';
+    manage.textContent = t.manageLink;
+    manage.style.color = COLORS.cobalt;
     const out = el('button', 'btn wide shadow', body);
     out.appendChild(paperText(t.signOut, 16, INK));
     out.setAttribute('aria-label', t.signOut);

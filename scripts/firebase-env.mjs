@@ -1,5 +1,6 @@
 // Turns the Firebase web config pasted from the console (credentials/firebase-web.json,
-// a JS snippet) into codes/xrclient/.env.local for Vite. Both files stay out of git.
+// a JS snippet) into .env.local for Vite in codes/xrclient and codes/frontrouter.
+// All of these files stay out of git.
 // Usage: node scripts/firebase-env.mjs   (prints the project id only)
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -17,5 +18,8 @@ for (const [key, env] of Object.entries(fields)) {
   found[key] = m[1];
   lines.push(`VITE_FIREBASE_${env}=${m[1]}`);
 }
-writeFileSync(new URL('codes/xrclient/.env.local', root), `${lines.join('\n')}\n`);
+// The game and the web pages (teacher sign-in, admin) use the same project.
+for (const app of ['xrclient', 'frontrouter']) {
+  writeFileSync(new URL(`codes/${app}/.env.local`, root), `${lines.join('\n')}\n`);
+}
 console.log(found.projectId);
