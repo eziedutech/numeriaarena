@@ -106,6 +106,9 @@ export class RaceCard {
     this.base.mesh.name = 'race-card-paper';
     this.live.mesh.name = 'race-card-live';
     this.live.mesh.position.z = 0.002;
+    // Always after the paper: with the same order the two were sorted by distance,
+    // and on the tilted card a lower row's band (its clock) fell behind the paper.
+    this.live.mesh.renderOrder = 11;
     this.live.mesh.visible = false;
     this.root.add(this.base.mesh, this.live.mesh);
     this.draw();

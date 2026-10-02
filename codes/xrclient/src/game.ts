@@ -171,6 +171,16 @@ const CHOICE_GAP = 0.17;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
+/**
+ * The QUIT card during a game in the headset: on the right of the desk,
+ * opposite the settings and clear of the crystals. The first press (touch or
+ * click) asks, a second within QUIT_ASK_MS leaves to the desk menu.
+ */
+const QUIT_X = 0.39;
+const QUIT_ASK_MS = 4000;
+/** How far and how long a pressed desk card sinks. */
+const PRESS_DIP_M = 0.006;
+const PRESS_DIP_MS = 160;
 const HOME_CARD_SCALE = 0.95;
 /** The first-time hand repeats its press every this many seconds. */
 const HINT_LOOP_S = 2.2;
@@ -301,7 +311,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'done';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'done' | 'quit';
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -322,6 +332,8 @@ export class GameSystem extends createSystem({
   private store?: LocalStore;
   private unsaved: { events: unknown[]; mode: string }[] = [];
   private phase: Phase = 'loading';
+  private quitLabel?: Label;
+  private quitAskedAt = 0;
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
   private shownAt = 0;
@@ -551,6 +563,12 @@ export class GameSystem extends createSystem({
 
   private pressButton(e: Entity): void {
     console.info(`[menu] pressed ${e.getValue(MenuButton, 'game')} (${e.object3D?.name}) while ${this.phase}`);
+    // Envelopes open with their own move; the paper cards sink.
+    if (e.object3D && !this.envelopes.has(e)) this.dip(e.object3D);
+    if (e.getValue(MenuButton, 'game') === 'quit') {
+      this.pressQuit(e);
+      return;
+    }
     if (this.phase === 'recap') {
       if (!this.choiceReady(e)) {
         console.info(`[menu] ${e.object3D?.name} not taken: too soon, or the finger did not come in from outside`);
@@ -594,7 +612,7 @@ export class GameSystem extends createSystem({
       return;
     }
     // PRACTICE AGAIN and Done belong to results; a late touch from them does nothing here.
-    if (pressed === 'again' || pressed === 'done') return;
+    if (pressed === 'again' || pressed === 'done' || pressed === 'quit') return;
     this.hideHint(true);
     const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
@@ -1194,7 +1212,7 @@ export class GameSystem extends createSystem({
     this.practiceBase = this.practiceTotal;
     if (choice === 'race') {
       this.phase = 'loading';
-      this.startRace(resume).catch((error) => {
+      this.startRace(resume).then(() => this.addQuitCard()).catch((error) => {
         console.error('[race] could not start', error);
         this.showMenu();
       });
@@ -1205,6 +1223,7 @@ export class GameSystem extends createSystem({
     // Practice keeps its own running score where the title stood.
     this.score.set(T.points(0));
     this.spawnPractice();
+    this.addQuitCard();
   }
 
   // ------------------------------------------------------------ Race
@@ -1402,6 +1421,7 @@ export class GameSystem extends createSystem({
     this.saveAnswers();
     this.phase = 'recap';
     this.clearPlay();
+    this.removeQuitCard();
     this.raceScene.showRecap(recap, T.you);
     const own = recap.players.find((p) => !p.bot);
     if (own) this.saveBest(own.points, own.stars);
@@ -1428,6 +1448,7 @@ export class GameSystem extends createSystem({
    */
   private showPracticeDone(points: number): void {
     this.phase = 'recap';
+    this.removeQuitCard();
     this.saveAnswers();
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
     const desk = this.deskEntity()?.object3D;
@@ -1464,6 +1485,73 @@ export class GameSystem extends createSystem({
     } else {
       this.showMenu();
     }
+  }
+
+  /**
+   * A pressed card sinks into the desk side a few millimetres and comes back,
+   * so a press (touch, trigger or click) shows as one, apart from a hover.
+   */
+  private dip(obj: Object3D): void {
+    if (obj.userData.dipping) return;
+    obj.userData.dipping = true;
+    obj.position.z -= PRESS_DIP_M;
+    setTimeout(() => {
+      obj.position.z += PRESS_DIP_M;
+      obj.userData.dipping = false;
+    }, PRESS_DIP_MS);
+  }
+
+  /** A QUIT card on the desk while a game is on in the headset (see QUIT_X). */
+  private addQuitCard(): void {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
+    this.removeQuitCard();
+    const button = this.addButton('quit', '', QUIT_X, 0xfff8ec, SETTINGS_SCALE);
+    // Approached from outside and up a while before it takes a press, like the results choices.
+    button.userData.choice = true;
+    button.userData.shownAt = performance.now();
+    button.userData.armed = false;
+    this.quitLabel = new Label(T.quit, { height: 0.026, card: false });
+    this.quitLabel.mesh.position.set(0, 0, 0.002);
+    button.add(this.quitLabel.mesh);
+    this.quitAskedAt = 0;
+  }
+
+  private removeQuitCard(): void {
+    for (const e of [...this.queries.buttons.entities]) if (e.getValue(MenuButton, 'game') === 'quit') this.remove(e);
+    this.quitLabel = undefined;
+  }
+
+  /** First press asks (SURE?), a second within QUIT_ASK_MS leaves the game for the desk menu. */
+  private pressQuit(e: Entity): void {
+    const playing = this.phase === 'playing' || this.phase === 'between' || this.phase === 'opening' || (this.phase === 'loading' && this.race);
+    if (!playing || !this.choiceReady(e)) return;
+    const obj = e.object3D;
+    if (!obj) return;
+    const now = performance.now();
+    if (now - this.quitAskedAt > QUIT_ASK_MS) {
+      this.quitAskedAt = now;
+      // The same finger has to come in again for the second press.
+      obj.userData.armed = false;
+      this.quitLabel?.set(T.quitSure);
+      obj.getWorldPosition(this.a);
+      this.pop(T.quitAgain, QUESTION_INK, undefined, this.a.clone().add(new Vector3(0, 0.07, 0)), 0.02);
+      const asked = this.quitAskedAt;
+      setTimeout(() => {
+        if (this.quitAskedAt === asked) this.quitLabel?.set(T.quit);
+      }, QUIT_ASK_MS);
+      return;
+    }
+    console.info(`[game] quit from the desk while ${this.phase}`);
+    this.quitAskedAt = 0;
+    this.removeQuitCard();
+    if (this.race) {
+      this.endRace();
+      return;
+    }
+    this.opening = undefined;
+    this.clearPlay();
+    this.score.set(T.title);
+    this.showMenu();
   }
 
   /** The HOME card in the headset: end the session; the home page shows once it has ended. */

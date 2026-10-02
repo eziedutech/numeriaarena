@@ -68,6 +68,15 @@ export const EN = {
   onOff: (on: boolean): string => (on ? 'ON' : 'OFF'),
   best: (points: number, stars: number) => `BEST: ${points} PTS${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'FOLD TOWN: SOON',
+  /** The desk card that leaves a game in the headset, and what it says once pressed. */
+  quit: 'QUIT',
+  quitSure: 'SURE?',
+  quitAgain: 'Press again to quit',
+  /** Placing the book in the headset. */
+  ready: 'Ready!',
+  findingTable: 'Finding your table',
+  pinchToPlace: (s: number) => `Pinch to place the book, or wait ${s} s`,
+  orWait: (s: number) => `or wait ${s} s`,
   animal: {
     dog: 'DOG',
     rabbit: 'RABBIT',
@@ -93,7 +102,7 @@ export const ID: Text = {
   place: ORDINAL_ID,
   rival: (solved: number, points: number) => `${solved} BENAR, ${points} POIN`,
   roundRow: (n: number) => `GELOMBANG ${n}`,
-  bossRow: 'BOSS ×2',
+  bossRow: 'BOS ×2',
   gameShort: { balloon_burst: 'BALON', orb_forge: 'KRISTAL' },
   youRow: (place: number, points: number) => `KAMU  ${ORDINAL_ID(place)}  ${points} POIN`,
   nextRound: 'BERIKUTNYA',
@@ -132,6 +141,13 @@ export const ID: Text = {
   onOff: (on: boolean) => (on ? 'NYALA' : 'MATI'),
   best: (points: number, stars: number) => `TERBAIK: ${points} POIN${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'KOTA LIPAT: SEGERA',
+  quit: 'KELUAR',
+  quitSure: 'YAKIN?',
+  quitAgain: 'Tekan lagi untuk keluar',
+  ready: 'Siap!',
+  findingTable: 'Mencari mejamu',
+  pinchToPlace: (s: number) => `Cubit untuk menaruh buku, atau tunggu ${s} detik`,
+  orWait: (s: number) => `atau tunggu ${s} detik`,
   animal: {
     dog: 'ANJING',
     rabbit: 'KELINCI',

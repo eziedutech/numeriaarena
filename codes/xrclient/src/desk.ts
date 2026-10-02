@@ -19,6 +19,7 @@ import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
+import { T } from './text.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
 const TABLE_WAIT_S = 3;
@@ -384,7 +385,7 @@ export class DeskSystem extends createSystem({
         // On the book itself, over the front of the pages and under the
         // portal, so it never covers the portal or the title.
         this.root.localToWorld(this.readyAt.copy(READY_ON_BOOK));
-        this.showStatus('Ready!', delta, false, 0, this.readyAt, { name: 'status_ready', scale: 0.55 }, 0);
+        this.showStatus(T.ready, delta, false, 0, this.readyAt, { name: 'status_ready', scale: 0.55 }, 0);
       } else {
         this.status.visible = false;
         this.curtain.visible = false;
@@ -396,7 +397,7 @@ export class DeskSystem extends createSystem({
     this.waited += delta;
     if (this.waited < TABLE_WAIT_S) {
       const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
-      this.showStatus(`Finding your table${dots}`, delta, true, CURTAIN_WAIT, undefined, {
+      this.showStatus(`${T.findingTable}${dots}`, delta, true, CURTAIN_WAIT, undefined, {
         name: 'status_finding_table',
         scale: 1.2,
       });
@@ -409,10 +410,10 @@ export class DeskSystem extends createSystem({
     this.ghost.visible = true;
     this.frontOf(this.ghost);
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(`Pinch to place the book, or wait ${left} s`, delta, true, CURTAIN_ACT, this.ghost.position, {
+    this.showStatus(T.pinchToPlace(left), delta, true, CURTAIN_ACT, this.ghost.position, {
       name: 'status_pinch_to_place',
       scale: 1.2,
-      small: `or wait ${left} s`,
+      small: T.orWait(left),
     });
     const pads = this.input.xr.gamepads;
     if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
