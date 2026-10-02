@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -291,9 +291,28 @@ if (mode === 'balloon') {
   }
 }
 
+// Starts a race, then leaves it with the QUIT card (two presses) and checks the desk menu is back.
+if (mode === 'quit') {
+  await fresh();
+  const oldFail = await lastLog('race\\] could not start');
+  await card(-0.135);
+  await sleep(3);
+  const fail = await lastLog('race\\] could not start');
+  if (fail && fail !== oldFail) throw new Error(`The race did not start: ${fail}`);
+  const quit = await posOf('^menu-quit$');
+  console.log(quit ? `QUIT card at ${quit.x.toFixed(3)}, ${quit.y.toFixed(3)}, ${quit.z.toFixed(3)}` : 'no QUIT card');
+  const oldQuit = await lastLog('\\[game\\] quit from the desk');
+  await card(0.39);
+  console.log('after one press:', (await logs('\\[menu\\] pressed quit', 1))[0] ?? 'no press logged');
+  await card(0.39);
+  const done = await lastLog('\\[game\\] quit from the desk');
+  console.log(done && done !== oldQuit ? done : 'did not quit');
+  console.log((await find('^menu-race$')).length > 0 ? 'desk menu is back' : 'no desk menu');
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
-if (['race', 'orb', 'balloon'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit'].includes(mode)) {
   await cli('xr', 'exit');
   console.log(`done in ${Math.round((Date.now() - t0) / 1000)} s`);
 }

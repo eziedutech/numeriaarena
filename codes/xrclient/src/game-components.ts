@@ -37,7 +37,12 @@ const Games = {
   Again: 'again',
   /** Done, on any results: it only closes them, so a second touch can never start a game. */
   Done: 'done',
+  /** QUIT, on the desk during a game in the headset. */
+  Quit: 'quit',
 } as const;
+
+/** Every value a MenuButton can carry; the game's choices must be among them. */
+export type MenuButtonValue = (typeof Games)[keyof typeof Games];
 
 export const MenuButton = createComponent('MenuButton', {
   game: { type: Types.Enum, default: Games.BalloonBurst, enum: Games },

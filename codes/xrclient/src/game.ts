@@ -64,7 +64,7 @@ import {
 } from './game/core.js';
 import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
-import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb } from './game-components.js';
+import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb, type MenuButtonValue } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore } from './storage.js';
@@ -312,6 +312,9 @@ interface Drift {
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
 type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'done' | 'quit';
+// A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
+const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
+void BUTTON_CHOICES_IN_ENUM;
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -1212,7 +1215,7 @@ export class GameSystem extends createSystem({
     this.practiceBase = this.practiceTotal;
     if (choice === 'race') {
       this.phase = 'loading';
-      this.startRace(resume).then(() => this.addQuitCard()).catch((error) => {
+      this.startRace(resume).then(() => this.addQuitCardSafely()).catch((error) => {
         console.error('[race] could not start', error);
         this.showMenu();
       });
@@ -1223,7 +1226,7 @@ export class GameSystem extends createSystem({
     // Practice keeps its own running score where the title stood.
     this.score.set(T.points(0));
     this.spawnPractice();
-    this.addQuitCard();
+    this.addQuitCardSafely();
   }
 
   // ------------------------------------------------------------ Race
@@ -1514,6 +1517,16 @@ export class GameSystem extends createSystem({
     this.quitLabel.mesh.position.set(0, 0, 0.002);
     button.add(this.quitLabel.mesh);
     this.quitAskedAt = 0;
+  }
+
+  /** The QUIT card is a convenience: if it cannot be made, the game goes on without it. */
+  private addQuitCardSafely(): void {
+    try {
+      this.addQuitCard();
+    } catch (error) {
+      console.error('[game] the QUIT card could not be made', error);
+      this.removeQuitCard();
+    }
   }
 
   private removeQuitCard(): void {
