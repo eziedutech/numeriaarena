@@ -86,6 +86,7 @@ const CSS = `
 #home .chip { padding: 9px 16px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
+#home .offline { position: absolute; left: 50%; top: 304px; transform: translateX(-50%); }
 #home .hint { position: absolute; left: 50%; top: 266px; transform: translateX(-50%); font-size: 15px; color: ${PAPER};
   background: rgba(92, 66, 24, 0.42); padding: 5px 12px; white-space: nowrap; }
 #home .head { position: absolute; top: 312px; }
@@ -147,6 +148,8 @@ const CSS = `
   animation: home-skel 1.1s ease-in-out infinite alternate; }
 @keyframes home-skel { from { opacity: 0.45; } to { opacity: 1; } }
 body.home-open button[class*="xr" i], body.home-open #VRButton, body.home-open #ARButton { display: none !important; }
+#home-games { position: fixed; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
+  background: ${PAPER}; box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); display: none; }
 #home-back { position: fixed; left: 16px; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
   background: ${PAPER}; box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); display: none; }
 `;
@@ -203,6 +206,9 @@ export class Home {
   private device: Device;
   private scale = 1;
   private shown = false;
+  /** OTHER GAME beside HOME, during a practice in the browser: back to the practice envelopes. */
+  private otherGame: HTMLElement;
+  private otherGameWanted = false;
   private savedEye?: { p: Vector3; q: Quaternion };
   /** The sign-up form opens by itself once per sign-in, not on every redraw. */
   private askedToRegister = false;
@@ -212,6 +218,7 @@ export class Home {
     private xrAvailable: boolean,
     private onPlay: (mode: PlayMode, device: Device) => void,
     private onBack: () => void,
+    private onOtherGame: () => void,
   ) {
     const style = document.createElement('style');
     style.textContent = CSS;
@@ -223,6 +230,9 @@ export class Home {
     this.back = el('button', 'shadow', document.body);
     this.back.id = 'home-back';
     this.back.addEventListener('click', () => this.onBack());
+    this.otherGame = el('button', 'shadow', document.body);
+    this.otherGame.id = 'home-games';
+    this.otherGame.addEventListener('click', () => this.onOtherGame());
     this.lang = getLang();
     // A language picked on the desk shows here too.
     onSettings(() => {
@@ -312,6 +322,20 @@ export class Home {
       }
     }
     this.back.style.display = inGame ? 'block' : 'none';
+    this.placeOtherGame(inGame);
+  }
+
+  /** Shows OTHER GAME beside HOME while a practice is on (the game says when). */
+  setOtherGame(on: boolean): void {
+    if (on === this.otherGameWanted) return;
+    this.otherGameWanted = on;
+    this.placeOtherGame(this.back.style.display === 'block');
+  }
+
+  private placeOtherGame(inGame: boolean): void {
+    const show = inGame && this.otherGameWanted;
+    this.otherGame.style.display = show ? 'block' : 'none';
+    if (show) this.otherGame.style.left = `${16 + this.back.offsetWidth + 12}px`;
   }
 
   private fit(): void {
@@ -342,12 +366,6 @@ export class Home {
       else tab.addEventListener('click', () => this.setDevice(d));
     }
     const chips = el('div', 'chips', this.stage);
-    if (!online()) {
-      // No network: the games still play, and say where their results go.
-      const off = el('div', 'chip shadow', chips);
-      off.appendChild(paperText(t.offline, 17, COLORS.coral));
-      off.setAttribute('role', 'status');
-    }
     const lang = el('div', 'chip shadow', chips);
     lang.appendChild(paperText(t.language, 17, INK));
     for (const code of ['en', 'id'] as Lang[]) {
@@ -367,6 +385,13 @@ export class Home {
     access.setAttribute('aria-label', t.accessibility);
     access.addEventListener('click', () => this.accessibility());
     el('div', 'hint', this.stage).textContent = t.hint[this.device];
+    if (!online()) {
+      // No network: the games still play, and say where their results go. A row of its own,
+      // under the hint, so the chips above keep their width.
+      const off = el('div', 'offline chip shadow', this.stage);
+      off.appendChild(paperText(t.offline, 17, COLORS.coral));
+      off.setAttribute('role', 'status');
+    }
 
     // Left: ways to play.
     const left = el('div', 'head', this.stage);
@@ -457,6 +482,9 @@ export class Home {
     this.back.innerHTML = '';
     this.back.appendChild(paperText(this.lang === 'id' ? 'BERANDA' : 'HOME', 18, INK));
     this.back.setAttribute('aria-label', this.lang === 'id' ? 'Beranda' : 'Home');
+    this.otherGame.innerHTML = '';
+    this.otherGame.appendChild(paperText(this.lang === 'id' ? 'GAME LAIN' : 'OTHER GAME', 18, INK));
+    this.otherGame.setAttribute('aria-label', this.lang === 'id' ? 'Pilih game lain' : 'Choose another game');
     this.fit();
   }
 

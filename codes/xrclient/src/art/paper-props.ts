@@ -297,8 +297,9 @@ export function paperBadge(highlight: string): Group {
   return g;
 }
 
-const BUTTON_W = 0.1;
-const BUTTON_H = 0.065;
+/** The desk card's paper, in metres; a caller may scale it to fit its words. */
+export const BUTTON_W = 0.1;
+export const BUTTON_H = 0.065;
 
 /** A plain card of paper to poke, origin at its centre, front +Z. */
 export function paperButton(color: number): Group {

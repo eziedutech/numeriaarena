@@ -35,6 +35,8 @@ const Games = {
   Town: 'town',
   /** PRACTICE AGAIN, on a practice's results. */
   Again: 'again',
+  /** OTHER GAME, on a practice's results: back to the practice envelopes. */
+  Games: 'games',
   /** Done, on any results: it only closes them, so a second touch can never start a game. */
   Done: 'done',
   /** QUIT, on the desk during a game in the headset. */

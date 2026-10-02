@@ -48,6 +48,7 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
+import { BUTTON_H, BUTTON_W } from './art/paper-props.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { makePaperHand } from './art/paper-hand.js';
 import { placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
@@ -166,8 +167,14 @@ const MENU_GRACE_MS = 800;
  */
 const CHOICE_GRACE_MS = 1200;
 const CHOICE_ARM_M = 0.06;
-const CHOICE_SCALE = 1.55;
-const CHOICE_GAP = 0.17;
+/**
+ * A results choice is a paper card cut to its word: 3 cm letters, CHOICE_PAD
+ * of paper left and right, CHOICE_H tall, and CHOICE_SPACE between two cards.
+ */
+const CHOICE_TEXT_H = 0.03;
+const CHOICE_H = 0.058;
+const CHOICE_PAD = 0.022;
+const CHOICE_SPACE = 0.03;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
@@ -316,7 +323,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'done' | 'quit';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'games' | 'done' | 'quit';
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -506,6 +513,7 @@ export class GameSystem extends createSystem({
       this.world.xrEnabled,
       (mode, device) => this.homePlay(mode, device),
       () => this.goHome(),
+      () => this.otherGame(),
     );
     // The project allows XR; whether this device can open a session is the browser's to say.
     const xr = (navigator as Navigator & { xr?: { isSessionSupported(mode: string): Promise<boolean> } }).xr;
@@ -591,12 +599,16 @@ export class GameSystem extends createSystem({
         return;
       }
       const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
-      // A practice can go round again; anything else on a results screen is Done.
+      // A practice can go round again or back to its envelopes; anything else on a results screen is Done.
       if (pressed === 'again' && !this.race) {
         const kind = this.kind;
         this.clearPracticeCards();
         this.clear(this.queries.buttons);
         this.start(kind);
+        return;
+      }
+      if (pressed === 'games' && !this.race) {
+        this.otherGame();
         return;
       }
       this.endRace();
@@ -628,7 +640,7 @@ export class GameSystem extends createSystem({
       return;
     }
     // PRACTICE AGAIN and Done belong to results; a late touch from them does nothing here.
-    if (pressed === 'again' || pressed === 'done' || pressed === 'quit') return;
+    if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit') return;
     this.hideHint(true);
     const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
@@ -1174,19 +1186,40 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * A choice on a results screen: a coloured paper card with its word in
-   * cream paper letters, the same size for every choice.
+   * A choice on a results screen: a coloured paper card cut to its word in
+   * cream paper letters (see CHOICE_H), the letters the same size for every
+   * choice. Returns the card and its width.
    */
-  private addChoiceButton(choice: ButtonChoice, title: string, x: number, color: number): void {
-    const button = this.addButton(choice, '', x, color, CHOICE_SCALE);
+  private addChoiceButton(choice: ButtonChoice, title: string, x: number, color: number): { button: Object3D; width: number } {
+    const button = this.addButton(choice, '', x, color, 1);
     button.userData.choice = true;
     button.userData.shownAt = performance.now();
     button.userData.armed = false;
-    const l = new Label(title.toUpperCase(), { height: 0.03, card: false, ink: 0xfff8ec });
-    l.mesh.position.set(0, 0, 0.002);
-    // Inside the card's own scale, so the letters stay 3 cm whatever its size.
-    l.mesh.scale.multiplyScalar(1 / CHOICE_SCALE);
-    button.add(l.mesh);
+    const l = new Label(title.toUpperCase(), { height: CHOICE_TEXT_H, card: false, ink: 0xfff8ec });
+    // The label's own width already holds a little paper either side of its letters.
+    const width = l.mesh.scale.x + 2 * CHOICE_PAD;
+    const sx = width / BUTTON_W;
+    const sy = CHOICE_H / BUTTON_H;
+    button.scale.set(sx, sy, 1);
+    button.position.y = CHOICE_H / 2;
+    // In a holder that undoes the card's uneven scale, so the letters keep their shape.
+    const holder = new Group();
+    holder.position.set(0, 0, 0.002);
+    holder.scale.set(1 / sx, 1 / sy, 1);
+    holder.add(l.mesh);
+    button.add(holder);
+    return { button, width };
+  }
+
+  /** Results choices side by side, centred, CHOICE_SPACE apart. */
+  private addChoiceRow(choices: [ButtonChoice, string, number][]): void {
+    const made = choices.map(([choice, title, color]) => this.addChoiceButton(choice, title, 0, color));
+    const total = made.reduce((sum, m) => sum + m.width, 0) + CHOICE_SPACE * (made.length - 1);
+    let left = -total / 2;
+    for (const m of made) {
+      m.button.position.x = left + m.width / 2;
+      left += m.width + CHOICE_SPACE;
+    }
   }
 
   /** A results choice takes a press only once up a while and approached from outside (see CHOICE_GRACE_MS). */
@@ -1481,8 +1514,11 @@ export class GameSystem extends createSystem({
       this.labels.add(l.mesh);
       this.practiceCards.push(l.mesh);
     }
-    this.addChoiceButton('again', T.again, -CHOICE_GAP / 2, 0x3fb6a0);
-    this.addChoiceButton('done', T.done, CHOICE_GAP / 2, 0x3469c4);
+    this.addChoiceRow([
+      ['again', T.again, 0x3fb6a0],
+      ['games', T.otherGame, 0xe8b64c],
+      ['done', T.done, 0x3469c4],
+    ]);
   }
 
   private clearPracticeCards(): void {
@@ -1635,6 +1671,19 @@ export class GameSystem extends createSystem({
     this.start('race', cp ?? undefined);
   }
 
+  /** OTHER GAME over the browser game, or on a practice's results: leave the practice for its envelopes. */
+  private otherGame(): void {
+    if (this.race) return;
+    console.info(`[game] other game chosen while ${this.phase}`);
+    this.removeQuitCard();
+    this.clearPracticeCards();
+    this.clear(this.queries.buttons);
+    this.opening = undefined;
+    this.clearPlay();
+    this.score.set(T.title);
+    this.showMenu('practice');
+  }
+
   /** The Home button over the browser game: leave whatever is on and go back. */
   private goHome(): void {
     if (this.race || this.phase === 'recap') {
@@ -1673,6 +1722,10 @@ export class GameSystem extends createSystem({
     } else {
       this.home.hide(!immersive && this.phase !== 'loading');
     }
+    // A practice in the browser can be left for another game (in the headset QUIT does it).
+    const practising =
+      !this.race && (this.phase === 'playing' || this.phase === 'between' || (this.phase === 'opening' && this.opening?.choice !== 'race'));
+    this.home.setOtherGame(practising);
     // The page has its own title; the 3D title and score come back after it.
     if (home !== this.homeWasShown) {
       this.homeWasShown = home;
