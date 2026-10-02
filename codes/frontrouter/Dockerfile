@@ -16,6 +16,9 @@ RUN bun run build
 FROM nginx:1.31.6-alpine
 COPY codes/frontrouter/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build/client /usr/share/nginx/html
+# A .gz beside every file that compresses, for nginx's gzip_static.
+RUN find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.svg' -o -name '*.html' \) \
+      -exec sh -c 'gzip -9 -c "$1" > "$1.gz"' _ {} \;
 ARG GIT_SHA=dev
 RUN printf '{"sha":"%s"}\n' "$GIT_SHA" > /usr/share/nginx/html/version.json
 EXPOSE 80

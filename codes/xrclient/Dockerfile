@@ -34,6 +34,10 @@ RUN bun run build
 FROM nginx:1.31.6-alpine
 COPY codes/xrclient/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/codes/xrclient/dist /usr/share/nginx/html/play
+# A .gz beside every file that compresses, for nginx's gzip_static: the
+# code shrinks to about a quarter and nothing is compressed per request.
+RUN find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.wasm' -o -name '*.json' -o -name '*.css' \
+      -o -name '*.glb' -o -name '*.svg' -o -name '*.html' \) -exec sh -c 'gzip -9 -c "$1" > "$1.gz"' _ {} \;
 ARG GIT_SHA=dev
 RUN printf '{"sha":"%s"}\n' "$GIT_SHA" > /usr/share/nginx/html/play/version.json
 EXPOSE 80
