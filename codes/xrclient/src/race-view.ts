@@ -25,8 +25,8 @@ const CARD_SCALE = 0.85;
 /** Frame colours match the robots: cobalt (a) and teal (b). */
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
-/** Banners show above the back of the book, clear of the question card. */
-const BOARD_TOP = 0.46;
+/** Banners sit just over the question card, inside the view in the browser and the headset. */
+const BANNER_Y = 0.42;
 const BOARD_Z = -0.15;
 /** Results rows: text height and spacing, larger than the live scoreboard's. */
 const RECAP_TEXT = 0.036;
@@ -136,7 +136,7 @@ export class RaceScene {
     this.clearBanner();
     const group = new Group();
     group.name = 'race-banner';
-    group.position.set(0, BOARD_TOP + 0.12, BOARD_Z);
+    group.position.set(0, BANNER_Y, BOARD_Z);
     const parts = images.map((name) => uiImage(name, 0.8));
     if (parts.length > 0 && parts.every((m) => m)) {
       let y = 0;

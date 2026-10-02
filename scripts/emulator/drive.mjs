@@ -151,7 +151,8 @@ async function carry(held, from, to) {
 }
 
 export async function orbRound() {
-  const line = await lastLog('orb_forge');
+  // Only the offer line: "[menu] pressed orb_forge" mentions the game too.
+  const line = await lastLog('\\[game\\] offer \\d+ orb_forge');
   const m = /target (.+?) crystals (.*)$/.exec(line);
   const T = val(m[1]);
   const xs = m[2].split(', ').map(val);

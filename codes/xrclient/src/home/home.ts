@@ -255,6 +255,24 @@ export class Home {
       });
   }
 
+  /**
+   * Whether this device can really open a headset session, once the browser
+   * has said so (the constructor's value is only the project's setting). A
+   * saved choice of the headset falls back to this computer without one.
+   */
+  setXrAvailable(available: boolean): void {
+    if (available === this.xrAvailable) return;
+    this.xrAvailable = available;
+    if (!available && this.device === 'xr') this.device = 'computer';
+    this.render();
+  }
+
+  /** The headset session could not start: say so, and play here instead. */
+  xrFailed(): void {
+    this.setXrAvailable(false);
+    this.message(this.t.device.xr, this.t.noXrBody);
+  }
+
   get visible(): boolean {
     return this.shown;
   }

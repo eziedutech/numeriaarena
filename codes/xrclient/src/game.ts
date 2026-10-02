@@ -49,6 +49,7 @@ import {
   type Figure,
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
+import { makePaperHand } from './art/paper-hand.js';
 import { placeUiImage, prefetchUi, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
@@ -157,6 +158,16 @@ const HOWTO_KEY = 'numeria.howto.';
  * pressed Done is still there, and an envelope may appear right under it.
  */
 const MENU_GRACE_MS = 800;
+/**
+ * The choice buttons on a results screen (PRACTICE AGAIN, Done) take a press
+ * only once they have been up this long, and only from a fingertip that came
+ * in from at least CHOICE_ARM_M away: a hand resting where they appear, or
+ * hovering over them, never chooses.
+ */
+const CHOICE_GRACE_MS = 1200;
+const CHOICE_ARM_M = 0.06;
+const CHOICE_SCALE = 1.55;
+const CHOICE_GAP = 0.17;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
@@ -475,6 +486,13 @@ export class GameSystem extends createSystem({
       (mode, device) => this.homePlay(mode, device),
       () => this.goHome(),
     );
+    // The project allows XR; whether this device can open a session is the browser's to say.
+    const xr = (navigator as Navigator & { xr?: { isSessionSupported(mode: string): Promise<boolean> } }).xr;
+    if (!xr) this.home.setXrAvailable(false);
+    else
+      Promise.all([xr.isSessionSupported('immersive-ar'), xr.isSessionSupported('immersive-vr')])
+        .then(([ar, vr]) => this.home.setXrAvailable(ar || vr))
+        .catch(() => this.home.setXrAvailable(false));
 
     useLanguage(getLang());
     // A setting changed on the desk or the home page: new text from now on,
@@ -531,6 +549,10 @@ export class GameSystem extends createSystem({
   private pressButton(e: Entity): void {
     console.info(`[menu] pressed ${e.getValue(MenuButton, 'game')} (${e.object3D?.name}) while ${this.phase}`);
     if (this.phase === 'recap') {
+      if (!this.choiceReady(e)) {
+        console.info(`[menu] ${e.object3D?.name} not taken: too soon, or the finger did not come in from outside`);
+        return;
+      }
       const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
       // A practice can go round again; anything else on a results screen is Done.
       if (pressed === 'again' && !this.race) {
@@ -942,16 +964,7 @@ export class GameSystem extends createSystem({
 
   /** A pale paper hand, index finger out along -Z, for showing what to do. */
   private paperHand(name: string): Group {
-    const hand = new Group();
-    hand.name = name;
-    const mat = new MeshBasicMaterial({ color: 0xfff8ec, transparent: true, opacity: 0.85 });
-    const palm = new Mesh(new BoxGeometry(0.026, 0.03, 0.008), mat);
-    const finger = new Mesh(new BoxGeometry(0.008, 0.008, 0.032), mat);
-    finger.position.set(0.004, 0.006, -0.026);
-    const thumb = new Mesh(new BoxGeometry(0.007, 0.007, 0.014), mat);
-    thumb.position.set(-0.014, 0.0, -0.008);
-    hand.add(palm, finger, thumb);
-    return hand;
+    return makePaperHand(name);
   }
 
   /** Starts the how-to for `game` if this device has not seen it. */
@@ -1022,7 +1035,7 @@ export class GameSystem extends createSystem({
       const across = smooth((k - 0.2) / 0.5);
       const lift = 0.03 + 0.03 * Math.sin(Math.PI * across) + 0.05 * smooth((k - 0.8) / 0.2) + 0.04 * (1 - smooth(k / 0.2));
       d.hand.position.set(a.position.x + (c.position.x - a.position.x) * across, a.position.y + lift, a.position.z + 0.02);
-      d.hand.rotation.set(-1.1, 0, 0);
+      d.hand.rotation.set(-0.45, 0, 0);
     }
   }
 
@@ -1121,6 +1134,31 @@ export class GameSystem extends createSystem({
       this.label(title, labelH / (scale / 1.3), button, 0, 0.002, false);
     }
     return button;
+  }
+
+  /**
+   * A choice on a results screen: a coloured paper card with its word in
+   * cream paper letters, the same size for every choice.
+   */
+  private addChoiceButton(choice: ButtonChoice, title: string, x: number, color: number): void {
+    const button = this.addButton(choice, '', x, color, CHOICE_SCALE);
+    button.userData.choice = true;
+    button.userData.shownAt = performance.now();
+    button.userData.armed = false;
+    const l = new Label(title.toUpperCase(), { height: 0.03, card: false, ink: 0xfff8ec });
+    l.mesh.position.set(0, 0, 0.002);
+    // Inside the card's own scale, so the letters stay 3 cm whatever its size.
+    l.mesh.scale.multiplyScalar(1 / CHOICE_SCALE);
+    button.add(l.mesh);
+  }
+
+  /** A results choice takes a press only once up a while and approached from outside (see CHOICE_GRACE_MS). */
+  private choiceReady(e: Entity): boolean {
+    const obj = e.object3D;
+    if (!obj?.userData.choice) return true;
+    const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    if (performance.now() - (obj.userData.shownAt as number) < CHOICE_GRACE_MS) return false;
+    return !immersive || obj.userData.armed === true;
   }
 
   /**
@@ -1364,7 +1402,7 @@ export class GameSystem extends createSystem({
     this.raceScene.showRecap(recap, T.you);
     const own = recap.players.find((p) => !p.bot);
     if (own) this.saveBest(own.points, own.stars);
-    this.addButton('done', T.done, 0, 0x81b29a);
+    this.addChoiceButton('done', T.done, 0, 0x3469c4);
   }
 
   private endRace(): void {
@@ -1403,8 +1441,8 @@ export class GameSystem extends createSystem({
       this.labels.add(l.mesh);
       this.practiceCards.push(l.mesh);
     }
-    this.addButton('again', T.again, -0.07, CORRECT, 1.3, 0.021);
-    this.addButton('done', T.done, 0.07, 0x81b29a);
+    this.addChoiceButton('again', T.again, -CHOICE_GAP / 2, 0x3fb6a0);
+    this.addChoiceButton('done', T.done, CHOICE_GAP / 2, 0x3469c4);
   }
 
   private clearPracticeCards(): void {
@@ -1439,7 +1477,12 @@ export class GameSystem extends createSystem({
     this.wantHome = false;
     if (device === 'xr') {
       this.pendingXr = mode;
-      void this.world.launchXR();
+      Promise.resolve(this.world.launchXR()).catch((error) => {
+        console.warn('[xr] the headset session did not start', error);
+        this.pendingXr = undefined;
+        this.wantHome = true;
+        this.home.xrFailed();
+      });
       return;
     }
     if (mode === 'race') this.start('race');
@@ -1944,6 +1987,12 @@ export class GameSystem extends createSystem({
         on = e.hasComponent(Hovered) || near(obj);
       }
       obj.userData.hovered = on;
+      if (obj.userData.choice) {
+        // No growing towards the finger: that is what pressed it by itself.
+        obj.getWorldPosition(this.a);
+        if (this.tipPos.every((t) => t.distanceTo(this.a) > CHOICE_ARM_M)) obj.userData.armed = true;
+        return;
+      }
       const h = (obj.userData.hover as number | undefined) ?? 0;
       const next = h + ((on ? 1 : 0) - h) * step;
       obj.userData.hover = next;

@@ -18,6 +18,8 @@ const EN = {
     smartboard: 'Touch the big screen to play. The class helper mode for smartboards is coming soon.',
   },
   noXr: 'No headset found on this device',
+  noXrBody:
+    'This device has no headset ready for the game. Open numeria.eziedutech.dev in the browser of a Meta Quest headset to play on your real desk, or play here on this computer.',
   play: 'PLAY',
   you: 'YOU',
   practice: ['PRACTICE ON MY OWN', 'No timer, your own pace'],
@@ -138,6 +140,8 @@ const ID: typeof EN = {
     smartboard: 'Sentuh layar besar untuk bermain. Mode pembantu kelas untuk smartboard segera hadir.',
   },
   noXr: 'Headset tidak ditemukan di perangkat ini',
+  noXrBody:
+    'Perangkat ini tidak punya headset yang siap untuk game. Buka numeria.eziedutech.dev di browser headset Meta Quest untuk bermain di mejamu sendiri, atau bermain di komputer ini.',
   play: 'MAIN',
   you: 'KAMU',
   practice: ['BERLATIH SENDIRI', 'Tanpa waktu, sesuai kecepatanmu'],
