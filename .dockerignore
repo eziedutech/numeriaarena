@@ -1,0 +1,14 @@
+# Build context is the repository root (Dokploy). Keep it small and free of secrets.
+.git
+**/node_modules
+**/target
+**/dist
+**/build
+assets
+credentials
+agents
+docs
+resources
+**/.env
+**/.env.*
+!**/.env.example

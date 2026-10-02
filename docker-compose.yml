@@ -1,0 +1,24 @@
+# Local development only. Production runs on Dokploy (docs/INFRA-DOKPLOY.md)
+# with its own Numeria Postgres and credentials.
+#   docker compose up -d postgres
+#   DATABASE_URL=postgres://numeria:numeria_local@localhost:5434/numeria
+name: numeria
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: numeria
+      POSTGRES_PASSWORD: ${NUMERIA_PG_PASSWORD:-numeria_local}
+      POSTGRES_DB: numeria
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - numeria-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U numeria -d numeria"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  numeria-pg:

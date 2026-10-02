@@ -1,0 +1,22 @@
+[package]
+name = "numeria-server"
+description = "API for Numeria Arena: adult sign-in (Firebase ID tokens), organizers, and later rooms."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+sqlx.workspace = true
+jsonwebtoken.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+jsonwebtoken = { workspace = true, features = ["use_pem"] }
