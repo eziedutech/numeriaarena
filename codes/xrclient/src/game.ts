@@ -123,6 +123,9 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * of the table, front of the line on the right (they face +X, in profile).
  * They are plain white paper until called, then take the question's colour.
  */
+/** The HOME card on the headset menu: right of the envelopes, a little smaller. */
+const HOME_CARD_X = 0.26;
+const HOME_CARD_SCALE = 0.95;
 const LINE_SIZE = 5;
 const LINE_Z = -0.245;
 /** Space between two animals in the line. */
@@ -249,6 +252,8 @@ interface Drift {
 }
 
 type MenuChoice = GameKind | 'race';
+/** A desk button: a game, or HOME (leave the headset for the home page). */
+type ButtonChoice = MenuChoice | 'home';
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -457,7 +462,12 @@ export class GameSystem extends createSystem({
       return;
     }
     if (this.phase !== 'menu') return;
-    const choice = e.getValue(MenuButton, 'game') as MenuChoice;
+    const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
+    if (pressed === 'home') {
+      this.leaveToHome();
+      return;
+    }
+    const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
     if (!envelope) {
       this.start(choice);
@@ -702,6 +712,11 @@ export class GameSystem extends createSystem({
       if (only === 'practice' && game === 'race') continue;
       this.addEnvelope(game, title, only === 'practice' ? x - 0.0675 : x, color);
     }
+    // In the headset the home page cannot show, so a paper HOME card on the
+    // desk ends the session and goes back to it.
+    if (this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
+      this.addButton('home', T.home, HOME_CARD_X, 0xe8b64c, HOME_CARD_SCALE);
+    }
   }
 
   /**
@@ -747,11 +762,11 @@ export class GameSystem extends createSystem({
     }
   }
 
-  private addButton(game: MenuChoice, title: string, x: number, color: number): void {
+  private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3): void {
     const button = makeButton(color);
     button.name = `menu-${game}`;
-    button.position.set(x, 0.0325 * 1.3, ENVELOPE_Z);
-    button.scale.setScalar(1.3);
+    button.position.set(x, 0.0325 * scale, ENVELOPE_Z);
+    button.scale.setScalar(scale);
     const e = this.add(button);
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
@@ -762,7 +777,8 @@ export class GameSystem extends createSystem({
         fallback: () => this.label(title, 0.022, button, 0, 0.002, false).mesh,
       });
     } else {
-      this.label(title, 0.022, button, 0, 0.0075, false);
+      // On the thin paper card, large enough to read from the seat.
+      this.label(title, 0.03, button, 0, 0.002, false);
     }
   }
 
@@ -950,6 +966,15 @@ export class GameSystem extends createSystem({
     } else {
       this.showMenu();
     }
+  }
+
+  /** The HOME card in the headset: end the session; the home page shows once it has ended. */
+  private leaveToHome(): void {
+    this.clear(this.queries.buttons);
+    this.envelopes.clear();
+    this.pendingXr = undefined;
+    this.wantHome = true;
+    void this.world.exitXR();
   }
 
   /** A choice on the home page: play here, or open the headset session first. */

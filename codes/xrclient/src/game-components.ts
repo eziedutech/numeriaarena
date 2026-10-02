@@ -24,7 +24,8 @@ export const Orb = createComponent('Orb', {
   second: { type: Types.Int16, default: -1 },
 });
 
-const Games = { Race: 'race', BalloonBurst: 'balloon_burst', OrbForge: 'orb_forge' } as const;
+/** What a menu button starts; `home` leaves the headset for the home page. */
+const Games = { Race: 'race', BalloonBurst: 'balloon_burst', OrbForge: 'orb_forge', Home: 'home' } as const;
 
 export const MenuButton = createComponent('MenuButton', {
   game: { type: Types.Enum, default: Games.BalloonBurst, enum: Games },

@@ -43,6 +43,7 @@ export const EN = {
     brave_try: 'BRAVE TRY',
   } satisfies Record<Highlight, string>,
   done: 'Done',
+  home: 'HOME',
   popHint: 'Pop the right answer',
   orbFirst: (target: string) => `Join 2 crystals to make ${target}`,
   orbTask: (target: string) => `Make ${target}`,
