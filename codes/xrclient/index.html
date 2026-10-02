@@ -8,8 +8,104 @@
     />
     <link rel="icon" href="data:," />
     <title>Numeria Arena</title>
+    <style>
+      /*
+       * Shown at once, before the game's code arrives: the home page's sand,
+       * a paper card with the name, and three squares of paper folding in
+       * turn. The game fades it out when its home page (or the game) is up.
+       */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 40%, #e8d394 0%, #e0c780 55%, #d6bb70 100%);
+        font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+        color: #3a3f4b;
+        transition: opacity 0.45s ease;
+      }
+      #boot.gone {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot .card {
+        background: #fffdf8;
+        box-shadow: 6px 9px 16px rgba(70, 50, 25, 0.32);
+        padding: 30px 44px 26px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+      }
+      #boot .name {
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+      #boot .folds {
+        display: flex;
+        gap: 20px;
+        perspective: 260px;
+      }
+      #boot .folds span {
+        width: 34px;
+        height: 34px;
+        box-shadow: 3px 5px 8px rgba(70, 50, 25, 0.28);
+        /* Hinged on the left edge, like a page of the book turning over. */
+        transform-origin: 0% 50%;
+        animation: fold 1.8s ease-in-out infinite;
+      }
+      #boot .folds span:nth-child(1) {
+        background: linear-gradient(135deg, #f7a39e 50%, #f2716b 50%);
+      }
+      #boot .folds span:nth-child(2) {
+        background: linear-gradient(135deg, #6a95e0 50%, #3469c4 50%);
+        animation-delay: 0.3s;
+      }
+      #boot .folds span:nth-child(3) {
+        background: linear-gradient(135deg, #7fd6c6 50%, #3fb6a0 50%);
+        animation-delay: 0.6s;
+      }
+      @keyframes fold {
+        0%,
+        55%,
+        100% {
+          transform: rotateY(0deg);
+        }
+        25% {
+          transform: rotateY(-170deg);
+        }
+      }
+      #boot .what {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot .folds span {
+          animation: none;
+        }
+      }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body style="margin: 0; background: #e0c780">
+    <div id="boot" role="status" aria-live="polite">
+      <div class="card">
+        <div class="name">NUMERIA ARENA</div>
+        <div class="folds" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="what" id="boot-what">OPENING THE BOOK</div>
+      </div>
+    </div>
+    <script>
+      // The player's language, as the game keeps it.
+      try {
+        if (localStorage.getItem('numeria.lang') === 'id') document.getElementById('boot-what').textContent = 'MEMBUKA BUKU';
+      } catch (e) {
+        // No storage: English.
+      }
+    </script>
     <div id="scene-container"></div>
     <script type="module" src="/src/index.ts"></script>
   </body>

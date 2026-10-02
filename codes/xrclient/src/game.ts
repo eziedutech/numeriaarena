@@ -381,6 +381,8 @@ export class GameSystem extends createSystem({
   private pendingXr?: PlayMode;
   private wasImmersive = false;
   private homeWasShown = false;
+  /** The loading screen from index.html has been faded out. */
+  private bootGone = false;
   private recapIn = -1;
   private stage!: Stage;
   private envelopes = new Map<Entity, Envelope>();
@@ -1337,6 +1339,13 @@ export class GameSystem extends createSystem({
     if (this.wasImmersive && !immersive && this.phase === 'menu') this.wantHome = true;
     this.wasImmersive = immersive;
     const home = !immersive && this.phase === 'menu' && this.wantHome;
+    // The loading screen in index.html goes once there is something to see.
+    if (!this.bootGone && (home || immersive || this.phase !== 'loading')) {
+      this.bootGone = true;
+      const boot = document.getElementById('boot');
+      boot?.classList.add('gone');
+      setTimeout(() => boot?.remove(), 600);
+    }
     if (home) {
       if (this.queries.buttons.entities.size > 0) this.clearMenu();
       this.home.show();
