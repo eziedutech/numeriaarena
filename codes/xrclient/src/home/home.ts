@@ -3,6 +3,19 @@ import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 import { drawGlyphs, glyphWidth, whenGlyphsLoad } from '../art/glyphs.js';
 import { bigText, getLang, onSettings, setBigText, setLang } from '../settings.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
+import {
+  authErrorCode,
+  finishEmailLink,
+  onTeacher,
+  register,
+  sendEmailLink,
+  signInConfigured,
+  signInWith,
+  signOut,
+  startTeacher,
+  teacherState,
+  type Me,
+} from './teacher.js';
 import { townSticker } from './town-sticker.js';
 
 /**
@@ -32,6 +45,11 @@ const ICONS: Record<string, string> = {
   classmates: '<rect width="54" height="54" fill="#fff8ec"/><circle cx="18" cy="17" r="7" fill="#f2716b"/><path d="M6 46 10 28h16l4 18z" fill="#f2716b"/><circle cx="36" cy="17" r="7" fill="#c9554f"/><path d="M24 46 28 28h16l4 18z" fill="#c9554f"/>',
   smartboard: '<rect width="54" height="54" fill="#fff8ec"/><rect x="7" y="9" width="40" height="27" fill="#b198ea"/><path d="M27 9h20v27H27z" fill="#8f76c9"/><rect x="25" y="36" width="4" height="9" fill="#3a3f4b"/><rect x="16" y="44" width="22" height="3" fill="#3a3f4b"/>',
   student: '<rect width="54" height="54" fill="#e8b64c"/><path d="M8 18h38v18H8z" fill="#fff8ec"/><path d="M27 18h19v18H27z" fill="#f3e6c9"/><rect x="13" y="24" width="5" height="6" fill="#3a3f4b"/><rect x="22" y="24" width="5" height="6" fill="#3a3f4b"/><rect x="31" y="24" width="5" height="6" fill="#3a3f4b"/>',
+  person:
+    '<rect width="54" height="54" fill="#fff8ec"/><circle cx="27" cy="19" r="9" fill="#3469c4"/><path d="M9 46q0-16 18-16t18 16z" fill="#3469c4"/><path d="M27 10a9 9 0 0 1 0 18zM27 30q18 0 18 16H27z" fill="#2a54a0"/>',
+  classes:
+    '<rect width="54" height="54" fill="#fff8ec"/><rect x="8" y="8" width="17" height="17" fill="#e8b64c"/><rect x="29" y="8" width="17" height="17" fill="#e8b64c"/><rect x="8" y="29" width="17" height="17" fill="#e8b64c"/><rect x="29" y="29" width="17" height="17" fill="#c9962f"/>',
+  room: '<rect width="54" height="54" fill="#fff8ec"/><rect x="7" y="9" width="40" height="26" fill="#f2716b"/><path d="M27 9h20v26H27z" fill="#c9554f"/><rect x="18" y="17" width="18" height="10" fill="#fff8ec"/><rect x="25" y="35" width="4" height="9" fill="#3a3f4b"/>',
   teacher: '<rect width="54" height="54" fill="#3469c4"/><path d="M9 14h17v28H9z" fill="#fff8ec"/><path d="M28 14h17v28H28z" fill="#f3e6c9"/><rect x="26" y="12" width="2" height="32" fill="#3a3f4b"/><rect x="13" y="20" width="9" height="2" fill="#3469c4"/><rect x="13" y="25" width="9" height="2" fill="#3469c4"/>',
   tips: '<rect width="54" height="54" fill="#3fb6a0"/><circle cx="27" cy="22" r="12" fill="#fff8ec"/><path d="M27 10a12 12 0 0 1 0 24z" fill="#f3e6c9"/><rect x="21" y="34" width="12" height="4" fill="#fff8ec"/><rect x="22" y="40" width="10" height="4" fill="#f3e6c9"/>',
   watch: '<rect width="54" height="54" fill="#b198ea"/><path d="M5 27q22-20 44 0q-22 20-44 0z" fill="#fff8ec"/><path d="M27 12q11 3 22 15q-11 12-22 15z" fill="#f3e6c9"/><circle cx="27" cy="27" r="7" fill="#3a3f4b"/>',
@@ -107,7 +125,21 @@ const CSS = `
 #home .btn { padding: 12px 18px; border: 0; cursor: pointer; display: flex; align-items: center; }
 #home .actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
 #home .wide { width: 100%; margin-top: 10px; justify-content: flex-start; font-family: inherit; font-weight: 700; font-size: 17px;
-  color: ${INK}; background: ${PAPER}; border-left: 6px solid #f1e3c4; }
+  color: ${INK}; background: ${PAPER}; }
+#home .field { width: 100%; box-sizing: border-box; height: 46px; padding: 0 12px; background: #f1e3c4; border: 0;
+  font-family: inherit; font-size: 18px; color: ${INK}; }
+#home .field.short { width: 90px; text-transform: uppercase; text-align: center; font-weight: 700; }
+#home .kind { padding: 9px 12px; background: #f1e3c4; border: 0; cursor: pointer; }
+#home .kind.on { background: ${COLORS.cobalt}; }
+#home .tick { display: flex; gap: 12px; align-items: flex-start; background: none; border: 0; padding: 0; margin-top: 14px;
+  cursor: pointer; text-align: left; font-family: inherit; font-size: 15px; line-height: 1.4; color: ${INK}; }
+#home .tick .mark { flex: none; width: 26px; height: 26px; background: #f1e3c4; display: flex; align-items: center;
+  justify-content: center; }
+#home .tick.on .mark { background: ${COLORS.teal}; }
+#home .err { color: #c62828; font-size: 15px; min-height: 20px; margin: 10px 0 0; }
+#home .skel { display: inline-block; width: 170px; height: 13px; background: rgba(58, 63, 75, 0.14);
+  animation: home-skel 1.1s ease-in-out infinite alternate; }
+@keyframes home-skel { from { opacity: 0.45; } to { opacity: 1; } }
 body.home-open button[class*="xr" i], body.home-open #VRButton, body.home-open #ARButton { display: none !important; }
 #home-back { position: fixed; left: 16px; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
   background: ${PAPER}; box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); display: none; }
@@ -166,6 +198,8 @@ export class Home {
   private scale = 1;
   private shown = false;
   private savedEye?: { p: Vector3; q: Quaternion };
+  /** The sign-up form opens by itself once per sign-in, not on every redraw. */
+  private askedToRegister = false;
 
   constructor(
     private camera: PerspectiveCamera,
@@ -197,6 +231,23 @@ export class Home {
     this.device = saved && (saved !== 'xr' || xrAvailable) ? saved : onHeadset && xrAvailable ? 'xr' : 'computer';
     this.render();
     window.addEventListener('resize', () => this.fit());
+    onTeacher((s) => {
+      this.render();
+      if (s.kind === 'out') this.askedToRegister = false;
+      if (s.kind === 'in' && !s.me.organizer && !this.askedToRegister) {
+        this.askedToRegister = true;
+        this.registration(s.me);
+      }
+      if (s.kind === 'error') this.message(this.t.teacher[0], this.errorText(s.code));
+    });
+    startTeacher()
+      .then((r) => {
+        if (r === 'needs_email') this.confirmLinkEmail();
+      })
+      .catch((e) => {
+        console.warn('[teacher] start failed', e);
+        this.message(this.t.teacher[0], this.errorText(authErrorCode(e)));
+      });
   }
 
   get visible(): boolean {
@@ -299,10 +350,34 @@ export class Home {
     const right = el('div', 'head', this.stage);
     right.style.left = '1210px';
     right.appendChild(paperText(t.you, 30, INK));
-    this.card('right', 0, t.student, 'student', COLORS.sun, () => this.studentCode());
-    this.card('right', 1, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
-    this.card('right', 2, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
-    this.card('right', 3, t.watch, 'watch', COLORS.violet, () => this.message(t.watch[0], t.soonBody.watch), true);
+    // Student and teacher sign-in hide each other: a signed-in teacher gets
+    // their own card and the class tools in place of the student code.
+    const teacher = teacherState();
+    let row = 0;
+    if (teacher.kind === 'in') {
+      const me = teacher.me;
+      const status = me.organizer ? t.status[me.organizer.status] : t.finishSignUp;
+      const org = me.organizer?.org;
+      const where = org && org.kind !== 'personal' ? `${org.name} · ` : '';
+      const name = (me.name || me.email.split('@')[0]).toUpperCase();
+      const card = this.card('right', row++, [name, `${where}${status}`], 'person', COLORS.cobalt, () => this.account(me));
+      card.style.background = COLORS.cobalt;
+      card.style.color = PAPER;
+      card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
+      this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.message(t.myClasses[0], t.classesSoon), true);
+      this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.message(t.openRoom[0], t.classesSoon), true);
+    } else {
+      this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
+      const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
+      if (teacher.kind === 'loading') {
+        const sub = card.querySelector('.sub');
+        if (sub) sub.innerHTML = '<span class="skel"></span>';
+        card.setAttribute('aria-label', `${t.teacher[0]}. ${t.signingIn}`);
+        card.setAttribute('aria-busy', 'true');
+      }
+    }
+    this.card('right', row++, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
+    this.card('right', row++, t.watch, 'watch', COLORS.violet, () => this.message(t.watch[0], t.soonBody.watch), true);
 
     // The town the player builds with the Folds they earn: a small round
     // paper sticker with the town standing up on it.
@@ -484,26 +559,200 @@ export class Home {
     });
   }
 
+  private errorText(code: string): string {
+    return this.t.errors[code] ?? this.t.errors.other;
+  }
+
+  /** A line in a form for what went wrong; empty until then. */
+  private errorLine(body: HTMLElement): (code?: string) => void {
+    const line = el('p', 'err', body);
+    line.setAttribute('role', 'alert');
+    return (code) => {
+      line.textContent = code ? this.errorText(code) : '';
+    };
+  }
+
+  private emailField(body: HTMLElement): HTMLInputElement {
+    const input = el('input', 'field', body);
+    input.type = 'email';
+    input.autocomplete = 'email';
+    input.setAttribute('aria-label', this.t.emailLabel);
+    return input;
+  }
+
   private teacherSignIn(): void {
     const t = this.t;
+    if (!signInConfigured) {
+      this.message(t.teacher[0], t.serverSoon);
+      return;
+    }
     const { veil, body } = this.popup(t.teacher[0]);
     el('p', '', body).textContent = t.teacherIntro;
     // Plain text, no company logos.
-    for (const label of [t.google, t.facebook]) {
+    const providers = [
+      [t.google, 'google'],
+      [t.facebook, 'facebook'],
+    ] as const;
+    const buttons = providers.map(([label]) => {
       const b = el('button', 'btn wide shadow', body);
       b.textContent = label;
-      b.addEventListener('click', () => {
-        veil.remove();
-        this.message(t.teacher[0], t.serverSoon);
-      });
-    }
+      return b;
+    });
     const mail = el('button', 'btn wide shadow', body);
     mail.style.background = COLORS.cobalt;
-    mail.style.borderLeft = '0';
     mail.appendChild(paperText(t.email, 16, PAPER));
+    mail.setAttribute('aria-label', t.email);
     mail.addEventListener('click', () => {
       veil.remove();
-      this.message(t.teacher[0], t.serverSoon);
+      this.emailLink();
+    });
+    const showError = this.errorLine(body);
+    buttons.forEach((b, i) =>
+      b.addEventListener('click', () => {
+        showError();
+        signInWith(providers[i][1])
+          .then(() => veil.remove())
+          .catch((e) => showError(authErrorCode(e)));
+      }),
+    );
+    this.actions(body, veil);
+  }
+
+  private emailLink(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.email);
+    el('div', 'step', body).textContent = t.emailLabel;
+    const input = this.emailField(body);
+    const showError = this.errorLine(body);
+    const row = el('div', 'actions', body);
+    const cancel = el('button', 'btn shadow', row);
+    cancel.style.background = '#f1e3c4';
+    cancel.appendChild(paperText(t.cancel, 16, INK));
+    cancel.setAttribute('aria-label', t.cancel);
+    cancel.addEventListener('click', () => veil.remove());
+    const send = el('button', 'btn shadow', row);
+    send.style.background = COLORS.cobalt;
+    send.appendChild(paperText(t.sendLink, 16, PAPER));
+    send.setAttribute('aria-label', t.sendLink);
+    send.addEventListener('click', () => {
+      const email = input.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+        showError('auth/invalid-email');
+        return;
+      }
+      showError();
+      sendEmailLink(email)
+        .then(() => {
+          veil.remove();
+          this.message(t.email, t.linkSent(email));
+        })
+        .catch((e) => showError(authErrorCode(e)));
+    });
+    input.focus();
+  }
+
+  /** An email link opened in a browser that did not send it: ask which email. */
+  private confirmLinkEmail(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.teacher[0]);
+    el('p', '', body).textContent = t.confirmEmail;
+    const input = this.emailField(body);
+    const showError = this.errorLine(body);
+    this.actions(body, veil, () => {
+      showError();
+      finishEmailLink(input.value.trim())
+        .then(() => veil.remove())
+        .catch((e) => showError(authErrorCode(e)));
+    });
+  }
+
+  /** One-time organizer form: name, organization, kind, country, and the statement. */
+  private registration(me: Me): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.regTitle);
+    el('p', '', body).textContent = t.regIntro;
+    el('div', 'step', body).textContent = t.yourName;
+    const name = el('input', 'field', body);
+    name.value = me.name;
+    name.maxLength = 60;
+    name.setAttribute('aria-label', t.yourName);
+    el('div', 'step', body).textContent = t.orgName;
+    const org = el('input', 'field', body);
+    org.maxLength = 80;
+    org.setAttribute('aria-label', t.orgName);
+    el('div', 'step', body).textContent = t.orgKind;
+    const kindRow = el('div', 'row', body);
+    const kinds = Object.entries(t.kinds);
+    let kind = kinds[0][0];
+    const drawKinds = () => {
+      kindRow.replaceChildren();
+      for (const [k, label] of kinds) {
+        const on = k === kind;
+        const b = el('button', `kind${on ? ' on' : ''}`, kindRow);
+        b.appendChild(paperText(label, 15, on ? PAPER : INK));
+        b.setAttribute('aria-pressed', String(on));
+        b.setAttribute('aria-label', label);
+        b.addEventListener('click', () => {
+          kind = k;
+          drawKinds();
+        });
+      }
+    };
+    drawKinds();
+    el('div', 'step', body).textContent = t.country;
+    const country = el('input', 'field short', body);
+    country.maxLength = 2;
+    country.value = this.lang === 'id' ? 'ID' : '';
+    country.setAttribute('aria-label', t.country);
+    let agree = false;
+    const tick = el('button', 'tick', body);
+    const mark = el('span', 'mark', tick);
+    el('span', '', tick).textContent = t.statement;
+    tick.setAttribute('aria-pressed', 'false');
+    tick.addEventListener('click', () => {
+      agree = !agree;
+      tick.classList.toggle('on', agree);
+      tick.setAttribute('aria-pressed', String(agree));
+      mark.innerHTML = agree
+        ? '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8l4 4 8-9" stroke="#fff8ec" stroke-width="3" fill="none"/></svg>'
+        : '';
+    });
+    const showError = this.errorLine(body);
+    this.actions(body, veil, () => {
+      showError();
+      void register({
+        name: name.value,
+        org_name: org.value,
+        org_kind: kind,
+        country: country.value,
+        terms_version: me.terms_version,
+        agree,
+      }).then((code) => {
+        if (code) showError(code);
+        else veil.remove();
+      });
+    });
+  }
+
+  /** The signed-in teacher: who, where, the approval status, and signing out. */
+  private account(me: Me): void {
+    const t = this.t;
+    if (!me.organizer) {
+      this.registration(me);
+      return;
+    }
+    const { veil, body } = this.popup(t.account);
+    el('p', '', body).textContent = `${me.name} (${me.email})`;
+    const org = me.organizer.org;
+    if (org && org.kind !== 'personal') el('p', '', body).textContent = `${org.name}, ${org.country}`;
+    el('div', 'step', body).textContent = t.status[me.organizer.status];
+    if (me.organizer.status === 'pending') el('p', '', body).textContent = t.pendingBody;
+    const out = el('button', 'btn wide shadow', body);
+    out.appendChild(paperText(t.signOut, 16, INK));
+    out.setAttribute('aria-label', t.signOut);
+    out.addEventListener('click', () => {
+      veil.remove();
+      signOut().catch((e) => console.warn('[teacher] sign out failed', e));
     });
     this.actions(body, veil);
   }
