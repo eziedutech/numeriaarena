@@ -342,6 +342,7 @@ export class GameSystem extends createSystem({
   private phase: Phase = 'loading';
   private quitLabel?: Label;
   private quitAskedAt = 0;
+  private wasControllers = false;
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
   private shownAt = 0;
@@ -538,9 +539,16 @@ export class GameSystem extends createSystem({
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
       this.queries.pressedLine.subscribe('qualify', (e) => this.greet(e)),
-      // A mouse click outside XR is always deliberate; in XR a touch must be a poke.
+      // A mouse click outside XR is always deliberate; in XR a touch must be a poke,
+      // and with controllers only a trigger click counts (a ray waved past, or the
+      // controller pushed through a balloon, is not a choice).
       this.queries.pressedBalloons.subscribe('qualify', (e) => {
         const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+        if (!browser && this.controllersOnly()) {
+          if (this.pressMeant()) this.popBalloon(e, true);
+          else console.info('[game] balloon brushed by a controller without its trigger: ignored');
+          return;
+        }
         // In the emulator the hands move with the view and the body, so a
         // "poke" is usually an accident: there, T chooses (Y allows pokes).
         if (!browser && this.onEmulator && !this.emulatorPokes) {
@@ -555,11 +563,7 @@ export class GameSystem extends createSystem({
         this.pauseWhileAway();
         for (const e of [...this.queries.crystals.entities, ...this.queries.balloons.entities]) {
           if (e.hasComponent(Balloon) && !e.hasComponent(PokeInteractable)) continue;
-          if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
-            if (!e.hasComponent(RayInteractable)) e.addComponent(RayInteractable);
-          } else if (e.hasComponent(RayInteractable)) {
-            e.removeComponent(RayInteractable);
-          }
+          this.setClickable(e);
         }
       }),
       // Picking up a crystal is the move the how-to shows: it can stop.
@@ -1522,9 +1526,7 @@ export class GameSystem extends createSystem({
    * the mouse): there only a press with a trigger held counts, as a ray click is.
    */
   private pressMeant(): boolean {
-    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return true;
-    const session = this.world.renderer.xr.getSession();
-    if (session && [...session.inputSources].some((s) => s.hand)) return true;
+    if (!this.controllersOnly()) return true;
     const pads = this.input.xr.gamepads;
     return Boolean(pads.right?.getSelecting() || pads.left?.getSelecting());
   }
@@ -2332,6 +2334,12 @@ export class GameSystem extends createSystem({
 
   update(delta: number): void {
     if (this.pausedAt !== undefined) return;
+    // Hands put down or picked up mid-game: balloons follow (touch or trigger click).
+    const controllers = this.controllersOnly();
+    if (controllers !== this.wasControllers) {
+      this.wasControllers = controllers;
+      for (const b of this.queries.balloons.entities) if (b.hasComponent(PokeInteractable)) this.setClickable(b);
+    }
     this.showWelcomeInMenuOnly();
     showStickerBackings(this.world.visibilityState.peek() !== VisibilityState.NonImmersive);
     const desk = this.deskEntity();
@@ -2453,7 +2461,27 @@ export class GameSystem extends createSystem({
    * do it (touch, pinch), so the reaching stays part of the game.
    */
   private clickable(e: Entity): void {
-    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) e.addComponent(RayInteractable);
+    this.setClickable(e);
+  }
+
+  /**
+   * Mouse clicks outside the headset; in it, balloons also take a trigger
+   * click while the player holds controllers (hands touch them instead).
+   */
+  private setClickable(e: Entity): void {
+    const want =
+      this.world.visibilityState.peek() === VisibilityState.NonImmersive || (e.hasComponent(Balloon) && this.controllersOnly());
+    if (want && !e.hasComponent(RayInteractable)) e.addComponent(RayInteractable);
+    else if (!want && e.hasComponent(RayInteractable)) e.removeComponent(RayInteractable);
+  }
+
+  /** In the headset with controllers and no tracked hand (hands touch, controllers click). */
+  private controllersOnly(): boolean {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return false;
+    const sources = this.world.renderer.xr.getSession()?.inputSources;
+    if (!sources) return false;
+    for (let i = 0; i < sources.length; i++) if (sources[i].hand) return false;
+    return true;
   }
 
   private clickCrystal(e: Entity): void {

@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -343,12 +343,34 @@ if (mode === 'brush') {
   console.log('after a press with the trigger:', (await lastLog('pressed home')) && (await find('^menu-home$')).length === 0 ? 'left the headset' : 'still in the headset');
 }
 
+// With controllers a balloon pops only on a trigger click: a ray resting on it does nothing.
+if (mode === 'click') {
+  await fresh();
+  let last = (await lastLog('\\[game\\] offer')) ?? '';
+  await card(0);
+  for (let k = 0; k < 20 && ((await lastLog('\\[game\\] offer')) ?? '') === last; k++) await sleep(0.5);
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(1.5);
+  const aim = async () => {
+    const b = await posOf('^balloon-0$');
+    if (b) await cli('xr', 'set-transform', { device: 'controller-right', position: w(b.x, b.y + 0.07, b.z + 0.25), orientation: ID });
+  };
+  const before = await lastLog('\\[game\\] balloon ');
+  for (let k = 0; k < 6; k++) { await aim(); await sleep(0.25); }
+  console.log((await lastLog('\\[game\\] balloon ')) === before ? 'ray on a balloon, no trigger: nothing popped' : 'popped without the trigger (wrong)');
+  await aim();
+  await cli('xr', 'set-select-value', { device: 'controller-right', value: 1 }); await sleep(0.2);
+  await cli('xr', 'set-select-value', { device: 'controller-right', value: 0 }); await sleep(1);
+  const after = await lastLog('\\[game\\] balloon ');
+  console.log(after !== before ? `trigger click: ${after}` : 'trigger click: nothing popped (wrong)');
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
 // mouse pops them) and controllers instead of hands.
-if (['race', 'orb', 'balloon', 'quit', 'brush'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit', 'brush', 'click'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
