@@ -190,6 +190,10 @@ const QUIT_YAW = -0.65;
 const QUIT_SCALE = { x: 0.6, y: 0.5 };
 const QUIT_TEXT_H = 0.02;
 const QUIT_ASK_MS = 4000;
+/** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
+const RAY_VISIBLE = 1;
+const RAY_ON_TARGET = 2;
+const SIDES = ['left', 'right'] as const;
 /** How far and how long a pressed desk card sinks. */
 const PRESS_DIP_M = 0.006;
 const PRESS_DIP_MS = 160;
@@ -2392,7 +2396,10 @@ export class GameSystem extends createSystem({
     if (controllers !== this.wasControllers) {
       this.wasControllers = controllers;
       for (const b of this.queries.balloons.entities) if (b.hasComponent(PokeInteractable)) this.setClickable(b);
+      this.pointRays(controllers);
     }
+    // IWSDK turns the near touch pointer on again whenever something touchable appears.
+    if (controllers) for (const side of SIDES) this.input.xr.multiPointers[side].toggleSubPointer('touch', false);
     this.showWelcomeInMenuOnly();
     showStickerBackings(this.world.visibilityState.peek() !== VisibilityState.NonImmersive);
     const desk = this.deskEntity();
@@ -2526,6 +2533,24 @@ export class GameSystem extends createSystem({
       this.world.visibilityState.peek() === VisibilityState.NonImmersive || (e.hasComponent(Balloon) && this.controllersOnly());
     if (want && !e.hasComponent(RayInteractable)) e.addComponent(RayInteractable);
     else if (!want && e.hasComponent(RayInteractable)) e.removeComponent(RayInteractable);
+  }
+
+  /**
+   * With controllers the ray is always drawn, so the player always sees where
+   * the controller points, and the near touch pointer is off: by default IWSDK
+   * hides the ray when it hits nothing and swaps it for touch when the
+   * controller is close to something, so the pointer came and went. Hands get
+   * IWSDK's own behaviour back (touch, a ray only on a target).
+   */
+  private pointRays(controllers: boolean): void {
+    for (const side of SIDES) {
+      const multi = this.input.xr.multiPointers[side];
+      multi.toggleSubPointer('touch', !controllers);
+      // The ray's visual is not public; its display mode is (RayDisplayMode).
+      const ray = (multi as unknown as { ray?: { visual?: { rayDisplayMode: number } } }).ray?.visual;
+      if (ray) ray.rayDisplayMode = controllers ? RAY_VISIBLE : RAY_ON_TARGET;
+    }
+    console.info(`[input] ${controllers ? 'controllers: ray always shown, no touch' : 'hands: touch, ray on a target'}`);
   }
 
   /** In the headset with controllers and no tracked hand (hands touch, controllers click). */
