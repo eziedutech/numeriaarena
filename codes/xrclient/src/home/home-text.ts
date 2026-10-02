@@ -54,6 +54,9 @@ const EN = {
   serverSoon:
     'Class sign-in opens when the class server is ready. Until then you can practise and race the robots without signing in.',
   teacherIntro: 'For teachers and club organisers. Students never sign in here.',
+  /** Shown on the home page while there is no network. */
+  offline: 'OFFLINE: RESULTS KEPT ON THIS DEVICE',
+  offlineSignIn: 'Signing in needs the internet. Practice and robot races work offline, and their results wait on this device.',
   google: 'Continue with Google',
   facebook: 'Continue with Facebook',
   email: 'EMAIL ME A SIGN-IN LINK',
@@ -175,6 +178,8 @@ const ID: typeof EN = {
   serverSoon:
     'Masuk kelas dibuka saat server kelas siap. Sampai saat itu kamu tetap bisa berlatih dan lomba melawan robot tanpa masuk.',
   teacherIntro: 'Untuk guru dan pembina klub. Siswa tidak pernah masuk di sini.',
+  offline: 'OFFLINE: HASIL DISIMPAN DI PERANGKAT',
+  offlineSignIn: 'Masuk membutuhkan internet. Berlatih dan lomba lawan robot tetap bisa tanpa internet, dan hasilnya menunggu di perangkat ini.',
   google: 'Lanjut dengan Google',
   facebook: 'Lanjut dengan Facebook',
   email: 'KIRIM TAUTAN MASUK KE EMAIL',

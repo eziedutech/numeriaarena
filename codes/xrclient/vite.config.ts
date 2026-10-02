@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -36,8 +40,44 @@ function bootProgress(): Plugin {
   };
 }
 
+/** Every file under `dir`, as paths relative to it with forward slashes. */
+function filesUnder(dir: string, prefix = ''): string[] {
+  return readdirSync(join(dir, prefix), { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? filesUnder(dir, `${prefix}${d.name}/`) : [`${prefix}${d.name}`],
+  );
+}
+
+/**
+ * Production builds only: sw.js, a service worker that keeps the whole game
+ * on the device after the first visit, so practice and robot races open and
+ * play without a network (scripts/offline-worker.js holds its code; the list
+ * of files and a version made from them are written in front of it here).
+ */
+function offlineWorker(): Plugin {
+  return {
+    name: 'numeria-offline-worker',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      // Names in the bundle carry a content hash; public files are taken with their sizes.
+      const built = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
+      const pub = filesUnder('public').map((f) => ({ f, size: statSync(join('public', f)).size }));
+      const version = createHash('sha256')
+        .update(JSON.stringify([built.sort(), pub]))
+        .digest('hex')
+        .slice(0, 12);
+      const files = ['./', ...built.map((f) => `./${f}`), ...pub.map((p) => `./${p.f}`)];
+      const code = readFileSync('scripts/offline-worker.js', 'utf8');
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sw.js',
+        source: `const VERSION = ${JSON.stringify(version)};\nconst FILES = ${JSON.stringify(files)};\n${code}`,
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [iwsdkDev(), bootProgress()],
+  plugins: [iwsdkDev(), bootProgress(), offlineWorker()],
   server: {
     host: '0.0.0.0',
     port: 3322,

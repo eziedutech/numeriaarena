@@ -16,6 +16,7 @@ import {
   teacherState,
   type Me,
 } from './teacher.js';
+import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
 import { townSticker } from './town-sticker.js';
@@ -236,6 +237,10 @@ export class Home {
     this.device = saved && (saved !== 'xr' || xrAvailable) ? saved : onHeadset && xrAvailable ? 'xr' : 'computer';
     this.render();
     window.addEventListener('resize', () => this.fit());
+    // The OFFLINE chip comes and goes with the network.
+    onNetwork(() => {
+      if (this.shown) this.render();
+    });
     onTeacher((s) => {
       this.render();
       if (s.kind === 'out') this.askedToRegister = false;
@@ -337,6 +342,12 @@ export class Home {
       else tab.addEventListener('click', () => this.setDevice(d));
     }
     const chips = el('div', 'chips', this.stage);
+    if (!online()) {
+      // No network: the games still play, and say where their results go.
+      const off = el('div', 'chip shadow', chips);
+      off.appendChild(paperText(t.offline, 17, COLORS.coral));
+      off.setAttribute('role', 'status');
+    }
     const lang = el('div', 'chip shadow', chips);
     lang.appendChild(paperText(t.language, 17, INK));
     for (const code of ['en', 'id'] as Lang[]) {
@@ -684,6 +695,10 @@ export class Home {
     const t = this.t;
     if (!signInConfigured) {
       this.message(t.teacher[0], t.serverSoon);
+      return;
+    }
+    if (!online()) {
+      this.message(t.teacher[0], t.offlineSignIn);
       return;
     }
     const { veil, body } = this.popup(t.teacher[0]);
