@@ -33,6 +33,10 @@ const Games = {
   Language: 'lang',
   BigText: 'bigtext',
   Town: 'town',
+  /** PRACTICE AGAIN, on a practice's results. */
+  Again: 'again',
+  /** Done, on any results: it only closes them, so a second touch can never start a game. */
+  Done: 'done',
 } as const;
 
 export const MenuButton = createComponent('MenuButton', {

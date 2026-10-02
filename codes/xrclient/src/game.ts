@@ -136,10 +136,14 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * above HOME, the Fold Town sticker beside the book, and the hand that shows
  * a first-time player what to do.
  */
-/** The two settings cards stand side by side, left of the envelopes. */
-const SETTINGS_X = [-0.235, -0.33];
-const SETTINGS_SCALE = 0.72;
-const BEST_AT = new Vector3(0.26, 0.085, 0.16);
+/**
+ * The two settings cards stand left of the envelopes, the size of HOME on
+ * the right and spaced like it, with letters large enough to read from the
+ * seat; the best score sits just above HOME.
+ */
+const SETTINGS_X = [-0.265, -0.385];
+const SETTINGS_SCALE = 1.05;
+const BEST_AT = new Vector3(0.26, 0.097, 0.16);
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
 const TOWN_W = 0.15;
 const HINT_SEEN = 'numeria.menuHintSeen';
@@ -148,6 +152,11 @@ const HINT_SEEN = 'numeria.menuHintSeen';
  * it (`numeria.howto.<game>`), for up to DEMO_S or until the player acts.
  */
 const HOWTO_KEY = 'numeria.howto.';
+/**
+ * A menu that has just appeared ignores touches this long: the finger that
+ * pressed Done is still there, and an envelope may appear right under it.
+ */
+const MENU_GRACE_MS = 800;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
@@ -281,7 +290,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'done';
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -306,6 +315,14 @@ export class GameSystem extends createSystem({
   private offer?: Offer;
   private shownAt = 0;
   private played = 0;
+  /** Creatures folded in this practice, and the practice summary cards while they show. */
+  private practiceRight = 0;
+  /** The practice session's running total when this practice began: its own points count from here. */
+  private practiceBase = 0;
+  private practiceTotal = 0;
+  /** When the desk menu last appeared (performance.now()), for MENU_GRACE_MS. */
+  private menuShownAt = 0;
+  private practiceCards: Mesh[] = [];
   private score!: Label;
   /** The paper title over the book on the menu (the score line's place). */
   private title?: Mesh;
@@ -512,11 +529,25 @@ export class GameSystem extends createSystem({
   }
 
   private pressButton(e: Entity): void {
+    console.info(`[menu] pressed ${e.getValue(MenuButton, 'game')} (${e.object3D?.name}) while ${this.phase}`);
     if (this.phase === 'recap') {
+      const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
+      // A practice can go round again; anything else on a results screen is Done.
+      if (pressed === 'again' && !this.race) {
+        const kind = this.kind;
+        this.clearPracticeCards();
+        this.clear(this.queries.buttons);
+        this.start(kind);
+        return;
+      }
       this.endRace();
       return;
     }
     if (this.phase !== 'menu') return;
+    if (performance.now() - this.menuShownAt < MENU_GRACE_MS) {
+      console.info('[menu] touch ignored: the menu has only just appeared');
+      return;
+    }
     const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
     if (pressed === 'home') {
       this.leaveToHome();
@@ -537,6 +568,8 @@ export class GameSystem extends createSystem({
       this.pop(T.townSoon, QUESTION_INK, undefined, TOWN_AT.clone().add(new Vector3(0, 0.16, 0.02)), 0.026);
       return;
     }
+    // PRACTICE AGAIN and Done belong to results; a late touch from them does nothing here.
+    if (pressed === 'again' || pressed === 'done') return;
     this.hideHint(true);
     const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
@@ -758,6 +791,7 @@ export class GameSystem extends createSystem({
 
   private showMenu(only: 'all' | 'practice' = 'all'): void {
     this.phase = 'menu';
+    this.menuShownAt = performance.now();
     this.menuOnly = only;
     this.syncLine(this.lineFrom);
     const desk = this.deskEntity()!.object3D!;
@@ -789,9 +823,9 @@ export class GameSystem extends createSystem({
     if (this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       this.addButton('home', T.home, HOME_CARD_X, 0xe8b64c, HOME_CARD_SCALE);
       // Settings on the desk, so the headset never has to come off for them.
-      this.addButton('lang', T.language(getLang().toUpperCase()), SETTINGS_X[0], 0xfff8ec, SETTINGS_SCALE, 0.012);
+      this.addSettingCard('lang', T.langCaption, getLang().toUpperCase(), SETTINGS_X[0], 0xfff8ec);
       // Teal while big numbers are on, plain paper while off.
-      this.addButton('bigtext', T.bigText(bigText()), SETTINGS_X[1], bigText() ? 0x3fb6a0 : 0xfff8ec, SETTINGS_SCALE, 0.011);
+      this.addSettingCard('bigtext', T.bigCaption, T.onOff(bigText()), SETTINGS_X[1], bigText() ? 0x3fb6a0 : 0xfff8ec);
       this.addTownSticker();
       this.showHint();
     }
@@ -813,7 +847,7 @@ export class GameSystem extends createSystem({
     this.bestCard = undefined;
     const best = this.readBest();
     if (!best) return;
-    const card = new Label(T.best(best.points, best.stars), { height: 0.02 });
+    const card = new Label(T.best(best.points, best.stars), { height: 0.017 });
     card.mesh.name = 'best-card';
     card.mesh.position.copy(BEST_AT);
     this.deskEntity()?.object3D?.add(card.mesh);
@@ -1075,7 +1109,9 @@ export class GameSystem extends createSystem({
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
-    if (title === T.done) {
+    if (title === '') {
+      // The caller writes on it (see addSettingCard).
+    } else if (title === T.done) {
       placeUiImage('button_done', button, [0, 0, 0.002], {
         scale: 0.9,
         fallback: () => this.label(title, 0.022, button, 0, 0.002, false).mesh,
@@ -1087,6 +1123,24 @@ export class GameSystem extends createSystem({
     return button;
   }
 
+  /**
+   * A settings card on the desk: a small caption on top and its value large
+   * below ("LANGUAGE" over "ID"), so the value reads from the seat.
+   */
+  private addSettingCard(choice: ButtonChoice, caption: string, value: string, x: number, color: number): void {
+    const button = this.addButton(choice, '', x, color, SETTINGS_SCALE);
+    // Printed straight on the card (no paper of their own), the value about
+    // as tall as HOME's letters and the caption as wide as the card allows.
+    for (const [text, height, y] of [
+      [caption, 0.016, 0.017],
+      [value, 0.034, -0.008],
+    ] as const) {
+      const l = new Label(text, { height, card: false });
+      l.mesh.position.set(0, y, 0.002);
+      button.add(l.mesh);
+    }
+  }
+
   private start(choice: MenuChoice, resume?: RaceCheckpoint): void {
     this.phase = 'loading';
     // Started from the home page, the 3D menu (which puts the score on the desk) never showed.
@@ -1095,6 +1149,8 @@ export class GameSystem extends createSystem({
     this.showTitle();
     this.clearMenu();
     this.played = 0;
+    this.practiceRight = 0;
+    this.practiceBase = this.practiceTotal;
     if (choice === 'race') {
       this.phase = 'loading';
       this.startRace(resume).catch((error) => {
@@ -1308,12 +1364,13 @@ export class GameSystem extends createSystem({
     this.raceScene.showRecap(recap, T.you);
     const own = recap.players.find((p) => !p.bot);
     if (own) this.saveBest(own.points, own.stars);
-    this.addButton('race', T.done, 0, 0x81b29a);
+    this.addButton('done', T.done, 0, 0x81b29a);
   }
 
   private endRace(): void {
     this.clear(this.queries.buttons);
     this.clearPlay();
+    this.clearPracticeCards();
     this.raceScene?.dispose();
     this.raceScene = undefined;
     this.race?.free();
@@ -1322,6 +1379,40 @@ export class GameSystem extends createSystem({
     this.score.set(T.title);
     this.score.mesh.visible = true;
     this.backToMenu();
+  }
+
+  /**
+   * The end of a practice: what it came to, and two buttons, PRACTICE AGAIN
+   * and Done. It waits for the player instead of leaving by itself.
+   */
+  private showPracticeDone(points: number): void {
+    this.phase = 'recap';
+    this.saveAnswers();
+    console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
+    const desk = this.deskEntity()?.object3D;
+    if (!desk) {
+      this.backToMenu();
+      return;
+    }
+    const title = new Label(T.practiceDone, { height: 0.044 * textScale(), ink: QUESTION_INK, question: true });
+    title.mesh.position.set(0, 0.29, 0.02);
+    const line = new Label(T.practiceScore(this.practiceRight, WAVE, points), { height: 0.03 * textScale() });
+    line.mesh.position.set(0, 0.235, 0.02);
+    for (const l of [title, line]) {
+      desk.add(l.mesh);
+      this.labels.add(l.mesh);
+      this.practiceCards.push(l.mesh);
+    }
+    this.addButton('again', T.again, -0.07, CORRECT, 1.3, 0.021);
+    this.addButton('done', T.done, 0.07, 0x81b29a);
+  }
+
+  private clearPracticeCards(): void {
+    for (const c of this.practiceCards) {
+      c.removeFromParent();
+      this.labels.delete(c);
+    }
+    this.practiceCards = [];
   }
 
   /** After a game: the home page outside the headset, the envelopes in it. */
@@ -1681,6 +1772,7 @@ export class GameSystem extends createSystem({
 
   private afterVerdict(v: Verdict | RaceVerdict): void {
     this.saveAnswers();
+    if (!this.race) this.practiceTotal = v.total_points;
     if (!v.correct) {
       if (v.retry_allowed) this.pop(T.tryAgain, WRONG_INK, 'feedback_try_again');
       else this.pop(T.itWas(v.expected_text), WRONG_INK);
@@ -1691,11 +1783,12 @@ export class GameSystem extends createSystem({
     }
     // Practice points go up when the creature reaches them (see `foldHome`).
     if (this.race) this.refreshRace();
-    else if (!v.correct) this.score.set(T.points(v.total_points));
+    else if (!v.correct) this.score.set(T.points(v.total_points - this.practiceBase));
     const creature = this.creature();
     if (!creature) return;
     const obj = creature.object3D!;
     if (v.correct) {
+      if (!this.race) this.practiceRight += 1;
       this.figure?.mark?.('right');
       this.solveCard();
       this.clear(this.queries.balloons);
@@ -1937,7 +2030,7 @@ export class GameSystem extends createSystem({
       this.tween(obj, to, TO_SCORE_S, 0.05, this.creatureScale * 0.2, () => {
         this.remove(creature);
         if (this.race) this.raceScene?.stamp(round, species, color, true);
-        if (!this.race) this.score.set(T.points(total));
+        if (!this.race) this.score.set(T.points(total - this.practiceBase));
         // A small +N rises beside the points (in a race, just above the stamp it became) and fades.
         const beside = this.race ? new Vector3(0, 0.03, 0.02) : new Vector3(0.11, 0, 0.01);
         this.pop(`+${gained}`, RIGHT_INK, undefined, to.clone().add(beside), this.race ? 0.018 : 0.024);
@@ -1992,8 +2085,9 @@ export class GameSystem extends createSystem({
     }
     this.played += 1;
     if (this.played >= WAVE) {
-      this.saveBest(Number.parseInt(this.score.value, 10) || 0, 0);
-      this.backToMenu();
+      const points = Number.parseInt(this.score.value, 10) || 0;
+      this.saveBest(points, 0);
+      this.showPracticeDone(points);
       return;
     }
     this.phase = 'playing';

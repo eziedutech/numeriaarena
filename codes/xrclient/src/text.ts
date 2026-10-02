@@ -49,6 +49,10 @@ export const EN = {
     brave_try: 'BRAVE TRY',
   } satisfies Record<Highlight, string>,
   done: 'Done',
+  /** The end of a practice: what it was, and the way on. */
+  practiceDone: 'PRACTICE DONE',
+  practiceScore: (right: number, total: number, points: number) => `${right} OF ${total} FOLDED, ${points} POINTS`,
+  again: 'PRACTICE AGAIN',
   home: 'HOME',
   popHint: 'Pop the right answer',
   orbFirst: (target: string) => `Join 2 crystals to make ${target}`,
@@ -58,6 +62,10 @@ export const EN = {
   touchHint: 'TOUCH AN ENVELOPE',
   language: (lang: string) => `LANG ${lang}`,
   bigText: (_on: boolean) => 'BIG NUMBERS',
+  /** The settings cards on the desk: a small caption over a large value. */
+  langCaption: 'LANGUAGE',
+  bigCaption: 'BIG NUMBERS',
+  onOff: (on: boolean): string => (on ? 'ON' : 'OFF'),
   best: (points: number, stars: number) => `BEST: ${points} PTS${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'FOLD TOWN: SOON',
   animal: {
@@ -108,6 +116,9 @@ export const ID: Text = {
     brave_try: 'PALING BERANI',
   },
   done: 'Selesai',
+  practiceDone: 'LATIHAN SELESAI',
+  practiceScore: (right: number, total: number, points: number) => `${right} DARI ${total} DILIPAT, ${points} POIN`,
+  again: 'LATIH LAGI',
   home: 'BERANDA',
   popHint: 'Pecahkan jawaban yang benar',
   orbFirst: (target: string) => `Gabung 2 kristal jadi ${target}`,
@@ -116,6 +127,9 @@ export const ID: Text = {
   touchHint: 'SENTUH SEBUAH AMPLOP',
   language: (lang: string) => `BAHASA ${lang}`,
   bigText: (_on: boolean) => 'ANGKA BESAR',
+  langCaption: 'BAHASA',
+  bigCaption: 'ANGKA BESAR',
+  onOff: (on: boolean) => (on ? 'NYALA' : 'MATI'),
   best: (points: number, stars: number) => `TERBAIK: ${points} POIN${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'KOTA LIPAT: SEGERA',
   animal: {
