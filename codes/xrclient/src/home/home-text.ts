@@ -28,6 +28,7 @@ const EN = {
   tips: ['MATH TIPS', 'Ways to understand primary maths'],
   watch: ['WATCH A MATCH', 'With a watch code, or the demo match'],
   town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
+  board: ['LEADERBOARD', 'My class and the world'],
   soon: 'SOON',
   footer: ['How to play', 'For parents', 'Privacy', 'Credits and licenses', 'About'],
   close: 'CLOSE',
@@ -90,6 +91,8 @@ const EN = {
   } as Record<string, string>,
   soonBody: {
     tips: 'Short lessons and tips for every topic in the game are on their way.',
+    board:
+      'Two boards: MY CLASS and GLOBAL. Each ranks HIGH STRIKE (the best race scores) and CITY BUILDER (the biggest Fold Towns), for this month or for all time. Players show only as made-up names, like BLUE CRANE 07.',
     town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
     watch: 'Watching a class match with a watch code, and the always-on demo match, come with the class server.',
     smartboard: 'On a smartboard the whole class helps the headset players. This mode is coming in a later update.',
@@ -133,6 +136,7 @@ const ID: typeof EN = {
   tips: ['TIPS MATEMATIKA', 'Cara memahami matematika SD'],
   watch: ['TONTON PERTANDINGAN', 'Dengan kode tonton, atau pertandingan demo'],
   town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
+  board: ['PAPAN PERINGKAT', 'Kelasku dan seluruh dunia'],
   soon: 'SEGERA',
   footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Kredit dan lisensi', 'Tentang'],
   close: 'TUTUP',
@@ -195,6 +199,8 @@ const ID: typeof EN = {
   } as Record<string, string>,
   soonBody: {
     tips: 'Pelajaran singkat dan tips untuk setiap topik di game sedang disiapkan.',
+    board:
+      'Dua papan: KELASKU dan GLOBAL. Masing-masing memeringkat HIGH STRIKE (skor lomba terbaik) dan CITY BUILDER (Kota Lipat terbesar), untuk bulan ini atau sepanjang masa. Pemain hanya tampil dengan nama samaran, misalnya BLUE CRANE 07.',
     town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
     watch: 'Menonton pertandingan kelas dengan kode tonton, dan pertandingan demo, hadir bersama server kelas.',
     smartboard: 'Di smartboard, seluruh kelas membantu pemain headset. Mode ini hadir di pembaruan berikutnya.',

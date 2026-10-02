@@ -16,6 +16,7 @@ import {
   teacherState,
   type Me,
 } from './teacher.js';
+import { leaderboardSticker } from './leaderboard-sticker.js';
 import { townSticker } from './town-sticker.js';
 
 /**
@@ -100,6 +101,9 @@ const CSS = `
 #home .townlabel { position: absolute; left: 70px; top: 196px; background: ${PAPER}; padding: 6px 12px 8px; }
 #home .town .sub { font-size: 13px; margin-top: 2px; }
 #home .town .soon { position: absolute; right: 10px; top: 60px; background: ${INK}; padding: 2px 6px; }
+#home .town.board { left: auto; right: 34px; }
+#home .town.board .townlabel { left: auto; right: 70px; }
+#home .town.board .soon { right: auto; left: 10px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
 #home .footer { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; background: ${PAPER}; }
 #home .footer button { padding: 10px 16px; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
@@ -389,6 +393,16 @@ export class Home {
     el('span', 'soon', town).appendChild(paperText(t.soon, 12, PAPER));
     town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}. ${t.soon}`);
     town.addEventListener('click', () => this.message(t.town[0], t.soonBody.town));
+
+    // Its partner on the right: the leaderboards, a podium on a sticker.
+    const board = el('button', 'town board', this.stage);
+    board.insertAdjacentHTML('beforeend', leaderboardSticker(300));
+    const boardLabel = el('div', 'townlabel shadow', board);
+    boardLabel.appendChild(paperText(t.board[0], 18, INK));
+    el('div', 'sub', boardLabel).textContent = t.board[1];
+    el('span', 'soon', board).appendChild(paperText(t.soon, 12, PAPER));
+    board.setAttribute('aria-label', `${t.board[0]}. ${t.board[1]}. ${t.soon}`);
+    board.addEventListener('click', () => this.message(t.board[0], t.soonBody.board));
 
     const footer = el('div', 'footer shadow', this.stage);
     const keys = Object.keys(HOME_TEXT.en.pages) as (keyof HomeText['pages'])[];
