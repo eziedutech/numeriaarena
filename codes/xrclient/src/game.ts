@@ -999,8 +999,7 @@ export class GameSystem extends createSystem({
     const desk = this.deskEntity()?.object3D;
     if (desk && !this.score.mesh.parent) desk.add(this.score.mesh);
     this.showTitle();
-    this.clear(this.queries.buttons);
-    this.envelopes.clear();
+    this.clearMenu();
     this.played = 0;
     if (choice === 'race') {
       this.phase = 'loading';
@@ -1207,8 +1206,7 @@ export class GameSystem extends createSystem({
     if (this.race || this.phase === 'recap') {
       this.endRace();
     } else {
-      this.clear(this.queries.buttons);
-      this.envelopes.clear();
+      this.clearMenu();
       this.opening = undefined;
       this.clearPlay();
       this.score.set(T.title);
@@ -1362,7 +1360,7 @@ export class GameSystem extends createSystem({
     const card =
       offer.game === 'balloon_burst' ? offer.prompt[getLang()] : seen < HINTED ? T.orbFirst(target) : T.orbTask(target);
     const desk = this.deskEntity()!.object3D!;
-    this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK });
+    this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK, question: true });
     this.prompt.mesh.name = 'prompt-label';
     this.prompt.mesh.position.copy(PROMPT_POS);
     desk.add(this.prompt.mesh);
@@ -1558,7 +1556,7 @@ export class GameSystem extends createSystem({
       o.game === 'orb_forge'
         ? `${this.lastPicks.map((i) => o.crystals[i]?.text ?? '?').join(' + ')} = ${o.target?.text ?? ''}`
         : this.prompt.value.replace('?', o.balloons.find((_, i) => i === this.lastBalloon)?.text ?? '?');
-    const solved = new Label(text, { height: 0.036, ink: RIGHT_INK });
+    const solved = new Label(text, { height: 0.036 * textScale(), ink: RIGHT_INK, question: true });
     solved.mesh.name = 'prompt-label';
     solved.mesh.position.copy(this.prompt.mesh.position);
     this.prompt.mesh.parent?.add(solved.mesh);
