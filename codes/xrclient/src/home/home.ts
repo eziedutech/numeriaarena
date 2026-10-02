@@ -1,6 +1,7 @@
 import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 
 import { drawGlyphs, glyphWidth, whenGlyphsLoad } from '../art/glyphs.js';
+import { bigText, getLang, onSettings, setBigText, setLang } from '../settings.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
 import { townSticker } from './town-sticker.js';
 
@@ -182,7 +183,14 @@ export class Home {
     this.back = el('button', 'shadow', document.body);
     this.back.id = 'home-back';
     this.back.addEventListener('click', () => this.onBack());
-    this.lang = store.get('lang') === 'id' ? 'id' : 'en';
+    this.lang = getLang();
+    // A language picked on the desk shows here too.
+    onSettings(() => {
+      if (getLang() !== this.lang) {
+        this.lang = getLang();
+        this.render();
+      }
+    });
     const saved = store.get('device') as Device | null;
     // On a headset the game opens on the desk by default.
     const onHeadset = /OculusBrowser|Quest/u.test(navigator.userAgent);
@@ -270,7 +278,7 @@ export class Home {
       '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="4" r="3.2" fill="#3469c4"/><path d="M2 8h18v3h-6v10h-3v-6h0v6H8V11H2z" fill="#3469c4"/></svg>';
     access.appendChild(paperText(t.accessibility, 17, INK));
     access.setAttribute('aria-label', t.accessibility);
-    access.addEventListener('click', () => this.message(t.accessibility, t.soonBody.accessibility));
+    access.addEventListener('click', () => this.accessibility());
     el('div', 'hint', this.stage).textContent = t.hint[this.device];
 
     // Left: ways to play.
@@ -364,8 +372,7 @@ export class Home {
 
   private setLang(l: Lang): void {
     this.lang = l;
-    store.set('lang', l);
-    document.documentElement.lang = l;
+    setLang(l);
     this.render();
   }
 
@@ -407,6 +414,26 @@ export class Home {
   private message(title: string, text: string): void {
     const { veil, body } = this.popup(title);
     el('p', '', body).textContent = text;
+    this.actions(body, veil);
+  }
+
+  private accessibility(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.accessibility);
+    const toggle = el('button', 'btn wide shadow', body);
+    const draw = () => {
+      toggle.innerHTML = '';
+      toggle.style.background = bigText() ? COLORS.teal : PAPER;
+      toggle.appendChild(paperText(t.bigNumbers(bigText()), 17, bigText() ? PAPER : INK));
+      toggle.setAttribute('aria-pressed', String(bigText()));
+      toggle.setAttribute('aria-label', t.bigNumbers(bigText()));
+    };
+    draw();
+    toggle.addEventListener('click', () => {
+      setBigText(!bigText());
+      draw();
+    });
+    el('p', '', body).textContent = t.soonBody.accessibility;
     this.actions(body, veil);
   }
 

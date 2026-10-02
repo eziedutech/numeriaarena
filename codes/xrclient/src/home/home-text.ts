@@ -9,6 +9,7 @@ const EN = {
   device: { computer: 'THIS COMPUTER', xr: 'HEADSET (XR)', smartboard: 'SMARTBOARD' },
   language: 'LANGUAGE',
   accessibility: 'ACCESSIBILITY',
+  bigNumbers: (on: boolean) => `BIG NUMBERS: ${on ? 'ON' : 'OFF'}`,
   hint: {
     computer: 'Pick where you play first. This computer plays with the mouse; the headset opens the game on your real desk.',
     xr: 'The game opens on your real desk. Put the headset on and play with your hands.',
@@ -50,7 +51,7 @@ const EN = {
     watch: 'Watching a class match with a watch code, and the always-on demo match, come with the class server.',
     smartboard: 'On a smartboard the whole class helps the headset players. This mode is coming in a later update.',
     accessibility:
-      'Coming next: one-handed play, no timer, high contrast, larger numbers, read the question aloud, and steadier aim. Until then every game can be played with one hand.',
+      'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
   },
   pages: {
     'How to play':
@@ -70,6 +71,7 @@ const ID: typeof EN = {
   device: { computer: 'KOMPUTER INI', xr: 'HEADSET (XR)', smartboard: 'SMARTBOARD' },
   language: 'BAHASA',
   accessibility: 'AKSESIBILITAS',
+  bigNumbers: (on: boolean) => `ANGKA BESAR: ${on ? 'NYALA' : 'MATI'}`,
   hint: {
     computer: 'Pilih dulu tempat bermain. Komputer ini dimainkan dengan mouse; headset membuka game di mejamu sendiri.',
     xr: 'Game terbuka di mejamu sendiri. Pakai headset dan bermain dengan tangan.',
@@ -111,7 +113,7 @@ const ID: typeof EN = {
     watch: 'Menonton pertandingan kelas dengan kode tonton, dan pertandingan demo, hadir bersama server kelas.',
     smartboard: 'Di smartboard, seluruh kelas membantu pemain headset. Mode ini hadir di pembaruan berikutnya.',
     accessibility:
-      'Segera: main satu tangan, tanpa waktu, kontras tinggi, angka lebih besar, soal dibacakan, dan bidikan lebih stabil. Saat ini semua game sudah bisa dimainkan dengan satu tangan.',
+      'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',
   },
   pages: {
     'How to play':

@@ -48,6 +48,83 @@ export const EN = {
   orbFirst: (target: string) => `Join 2 crystals to make ${target}`,
   orbTask: (target: string) => `Make ${target}`,
   gameName: { balloon_burst: 'Balloon Burst', orb_forge: 'Orb Forge' },
-} as const;
+  /** First time on the desk menu: what to do, under the hand that shows it. */
+  touchHint: 'TOUCH AN ENVELOPE',
+  language: (lang: string) => `LANG ${lang}`,
+  bigText: (_on: boolean) => 'BIG NUMBERS',
+  best: (points: number, stars: number) => `BEST: ${points} PTS${stars ? `, ${stars} ★` : ''}`,
+  townSoon: 'FOLD TOWN: SOON',
+  animal: {
+    dog: 'DOG',
+    rabbit: 'RABBIT',
+    bird: 'BIRD',
+    chicken: 'CHICKEN',
+    cow: 'COW',
+    fish: 'FISH',
+    cat: 'CAT',
+    elephant: 'ELEPHANT',
+  } as Record<string, string>,
+};
 
-export const T = EN;
+type Text = typeof EN;
+
+const ORDINAL_ID = (n: number) => `KE-${n}`;
+
+export const ID: Text = {
+  title: 'Numeria Arena',
+  race: 'Lomba Robot',
+  bot: (name: string) => `${name.toUpperCase()} (BOT)`,
+  you: 'KAMU',
+  wave: (n: number, total: number) => `Gelombang ${n} dari ${total}`,
+  place: ORDINAL_ID,
+  rival: (solved: number, points: number) => `${solved} BENAR, ${points} POIN`,
+  clock: EN.clock,
+  timeUp: 'Waktu habis!',
+  right: 'Benar!',
+  earned: (points: number) => `+${points} POIN`,
+  points: (points: number) => `${points} POIN`,
+  tryAgain: 'Coba lagi!',
+  itWas: (answer: string) => `Jawabannya ${answer}`,
+  missed: 'Meleset',
+  bossRound: 'Ronde bos: 20 detik, poin ganda!',
+  emote: { thumbs_up: 'Hebat!', clap: 'Hore!' },
+  recapTitle: 'Hasil lomba',
+  highlight: {
+    best_save: 'BANGKIT TERBAIK',
+    most_improved: 'PALING MAJU',
+    sharpest_aim: 'PALING JITU',
+    steady_streak: 'PALING KONSISTEN',
+    brave_try: 'PALING BERANI',
+  },
+  done: 'Selesai',
+  home: 'BERANDA',
+  popHint: 'Pecahkan jawaban yang benar',
+  orbFirst: (target: string) => `Gabung 2 kristal jadi ${target}`,
+  orbTask: (target: string) => `Buat ${target}`,
+  gameName: { balloon_burst: 'Balloon Burst', orb_forge: 'Orb Forge' },
+  touchHint: 'SENTUH SEBUAH AMPLOP',
+  language: (lang: string) => `BAHASA ${lang}`,
+  bigText: (_on: boolean) => 'ANGKA BESAR',
+  best: (points: number, stars: number) => `TERBAIK: ${points} POIN${stars ? `, ${stars} ★` : ''}`,
+  townSoon: 'KOTA LIPAT: SEGERA',
+  animal: {
+    dog: 'ANJING',
+    rabbit: 'KELINCI',
+    bird: 'BURUNG',
+    chicken: 'AYAM',
+    cow: 'SAPI',
+    fish: 'IKAN',
+    cat: 'KUCING',
+    elephant: 'GAJAH',
+  },
+};
+
+/**
+ * The text in the chosen language. Read it when drawing (`T.x`), so text
+ * drawn after a language change follows it.
+ */
+export const T: Text = { ...EN };
+
+export function useLanguage(lang: 'en' | 'id'): void {
+  Object.assign(T, lang === 'id' ? ID : EN);
+}

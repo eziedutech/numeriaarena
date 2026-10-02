@@ -1,6 +1,10 @@
 import {
   Box3,
+  BoxGeometry,
+  CanvasTexture,
   createSystem,
+  DoubleSide,
+  SRGBColorSpace,
   Entity,
   GrabSystem,
   Mesh,
@@ -44,7 +48,7 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
-import { ACCENTS, accentForSkill, CORRECT, paper, TRY_AGAIN } from './art/palette.js';
+import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { placeUiImage, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
@@ -59,10 +63,12 @@ import {
 } from './game/core.js';
 import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
-import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb } from './game-components.js';
+import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
 import { LocalStore } from './storage.js';
-import { T } from './text.js';
+import { T, useLanguage } from './text.js';
+import { bigText, getLang, onSettings, setBigText, setLang, textScale } from './settings.js';
+import { townSticker } from './home/town-sticker.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -124,8 +130,23 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * They are plain white paper until called, then take the question's colour.
  */
 /** The HOME card on the headset menu: right of the envelopes, a little smaller. */
+/**
+ * The rest of the desk menu: settings cards on the left, the best score
+ * above HOME, the Fold Town sticker beside the book, and the hand that shows
+ * a first-time player what to do.
+ */
+/** The two settings cards stand side by side, left of the envelopes. */
+const SETTINGS_X = [-0.235, -0.33];
+const SETTINGS_SCALE = 0.72;
+const BEST_AT = new Vector3(0.26, 0.085, 0.16);
+const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
+const TOWN_W = 0.15;
+const HINT_SEEN = 'numeria.menuHintSeen';
+const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
 const HOME_CARD_SCALE = 0.95;
+/** The first-time hand repeats its press every this many seconds. */
+const HINT_LOOP_S = 2.2;
 const LINE_SIZE = 5;
 const LINE_Z = -0.245;
 /** Space between two animals in the line. */
@@ -253,7 +274,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town';
 
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
@@ -267,6 +288,7 @@ export class GameSystem extends createSystem({
   heldOrbs: { required: [Orb, Grabbed] },
   buttons: { required: [MenuButton] },
   pressedButtons: { required: [MenuButton, Pressed] },
+  pressedLine: { required: [LineTap, Pressed] },
 }) {
   private core?: Core;
   /** Device storage; answers judged before it opens wait in `unsaved`. */
@@ -298,6 +320,11 @@ export class GameSystem extends createSystem({
   private lastPoke = '';
   /** The animals waiting their turn behind the book, front of the line first. */
   private line: LineAnimal[] = [];
+  private menuOnly: 'all' | 'practice' = 'all';
+  private bestCard?: Label;
+  private hintHand?: Group;
+  private hintLabel?: Label;
+  private hintT = 0;
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -418,6 +445,17 @@ export class GameSystem extends createSystem({
       () => this.goHome(),
     );
 
+    useLanguage(getLang());
+    // A setting changed on the desk or the home page: new text from now on,
+    // and the desk menu redrawn so its cards show the new choice.
+    onSettings(() => {
+      useLanguage(getLang());
+      if (this.phase === 'menu' && this.queries.buttons.entities.size > 0) {
+        this.clearMenu();
+        this.showMenu(this.menuOnly);
+      }
+    });
+
     Core.start(Date.now() >>> 0)
       .then((core) => {
         this.core = core;
@@ -427,6 +465,7 @@ export class GameSystem extends createSystem({
 
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
+      this.queries.pressedLine.subscribe('qualify', (e) => this.greet(e)),
       // A mouse click outside XR is always deliberate; in XR a touch must be a poke.
       this.queries.pressedBalloons.subscribe('qualify', (e) => {
         const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
@@ -467,6 +506,22 @@ export class GameSystem extends createSystem({
       this.leaveToHome();
       return;
     }
+    if (pressed === 'lang') {
+      console.info('[menu] language toggled');
+      setLang(getLang() === 'en' ? 'id' : 'en');
+      return;
+    }
+    if (pressed === 'bigtext') {
+      console.info('[menu] big numbers toggled');
+      setBigText(!bigText());
+      return;
+    }
+    if (pressed === 'town') {
+      console.info('[menu] fold town (soon)');
+      this.pop(T.townSoon, QUESTION_INK, undefined, TOWN_AT.clone().add(new Vector3(0, 0.16, 0.02)), 0.026);
+      return;
+    }
+    this.hideHint(true);
     const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
     if (!envelope) {
@@ -687,6 +742,7 @@ export class GameSystem extends createSystem({
 
   private showMenu(only: 'all' | 'practice' = 'all'): void {
     this.phase = 'menu';
+    this.menuOnly = only;
     this.syncLine(this.lineFrom);
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
@@ -716,7 +772,154 @@ export class GameSystem extends createSystem({
     // desk ends the session and goes back to it.
     if (this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       this.addButton('home', T.home, HOME_CARD_X, 0xe8b64c, HOME_CARD_SCALE);
+      // Settings on the desk, so the headset never has to come off for them.
+      this.addButton('lang', T.language(getLang().toUpperCase()), SETTINGS_X[0], 0xfff8ec, SETTINGS_SCALE, 0.012);
+      // Teal while big numbers are on, plain paper while off.
+      this.addButton('bigtext', T.bigText(bigText()), SETTINGS_X[1], bigText() ? 0x3fb6a0 : 0xfff8ec, SETTINGS_SCALE, 0.011);
+      this.addTownSticker();
+      this.showHint();
     }
+    this.showBest();
+  }
+
+  /** Clears the desk menu: its buttons, envelopes, best card and hint. */
+  private clearMenu(): void {
+    this.clear(this.queries.buttons);
+    this.envelopes.clear();
+    this.bestCard?.mesh.removeFromParent();
+    this.bestCard = undefined;
+    this.hideHint(false);
+  }
+
+  /** The best score kept on this device, as a small card above HOME. */
+  private showBest(): void {
+    this.bestCard?.mesh.removeFromParent();
+    this.bestCard = undefined;
+    const best = this.readBest();
+    if (!best) return;
+    const card = new Label(T.best(best.points, best.stars), { height: 0.02 });
+    card.mesh.name = 'best-card';
+    card.mesh.position.copy(BEST_AT);
+    this.deskEntity()?.object3D?.add(card.mesh);
+    this.labels.add(card.mesh);
+    this.bestCard = card;
+  }
+
+  private readBest(): { points: number; stars: number } | undefined {
+    try {
+      const raw = localStorage.getItem(BEST_KEY);
+      return raw ? (JSON.parse(raw) as { points: number; stars: number }) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Keeps the better of this result and the best so far. */
+  private saveBest(points: number, stars: number): void {
+    const best = this.readBest();
+    if (best && (best.stars > stars || (best.stars === stars && best.points >= points))) return;
+    try {
+      localStorage.setItem(BEST_KEY, JSON.stringify({ points, stars }));
+    } catch {
+      // Without storage the best score is simply not kept.
+    }
+  }
+
+  /** The Fold Town sticker standing beside the book, the same one as on the home page. */
+  private addTownSticker(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 400;
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    const img = new Image();
+    img.onload = () => {
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      tex.needsUpdate = true;
+    };
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(townSticker(600))}`;
+    const h = (TOWN_W * canvas.height) / canvas.width;
+    const plane = new Mesh(
+      new PlaneGeometry(TOWN_W, h),
+      new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: DoubleSide }),
+    );
+    plane.position.y = h / 2;
+    const sticker = new Group();
+    sticker.name = 'menu-town';
+    sticker.add(plane);
+    sticker.position.copy(TOWN_AT);
+    // Turned a little towards the reader, like a card propped on the desk.
+    sticker.rotation.y = 0.35;
+    const e = this.add(sticker);
+    e.addComponent(MenuButton, { game: 'town' });
+    e.addComponent(PokeInteractable);
+    e.addComponent(RayInteractable);
+  }
+
+  /** First time on the desk menu: a paper hand pokes the race envelope, with three words under it. */
+  private showHint(): void {
+    try {
+      if (localStorage.getItem(HINT_SEEN)) return;
+    } catch {
+      // Without storage the hint shows each time; it never blocks anything.
+    }
+    if (this.hintHand) return;
+    const hand = new Group();
+    hand.name = 'menu-hint-hand';
+    const mat = new MeshBasicMaterial({ color: 0xfff8ec, transparent: true, opacity: 0.85 });
+    const palm = new Mesh(new BoxGeometry(0.026, 0.03, 0.008), mat);
+    const finger = new Mesh(new BoxGeometry(0.008, 0.008, 0.032), mat);
+    finger.position.set(0.004, 0.006, -0.026);
+    const thumb = new Mesh(new BoxGeometry(0.007, 0.007, 0.014), mat);
+    thumb.position.set(-0.014, 0.0, -0.008);
+    hand.add(palm, finger, thumb);
+    this.deskEntity()?.object3D?.add(hand);
+    this.hintHand = hand;
+    const label = new Label(T.touchHint, { height: 0.02 });
+    label.mesh.position.set(-0.135, 0.11, ENVELOPE_Z);
+    this.deskEntity()?.object3D?.add(label.mesh);
+    this.labels.add(label.mesh);
+    this.hintLabel = label;
+    this.hintT = 0;
+  }
+
+  private hideHint(seen: boolean): void {
+    this.hintHand?.removeFromParent();
+    this.hintHand = undefined;
+    this.hintLabel?.mesh.removeFromParent();
+    if (this.hintLabel) this.labels.delete(this.hintLabel.mesh);
+    this.hintLabel = undefined;
+    if (seen) {
+      try {
+        localStorage.setItem(HINT_SEEN, '1');
+      } catch {
+        // Nothing to keep.
+      }
+    }
+  }
+
+  /** The hand moves in, presses the envelope's face, and backs out again. */
+  private runHint(delta: number): void {
+    if (!this.hintHand) return;
+    this.hintT = (this.hintT + delta) % HINT_LOOP_S;
+    const k = this.hintT / HINT_LOOP_S;
+    // In over the first half, a short press, then away.
+    const reach = k < 0.45 ? k / 0.45 : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+    const ease = reach * reach * (3 - 2 * reach);
+    this.hintHand.position.set(-0.135, 0.05 + 0.05 * (1 - ease), ENVELOPE_Z + 0.03 + 0.09 * (1 - ease));
+    this.hintHand.rotation.x = -0.6;
+  }
+
+  /** Touching an animal in the line: it hops and its name shows above it. */
+  private greet(e: Entity): void {
+    if (this.phase !== 'menu') return;
+    const a = this.line.find((l) => l.entity === e);
+    const obj = e.object3D;
+    if (!a || !obj || this.tweens.some((t) => t.obj === obj)) return;
+    console.info(`[menu] hello ${a.species}`);
+    const at = obj.position.clone();
+    this.tween(obj, at, 0.45, 0.03, LINE_SCALE);
+    this.pop(T.animal[a.species] ?? a.species.toUpperCase(), INK, undefined, at.clone().add(new Vector3(0, 0.1, 0.02)), 0.022);
   }
 
   /**
@@ -728,7 +931,14 @@ export class GameSystem extends createSystem({
     envelope.root.name = `menu-${game}`;
     // Leaning back on the table like envelopes on a stand: low enough that
     // the book behind them stays in view, faces still towards the player.
-    envelope.root.scale.setScalar(1.05);
+    // The robot race, the main game, stands a little larger with a gold star.
+    envelope.root.scale.setScalar(game === 'race' ? 1.18 : 1.05);
+    if (game === 'race') {
+      const star = makeStar(true);
+      star.scale.setScalar(0.42);
+      star.position.set(0.034, 0.02, 0.003);
+      envelope.root.add(star);
+    }
     envelope.root.rotation.x = -ENVELOPE_TILT;
     envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), ENVELOPE_Z);
     const e = this.add(envelope.root);
@@ -762,7 +972,7 @@ export class GameSystem extends createSystem({
     }
   }
 
-  private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3): void {
+  private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {
     const button = makeButton(color);
     button.name = `menu-${game}`;
     button.position.set(x, 0.0325 * scale, ENVELOPE_Z);
@@ -778,8 +988,9 @@ export class GameSystem extends createSystem({
       });
     } else {
       // On the thin paper card, large enough to read from the seat.
-      this.label(title, 0.03, button, 0, 0.002, false);
+      this.label(title, labelH / (scale / 1.3), button, 0, 0.002, false);
     }
+    return button;
   }
 
   private start(choice: MenuChoice): void {
@@ -942,6 +1153,8 @@ export class GameSystem extends createSystem({
     this.phase = 'recap';
     this.clearPlay();
     this.raceScene.showRecap(recap, T.you);
+    const own = recap.players.find((p) => !p.bot);
+    if (own) this.saveBest(own.points, own.stars);
     this.addButton('race', T.done, 0, 0x81b29a);
   }
 
@@ -970,8 +1183,7 @@ export class GameSystem extends createSystem({
 
   /** The HOME card in the headset: end the session; the home page shows once it has ended. */
   private leaveToHome(): void {
-    this.clear(this.queries.buttons);
-    this.envelopes.clear();
+    this.clearMenu();
     this.pendingXr = undefined;
     this.wantHome = true;
     void this.world.exitXR();
@@ -1013,10 +1225,7 @@ export class GameSystem extends createSystem({
     this.wasImmersive = immersive;
     const home = !immersive && this.phase === 'menu' && this.wantHome;
     if (home) {
-      if (this.queries.buttons.entities.size > 0) {
-        this.clear(this.queries.buttons);
-        this.envelopes.clear();
-      }
+      if (this.queries.buttons.entities.size > 0) this.clearMenu();
       this.home.show();
       if (this.line.length === 0 && this.deskEntity()) this.syncLine(this.lineFrom);
     } else {
@@ -1090,7 +1299,11 @@ export class GameSystem extends createSystem({
     fig.root.scale.setScalar(LINE_SCALE);
     fig.root.updateMatrixWorld(true);
     const size = new Box3().setFromObject(fig.root).getSize(new Vector3());
-    return { species, entity: this.add(fig.root), offerId, width: size.x };
+    const entity = this.add(fig.root);
+    entity.addComponent(LineTap);
+    entity.addComponent(PokeInteractable);
+    entity.addComponent(RayInteractable);
+    return { species, entity, offerId, width: size.x };
   }
 
   /**
@@ -1147,9 +1360,9 @@ export class GameSystem extends createSystem({
     const seen = this.seen[offer.game]++;
     const target = offer.target?.text ?? '';
     const card =
-      offer.game === 'balloon_burst' ? offer.prompt.en : seen < HINTED ? T.orbFirst(target) : T.orbTask(target);
+      offer.game === 'balloon_burst' ? offer.prompt[getLang()] : seen < HINTED ? T.orbFirst(target) : T.orbTask(target);
     const desk = this.deskEntity()!.object3D!;
-    this.prompt = new Label(card, { height: 0.036, ink: QUESTION_INK });
+    this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK });
     this.prompt.mesh.name = 'prompt-label';
     this.prompt.mesh.position.copy(PROMPT_POS);
     desk.add(this.prompt.mesh);
@@ -1192,7 +1405,7 @@ export class GameSystem extends createSystem({
       this.clickable(e);
       // The answer card hangs on the balloon's string, below it, so the
       // balloon never covers the number; a taller fraction card hangs lower.
-      this.label(b.text, 0.034, g, BALLOON_TAG_TOP.y, BALLOON_TAG_TOP.z, true, 'top');
+      this.label(b.text, 0.034 * textScale(), g, BALLOON_TAG_TOP.y, BALLOON_TAG_TOP.z, true, 'top');
       // The first rise is staggered so the balloons do not all come up together.
       this.launch(g, n, i, 0.2);
     });
@@ -1214,9 +1427,9 @@ export class GameSystem extends createSystem({
       // A price card standing on the table in front of the cluster, leaning
       // back a little. It does not turn to the head, so its top edge can
       // never swing into the paper; a taller fraction card grows upwards.
-      const tag = this.label(c.text, CRYSTAL_TAG_H, m, 0.001 - CRYSTAL_HALF, 0, false, 'bottom');
+      const tag = this.label(c.text, CRYSTAL_TAG_H * textScale(), m, 0.001 - CRYSTAL_HALF, 0, false, 'bottom');
       tag.mesh.rotation.x = -CRYSTAL_TAG_LEAN;
-      tag.mesh.position.z = (m.userData.front as number) + 0.004 + CRYSTAL_TAG_H * 1.5 * Math.sin(CRYSTAL_TAG_LEAN);
+      tag.mesh.position.z = (m.userData.front as number) + 0.004 + CRYSTAL_TAG_H * textScale() * 1.5 * Math.sin(CRYSTAL_TAG_LEAN);
     });
   }
 
@@ -1596,7 +1809,7 @@ export class GameSystem extends createSystem({
     }
     this.played += 1;
     if (this.played >= WAVE) {
-      this.score.set(`Wave done! ${this.score.value}`);
+      this.saveBest(Number.parseInt(this.score.value, 10) || 0, 0);
       this.backToMenu();
       return;
     }
@@ -1676,6 +1889,7 @@ export class GameSystem extends createSystem({
     if (this.phase === 'opening') this.runOpening(delta);
     this.runTimer();
     this.runPops(delta);
+    this.runHint(delta);
     this.hoverTargets(delta);
     this.floatBalloons(delta);
     if (this.race) this.updateRace(delta);
