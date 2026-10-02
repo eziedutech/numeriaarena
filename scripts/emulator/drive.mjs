@@ -133,6 +133,14 @@ export async function card(x) {
   await tip(x, 0.2, 0.35); await sleep(2.5);
 }
 
+/** Presses a standing card at desk (x, y, z) turned by `yaw`: in along its facing, then back out. */
+export async function pressFacing(x, y, z, yaw) {
+  const nx = Math.sin(yaw), nz = Math.cos(yaw);
+  for (const k of [1, 0.6, 0.3, 0.1, -0.05]) { await tip(x + nx * 0.08 * k, y, z + nz * 0.08 * k); await sleep(0.15); }
+  await sleep(0.3);
+  await tip(x + nx * 0.2, y, z + nz * 0.2); await sleep(2.5);
+}
+
 /** Reads a shown number: "3/8", "2 1/4", "0.25", or "16 cm" (the unit is dropped). */
 const val = (text) => {
   const t = text.replace(/\s*[a-z]+$/i, '');
@@ -301,13 +309,12 @@ if (mode === 'quit') {
   if (fail && fail !== oldFail) throw new Error(`The race did not start: ${fail}`);
   const quit = await posOf('^menu-quit$');
   console.log(quit ? `QUIT card at ${quit.x.toFixed(3)}, ${quit.y.toFixed(3)}, ${quit.z.toFixed(3)}` : 'no QUIT card');
-  const oldQuit = await lastLog('\\[game\\] quit from the desk');
-  await card(0.39);
-  console.log('after one press:', (await logs('\\[menu\\] pressed quit', 1))[0] ?? 'no press logged');
-  await card(0.39);
-  const done = await lastLog('\\[game\\] quit from the desk');
-  console.log(done && done !== oldQuit ? done : 'did not quit');
-  console.log((await find('^menu-race$')).length > 0 ? 'desk menu is back' : 'no desk menu');
+  // One press only asks: the game must still be on, its card still there.
+  await pressFacing(quit.x, quit.y, quit.z, -0.65);
+  console.log((await find('^menu-quit$')).length > 0 ? 'after one press: still playing' : 'after one press: already left');
+  await pressFacing(quit.x, quit.y, quit.z, -0.65);
+  const left = (await find('^menu-quit$')).length === 0 && (await find('^menu-race$')).length > 0;
+  console.log(left ? 'after two presses: back at the desk menu' : 'after two presses: still in the game');
 }
 
 // A finished run leaves no XR session behind: an idle emulated session keeps

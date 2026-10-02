@@ -172,11 +172,16 @@ const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 const HOME_CARD_X = 0.26;
 /**
- * The QUIT card during a game in the headset: on the right of the desk,
- * opposite the settings and clear of the crystals. The first press (touch or
- * click) asks, a second within QUIT_ASK_MS leaves to the desk menu.
+ * The QUIT card during a game in the headset: just over the race card on the
+ * right, turned to the player like it, away from the balloons and crystals
+ * (the same place in a practice). The first press (touch, trigger or click)
+ * asks, a second within QUIT_ASK_MS leaves to the desk menu.
  */
-const QUIT_X = 0.39;
+const QUIT_POS = new Vector3(0.395, 0.345, 0.08);
+const QUIT_YAW = -0.65;
+/** A small card for one word: narrower than it is scaled tall, its word kept 2 cm high. */
+const QUIT_SCALE = { x: 0.6, y: 0.72 };
+const QUIT_TEXT_H = 0.02;
 const QUIT_ASK_MS = 4000;
 /** How far and how long a pressed desk card sinks. */
 const PRESS_DIP_M = 0.006;
@@ -1497,9 +1502,10 @@ export class GameSystem extends createSystem({
   private dip(obj: Object3D): void {
     if (obj.userData.dipping) return;
     obj.userData.dipping = true;
-    obj.position.z -= PRESS_DIP_M;
+    // Along the card's own facing, so a card turned to the player sinks straight back.
+    obj.translateZ(-PRESS_DIP_M);
     setTimeout(() => {
-      obj.position.z += PRESS_DIP_M;
+      obj.translateZ(PRESS_DIP_M);
       obj.userData.dipping = false;
     }, PRESS_DIP_MS);
   }
@@ -1508,14 +1514,22 @@ export class GameSystem extends createSystem({
   private addQuitCard(): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     this.removeQuitCard();
-    const button = this.addButton('quit', '', QUIT_X, 0xfff8ec, SETTINGS_SCALE);
+    const button = this.addButton('quit', '', 0, 0xfff8ec, 1);
+    button.position.copy(QUIT_POS);
+    button.rotation.y = QUIT_YAW;
+    button.scale.set(QUIT_SCALE.x, QUIT_SCALE.y, 1);
     // Approached from outside and up a while before it takes a press, like the results choices.
     button.userData.choice = true;
     button.userData.shownAt = performance.now();
     button.userData.armed = false;
-    this.quitLabel = new Label(T.quit, { height: 0.026, card: false });
-    this.quitLabel.mesh.position.set(0, 0, 0.002);
-    button.add(this.quitLabel.mesh);
+    this.quitLabel = new Label(T.quit, { height: QUIT_TEXT_H, card: false });
+    // In a holder that undoes the card's uneven scale, so the letters keep their shape
+    // (the label sizes itself with its own mesh scale).
+    const holder = new Group();
+    holder.position.set(0, 0, 0.002);
+    holder.scale.set(1 / QUIT_SCALE.x, 1 / QUIT_SCALE.y, 1);
+    holder.add(this.quitLabel.mesh);
+    button.add(holder);
     this.quitAskedAt = 0;
   }
 
