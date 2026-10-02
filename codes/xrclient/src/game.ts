@@ -65,6 +65,7 @@ import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
 import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
+import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore } from './storage.js';
 import { T, useLanguage } from './text.js';
 import { bigText, getLang, onSettings, setBigText, setLang, textScale } from './settings.js';
@@ -1086,7 +1087,7 @@ export class GameSystem extends createSystem({
     return button;
   }
 
-  private start(choice: MenuChoice): void {
+  private start(choice: MenuChoice, resume?: RaceCheckpoint): void {
     this.phase = 'loading';
     // Started from the home page, the 3D menu (which puts the score on the desk) never showed.
     const desk = this.deskEntity()?.object3D;
@@ -1096,7 +1097,7 @@ export class GameSystem extends createSystem({
     this.played = 0;
     if (choice === 'race') {
       this.phase = 'loading';
-      this.startRace().catch((error) => {
+      this.startRace(resume).catch((error) => {
         console.error('[race] could not start', error);
         this.showMenu();
       });
@@ -1139,16 +1140,49 @@ export class GameSystem extends createSystem({
     }
   }
 
-  private async startRace(): Promise<void> {
-    const race = await Race.create(Date.now() >>> 0, BOT_NAMES);
+  private async startRace(resume?: RaceCheckpoint): Promise<void> {
+    const race = await Race.create(resume ? resume.seed : Date.now() >>> 0, BOT_NAMES);
     this.race = race;
     this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, BOT_NAMES);
     this.recapIn = -1;
-    race.start(this.now());
+    if (resume) {
+      // The same race, rebuilt call by call, with the game clock where it
+      // stood: the break before the next round, which then starts as usual.
+      race.replay(resume.calls);
+      this.pausedAt = undefined;
+      this.pausedTotal = Date.now() - resume.now;
+      this.raceRound = resume.next - 2;
+      this.roundStartPoints = this.racePoints();
+      console.info(`[race] picked up again before round ${resume.next}, ${resume.calls.length} calls replayed`);
+    } else {
+      clearCheckpoint();
+      race.start(this.now());
+    }
     // The scoreboard takes the place of the single score line during a race.
     this.score.mesh.visible = false;
     this.refreshRace();
+    if (resume) this.raceScene.restoreCard(resume.card);
     this.phase = 'playing';
+  }
+
+  /** Keeps what this race needs to pick up again from round `next` (1-based). */
+  private saveCheckpoint(next: number): void {
+    if (!this.race || !this.raceScene) return;
+    const cp: RaceCheckpoint = {
+      v: 1,
+      seed: this.race.seed,
+      calls: this.race.calls,
+      now: this.now(),
+      savedAt: Date.now(),
+      next,
+      card: this.raceScene.cardSnapshot(),
+    };
+    try {
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(cp));
+    } catch (error) {
+      // Full or blocked storage: the race simply cannot be picked up again.
+      console.warn('[race] checkpoint not kept', error);
+    }
   }
 
   private updateRace(delta: number): void {
@@ -1257,6 +1291,8 @@ export class GameSystem extends createSystem({
           if (this.phase === 'between') this.phase = 'playing';
         }
         scene.roundDone(this.raceRound, this.racePoints() - this.roundStartPoints);
+        // Between rounds the race can be left and picked up again from the next.
+        if (this.raceRound + 1 < (this.raceState?.plan?.length ?? 0)) this.saveCheckpoint(this.raceRound + 2);
         break;
     }
   }
@@ -1265,6 +1301,7 @@ export class GameSystem extends createSystem({
     if (!this.race || !this.raceScene) return;
     const recap = this.race.recap();
     console.info('[race] recap', JSON.stringify(recap));
+    clearCheckpoint();
     this.saveAnswers();
     this.phase = 'recap';
     this.clearPlay();
@@ -1315,7 +1352,14 @@ export class GameSystem extends createSystem({
       return;
     }
     if (mode === 'race') this.start('race');
+    else if (mode === 'resume') this.resumeRace();
     else this.showMenu('practice');
+  }
+
+  /** Picks up the race kept on this device, or starts a new one if it has gone stale meanwhile. */
+  private resumeRace(): void {
+    const cp = readCheckpoint();
+    this.start('race', cp ?? undefined);
   }
 
   /** The Home button over the browser game: leave whatever is on and go back. */
@@ -2018,6 +2062,7 @@ export class GameSystem extends createSystem({
       const mode = this.pendingXr;
       this.pendingXr = undefined;
       if (mode === 'race') this.start('race');
+      else if (mode === 'resume') this.resumeRace();
       else this.showMenu('practice');
     } else if (this.phase === 'menu' && placed && !onHome && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
       this.showMenu();

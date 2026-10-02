@@ -147,8 +147,26 @@ export interface Recap {
 }
 
 /** One race against two rival bots, all decided in the Rust core. */
+/**
+ * One call made on a race, with its arguments: the same seed and the same
+ * calls in the same order rebuild the same race, which is how a race picks
+ * up again after the page was closed (see `RaceCheckpoint` in game.ts).
+ */
+export type RaceCall =
+  | ['start', number]
+  | ['tick', number]
+  | ['next']
+  | ['balloon', number, number, number, number]
+  | ['orb', number, number[], number, number];
+
 export class Race {
-  private constructor(private game: RaceGame) {}
+  /** Every call so far, in order. */
+  readonly calls: RaceCall[] = [];
+
+  private constructor(
+    private game: RaceGame,
+    readonly seed: number,
+  ) {}
 
   static async create(seed: number, botNames: [string, string]): Promise<Race> {
     await init();
@@ -164,27 +182,65 @@ export class Race {
     const game = new RaceGame(templates, config);
     const rejected = JSON.parse(game.rejected()) as string[];
     if (rejected.length > 0) console.warn('[race] templates that did not compile:', rejected);
-    return new Race(game);
+    return new Race(game, seed);
   }
 
   start(now: number): void {
+    this.calls.push(['start', now]);
     this.game.start(now);
   }
 
   tick(now: number): RaceEvent[] {
+    this.calls.push(['tick', now]);
     return JSON.parse(this.game.tick(now)) as RaceEvent[];
   }
 
   playerNext(): RaceOffer | null {
+    this.calls.push(['next']);
     return JSON.parse(this.game.playerNext()) as RaceOffer | null;
   }
 
   answerBalloon(offerId: number, index: number, timeMs: number, now: number): RaceVerdict {
+    this.calls.push(['balloon', offerId, index, timeMs, now]);
     return JSON.parse(this.game.answerBalloon(offerId, index, timeMs, now)) as RaceVerdict;
   }
 
   answerOrb(offerId: number, crystals: number[], timeMs: number, now: number): RaceVerdict {
+    this.calls.push(['orb', offerId, crystals, timeMs, now]);
     return JSON.parse(this.game.answerOrb(offerId, Uint32Array.from(crystals), timeMs, now)) as RaceVerdict;
+  }
+
+  /**
+   * Plays recorded calls on this fresh race, in order. A call refused the
+   * first time (an answer after the whistle) is refused again and skipped.
+   * The answer events this produces were saved the first time round, so
+   * they are dropped here.
+   */
+  replay(calls: RaceCall[]): void {
+    for (const c of calls) {
+      try {
+        switch (c[0]) {
+          case 'start':
+            this.start(c[1]);
+            break;
+          case 'tick':
+            this.tick(c[1]);
+            break;
+          case 'next':
+            this.playerNext();
+            break;
+          case 'balloon':
+            this.answerBalloon(c[1], c[2], c[3], c[4]);
+            break;
+          case 'orb':
+            this.answerOrb(c[1], c[2], c[3], c[4]);
+            break;
+        }
+      } catch {
+        // Refused then, refused now: nothing changed.
+      }
+    }
+    this.drainEvents();
   }
 
   view(): RaceState {

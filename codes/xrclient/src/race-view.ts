@@ -5,7 +5,7 @@ import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
 import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
 import type { Emote, Highlight, RaceState, Recap } from './game/core.js';
-import { RaceCard } from './race-card.js';
+import { RaceCard, type RowSnapshot } from './race-card.js';
 import { T } from './text.js';
 
 /**
@@ -226,6 +226,16 @@ export class RaceScene {
     }
     const me = state.desks[0];
     if (me) this.card?.player(me.place, me.points);
+  }
+
+  /** The race card's rows, to keep with a race checkpoint. */
+  cardSnapshot(): RowSnapshot[] {
+    return this.card?.snapshot() ?? [];
+  }
+
+  /** Puts the race card's rows back after a checkpoint (the card must exist: call `show` first). */
+  restoreCard(rows: RowSnapshot[]): void {
+    this.card?.restore(rows);
   }
 
   /** Round `index` (0-based, the boss last) is on. */

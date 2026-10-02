@@ -22,6 +22,12 @@ const EN = {
   you: 'YOU',
   practice: ['PRACTICE ON MY OWN', 'No timer, your own pace'],
   robots: ['RACE THE ROBOTS', 'Two robot rivals, 3 timed waves'],
+  /** A race left before its results, picked up again from round `n` (the boss when `boss`). */
+  resumeSub: (n: number, boss: boolean) => (boss ? 'Carry on from the boss round' : `Carry on from wave ${n}`),
+  resumeBody: (n: number, boss: boolean) =>
+    `Your last race stopped before ${boss ? 'the boss round' : `wave ${n}`}. Carry on from there, or start a new race.`,
+  resumeGo: (n: number, boss: boolean) => (boss ? 'CARRY ON: BOSS ROUND' : `CARRY ON: WAVE ${n}`),
+  startOver: 'START A NEW RACE',
   classmates: ['RACE MY CLASSMATES', 'Same class, real time'],
   smartboard: ['PLAY ON THE SMARTBOARD', 'Help the headset players as a class'],
   studentFirst: 'Enter your student code first',
@@ -136,6 +142,11 @@ const ID: typeof EN = {
   you: 'KAMU',
   practice: ['BERLATIH SENDIRI', 'Tanpa waktu, sesuai kecepatanmu'],
   robots: ['LOMBA LAWAN ROBOT', 'Dua robot, 3 gelombang berwaktu'],
+  resumeSub: (n: number, boss: boolean) => (boss ? 'Lanjutkan dari ronde boss' : `Lanjutkan dari gelombang ${n}`),
+  resumeBody: (n: number, boss: boolean) =>
+    `Lombamu tadi berhenti sebelum ${boss ? 'ronde boss' : `gelombang ${n}`}. Lanjutkan dari situ, atau mulai lomba baru.`,
+  resumeGo: (n: number, boss: boolean) => (boss ? 'LANJUTKAN: RONDE BOSS' : `LANJUTKAN: GELOMBANG ${n}`),
+  startOver: 'MULAI LOMBA BARU',
   classmates: ['LOMBA DENGAN TEMAN', 'Satu kelas, langsung'],
   smartboard: ['MAIN DI SMARTBOARD', 'Bantu pemain headset bersama kelas'],
   studentFirst: 'Masukkan kode siswa dulu',

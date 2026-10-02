@@ -16,6 +16,7 @@ import {
   teacherState,
   type Me,
 } from './teacher.js';
+import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
 import { townSticker } from './town-sticker.js';
 
@@ -26,7 +27,7 @@ import { townSticker } from './town-sticker.js';
  * only.
  */
 export type Device = 'computer' | 'xr' | 'smartboard';
-export type PlayMode = 'practice' | 'race';
+export type PlayMode = 'practice' | 'race' | 'resume';
 
 const INK = '#3a3f4b';
 const PAPER = '#fff8ec';
@@ -265,6 +266,8 @@ export class Home {
   show(): void {
     if (this.shown) return;
     this.shown = true;
+    // Drawn again on every return: a race left meanwhile changes the robots card.
+    this.render();
     this.root.style.display = 'block';
     document.body.classList.add('home-open');
     this.back.style.display = 'none';
@@ -341,7 +344,10 @@ export class Home {
     left.style.left = '40px';
     left.appendChild(paperText(t.play, 30, INK));
     this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
-    this.card('left', 1, t.robots, 'robots', COLORS.cobalt, () => this.play('race'));
+    // A race left before its results can pick up again: the card says from where.
+    const kept = readCheckpoint();
+    const robots: [string, string] = kept ? [t.robots[0], t.resumeSub(kept.next, kept.next >= kept.card.length)] : [t.robots[0], t.robots[1]];
+    this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
     const mates = this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.studentCode());
     mates.classList.add('muted');
     const note = el('div', 'note shadow', this.stage);
@@ -472,8 +478,42 @@ export class Home {
   }
 
   private play(mode: PlayMode): void {
+    if (mode === 'race' && readCheckpoint()) {
+      this.resumeChoice();
+      return;
+    }
     // A smartboard plays like this computer, with touch for the mouse.
     this.onPlay(mode, this.device === 'xr' ? 'xr' : 'computer');
+  }
+
+  /** A race was left before its results: carry on from the next round, or start over. */
+  private resumeChoice(): void {
+    const t = this.t;
+    const kept = readCheckpoint();
+    if (!kept) {
+      this.play('race');
+      return;
+    }
+    const boss = kept.next >= kept.card.length;
+    const { veil, body } = this.popup(t.robots[0]);
+    el('p', '', body).textContent = t.resumeBody(kept.next, boss);
+    const device = this.device === 'xr' ? 'xr' : 'computer';
+    const go = el('button', 'btn wide shadow', body);
+    go.style.background = COLORS.teal;
+    go.appendChild(paperText(t.resumeGo(kept.next, boss), 17, PAPER));
+    go.setAttribute('aria-label', t.resumeGo(kept.next, boss));
+    go.addEventListener('click', () => {
+      veil.remove();
+      this.onPlay('resume', device);
+    });
+    const fresh = el('button', 'btn wide shadow', body);
+    fresh.appendChild(paperText(t.startOver, 17, INK));
+    fresh.setAttribute('aria-label', t.startOver);
+    fresh.addEventListener('click', () => {
+      veil.remove();
+      this.onPlay('race', device);
+    });
+    this.actions(body, veil);
   }
 
   // ------------------------------------------------------------ popups

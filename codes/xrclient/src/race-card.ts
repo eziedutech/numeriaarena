@@ -56,6 +56,13 @@ export interface RoundPlan {
 
 type Status = 'done' | 'on' | 'next' | 'later';
 
+/** One row of the card as plain data, for a race checkpoint. */
+export interface RowSnapshot {
+  status: Status;
+  gained?: number;
+  stamps: { species: Species; color: number; folded: boolean }[];
+}
+
 interface Row {
   plan: RoundPlan;
   status: Status;
@@ -132,6 +139,27 @@ export class RaceCard {
     r.gained = gained;
     if (this.rows[index + 1]) this.rows[index + 1].status = 'next';
     this.clockText = '';
+    this.draw();
+  }
+
+  /** The rows as plain data (status, points, stamps), to keep with a race checkpoint. */
+  snapshot(): RowSnapshot[] {
+    return this.rows.map((r) => ({
+      status: r.status,
+      gained: r.gained,
+      stamps: r.stamps.map(({ species, color, folded }) => ({ species, color, folded })),
+    }));
+  }
+
+  /** Puts the rows back as `snapshot` left them, stamps included. */
+  restore(rows: RowSnapshot[]): void {
+    rows.forEach((saved, i) => {
+      const r = this.rows[i];
+      if (!r) return;
+      r.status = saved.status;
+      r.gained = saved.gained;
+      for (const s of saved.stamps) this.stamp(i, s.species, s.color, s.folded);
+    });
     this.draw();
   }
 
