@@ -6,10 +6,38 @@
  */
 
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+/**
+ * Production builds only: the loading screen in index.html fetches the
+ * game's code itself, counting the bytes against the real size written here,
+ * so it can show an honest percentage; then it starts the code from the
+ * browser cache. The module script tag becomes `window.NUMERIA_BOOT`.
+ */
+function bootProgress(): Plugin {
+  return {
+    name: 'numeria-boot-progress',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_options, bundle) {
+      const files = Object.values(bundle);
+      const entry = files.find((f) => f.type === 'chunk' && f.isEntry);
+      const html = files.find((f) => f.type === 'asset' && f.fileName === 'index.html');
+      if (!entry || entry.type !== 'chunk' || !html || html.type !== 'asset') return;
+      const page = String(html.source);
+      const tag = /<script type="module" crossorigin src="([^"]+)"><\/script>/.exec(page);
+      if (!tag || !tag[1].endsWith(entry.fileName)) {
+        this.warn('the module script tag was not found; the loading screen shows no percentage');
+        return;
+      }
+      const boot = { src: tag[1], bytes: Buffer.byteLength(entry.code, 'utf8') };
+      html.source = page.replace(tag[0], `<script>window.NUMERIA_BOOT = ${JSON.stringify(boot)};</script>`);
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [iwsdkDev()],
+  plugins: [iwsdkDev(), bootProgress()],
   server: {
     host: '0.0.0.0',
     port: 3322,

@@ -49,7 +49,7 @@ import {
   type Figure,
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
-import { placeUiImage, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
+import { placeUiImage, prefetchUi, showStickerBackings, uiImage, type UiName } from './art/ui2d.js';
 import {
   Core,
   Race,
@@ -1342,9 +1342,12 @@ export class GameSystem extends createSystem({
     // The loading screen in index.html goes once there is something to see.
     if (!this.bootGone && (home || immersive || this.phase !== 'loading')) {
       this.bootGone = true;
+      (window as unknown as { numeriaBootProgress?: (p: number) => void }).numeriaBootProgress?.(100);
       const boot = document.getElementById('boot');
       boot?.classList.add('gone');
       setTimeout(() => boot?.remove(), 600);
+      // The race and results images now, one by one, while the player looks around.
+      void prefetchUi();
     }
     if (home) {
       if (this.queries.buttons.entities.size > 0) this.clearMenu();

@@ -9,18 +9,31 @@
     <link rel="icon" href="data:," />
     <title>Numeria Arena</title>
     <style>
+      /* The page never scrolls: the home page and the game fill the window. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
       /*
        * Shown at once, before the game's code arrives: the home page's sand,
-       * a paper card with the name, and three squares of paper folding in
-       * turn. The game fades it out when its home page (or the game) is up.
+       * the title sticker, and under it, right on the sand, three squares of
+       * paper turning over like pages, a progress strip and the percentage.
+       * The game fades it
+       * out when its home page (or the game) is up.
        */
       #boot {
         position: fixed;
         inset: 0;
         z-index: 20;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 18px;
+        padding: 16px;
+        box-sizing: border-box;
         background: radial-gradient(ellipse at 50% 40%, #e8d394 0%, #e0c780 55%, #d6bb70 100%);
         font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
         color: #3a3f4b;
@@ -30,19 +43,18 @@
         opacity: 0;
         pointer-events: none;
       }
+      #boot .title {
+        width: min(430px, 86vw);
+        height: auto;
+      }
       #boot .card {
-        background: #fffdf8;
-        box-shadow: 6px 9px 16px rgba(70, 50, 25, 0.32);
-        padding: 30px 44px 26px;
+        width: min(330px, 86vw);
+        box-sizing: border-box;
+        padding: 8px 0 0;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 22px;
-      }
-      #boot .name {
-        font-size: 30px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
+        gap: 16px;
       }
       #boot .folds {
         display: flex;
@@ -50,8 +62,8 @@
         perspective: 260px;
       }
       #boot .folds span {
-        width: 34px;
-        height: 34px;
+        width: 30px;
+        height: 30px;
         box-shadow: 3px 5px 8px rgba(70, 50, 25, 0.28);
         /* Hinged on the left edge, like a page of the book turning over. */
         transform-origin: 0% 50%;
@@ -78,10 +90,32 @@
           transform: rotateY(-170deg);
         }
       }
-      #boot .what {
-        font-size: 16px;
+      #boot .strip {
+        width: 100%;
+        height: 12px;
+        /* A deeper sand: the strip sits right on the background. */
+        background: rgba(92, 66, 24, 0.18);
+      }
+      #boot .fill {
+        width: 0%;
+        height: 100%;
+        background: #3fb6a0;
+        transition: width 0.25s ease;
+      }
+      #boot .line {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
         font-weight: 700;
         letter-spacing: 0.04em;
+      }
+      #boot .what {
+        font-size: 15px;
+      }
+      #boot .pct {
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
       }
       @media (prefers-reduced-motion: reduce) {
         #boot .folds span {
@@ -92,19 +126,78 @@
   </head>
   <body style="margin: 0; background: #e0c780">
     <div id="boot" role="status" aria-live="polite">
+      <img class="title" src="ui2d/brand/title_numeria_arena.webp" alt="Numeria Arena" width="430" height="84" />
       <div class="card">
-        <div class="name">NUMERIA ARENA</div>
         <div class="folds" aria-hidden="true"><span></span><span></span><span></span></div>
-        <div class="what" id="boot-what">OPENING THE BOOK</div>
+        <div class="strip" id="boot-strip" aria-hidden="true"><div class="fill" id="boot-fill"></div></div>
+        <div class="line">
+          <span class="what" id="boot-what">OPENING THE BOOK</span>
+          <span class="pct" id="boot-pct"></span>
+        </div>
       </div>
     </div>
     <script>
-      // The player's language, as the game keeps it.
-      try {
-        if (localStorage.getItem('numeria.lang') === 'id') document.getElementById('boot-what').textContent = 'MEMBUKA BUKU';
-      } catch (e) {
-        // No storage: English.
-      }
+      (function () {
+        // The player's language, as the game keeps it.
+        try {
+          if (localStorage.getItem('numeria.lang') === 'id') document.getElementById('boot-what').textContent = 'MEMBUKA BUKU';
+        } catch (e) {
+          // No storage: English.
+        }
+        var pct = document.getElementById('boot-pct');
+        var fill = document.getElementById('boot-fill');
+        var shown = 0;
+        // Never goes backwards; the game calls it with 100 when it is up.
+        function show(p) {
+          shown = Math.max(shown, Math.min(100, Math.round(p)));
+          pct.textContent = shown + '%';
+          fill.style.width = shown + '%';
+        }
+        window.numeriaBootProgress = show;
+        // Production: the code's size was written in at build (vite.config.ts).
+        var boot = window.NUMERIA_BOOT;
+        if (!boot) {
+          // The dev server loads the code its own way: no percentage there.
+          document.getElementById('boot-strip').style.display = 'none';
+          return;
+        }
+        show(0);
+        // The code is 70% of the wait; then the core, models and menu images
+        // load, which the strip covers by easing towards 95% until the game
+        // says it is up.
+        var CODE = 70;
+        function start() {
+          var s = document.createElement('script');
+          s.type = 'module';
+          s.crossOrigin = 'anonymous';
+          s.src = boot.src;
+          document.body.appendChild(s);
+          var t0 = Date.now();
+          var id = setInterval(function () {
+            if (!document.getElementById('boot')) return clearInterval(id);
+            show(CODE + (95 - CODE) * (1 - Math.exp(-(Date.now() - t0) / 6000)));
+          }, 200);
+        }
+        fetch(boot.src, { credentials: 'same-origin' })
+          .then(function (res) {
+            if (!res.ok || !res.body || !res.body.getReader) return res.arrayBuffer().then(start);
+            var reader = res.body.getReader();
+            var got = 0;
+            function pump() {
+              return reader.read().then(function (r) {
+                if (r.done) {
+                  show(CODE);
+                  return start();
+                }
+                got += r.value.length;
+                show((CODE * got) / boot.bytes);
+                return pump();
+              });
+            }
+            return pump();
+          })
+          .catch(start);
+      })();
     </script>
     <div id="scene-container"></div>
     <script type="module" src="/src/index.ts"></script>
