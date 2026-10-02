@@ -364,6 +364,15 @@ body {
   max-width: 760px;
 }
 
+.tabs.mode {
+  align-items: center;
+}
+
+.mode-label {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .tools {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

@@ -46,6 +46,8 @@ const TEXT = {
     home: "Manage",
     account: "My account",
     organizers: "Organizers",
+    signedInAs: "Signed in as",
+    modes: { teacher: "TEACHER", admin: "ADMIN" } as Record<Mode, string>,
     signIn: "For teachers, club organisers and admins. Students never sign in here.",
     google: "Continue with Google",
     facebook: "Continue with Facebook",
@@ -112,6 +114,8 @@ const TEXT = {
     home: "Kelola",
     account: "Akun saya",
     organizers: "Penyelenggara",
+    signedInAs: "Masuk sebagai",
+    modes: { teacher: "GURU", admin: "ADMIN" } as Record<Mode, string>,
     signIn: "Untuk guru, pembina klub, dan admin. Siswa tidak pernah masuk di sini.",
     google: "Lanjut dengan Google",
     facebook: "Lanjut dengan Facebook",
@@ -179,6 +183,18 @@ type Text = (typeof TEXT)["en"];
 
 const errorText = (t: Text, code: string) => t.errors[code] ?? t.errors.other;
 
+/** One account can be an admin and a teacher at once; an admin picks which side of the page to use. */
+type Mode = "teacher" | "admin";
+const MODE_KEY = "numeria.manageAs";
+
+function readMode(): Mode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "admin" ? "admin" : "teacher";
+  } catch {
+    return "teacher";
+  }
+}
+
 function ErrorLine({ t, code }: { t: Text; code: string }) {
   if (!code) return null;
   return (
@@ -196,7 +212,17 @@ export default function Manage() {
   const [me, setMe] = useState<Me | null>(null);
   const [needsEmail, setNeedsEmail] = useState(false);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"account" | "organizers">("account");
+  const [mode, setMode] = useState<Mode>("teacher");
+  const chooseMode = (m: Mode) => {
+    setMode(m);
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      // The choice lasts for this visit.
+    }
+  };
+  useEffect(() => setMode(readMode()), []);
+  const asAdmin = mode === "admin" && Boolean(me?.admin);
 
   const loadMe = (u: User) => {
     setError("");
@@ -222,7 +248,7 @@ export default function Manage() {
       });
   }, []);
 
-  const crumbs = [t.home, view === "organizers" ? t.organizers : t.account];
+  const crumbs = [t.home, asAdmin ? t.organizers : t.account];
 
   return (
     <main className="paper-page">
@@ -257,16 +283,22 @@ export default function Manage() {
       ) : (
         <>
           {me.admin && (
-            <div className="tabs" role="tablist">
-              {(["account", "organizers"] as const).map((v) => (
-                <button key={v} type="button" role="tab" aria-selected={v === view} className={v === view ? "tab on" : "tab"} onClick={() => setView(v)}>
-                  {v === "account" ? t.account.toUpperCase() : t.organizers.toUpperCase()}
+            <div className="tabs mode" role="tablist" aria-label={t.signedInAs}>
+              <span className="mode-label">{t.signedInAs}</span>
+              {(["teacher", "admin"] as const).map((m) => (
+                <button key={m} type="button" role="tab" aria-selected={m === mode} className={m === mode ? "tab on" : "tab"} onClick={() => chooseMode(m)}>
+                  {t.modes[m]}
                 </button>
               ))}
             </div>
           )}
-          {view === "organizers" && me.admin ? (
-            <Organizers t={t} user={user} />
+          {asAdmin ? (
+            <>
+              <section className="paper-sheet">
+                <AccountHead t={t} me={me} />
+              </section>
+              <Organizers t={t} user={user} />
+            </>
           ) : (
             <Account t={t} user={user} me={me} onChange={() => loadMe(user)} />
           )}
@@ -334,24 +366,31 @@ function SignIn({ t, needsEmail, startError }: { t: Text; needsEmail: boolean; s
   );
 }
 
+/** Who is signed in, and the way out. */
+function AccountHead({ t, me }: { t: Text; me: Me }) {
+  return (
+    <div className="admin-head">
+      <div>
+        <h1 className="account-name">{me.name || me.email}</h1>
+        <p className="soft">
+          {me.email}
+          {me.admin ? `, ${t.admin}` : ""}
+        </p>
+      </div>
+      <button type="button" className="btn small" onClick={() => void signOut()}>
+        {t.signOut}
+      </button>
+    </div>
+  );
+}
+
 /** The signed-in adult: who, where, the approval status, the sign-up form if needed, and the class tools. */
 function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onChange: () => void }) {
   const org = me.organizer?.org;
   return (
     <>
       <section className="paper-sheet">
-        <div className="admin-head">
-          <div>
-            <h1 className="account-name">{me.name || me.email}</h1>
-            <p className="soft">
-              {me.email}
-              {me.admin ? `, ${t.admin}` : ""}
-            </p>
-          </div>
-          <button type="button" className="btn small" onClick={() => void signOut()}>
-            {t.signOut}
-          </button>
-        </div>
+        <AccountHead t={t} me={me} />
         {me.organizer && (
           <>
             <p>

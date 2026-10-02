@@ -109,21 +109,60 @@ async function refresh(user: User | null): Promise<void> {
   }
 }
 
+const USER_KEY = 'firebase:authUser:';
+
 /**
- * Starts Firebase when a teacher was signed in before, or when this page is
- * the return from an email link. Returns 'needs_email' when the link was
- * opened on a browser that does not remember which email it went to.
+ * Whether Firebase kept a signed-in adult on this origin, here or on /manage,
+ * without loading Firebase. Firebase keeps the session in IndexedDB
+ * (firebaseLocalStorageDb) and falls back to localStorage where IndexedDB is
+ * missing, so both are read. The database is never created here: an upgrade
+ * means it did not exist, and that open is aborted.
+ */
+async function rememberedUser(): Promise<boolean> {
+  try {
+    if (Object.keys(localStorage).some((k) => k.startsWith(USER_KEY))) return true;
+  } catch {
+    // No localStorage: IndexedDB may still hold the session.
+  }
+  if (typeof indexedDB === 'undefined') return false;
+  return new Promise((resolve) => {
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.open('firebaseLocalStorageDb');
+    } catch {
+      resolve(false);
+      return;
+    }
+    req.onupgradeneeded = () => req.transaction?.abort();
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(false);
+    req.onsuccess = () => {
+      const db = req.result;
+      const done = (found: boolean) => {
+        db.close();
+        resolve(found);
+      };
+      if (!db.objectStoreNames.contains('firebaseLocalStorage')) {
+        done(false);
+        return;
+      }
+      const keys = db.transaction('firebaseLocalStorage', 'readonly').objectStore('firebaseLocalStorage').getAllKeys();
+      keys.onsuccess = () => done(keys.result.some((k) => String(k).startsWith(USER_KEY)));
+      keys.onerror = () => done(false);
+    };
+  });
+}
+
+/**
+ * Starts Firebase when a teacher was signed in before (in the game or on
+ * /manage), or when this page is the return from an email link. Returns
+ * 'needs_email' when the link was opened on a browser that does not remember
+ * which email it went to.
  */
 export async function startTeacher(): Promise<'ok' | 'needs_email' | 'off'> {
   if (!signInConfigured) return 'off';
   const fromLink = /[?&]oobCode=/.test(location.search);
-  let remembered = false;
-  try {
-    remembered = Object.keys(localStorage).some((k) => k.startsWith('firebase:authUser:'));
-  } catch {
-    // No storage: nobody can be remembered.
-  }
-  if (!fromLink && !remembered) return 'ok';
+  if (!fromLink && !(await rememberedUser())) return 'ok';
   const { auth, mod } = await firebase();
   if (fromLink && mod.isSignInWithEmailLink(auth, location.href)) {
     let email: string | null = null;
