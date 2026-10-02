@@ -1,15 +1,145 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+/*
+ * The game's paper look on the web: matte sand, flat paper cards with square
+ * corners and no outlines, lifted by a soft warm shadow down and to the right.
+ */
+:root {
+  --sand: #e0c780;
+  --paper: #fffdf8;
+  --ink: #3a3f4b;
+  --ink-soft: #5d6270;
+  --cobalt: #3469c4;
+  --shadow: 4px 7px 12px rgba(70, 50, 25, 0.32);
+  color-scheme: light;
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  margin: 0;
+  background: var(--sand);
+  color: var(--ink);
+  font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+.paper-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 24px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.paper-nav {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.paper-chip,
+.paper-link {
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 9px 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paper-chip .seg {
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.paper-chip .seg.on {
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.paper-sheet {
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 28px 32px 32px;
+  line-height: 1.55;
+  font-size: 17px;
+}
+
+.paper-sheet h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.04em;
+}
+
+.paper-sheet .updated {
+  margin: 4px 0 18px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.paper-sheet h2 {
+  margin: 26px 0 6px;
+  font-size: 19px;
+  padding-top: 14px;
+  border-top: 2px solid rgba(58, 63, 75, 0.1);
+}
+
+.paper-sheet p,
+.paper-sheet li {
+  margin: 8px 0;
+}
+
+.paper-sheet ul,
+.paper-sheet ol {
+  padding-left: 22px;
+}
+
+.paper-sheet ul {
+  list-style: disc;
+}
+
+.paper-sheet ol {
+  list-style: decimal;
+}
+
+.paper-sheet a {
+  overflow-wrap: anywhere;
+}
+
+.paper-sheet a,
+.paper-foot a {
+  color: var(--cobalt);
+}
+
+.paper-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .paper-sheet {
+    padding: 20px 18px 24px;
+    font-size: 16px;
+  }
+  .paper-sheet h1 {
+    font-size: 24px;
   }
 }

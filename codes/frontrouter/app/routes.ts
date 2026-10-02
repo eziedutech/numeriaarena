@@ -1,3 +1,8 @@
-import { type RouteConfig, index } from "@react-router/dev/routes";
+import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
-export default [index("routes/home.tsx")] satisfies RouteConfig;
+export default [
+  // The site's root opens the game's home page (nginx redirects it in production).
+  index("routes/home.tsx"),
+  route("privacy", "routes/privacy.tsx"),
+  route("data-deletion", "routes/data-deletion.tsx"),
+] satisfies RouteConfig;

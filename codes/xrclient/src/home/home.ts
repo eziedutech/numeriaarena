@@ -409,7 +409,9 @@ export class Home {
     t.footer.forEach((label, i) => {
       const b = el('button', '', footer);
       b.textContent = label;
-      b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]]));
+      // Privacy and the page for parents point to the full policy on the site.
+      const policy = keys[i] === 'Privacy' || keys[i] === 'For parents' ? { href: '/privacy', label: t.fullPolicy } : undefined;
+      b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]], policy));
     });
     el('span', '', footer).textContent = VERSION;
 
@@ -500,9 +502,16 @@ export class Home {
     }
   }
 
-  private message(title: string, text: string): void {
+  private message(title: string, text: string, link?: { href: string; label: string }): void {
     const { veil, body } = this.popup(title);
     el('p', '', body).textContent = text;
+    if (link) {
+      const p = el('p', '', body);
+      const a = el('a', '', p);
+      a.href = link.href;
+      a.textContent = link.label;
+      a.style.color = COLORS.cobalt;
+    }
     this.actions(body, veil);
   }
 
