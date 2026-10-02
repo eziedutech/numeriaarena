@@ -1,22 +1,31 @@
 import { Entity, Group, Object3D, Vector3 } from '@iwsdk/core';
 
+import type { Species } from './assets.js';
 import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
 import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
 import type { Emote, Highlight, RaceState, Recap } from './game/core.js';
+import { RaceCard } from './race-card.js';
 import { T } from './text.js';
 
 /**
- * Rival windows sit left and right, outside the balloon lanes as the seated
- * player sees them, so the answers keep the middle of the view.
+ * Rivals stack on the left and the race card stands on the right, both
+ * outside the balloon lanes as the seated player sees them, so the answers
+ * keep the middle of the view. A race with more players adds rows to the
+ * left column the same way.
  */
-const WINDOW_POS = [new Vector3(-0.4, 0.2, 0.08), new Vector3(0.4, 0.2, 0.08)];
+const WINDOW_POS = [new Vector3(-0.375, 0.25, 0.07), new Vector3(-0.375, 0.085, 0.11)];
 /** Windows turn to face the seated player. */
-const WINDOW_YAW = [0.75, -0.75];
+const WINDOW_YAW = [0.75, 0.75];
+const WINDOW_SCALE = 0.78;
+/** The race card on the right, turned to the player like the windows. */
+const CARD_POS = new Vector3(0.395, 0.19, 0.08);
+const CARD_YAW = -0.65;
+const CARD_SCALE = 0.85;
 /** Frame colours match the robots: cobalt (a) and teal (b). */
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
-/** Scoreboard rows above the back of the book, clear of the question card. */
+/** Banners show above the back of the book, clear of the question card. */
 const BOARD_TOP = 0.46;
 const BOARD_Z = -0.15;
 /** Results rows: text height and spacing, larger than the live scoreboard's. */
@@ -38,12 +47,8 @@ const RIBBON_ASPECT: Record<string, number> = {
   badge_label_sharpest_aim: 4.821,
   badge_label_steady_streak: 5.214,
 };
-/** The countdown turns red for the last this many ms of a round. */
+/** The clock is marked red for the last this many ms of a round. */
 const CLOCK_WARN_MS = 10000;
-/** The countdown sits this far left of the scoreboard's centre. */
-const CLOCK_X = -0.2;
-const CLOCK_INK = 0x1f4fa3;
-const CLOCK_LATE_INK = 0xc62828;
 /** A flash label stays up this long (seconds). */
 const FLASH_S = 1.6;
 
@@ -82,11 +87,10 @@ export class RaceScene {
   private banner?: Object3D;
   private bannerLeft = 0;
   private recapItems: Entity[] = [];
-  /** One row per participant above the book, in place order. */
-  private board: Label[] = [];
-  private countdown?: Label;
-  private countdownLate = false;
-  /** Where the viewer's eye is, for turning the countdown to face it. */
+  /** The race card on the right, made once the core sends the plan of rounds. */
+  private card?: RaceCard;
+  private cardEntity?: Entity;
+  /** Where the viewer's eye is. */
   readonly eye = new Vector3();
 
   constructor(
@@ -99,6 +103,7 @@ export class RaceScene {
       frame.name = `rival-window-${i + 1}`;
       frame.position.copy(WINDOW_POS[i]);
       frame.rotation.y = WINDOW_YAW[i];
+      frame.scale.setScalar(WINDOW_SCALE);
       const entity = stage.add(frame);
       const bot = makeBot(i === 0 ? 0 : 1, BOT_COLORS[i]);
       // The robot stands in the lower half of the dark opening.
@@ -114,16 +119,13 @@ export class RaceScene {
       } else {
         stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
       }
-      const status = stage.label(T.rival(0, 0), 0.024, frame, 0.08, 0.008, false);
+      const status = stage.label(T.rival(0, 0), 0.02, frame, 0.078, 0.008, false);
       const work = stage.label(' ', 0.02, frame, 0.036, 0.008, false);
       const flash = stage.label(' ', 0.022, frame, 0.0, 0.03, false);
       flash.mesh.visible = false;
       work.mesh.visible = false;
       this.windows.push({ entity, frame, tone: i === 0 ? 'cobalt' : 'teal', bot, status, work, flash, flashLeft: 0 });
     });
-    for (let i = 0; i < 3; i += 1) {
-      this.board.push(stage.label(' ', 0.03, desk, BOARD_TOP - i * 0.036, BOARD_Z));
-    }
   }
 
   /**
@@ -201,46 +203,53 @@ export class RaceScene {
     for (const w of this.windows) w.work.mesh.visible = false;
   }
 
-  /**
-   * The round's countdown above the scoreboard, turning red for the last ten
-   * seconds. Hidden between rounds.
-   */
+  /** The clock of the round that is on, in its row of the race card; null between rounds. */
   clock(msLeft: number | null): void {
-    if (msLeft === null) {
-      if (this.countdown) this.countdown.mesh.visible = false;
-      return;
-    }
-    const late = msLeft <= CLOCK_WARN_MS;
-    if (!this.countdown || this.countdownLate !== late) {
-      this.countdown?.mesh.removeFromParent();
-      this.countdown = new Label(T.clock(msLeft), { height: 0.05, ink: late ? CLOCK_LATE_INK : CLOCK_INK });
-      this.countdown.mesh.name = 'race-countdown';
-      // Left of the scoreboard, at its middle row: inside the seated view.
-      this.countdown.mesh.position.set(CLOCK_X, BOARD_TOP - 0.036, BOARD_Z);
-      this.desk.add(this.countdown.mesh);
-      this.countdownLate = late;
-    }
-    this.countdown.set(T.clock(msLeft));
-    this.countdown.mesh.visible = true;
-    this.countdown.mesh.lookAt(this.eye);
+    this.card?.clock(msLeft === null ? null : T.clock(msLeft), msLeft !== null && msLeft <= CLOCK_WARN_MS);
   }
 
-  /** The scoreboard for everyone, and progress and points above each rival's window. */
+  /**
+   * Each rival's place, progress and points above its window, and the
+   * player's own on the race card (made here from the core's plan of rounds).
+   */
   show(state: RaceState): void {
     this.windows.forEach((w, i) => {
       const d = state.desks[i + 1];
-      if (d) w.status.set(T.rival(d.folded, d.points));
+      if (d) w.status.set(`${T.place(d.place)}  ${T.rival(d.folded, d.points)}`);
     });
-    const rows = state.desks
-      .map((d, i) => ({ d, i }))
-      .sort((a, b) => a.d.place - b.d.place || a.i - b.i);
-    rows.forEach(({ d }, r) => {
-      const who = d.bot ? T.bot(d.name) : T.you;
-      this.board[r]?.set(`${T.place(d.place)}  ${who}: ${d.points}`);
-    });
+    if (!this.card && state.plan?.length) {
+      this.card = new RaceCard(state.plan);
+      this.card.root.position.copy(CARD_POS);
+      this.card.root.rotation.y = CARD_YAW;
+      this.card.root.scale.setScalar(CARD_SCALE);
+      this.cardEntity = this.stage.add(this.card.root);
+    }
+    const me = state.desks[0];
+    if (me) this.card?.player(me.place, me.points);
+  }
+
+  /** Round `index` (0-based, the boss last) is on. */
+  roundOn(index: number): void {
+    this.card?.roundOn(index);
+  }
+
+  /** Round `index` is over; the player made `gained` points in it. */
+  roundDone(index: number, gained: number): void {
+    this.card?.roundDone(index, gained);
+  }
+
+  /** An animal of round `index` joins its row: coloured when folded, white when it got away. */
+  stamp(index: number, species: Species, color: number, folded: boolean): void {
+    this.card?.stamp(index, species, color, folded);
+  }
+
+  /** Where the next animal of round `index` stands on the card, in the desk's space; null without a card. */
+  stampTarget(index: number): Vector3 | null {
+    return this.card ? this.card.stampTarget(index, new Vector3()) : null;
   }
 
   update(delta: number): void {
+    this.card?.update(delta);
     if (this.banner && this.bannerLeft > 0) {
       this.bannerLeft -= delta;
       if (this.bannerLeft <= 0) this.clearBanner();
@@ -262,10 +271,10 @@ export class RaceScene {
    * finishing order with place, points, and their highlight badge.
    */
   showRecap(recap: Recap, playerName: string): void {
-    // The results replace the live scoreboard, so the points show once, large.
-    for (const l of this.board) l.mesh.visible = false;
-    if (this.countdown) this.countdown.mesh.visible = false;
+    // The results show the points once, large; the race card stays as the
+    // round-by-round summary beside them.
     for (const w of this.windows) w.status.mesh.visible = false;
+    this.card?.clock(null, false);
     const card = new Group();
     card.name = 'race-recap';
     card.position.set(0, 0.2, 0.02);
@@ -312,12 +321,12 @@ export class RaceScene {
   dispose(): void {
     for (const w of this.windows) this.stage.remove(w.entity);
     this.windows = [];
-    for (const l of this.board) l.mesh.removeFromParent();
-    this.board = [];
     for (const e of this.recapItems) this.stage.remove(e);
     this.recapItems = [];
     this.clearBanner();
-    this.countdown?.mesh.removeFromParent();
-    this.countdown = undefined;
+    if (this.cardEntity) this.stage.remove(this.cardEntity);
+    this.card?.dispose();
+    this.card = undefined;
+    this.cardEntity = undefined;
   }
 }

@@ -188,9 +188,19 @@ pub struct RaceView {
     #[serde(flatten)]
     pub phase: Phase,
     pub waves: usize,
+    /// Every round in order, the boss last: what the race card lists.
+    pub plan: Vec<RoundPlan>,
     /// When the current round's clock runs out, on the caller's clock.
     pub ends_at_ms: Option<f64>,
     pub desks: Vec<DeskView>,
+}
+
+/// One round of the race as planned: its game, length, and whether it is the boss.
+#[derive(Clone, Debug, Serialize)]
+pub struct RoundPlan {
+    pub game: GameType,
+    pub seconds: f64,
+    pub boss: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -750,9 +760,25 @@ impl RaceMatch {
                 place: places[i],
             })
             .collect();
+        let plan = self
+            .cfg
+            .waves
+            .iter()
+            .map(|w| RoundPlan {
+                game: w.game,
+                seconds: w.seconds,
+                boss: false,
+            })
+            .chain(std::iter::once(RoundPlan {
+                game: self.cfg.boss_game,
+                seconds: self.cfg.boss_seconds,
+                boss: true,
+            }))
+            .collect();
         RaceView {
             phase: self.phase,
             waves: self.cfg.waves.len(),
+            plan,
             ends_at_ms: self.in_round().then_some(self.ends_at),
             desks,
         }

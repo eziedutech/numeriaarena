@@ -100,7 +100,7 @@ function tracePath(c: CanvasRenderingContext2D, pts: [number, number][], dx = 0,
 let shadowCanvas: HTMLCanvasElement | undefined;
 
 /** Draws a K card w by h at (0, 0): faded drop shadow, faint top lip, then the paper. */
-function drawCard(c: CanvasRenderingContext2D, w: number, h: number, m: number, paper: string, seed: string): void {
+export function drawCard(c: CanvasRenderingContext2D, w: number, h: number, m: number, paper: string, seed: string): void {
   const edge = cutEdge(w, h, seed);
   const sc = (shadowCanvas ??= document.createElement('canvas'));
   sc.width = c.canvas.width;

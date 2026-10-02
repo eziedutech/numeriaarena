@@ -362,6 +362,9 @@ export class GameSystem extends createSystem({
   private raceScene?: RaceScene;
   private raceState?: RaceState;
   private racePoll = 0;
+  /** The race round that is on (0-based, the boss last), and the player's points when it began. */
+  private raceRound = 0;
+  private roundStartPoints = 0;
   /**
    * Pause while the headset is off or the system menu is open (the session
    * is hidden or blurred): Date.now() when it started, and the paused time
@@ -1195,6 +1198,26 @@ export class GameSystem extends createSystem({
     this.raceScene?.show(this.raceState);
   }
 
+  /** The player's race points right now. */
+  private racePoints(): number {
+    return this.race?.view().desks[0]?.points ?? 0;
+  }
+
+  /** A round begins: the race card marks it as on and its points count from here. */
+  private beginRound(index: number): void {
+    // The card is made from the view, so it exists before its first round is marked.
+    this.refreshRace();
+    this.raceRound = index;
+    this.roundStartPoints = this.racePoints();
+    this.raceScene?.roundOn(index);
+  }
+
+  /** The animal on the desk got away (time up, or a last wrong answer): a white stamp on the card. */
+  private stampMissed(): void {
+    if (!this.race || !this.offer) return;
+    this.raceScene?.stamp(this.raceRound, this.species, accentForSkill(this.offer.skill), false);
+  }
+
   private onRaceEvent(ev: RaceEvent): void {
     const scene = this.raceScene!;
     switch (ev.type) {
@@ -1203,6 +1226,7 @@ export class GameSystem extends createSystem({
         // The paper banners read "WAVE n OF 3"; other lengths keep the text card.
         const paper: UiName[] = total === 3 ? [`race_wave_${ev.wave + 1}` as UiName] : [];
         scene.showBanner(`${T.wave(ev.wave + 1, total)}: ${T.gameName[ev.game]}`, 2.5, paper);
+        this.beginRound(ev.wave);
         break;
       }
       case 'bot_working':
@@ -1216,6 +1240,7 @@ export class GameSystem extends createSystem({
         break;
       case 'boss_start':
         scene.showBanner(T.bossRound, 3, ['race_boss_round', 'race_double_points']);
+        this.beginRound(this.raceState?.waves ?? 3);
         break;
       case 'match_end':
         this.recapIn = RECAP_DELAY_S;
@@ -1225,9 +1250,11 @@ export class GameSystem extends createSystem({
         scene.showBanner(T.timeUp, 2, ['race_times_up']);
         // A creature still open when the clock ran out goes home unanswered.
         if (ev.player_cut) {
+          this.stampMissed();
           this.clearPlay();
           if (this.phase === 'between') this.phase = 'playing';
         }
+        scene.roundDone(this.raceRound, this.racePoints() - this.roundStartPoints);
         break;
     }
   }
@@ -1631,6 +1658,7 @@ export class GameSystem extends createSystem({
       this.clear(this.queries.crystals);
       this.clear(this.queries.orbs);
       this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
+      this.stampMissed();
       this.phase = 'between';
       // Missed twice: it walks home without points.
       this.tween(obj, EXIT, 1.4, 0.02, 0.2, () => {
@@ -1844,14 +1872,19 @@ export class GameSystem extends createSystem({
     }
     // A tween that stays in place waits out the cheer, then the creature
     // floats up to the points and the points go up as it arrives.
+    // In a race it flies to its own stamp on the race card instead.
+    const round = this.raceRound;
+    const species = this.species;
     this.tween(obj, obj.position.clone(), cheer.getClip().duration, 0, obj.scale.x, () => {
-      const to = this.race ? BOARD_AT : SCORE_AT;
+      const to = (this.race && this.raceScene?.stampTarget(round)) || (this.race ? BOARD_AT : SCORE_AT);
       this.figure?.play('idle');
       this.tween(obj, to, TO_SCORE_S, 0.05, this.creatureScale * 0.2, () => {
         this.remove(creature);
+        if (this.race) this.raceScene?.stamp(round, species, color, true);
         if (!this.race) this.score.set(T.points(total));
-        // A small +N rises beside the points and fades.
-        this.pop(`+${gained}`, RIGHT_INK, undefined, to.clone().add(new Vector3(0.11, 0, 0.01)), 0.024);
+        // A small +N rises beside the points (in a race, just above the stamp it became) and fades.
+        const beside = this.race ? new Vector3(0, 0.03, 0.02) : new Vector3(0.11, 0, 0.01);
+        this.pop(`+${gained}`, RIGHT_INK, undefined, to.clone().add(beside), this.race ? 0.018 : 0.024);
         this.next();
       });
     });

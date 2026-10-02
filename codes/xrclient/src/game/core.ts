@@ -123,6 +123,8 @@ export interface RaceState {
   phase: 'ready' | 'wave' | 'break' | 'boss' | 'done';
   wave?: number;
   waves: number;
+  /** Every round in order, the boss last. */
+  plan: { game: GameKind; seconds: number; boss: boolean }[];
   /** When the current round's clock runs out (Date.now() clock), or null between rounds. */
   ends_at_ms: number | null;
   desks: DeskView[];

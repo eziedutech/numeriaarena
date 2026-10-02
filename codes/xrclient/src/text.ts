@@ -17,6 +17,12 @@ export const EN = {
   place: ordinal,
   /** A rival's line above its window, for example "4 SOLVED, 380 PTS". */
   rival: (solved: number, points: number) => `${solved} SOLVED, ${points} PTS`,
+  /** The race card on the right: one row per round, the player's line on top. */
+  roundRow: (n: number) => `WAVE ${n}`,
+  bossRow: 'BOSS ×2',
+  gameShort: { balloon_burst: 'BALLOONS', orb_forge: 'CRYSTALS' },
+  youRow: (place: number, points: number) => `YOU  ${ordinal(place)}  ${points} PTS`,
+  nextRound: 'NEXT',
   /** Countdown, for example "0:42". */
   clock: (ms: number) => {
     const s = Math.max(0, Math.ceil(ms / 1000));
@@ -78,6 +84,11 @@ export const ID: Text = {
   wave: (n: number, total: number) => `Gelombang ${n} dari ${total}`,
   place: ORDINAL_ID,
   rival: (solved: number, points: number) => `${solved} BENAR, ${points} POIN`,
+  roundRow: (n: number) => `GELOMBANG ${n}`,
+  bossRow: 'BOSS ×2',
+  gameShort: { balloon_burst: 'BALON', orb_forge: 'KRISTAL' },
+  youRow: (place: number, points: number) => `KAMU  ${ORDINAL_ID(place)}  ${points} POIN`,
+  nextRound: 'BERIKUTNYA',
   clock: EN.clock,
   timeUp: 'Waktu habis!',
   right: 'Benar!',
