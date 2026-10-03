@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal | grip
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal | grip | pull
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -436,12 +436,62 @@ if (mode === 'grip') {
   console.log(`grip at the crystal: ${held ? 'held' : 'not held (wrong)'}, raised ${(moved * 100).toFixed(1)} cm with the controller`);
 }
 
+// With controllers the grip held while the ray is on a crystal pulls it over;
+// let go in the air it flies back, carried to its partner the pair joins.
+if (mode === 'pull') {
+  await fresh();
+  const last = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '';
+  await card(0.135);
+  let line = '';
+  for (let k = 0; k < 20 && (!line || line === last); k++) { line = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? ''; await sleep(0.5); }
+  const m = /target (.+?) crystals (.*)$/.exec(line);
+  if (!m) throw new Error(`no Orb Forge offer: ${line}`);
+  const T = val(m[1]);
+  const xs = m[2].split(', ').map(val);
+  let pair;
+  for (let i = 0; i < xs.length && !pair; i++) for (let k = 0; k < xs.length; k++) if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) { pair = [i, k]; break; }
+  if (!pair) throw new Error(`no exact pair in ${line}`);
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(1.5);
+  const squeeze = (v) => cli('xr', 'set-gamepad-state', { device: 'controller-right', buttons: [{ index: 1, value: v, touched: v > 0 }] });
+  // The controller's pose is its ray origin; its grip sits 5 cm behind and 1.6 cm below it (world).
+  const gripAt = (p) => ({ device: 'controller-right', position: { x: p.x - 0.004, y: p.y + 0.016, z: p.z - 0.05 }, orientation: ID });
+  const a = await posOf(`^crystal-${pair[0]}$`);
+  const b = await posOf(`^crystal-${pair[1]}$`);
+  const pointAt = (c) => cli('xr', 'set-transform', { device: 'controller-right', position: w(c.x, c.y, c.z + 0.3), orientation: ID });
+
+  // 1. Pulled, then let go in the air: back to its place.
+  await pointAt(a); await sleep(0.4);
+  await squeeze(1); await sleep(0.8);
+  const ctl = w(a.x, a.y, a.z + 0.3);
+  const near = await posOf(`^crystal-${pair[0]}$`);
+  const pulledBy = Math.hypot(near.x - a.x, near.y - a.y, near.z - a.z);
+  console.log(`grip with the ray on a crystal: it came ${(pulledBy * 100).toFixed(0)} cm towards the controller (${(await lastLog('pulled by')) ?? 'no pull logged'})`);
+  await squeeze(0); await sleep(0.8);
+  const back = await posOf(`^crystal-${pair[0]}$`);
+  console.log(Math.hypot(back.x - a.x, back.y - a.y, back.z - a.z) < 0.005 ? 'let go in the air: back in its place' : `let go in the air: left at ${back.x.toFixed(3)}, ${back.y.toFixed(3)}, ${back.z.toFixed(3)} (wrong)`);
+
+  // 2. Pulled and carried to its partner: the pair joins and is given.
+  const before = await lastLog('orb ');
+  await pointAt(a); await sleep(0.4);
+  await squeeze(1); await sleep(0.6);
+  const target = w(b.x, b.y + 0.02, b.z);
+  for (const k of [0.25, 0.5, 0.75, 1]) {
+    await cli('xr', 'set-transform', gripAt({ x: ctl.x + (target.x - ctl.x) * k, y: ctl.y + (target.y - ctl.y) * k, z: ctl.z - 0.05 + (target.z - ctl.z + 0.05) * k }));
+    await sleep(0.15);
+  }
+  await sleep(1.2);
+  await squeeze(0); await sleep(1);
+  const after = await lastLog('orb ');
+  console.log(after !== before ? `carried to its partner: ${after}` : 'carried to its partner: no orb given (wrong)');
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
 // mouse pops them) and controllers instead of hands.
-if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip', 'pull'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});

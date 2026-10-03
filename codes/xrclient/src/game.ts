@@ -82,6 +82,10 @@ const MERGE_DIST = 0.05;
 const CRYSTAL_GAP = 0.095;
 // The unseen box a controller's ray clicks a crystal by (see addRayTarget), narrower than the gap.
 const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
+// The grip pulls a crystal under the ray to the controller (see runPull): how fast it follows, how long it flies back.
+const SQUEEZE = 'xr-standard-squeeze';
+const PULL_RATE = 18;
+const PULL_BACK_S = 0.35;
 const CRYSTAL_RAY_PAPER = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
 /**
  * Anything the player can act on grows this much while it is pointed at or a
@@ -386,6 +390,8 @@ export class GameSystem extends createSystem({
   private species: Species = 'dog';
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
+  /** A crystal pulled from afar by a controller's grip (see runPull): where it came from, which hand has it. */
+  private pulled?: { e: Entity; side: (typeof SIDES)[number]; home: Vector3 };
   private touchQuat = new Quaternion();
   private tipPos = [new Vector3(), new Vector3()];
   private tipVel = [new Vector3(), new Vector3()];
@@ -2219,7 +2225,7 @@ export class GameSystem extends createSystem({
     };
     for (const e of this.queries.balloons.entities) ease(e, false);
     for (const e of this.queries.buttons.entities) ease(e, true);
-    for (const e of this.queries.crystals.entities) ease(e, !e.hasComponent(Grabbed));
+    for (const e of this.queries.crystals.entities) ease(e, !e.hasComponent(Grabbed) && e !== this.pulled?.e);
   }
 
   /**
@@ -2459,6 +2465,7 @@ export class GameSystem extends createSystem({
       this.prompt.pulse(1 + PROMPT_PULSE * k);
     }
 
+    this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();
     if (!creature?.object3D) return;
@@ -2470,7 +2477,8 @@ export class GameSystem extends createSystem({
     // neighbour it passes.
     let near: Entity | undefined;
     let offering: Entity | undefined;
-    for (const held of [...this.queries.heldCrystals.entities, ...this.queries.heldOrbs.entities]) {
+    const pulled = this.pulled ? [this.pulled.e] : [];
+    for (const held of [...this.queries.heldCrystals.entities, ...this.queries.heldOrbs.entities, ...pulled]) {
       held.object3D!.getWorldPosition(this.a);
       if (this.a.distanceTo(this.creatureWorld) < GIVE_DIST) offering = held;
     }
@@ -2478,10 +2486,10 @@ export class GameSystem extends createSystem({
     // The creature leans in (grows a little) while it can take the answer.
     const s = this.creatureScale * (offering ? READY_SCALE : 1);
     if (!this.tweens.some((t) => t.obj === creature.object3D)) creature.object3D.scale.setScalar(s);
-    for (const held of this.queries.heldCrystals.entities) {
+    for (const held of [...this.queries.heldCrystals.entities, ...pulled]) {
       held.object3D!.getWorldPosition(this.a);
       for (const other of this.queries.crystals.entities) {
-        if (other === held || other.hasComponent(Grabbed)) continue;
+        if (other === held || other.hasComponent(Grabbed) || other === this.pulled?.e) continue;
         other.object3D!.getWorldPosition(this.b);
         if (this.a.distanceTo(this.b) < MERGE_DIST) {
           near = other;
@@ -2522,6 +2530,7 @@ export class GameSystem extends createSystem({
   private merge(held: Entity, other: Entity): void {
     const grab = this.world.getSystem(GrabSystem);
     if (held.hasComponent(Grabbed)) grab?.forceRelease(held);
+    if (held === this.pulled?.e) this.pulled = undefined;
     const i = held.getValue(Crystal, 'index') as number;
     const j = other.getValue(Crystal, 'index') as number;
     const texts = this.offer!.crystals;
@@ -2614,6 +2623,7 @@ export class GameSystem extends createSystem({
   private addRayTarget(e: Entity): void {
     const box = new Mesh(CRYSTAL_RAY_BOX, CRYSTAL_RAY_PAPER);
     box.name = 'crystal-ray-target';
+    box.userData.crystal = e;
     box.pointerEventsType = (_id: number, type: string) => type === 'ray' && this.controllersOnly();
     box.addEventListener('pointerdown', (event: { stopPropagation(): void }) => {
       event.stopPropagation();
@@ -2624,6 +2634,50 @@ export class GameSystem extends createSystem({
     const target = this.world.createTransformEntity(box, { parent: e });
     target.addComponent(RayInteractable);
     e.object3D!.userData.rayTarget = target;
+  }
+
+  /**
+   * IWSDK grabs a crystal only with the controller inside it, which the
+   * emulator's resting controllers never are and a seated player has to lean
+   * for. So with controllers, the grip held while the ray is on a crystal
+   * pulls it to the controller; it is then carried like a grabbed one (to
+   * another crystal to join them, to the creature to give it) and let go when
+   * the grip opens: given if offered, otherwise back to its place.
+   */
+  private runPull(delta: number): void {
+    const p = this.pulled;
+    const playing = this.phase === 'playing' && this.kind === 'orb_forge' && !!this.offer;
+    if (p) {
+      const pad = this.input.xr.gamepads[p.side];
+      const obj = p.e.active ? p.e.object3D : undefined;
+      // Taken up close by IWSDK's own grab as well: that one carries it.
+      if (!obj || !playing || !this.controllersOnly() || p.e.hasComponent(Grabbed)) {
+        this.pulled = undefined;
+        return;
+      }
+      if (!pad?.getButtonPressed(SQUEEZE)) {
+        this.pulled = undefined;
+        if (p.e === this.offering) this.released(p.e);
+        else this.tween(obj, p.home, PULL_BACK_S, 0.03, obj.scale.x);
+        return;
+      }
+      this.player.gripSpaces[p.side].getWorldPosition(this.a);
+      obj.parent!.worldToLocal(this.a);
+      obj.position.lerp(this.a, 1 - Math.exp(-PULL_RATE * delta));
+      return;
+    }
+    if (!playing || !this.controllersOnly()) return;
+    for (const side of SIDES) {
+      if (!this.input.xr.gamepads[side]?.getButtonDown(SQUEEZE)) continue;
+      const hit = this.input.xr.multiPointers[side].getPointer('ray').getIntersection();
+      const e = hit?.object.userData.crystal as Entity | undefined;
+      if (!e?.active || e.hasComponent(Grabbed) || this.tweens.some((t) => t.obj === e.object3D)) continue;
+      this.unselect();
+      this.endDemo(true);
+      this.pulled = { e, side, home: e.object3D!.position.clone() };
+      console.info(`[game] ${e.object3D!.name} pulled by the ${side} grip`);
+      return;
+    }
   }
 
   /** Lets go of the crystal chosen by a click (all but `keep`, which a hand has just taken). */
