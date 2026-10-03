@@ -37,6 +37,7 @@ import {
   makeCrystal,
   BALLOON_TAG_TOP,
   CRYSTAL_HALF,
+  PAGE_TOP,
   ENVELOPE_FLAP_REST,
   makeEnvelope,
   makeFoldling,
@@ -128,7 +129,11 @@ const STAND = new Vector3(0, 0.023, -0.03);
 const BALLOON_Z = 0.08;
 /** Lane spacing: 3.7 cm clear between neighbours (a balloon is 0.063 m wide). */
 const BALLOON_GAP = 0.1;
-const CRYSTAL_Z = 0.15;
+/**
+ * On the pages, behind the book's front edge, so the hands point down at them
+ * from further off; the price cards end at the edge (0.105 m).
+ */
+const CRYSTAL_Z = 0.05;
 /** Height of a crystal's price card, and how far it leans back (radians). */
 const CRYSTAL_TAG_H = 0.03;
 const CRYSTAL_TAG_LEAN = 0.3;
@@ -1976,7 +1981,7 @@ export class GameSystem extends createSystem({
     offer.crystals.forEach((c, i) => {
       const m = makeCrystal(CRYSTAL_COLORS[i % CRYSTAL_COLORS.length], i);
       m.name = `crystal-${i}`;
-      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, CRYSTAL_HALF, CRYSTAL_Z);
+      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, PAGE_TOP + CRYSTAL_HALF, CRYSTAL_Z);
       const e = this.add(m);
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);

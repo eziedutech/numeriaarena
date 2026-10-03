@@ -328,7 +328,8 @@ export function makeBook(): Group {
 /** Page area of the open book (metres) and the height of its paper. */
 const PAGE_W = 0.15;
 const PAGE_D = 0.21;
-const PAGE_TOP = 0.0236;
+/** The top of the open pages, above the book's base. */
+export const PAGE_TOP = 0.0236;
 
 /**
  * Soft pencil maths on one page: sums, fractions, a number line, a shared
