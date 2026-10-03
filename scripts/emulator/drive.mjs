@@ -275,20 +275,36 @@ export async function raceMatch(maxMinutes = 12) {
 }
 
 /**
- * Zia's seated pose for testing by hand: the eyes 1.15 m over the floor, the
- * controllers and hands 10 cm lower and 40 cm ahead, all looking straight ahead.
- * IWER keeps the last pose into the next session, so a run ends here.
+ * The seated pose of the SIT card (src/dev-seat.ts): the eyes 30 cm over the
+ * desk top and leaning 15 cm in, the controllers and hands 10 cm lower and
+ * 40 cm ahead, all looking straight ahead. Without a desk yet, the eyes go to
+ * 1.15 m over the floor. IWER keeps the last pose into the next session, so a
+ * run ends here.
  */
-const SIT_HEAD_Y = 1.15;
-const SIT_HAND_Y = 1.05;
+const SIT_EYES_ABOVE_DESK = 0.3;
+const SIT_FORWARD = 0.15;
+const SIT_HEAD_Y_NO_DESK = 1.15;
+const SIT_HANDS_BELOW_EYES = 0.1;
+const SIT_HANDS_AHEAD = 0.4;
+
+async function deskTop() {
+  const e = (await cli('ecs', 'find', { namePattern: '^desk-root$' })).entities?.[0]?.entityIndex;
+  if (e === undefined) return undefined;
+  const t = (await cli('ecs', 'query', { entityIndex: e })).components.find((c) => c.componentId === 'Transform')?.values;
+  return t?.position?.[1];
+}
 
 export async function sitDown() {
-  await cli('xr', 'set-transform', { device: 'headset', position: { x: 0, y: SIT_HEAD_Y, z: 0 }, orientation: ID });
+  const top = await deskTop().catch(() => undefined);
+  const head = top === undefined ? SIT_HEAD_Y_NO_DESK : top + SIT_EYES_ABOVE_DESK;
+  const z = top === undefined ? 0 : -SIT_FORWARD;
+  await cli('xr', 'set-transform', { device: 'headset', position: { x: 0, y: head, z }, orientation: ID });
   for (const [side, x] of [['left', -0.25], ['right', 0.25]]) {
     for (const kind of ['controller', 'hand']) {
-      await cli('xr', 'set-transform', { device: `${kind}-${side}`, position: { x, y: SIT_HAND_Y, z: -0.4 }, orientation: ID }).catch(() => {});
+      await cli('xr', 'set-transform', { device: `${kind}-${side}`, position: { x, y: head - SIT_HANDS_BELOW_EYES, z: z - SIT_HANDS_AHEAD }, orientation: ID }).catch(() => {});
     }
   }
+  return head;
 }
 
 const mode = process.argv[2];
@@ -297,12 +313,12 @@ const t0 = Date.now();
 // Seats the emulator for a hand test: waits up to 2 minutes for an XR session
 // (the pose can only be set inside one), then leaves the session running.
 if (mode === 'sit') {
-  let ok = false;
-  for (let i = 0; i < 240 && !ok; i++) {
-    ok = await sitDown().then(() => true, () => false);
-    if (!ok) await sleep(0.5);
+  let head;
+  for (let i = 0; i < 240 && head === undefined; i++) {
+    head = await sitDown().catch(() => undefined);
+    if (head === undefined) await sleep(0.5);
   }
-  console.log(ok ? `seated: head ${SIT_HEAD_Y} m, controllers ${SIT_HAND_Y} m` : 'no XR session within 2 minutes');
+  console.log(head !== undefined ? `seated: eyes ${head.toFixed(2)} m, controllers ${(head - SIT_HANDS_BELOW_EYES).toFixed(2)} m` : 'no XR session within 2 minutes');
 }
 
 if (mode === 'race') {
