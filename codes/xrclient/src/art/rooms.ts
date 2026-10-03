@@ -18,7 +18,7 @@ import {
  * Virtual rooms around the desk in the headset, built from flat matte paper
  * boxes: real proportions, a little untidy so they do not look stiff. The
  * colours ride on the vertices, so a room is two draw calls (paper and sky). Stand-ins until the room
- * models are made (docs/BRIEF-ASET-RUANGAN.md); the frame is the same.
+ * models are made; the frame is the same.
  *
  * Frame: the origin is on the floor under the point where the book stands,
  * +Y up, +Z towards the seated player. `deskTop` is the height of the real
@@ -34,6 +34,28 @@ export interface Seat {
   /** The rivals' seats beside the player, or a classmate in another row. */
   role: 'left' | 'right' | 'class';
 }
+
+/**
+ * A poster on the bedroom's front wall that holds a rival (a robot now,
+ * a classmate later): its centre on the wall, facing +Z, and its size.
+ */
+export interface Poster {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+  h: number;
+  /** 1 or 2: the rival on the left or the right, as at the classroom's desks. */
+  desk: number;
+}
+
+/** Bedroom posters: either side of the window, beyond the curtains. */
+const POSTER_X = 1.3;
+const POSTER_W = 0.5;
+const POSTER_H = 0.66;
+/** Poster colours: the robots' cobalt (left) and teal (right), as on their windows on the desk. */
+const POSTER_COLORS = [0x3469c4, 0x3fb6a0];
+const POSTER_TINTS = [0xe6edf8, 0xe2f3ee];
 
 /** Classmates' desk tops. */
 export const KID_DESK_TOP = 0.72;
@@ -400,15 +422,26 @@ function bedroom(deskTop: number): Group {
     }
   }
   b.box(FRAME, 1.9, 0.03, 0.03, 0, deskTop + 1.52, z0 + 0.06);
-  // A shelf on the wall to the right of the window with books and a jar of pencils.
-  b.box(DESK_WOOD, 0.7, 0.025, 0.22, 1.3, 1.55, z0 + 0.11);
-  books(b, 1.0, 1.563, z0 + 0.11, 0.16, 8, [0xf2716b, 0x3469c4, 0x3fb6a0, 0xb198ea]);
-  b.cylinder(0x3fb6a0, 0.035, 0.09, 1.52, 1.61, z0 + 0.1);
-  // A paper poster of shapes to the left of the window, a little crooked.
-  b.box(FRAME, 0.42, 0.56, 0.01, -1.3, 1.6, z0 + 0.025, 0, 0, 0.03);
-  b.cylinder(0xf2716b, 0.09, 0.012, -1.36, 1.7, z0 + 0.035, Math.PI / 2, 16);
-  b.box(0x3469c4, 0.13, 0.13, 0.012, -1.22, 1.5, z0 + 0.035, 0, 0, 0.3);
-  b.box(0xf9c74f, 0.2, 0.05, 0.012, -1.3, 1.4, z0 + 0.035, 0, 0, -0.1);
+  // A poster either side of the window for the two rivals (bedroom-life.ts
+  // puts a robot in each): a coloured sheet, a cream one on it, a pale panel
+  // the robot stands in, and a strip under it for its name. High enough that
+  // QUIT and the race card on the desk stand below them in the seated view.
+  const posters: Poster[] = [];
+  const py = deskTop + 1.0;
+  for (const [i, side] of [-1, 1].entries()) {
+    const x = side * POSTER_X;
+    const tilt = side * 0.012;
+    b.box(POSTER_COLORS[i], POSTER_W, POSTER_H, 0.008, x, py, z0 + 0.01, 0, 0, tilt);
+    b.box(FRAME, POSTER_W - 0.04, POSTER_H - 0.04, 0.006, x, py, z0 + 0.017, 0, 0, tilt);
+    b.box(POSTER_TINTS[i], POSTER_W - 0.08, POSTER_H * 0.62, 0.004, x, py + POSTER_H * 0.1, z0 + 0.021, 0, 0, tilt);
+    b.box(POSTER_COLORS[i], POSTER_W - 0.08, 0.012, 0.004, x, py - POSTER_H * 0.21, z0 + 0.022, 0, 0, tilt);
+    posters.push({ x, y: py, z: z0 + 0.024, w: POSTER_W, h: POSTER_H, desk: i + 1 });
+  }
+  // A shelf above the right poster with books and a jar of pencils.
+  const shelfY = py + POSTER_H / 2 + 0.12;
+  b.box(DESK_WOOD, 0.7, 0.025, 0.22, POSTER_X, shelfY, z0 + 0.11);
+  books(b, 1.0, shelfY + 0.013, z0 + 0.11, 0.16, 8, [0xf2716b, 0x3469c4, 0x3fb6a0, 0xb198ea]);
+  b.cylinder(0x3fb6a0, 0.035, 0.09, 1.52, shelfY + 0.06, z0 + 0.1);
   // The bed along the left wall behind the player: frame, mattress, blanket and pillow.
   const bx = x0 + 0.5;
   b.block(DESK_WOOD, 0.98, 0.3, 2.0, bx, 0, 2.15);
@@ -434,7 +467,9 @@ function bedroom(deskTop: number): Group {
   b.block(0x3469c4, 0.3, 0.38, 0.15, bx + 0.6, 0, 1.2, -0.4);
   // A ceiling lamp.
   b.cylinder(0xfffdf6, 0.25, 0.06, 0, height - 0.05, 1.4, 0, 20);
-  return b.build('room-bedroom');
+  const group = b.build('room-bedroom');
+  group.userData.posters = posters;
+  return group;
 }
 
 export function buildRoom(room: VirtualRoom, deskTop: number): Group {

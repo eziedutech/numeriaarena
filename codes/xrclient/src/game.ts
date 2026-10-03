@@ -292,8 +292,8 @@ const POP_S = 1.8;
 const PROMPT_PULSE = 0.05;
 const PROMPT_PULSE_S = 1.1;
 /** Where the points are shown: the practice score, or the race scoreboard's middle row. */
-const SCORE_AT = new Vector3(0, 0.42, -0.15);
-const BOARD_AT = new Vector3(0, 0.424, -0.15);
+const SCORE_AT = new Vector3(0, 0.48, -0.15);
+const BOARD_AT = new Vector3(0, 0.484, -0.15);
 /** A right answer's creature flies up to the points in this many seconds. */
 const TO_SCORE_S = 1.0;
 const RIGHT_INK = 0x2f7d32;

@@ -27,7 +27,7 @@ const CARD_SCALE = 0.85;
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
 /** Banners sit just over the question card, inside the view in the browser and the headset. */
-const BANNER_Y = 0.42;
+const BANNER_Y = 0.48;
 const BOARD_Z = -0.15;
 /** Results rows: text height and spacing, larger than the live scoreboard's. */
 const RECAP_TEXT = 0.036;

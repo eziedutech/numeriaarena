@@ -1,6 +1,7 @@
 import { type Entity, type Mesh, VisibilityState, createSystem } from '@iwsdk/core';
 
 import { buildRoom, type VirtualRoom } from './art/rooms.js';
+import { BedroomLife } from './bedroom-life.js';
 import { ClassroomLife } from './classroom-life.js';
 import { DeskRoot } from './game-components.js';
 import { type Room, getRoom } from './settings.js';
@@ -20,8 +21,8 @@ export class RoomSystem extends createSystem({
   desks: { required: [DeskRoot] },
 }) {
   private shown?: Entity;
-  /** The classmates, teacher, board and clock while the classroom is shown. */
-  private life?: ClassroomLife;
+  /** The classmates, teacher, board and clock in the classroom; the robot posters in the bedroom. */
+  private life?: ClassroomLife | BedroomLife;
   /** What the shown room was built for; rebuilt when any of it changes. */
   private room: Room = 'here';
   private x = 0;
@@ -57,7 +58,7 @@ export class RoomSystem extends createSystem({
     // The floor stays at the real floor (local-floor: y = 0) under the book.
     group.position.set(obj.position.x, 0, obj.position.z);
     group.rotation.set(0, obj.rotation.y, 0);
-    if (room === 'classroom') this.life = new ClassroomLife(group);
+    this.life = room === 'classroom' ? new ClassroomLife(group) : new BedroomLife(group);
     this.shown = this.world.createTransformEntity(group);
     this.room = room;
     this.x = obj.position.x;
