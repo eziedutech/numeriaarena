@@ -2571,7 +2571,7 @@ export class GameSystem extends createSystem({
     }
 
     this.clickAimedBalloon();
-    this.emulatorPinchBalloon();
+    this.emulatorPinch();
     this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();
@@ -2708,19 +2708,42 @@ export class GameSystem extends createSystem({
     return undefined;
   }
 
+  /** A desk card (or the emulator's SIT card) a hand's ray (not its touch) is on. */
+  private rayCard(side: (typeof SIDES)[number]): Entity | (() => void) | undefined {
+    const multi = this.input.xr.multiPointers[side];
+    if (multi.getActiveKind() !== 'ray') return undefined;
+    for (let o = multi.getPointer('ray').getIntersection()?.object; o; o = o.parent ?? undefined) {
+      if (o.userData.onTouch) return o.userData.onTouch as () => void;
+      for (const e of this.queries.buttons.entities) if (e.object3D === o) return e;
+    }
+    return undefined;
+  }
+
   /**
    * The emulator only (see emulatedHands): a pinch of the hand whose ray is
-   * on no balloon pops the one the other hand's ray is on, the right first.
-   * The pinching hand's own balloon is popped by its press as in the headset.
+   * on nothing to choose takes what the other hand's ray is on, the right
+   * first: a balloon pops, a card is pressed. What the pinching hand's own
+   * ray is on takes its press as in the headset.
    */
-  private emulatorPinchBalloon(): void {
+  private emulatorPinch(): void {
     if (!emulatedHands() || this.controllersOnly() || this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     for (const side of SIDES) {
-      if (!this.handPinchStart(side) || this.rayBalloon(side)) continue;
+      if (!this.handPinchStart(side) || this.rayBalloon(side) || this.rayCard(side)) continue;
       for (const other of HAND_ORDER) {
-        const e = this.rayBalloon(other);
-        if (e?.active && e.hasComponent(Balloon)) {
-          this.popBalloon(e, true);
+        const balloon = this.rayBalloon(other);
+        if (balloon?.active && balloon.hasComponent(Balloon)) {
+          this.popBalloon(balloon, true);
+          return;
+        }
+        const card = this.rayCard(other);
+        if (typeof card === 'function') {
+          console.info(`[emulator] ${side} pinch on the ${other} hand's card`);
+          card();
+          return;
+        }
+        if (card?.active) {
+          console.info(`[emulator] ${side} pinch on the ${other} hand's card`);
+          this.pressButton(card);
           return;
         }
       }
