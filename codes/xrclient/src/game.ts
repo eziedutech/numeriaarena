@@ -905,6 +905,9 @@ export class GameSystem extends createSystem({
   }
 
   private remove(e: Entity): void {
+    // Its moves go with it: a creature's entrance that ends after a quit would
+    // otherwise still bring out its balloons or crystals on the menu.
+    for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === e.object3D) this.tweens.splice(i, 1);
     if (e.object3D) forgetMixers(e.object3D);
     e.object3D?.traverse((o) => this.labels.delete(o as Mesh));
     const rayTarget = e.object3D?.userData.rayTarget as Entity | undefined;
@@ -2440,6 +2443,8 @@ export class GameSystem extends createSystem({
   }
 
   private next(): void {
+    // A creature's (or its bird's) way out that ends after a quit or the results: nothing comes next.
+    if (this.phase === 'menu' || this.phase === 'recap') return;
     this.clearPrompt();
     this.offer = undefined;
     if (this.race) {
