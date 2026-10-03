@@ -2255,7 +2255,7 @@ export class GameSystem extends createSystem({
           if (held > BALLOON_HOLD_S) on = false;
         }
       } else {
-        // A crystal under a controller's ray is hovered through its box (addRayTarget).
+        // A crystal under a controller's or a hand's ray is hovered through its box (addRayTarget).
         const rayTarget = obj.userData.rayTarget as Entity | undefined;
         on = e.hasComponent(Hovered) || !!rayTarget?.hasComponent(Hovered) || near(obj);
       }
@@ -2679,9 +2679,10 @@ export class GameSystem extends createSystem({
 
   /**
    * A grabbable crystal turns rays away (IWSDK gives it pointerEventsType deny
-   * 'ray', so its handle is only taken by the grip). With controllers the ray
-   * clicks crystals as a mouse does, so each crystal carries an unseen box, a
-   * little larger than the crystal, that only a controller's ray hits. It is
+   * 'ray', so its handle is only taken by the grip). In the headset a ray
+   * clicks crystals as a mouse does (a trigger click, or a hand's pinch from
+   * further off than its touch reaches), so each crystal carries an unseen
+   * box, a little larger than the crystal, that only an XR ray hits. It is
    * an entity of its own, so the grip on the crystal is not a press, and its
    * press stops there: the grab handle on the crystal never sees the ray.
    */
@@ -2689,7 +2690,8 @@ export class GameSystem extends createSystem({
     const box = new Mesh(CRYSTAL_RAY_BOX, CRYSTAL_RAY_PAPER);
     box.name = 'crystal-ray-target';
     box.userData.crystal = e;
-    box.pointerEventsType = (_id: number, type: string) => type === 'ray' && this.controllersOnly() && e !== this.pulled?.e;
+    box.pointerEventsType = (_id: number, type: string) =>
+      type === 'ray' && this.world.visibilityState.peek() !== VisibilityState.NonImmersive && e !== this.pulled?.e;
     box.addEventListener('pointerdown', (event: { stopPropagation(): void }) => {
       event.stopPropagation();
       // After the press is sent out: a second click joins and removes the
