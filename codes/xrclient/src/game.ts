@@ -94,6 +94,13 @@ const PULL_BACK_S = 0.35;
 const HAND_CARRY_DROP = 0.05;
 /** Both hands on a crystal: the right one's counts (see crystalFocus). */
 const HAND_ORDER = ['right', 'left'] as const;
+/**
+ * In the emulator on this computer (dev build, IWER): a hand's pinch is a
+ * mouse button per hand (left button, left hand), unlike the controllers'
+ * trigger. There either hand's pinch takes what the hands are on, so the left
+ * button chooses in both modes. Never in the public build or the headset.
+ */
+const emulatedHands = (): boolean => import.meta.env.DEV && !!(window as { IWER_DEVICE?: unknown }).IWER_DEVICE;
 // How near the creature's middle a ray must point to give it a pulled crystal (radians).
 const CREATURE_AIM = 0.15;
 const CRYSTAL_RAY_PAPER = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
@@ -416,6 +423,7 @@ export class GameSystem extends createSystem({
   private pulled?: { e: Entity; side: (typeof SIDES)[number]; home: Vector3; hand: boolean };
   /** The one crystal the hands point at or reach this frame, the right hand first. */
   private crystalFocus?: Entity;
+  private crystalFocusSide: (typeof SIDES)[number] = 'right';
   private touchQuat = new Quaternion();
   private tipPos = [new Vector3(), new Vector3()];
   private tipVel = [new Vector3(), new Vector3()];
@@ -2299,6 +2307,7 @@ export class GameSystem extends createSystem({
    */
   private handCrystal(): Entity | undefined {
     for (const side of HAND_ORDER) {
+      this.crystalFocusSide = side;
       const aimed = this.aimedCrystal(side);
       if (aimed) return aimed;
       const tip = this.tipPos[side === 'right' ? 0 : 1];
@@ -2562,6 +2571,7 @@ export class GameSystem extends createSystem({
     }
 
     this.clickAimedBalloon();
+    this.emulatorPinchBalloon();
     this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();
@@ -2685,16 +2695,36 @@ export class GameSystem extends createSystem({
 
   /** Whether a hand's ray, not its touch, is on balloon `e`. */
   private handRayOn(e: Entity): boolean {
+    return SIDES.some((side) => this.rayBalloon(side) === e);
+  }
+
+  /** The balloon a hand's ray (not its touch) is on. */
+  private rayBalloon(side: (typeof SIDES)[number]): Entity | undefined {
+    const multi = this.input.xr.multiPointers[side];
+    if (multi.getActiveKind() !== 'ray') return undefined;
+    for (let o = multi.getPointer('ray').getIntersection()?.object; o; o = o.parent ?? undefined) {
+      if (o.userData.balloon) return o.userData.balloon as Entity;
+    }
+    return undefined;
+  }
+
+  /**
+   * The emulator only (see emulatedHands): a pinch of the hand whose ray is
+   * on no balloon pops the one the other hand's ray is on, the right first.
+   * The pinching hand's own balloon is popped by its press as in the headset.
+   */
+  private emulatorPinchBalloon(): void {
+    if (!emulatedHands() || this.controllersOnly() || this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     for (const side of SIDES) {
-      const multi = this.input.xr.multiPointers[side];
-      if (multi.getActiveKind() !== 'ray') continue;
-      for (let o = multi.getPointer('ray').getIntersection()?.object; o; o = o.parent ?? undefined) {
-        if (!o.userData.balloon) continue;
-        if (o.userData.balloon === e) return true;
-        break;
+      if (!this.handPinchStart(side) || this.rayBalloon(side)) continue;
+      for (const other of HAND_ORDER) {
+        const e = this.rayBalloon(other);
+        if (e?.active && e.hasComponent(Balloon)) {
+          this.popBalloon(e, true);
+          return;
+        }
       }
     }
-    return false;
   }
 
   /** In the headset with controllers and no tracked hand (hands touch, controllers click). */
@@ -2775,7 +2805,8 @@ export class GameSystem extends createSystem({
         return;
       }
       // A controller lets go by opening the grip; a hand by its next pinch.
-      if (p.hand ? this.handPinchStart(p.side) : !pad?.getButtonPressed(SQUEEZE)) {
+      const handLetGo = this.handPinchStart(p.side) || (emulatedHands() && SIDES.some((k) => this.handPinchStart(k)));
+      if (p.hand ? handLetGo : !pad?.getButtonPressed(SQUEEZE)) {
         this.pulled = undefined;
         obj.pointerEventsType = { deny: 'ray' };
         // Let go with the ray on another crystal: the two join.
@@ -2798,9 +2829,14 @@ export class GameSystem extends createSystem({
       return;
     }
     if (!playing || !(controllers || hands)) return;
-    for (const side of hands ? HAND_ORDER : SIDES) {
+    for (let side of hands ? HAND_ORDER : SIDES) {
       if (hands ? !this.handPinchStart(side) : !this.input.xr.gamepads[side]?.getButtonDown(SQUEEZE)) continue;
-      const e = hands ? this.aimedCrystal(side) : (this.input.xr.multiPointers[side].getPointer('ray').getIntersection()?.object.userData.crystal as Entity | undefined);
+      let e = hands ? this.aimedCrystal(side) : (this.input.xr.multiPointers[side].getPointer('ray').getIntersection()?.object.userData.crystal as Entity | undefined);
+      // The emulator: the lit crystal, carried by the hand whose ray is on it.
+      if (hands && emulatedHands() && this.crystalFocus && this.aimedCrystal(this.crystalFocusSide) === this.crystalFocus) {
+        e = this.crystalFocus;
+        side = this.crystalFocusSide;
+      }
       if (!e?.active || e.hasComponent(Grabbed) || this.tweens.some((t) => t.obj === e.object3D)) continue;
       this.unselect();
       this.endDemo(true);
