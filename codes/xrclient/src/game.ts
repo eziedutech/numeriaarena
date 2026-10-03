@@ -80,6 +80,9 @@ const PRESS_GRACE_MS = 300;
 const MERGE_DIST = 0.05;
 /** Space between crystals in the row; wider than the merge distance. */
 const CRYSTAL_GAP = 0.095;
+// The unseen box a controller's ray clicks a crystal by (see addRayTarget), narrower than the gap.
+const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
+const CRYSTAL_RAY_PAPER = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
 /**
  * Anything the player can act on grows this much while it is pointed at or a
  * fingertip is within `HOVER_REACH` of it, and a rising balloon holds still.
@@ -581,8 +584,12 @@ export class GameSystem extends createSystem({
           this.setClickable(e);
         }
       }),
-      // Picking up a crystal is the move the how-to shows: it can stop.
-      this.queries.heldCrystals.subscribe('qualify', () => this.endDemo(true)),
+      // Picking up a crystal is the move the how-to shows: it can stop. A crystal
+      // chosen by a click before is let go, so a click and a grab do not mix.
+      this.queries.heldCrystals.subscribe('qualify', (e) => {
+        this.endDemo(true);
+        this.unselect(e);
+      }),
       this.queries.heldCrystals.subscribe('disqualify', (e) => this.released(e)),
       this.queries.heldOrbs.subscribe('disqualify', (e) => this.released(e)),
     );
@@ -849,6 +856,8 @@ export class GameSystem extends createSystem({
   private remove(e: Entity): void {
     if (e.object3D) forgetMixers(e.object3D);
     e.object3D?.traverse((o) => this.labels.delete(o as Mesh));
+    const rayTarget = e.object3D?.userData.rayTarget as Entity | undefined;
+    if (rayTarget?.active) rayTarget.dispose();
     e.dispose();
   }
 
@@ -1930,6 +1939,7 @@ export class GameSystem extends createSystem({
       const e = this.add(m);
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);
+      this.addRayTarget(e);
       this.clickable(e);
       // A price card standing on the table in front of the cluster, leaning
       // back a little. It does not turn to the head, so its top edge can
@@ -2407,6 +2417,7 @@ export class GameSystem extends createSystem({
     if (controllers !== this.wasControllers) {
       this.wasControllers = controllers;
       for (const b of this.queries.balloons.entities) if (b.hasComponent(PokeInteractable)) this.setClickable(b);
+      if (!controllers && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) this.unselect();
       this.pointRays(controllers);
     }
     // IWSDK turns the near touch pointer on again whenever something touchable appears.
@@ -2538,6 +2549,7 @@ export class GameSystem extends createSystem({
   /**
    * Mouse clicks outside the headset; in it, balloons also take a trigger
    * click while the player holds controllers (hands touch them instead).
+   * Crystals take theirs through a box of their own (addRayTarget).
    */
   private setClickable(e: Entity): void {
     const want =
@@ -2589,5 +2601,36 @@ export class GameSystem extends createSystem({
       return;
     }
     this.merge(first, e);
+  }
+
+  /**
+   * A grabbable crystal turns rays away (IWSDK gives it pointerEventsType deny
+   * 'ray', so its handle is only taken by the grip). With controllers the ray
+   * clicks crystals as a mouse does, so each crystal carries an unseen box, a
+   * little larger than the crystal, that only a controller's ray hits. It is
+   * an entity of its own, so the grip on the crystal is not a press, and its
+   * press stops there: the grab handle on the crystal never sees the ray.
+   */
+  private addRayTarget(e: Entity): void {
+    const box = new Mesh(CRYSTAL_RAY_BOX, CRYSTAL_RAY_PAPER);
+    box.name = 'crystal-ray-target';
+    box.pointerEventsType = (_id: number, type: string) => type === 'ray' && this.controllersOnly();
+    box.addEventListener('pointerdown', (event: { stopPropagation(): void }) => {
+      event.stopPropagation();
+      // After the press is sent out: a second click joins and removes the
+      // crystals, and with them listeners the pointer is still walking through.
+      if (this.pressMeant()) queueMicrotask(() => e.active && this.clickCrystal(e));
+    });
+    const target = this.world.createTransformEntity(box, { parent: e });
+    target.addComponent(RayInteractable);
+    e.object3D!.userData.rayTarget = target;
+  }
+
+  /** Lets go of the crystal chosen by a click (all but `keep`, which a hand has just taken). */
+  private unselect(keep?: Entity): void {
+    const first = this.selected;
+    if (!first) return;
+    this.selected = undefined;
+    if (first !== keep && first.object3D) first.object3D.position.y -= SELECT_LIFT;
   }
 }

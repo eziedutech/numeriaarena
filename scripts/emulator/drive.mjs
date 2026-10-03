@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -373,12 +373,52 @@ if (mode === 'click') {
   console.log(after !== before ? `trigger click: ${after}` : 'trigger click: nothing popped (wrong)');
 }
 
+// With controllers two crystals join on two trigger clicks of the ray, as with a mouse; a ray resting on one does nothing.
+if (mode === 'crystal') {
+  await fresh();
+  const last = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '';
+  await card(0.135);
+  let line = '';
+  for (let k = 0; k < 20 && (!line || line === last); k++) { line = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? ''; await sleep(0.5); }
+  const m = /target (.+?) crystals (.*)$/.exec(line);
+  if (!m) throw new Error(`no Orb Forge offer: ${line}`);
+  const T = val(m[1]);
+  const xs = m[2].split(', ').map(val);
+  let pair;
+  for (let i = 0; i < xs.length && !pair; i++) for (let k = 0; k < xs.length; k++) if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) { pair = [i, k]; break; }
+  if (!pair) throw new Error(`no exact pair in ${line}`);
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(1.5);
+  // From 25 cm in front and a little above, pointing straight ahead at the crystal's middle.
+  const aim = async (i) => {
+    const c = await posOf(`^crystal-${i}$`);
+    if (c) await cli('xr', 'set-transform', { device: 'controller-right', position: w(c.x, c.y, c.z + 0.25), orientation: ID });
+    return c;
+  };
+  const click = async () => {
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 1 }); await sleep(0.2);
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 0 }); await sleep(0.4);
+  };
+  const before = await lastLog('orb ');
+  const y0 = (await aim(pair[0]))?.y;
+  await sleep(1);
+  const y1 = (await posOf(`^crystal-${pair[0]}$`))?.y;
+  console.log(y0 !== undefined && y1 !== undefined && Math.abs(y1 - y0) < 1e-4 ? 'ray on a crystal, no trigger: not chosen' : `ray on a crystal moved it (wrong): ${y0} -> ${y1}`);
+  await click();
+  const y2 = (await posOf(`^crystal-${pair[0]}$`))?.y;
+  console.log(y2 !== undefined && y1 !== undefined && y2 > y1 + 0.01 ? 'first click: crystal lifted (chosen)' : `first click: not lifted (wrong): ${y1} -> ${y2}`);
+  await aim(pair[1]); await sleep(0.4);
+  await click(); await sleep(1.5);
+  const after = await lastLog('orb ');
+  console.log(after !== before ? `second click: ${after}` : 'second click: no orb given (wrong)');
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
 // mouse pops them) and controllers instead of hands.
-if (['race', 'orb', 'balloon', 'quit', 'brush', 'click'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
