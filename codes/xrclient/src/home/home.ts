@@ -212,6 +212,12 @@ export class Home {
   private savedEye?: { p: Vector3; q: Quaternion };
   /** The sign-up form opens by itself once per sign-in, not on every redraw. */
   private askedToRegister = false;
+  /**
+   * Whether the player opened the sign-in on this page. A session kept from
+   * before is checked by itself on every load: a server out of reach then
+   * shows on the teacher card, not as a box to close each time.
+   */
+  private signInAsked = false;
 
   constructor(
     private camera: PerspectiveCamera,
@@ -258,7 +264,7 @@ export class Home {
         this.askedToRegister = true;
         this.registration(s.me);
       }
-      if (s.kind === 'error') this.message(this.t.teacher[0], this.errorText(s.code));
+      if (s.kind === 'error' && (s.code !== 'offline' || this.signInAsked)) this.message(this.t.teacher[0], this.errorText(s.code));
     });
     startTeacher()
       .then((r) => {
@@ -433,6 +439,11 @@ export class Home {
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
+      if (teacher.kind === 'error' && teacher.code === 'offline') {
+        const sub = card.querySelector('.sub');
+        if (sub) sub.textContent = t.serverAway;
+        card.setAttribute('aria-label', `${t.teacher[0]}. ${t.serverAway}`);
+      }
       if (teacher.kind === 'loading') {
         const sub = card.querySelector('.sub');
         if (sub) sub.innerHTML = '<span class="skel"></span>';
@@ -721,6 +732,7 @@ export class Home {
 
   private teacherSignIn(): void {
     const t = this.t;
+    this.signInAsked = true;
     if (!signInConfigured) {
       this.message(t.teacher[0], t.serverSoon);
       return;

@@ -102,7 +102,11 @@ async function refresh(user: User | null): Promise<void> {
   try {
     const res = await call(user, '/me');
     if (res.ok) set({ kind: 'in', me: (await res.json()) as Me });
-    else set({ kind: 'error', code: await errorCode(res) });
+    else {
+      // A 5xx with no code of ours is the server (or the proxy before it) being away.
+      const code = await errorCode(res);
+      set({ kind: 'error', code: res.status >= 500 && code.startsWith('http_') ? 'offline' : code });
+    }
   } catch (e) {
     console.warn('[teacher] server unreachable', e);
     set({ kind: 'error', code: 'offline' });
