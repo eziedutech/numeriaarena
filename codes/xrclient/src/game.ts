@@ -112,11 +112,14 @@ const READY_SCALE = 1.15;
  * reaching for an answer never passes the creature.
  */
 const STAND = new Vector3(0, 0.023, -0.03);
-/** Rows in front of the creature, still within seated reach. */
-const BALLOON_Z = 0.2;
+/**
+ * Rows just in front of the book (its pages reach 0.105 m forward), close to
+ * it, so in the headset they stand ahead of and below the resting hands.
+ */
+const BALLOON_Z = 0.13;
 /** Lane spacing: wider than a balloon (0.063 m), so neighbours never touch. */
 const BALLOON_GAP = 0.08;
-const CRYSTAL_Z = 0.21;
+const CRYSTAL_Z = 0.15;
 /** Height of a crystal's price card, and how far it leans back (radians). */
 const CRYSTAL_TAG_H = 0.03;
 const CRYSTAL_TAG_LEAN = 0.3;

@@ -56,12 +56,13 @@ export async function desk() {
   const e = (await cli('ecs', 'find', { namePattern: '^desk-root$' })).entities[0].entityIndex;
   const t = (await cli('ecs', 'query', { entityIndex: e })).components.find((c) => c.componentId === 'Transform').values;
   const [qx, qy, qz, qw] = t.orientation;
-  D = { p: t.position, yaw: Math.atan2(2 * (qw * qy + qx * qz), 1 - 2 * (qy * qy + qx * qx)) };
+  // The desk is larger in the headset (desk.ts HEADSET_SCALE): desk coordinates scale with it.
+  D = { p: t.position, k: t.scale?.[0] ?? 1, yaw: Math.atan2(2 * (qw * qy + qx * qz), 1 - 2 * (qy * qy + qx * qx)) };
   return D;
 }
 export const w = (x, y, z) => {
-  const c = Math.cos(D.yaw), s = Math.sin(D.yaw);
-  return { x: D.p[0] + x * c + z * s, y: D.p[1] + y, z: D.p[2] - x * s + z * c };
+  const c = Math.cos(D.yaw), s = Math.sin(D.yaw), k = D.k;
+  return { x: D.p[0] + k * (x * c + z * s), y: D.p[1] + k * y, z: D.p[2] + k * (-x * s + z * c) };
 };
 const TIP = { x: -0.034, y: 0.064, z: -0.033 }; // index tip relative to hand-right, identity orientation
 // Hand grab point relative to the index tip, in WORLD axes (hand kept at identity orientation).

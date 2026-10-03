@@ -40,12 +40,18 @@ const TABLE_DROP_MIN_M = 0.2;
 const TABLE_DROP_MAX_M = 0.75;
 /** After this long with the pinch ghost, the book is put in front of the player. */
 const PINCH_WAIT_S = 6;
-/** Seated desk: this far below the eyes and this far in front. */
-const SEATED_DROP_M = 0.45;
-const SEATED_REACH_M = 0.45;
+/**
+ * Seated desk: this far below the eyes and this far in front. Far enough that
+ * the hands start behind and above what they act on (controllers rest about
+ * 0.4 m ahead and 0.1 m below the eyes), so a pointer comes down onto it.
+ */
+const SEATED_DROP_M = 0.55;
+const SEATED_REACH_M = 0.7;
+/** Everything on the desk in the headset, this much larger than the browser view, to read from further away. */
+const HEADSET_SCALE = 1.2;
 /**
  * The curtain's radius sits between the card (0.4 m) and the book (about
- * 0.6 m away), so only the card stays bright. Darker while the player must
+ * 0.9 m away), so only the card stays bright. Darker while the player must
  * wait, lighter when a pinch is expected.
  */
 const CURTAIN_R = 0.5;
@@ -238,6 +244,7 @@ export class DeskSystem extends createSystem({
     this.ghost.visible = false;
     // A book placed in XR is announced for a moment; in the browser there is no card.
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    this.root.scale.setScalar(placed && immersive ? HEADSET_SCALE : 1);
     this.readyLeft = placed && immersive ? READY_S : 0;
   }
 
@@ -408,6 +415,7 @@ export class DeskSystem extends createSystem({
     // puts it down there. It is where the book lands anyway when the wait
     // runs out, so the book never jumps from the side to the middle.
     this.ghost.visible = true;
+    this.ghost.scale.setScalar(HEADSET_SCALE);
     this.frontOf(this.ghost);
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
     this.showStatus(T.pinchToPlace(left), delta, true, CURTAIN_ACT, this.ghost.position, {
