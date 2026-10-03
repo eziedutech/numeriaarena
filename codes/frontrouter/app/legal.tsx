@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 /** The same choice as the game (`numeria.lang` on this site), so a page opens in the player's language. */
 export type Lang = "en" | "id";
 
-export const CONTACT = "zia@eziedutech.dev";
+export const CONTACT = "numeria@eziedutech.dev";
 export const UPDATED = { en: "Last updated 2 October 2026", id: "Terakhir diperbarui 2 Oktober 2026" };
 
 function readLang(): Lang {

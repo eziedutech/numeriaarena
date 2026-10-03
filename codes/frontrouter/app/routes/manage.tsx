@@ -60,7 +60,7 @@ const TEXT = {
     toGame: "TO THE GAME",
     status: { pending: "Waiting for approval", approved: "Approved", suspended: "Suspended" } as Record<Status, string>,
     pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
-    suspendedBody: "This account is suspended. Write to zia@eziedutech.dev if you think this is a mistake.",
+    suspendedBody: "This account is suspended. Write to numeria@eziedutech.dev if you think this is a mistake.",
     admin: "Admin",
     soon: "SOON",
     tools: [
@@ -128,7 +128,7 @@ const TEXT = {
     toGame: "KE GAME",
     status: { pending: "Menunggu persetujuan", approved: "Disetujui", suspended: "Ditangguhkan" } as Record<Status, string>,
     pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
-    suspendedBody: "Akun ini ditangguhkan. Tulis ke zia@eziedutech.dev bila menurut Anda ini keliru.",
+    suspendedBody: "Akun ini ditangguhkan. Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     admin: "Admin",
     soon: "SEGERA",
     tools: [
