@@ -440,41 +440,82 @@ if (mode === 'grip') {
 // let go in the air it flies back, carried to its partner the pair joins.
 if (mode === 'pull') {
   await fresh();
-  const last = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '';
+  let seen = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '';
   await card(0.135);
-  let line = '';
-  for (let k = 0; k < 20 && (!line || line === last); k++) { line = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? ''; await sleep(0.5); }
-  const m = /target (.+?) crystals (.*)$/.exec(line);
-  if (!m) throw new Error(`no Orb Forge offer: ${line}`);
-  const T = val(m[1]);
-  const xs = m[2].split(', ').map(val);
-  let pair;
-  for (let i = 0; i < xs.length && !pair; i++) for (let k = 0; k < xs.length; k++) if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) { pair = [i, k]; break; }
-  if (!pair) throw new Error(`no exact pair in ${line}`);
+  // Waits for an Orb Forge offer newer than the last one seen; returns its exact pair's positions.
+  const nextPair = async () => {
+    let line = '';
+    for (let k = 0; k < 30 && (!line || line === seen); k++) { line = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? ''; await sleep(0.5); }
+    seen = line;
+    const m = /target (.+?) crystals (.*)$/.exec(line);
+    if (!m) throw new Error(`no Orb Forge offer: ${line}`);
+    const T = val(m[1]);
+    const xs = m[2].split(', ').map(val);
+    for (let i = 0; i < xs.length; i++) for (let k = 0; k < xs.length; k++) {
+      if (i !== k && Math.abs(xs[i] + xs[k] - T) < 1e-9) {
+        await sleep(1.5);
+        return [i, await posOf(`^crystal-${i}$`), await posOf(`^crystal-${k}$`)];
+      }
+    }
+    // A single crystal is the answer (no pair adds up): only that one.
+    const i = xs.findIndex((x) => Math.abs(x - T) < 1e-9);
+    if (i < 0) throw new Error(`no exact pair or crystal in ${line}`);
+    await sleep(1.5);
+    return [i, await posOf(`^crystal-${i}$`), undefined];
+  };
+  let [ia, a, b] = await nextPair();
   await cli('xr', 'set-input-mode', { mode: 'controller' });
   await sleep(1.5);
   const squeeze = (v) => cli('xr', 'set-gamepad-state', { device: 'controller-right', buttons: [{ index: 1, value: v, touched: v > 0 }] });
   // The controller's pose is its ray origin; its grip sits 5 cm behind and 1.6 cm below it (world).
   const gripAt = (p) => ({ device: 'controller-right', position: { x: p.x - 0.004, y: p.y + 0.016, z: p.z - 0.05 }, orientation: ID });
-  const a = await posOf(`^crystal-${pair[0]}$`);
-  const b = await posOf(`^crystal-${pair[1]}$`);
   const pointAt = (c) => cli('xr', 'set-transform', { device: 'controller-right', position: w(c.x, c.y, c.z + 0.3), orientation: ID });
+  const letGo = async () => console.log(`  ${(await lastLog('let go')) ?? 'no let go logged'}`);
 
   // 1. Pulled, then let go in the air: back to its place.
   await pointAt(a); await sleep(0.4);
   await squeeze(1); await sleep(0.8);
-  const ctl = w(a.x, a.y, a.z + 0.3);
-  const near = await posOf(`^crystal-${pair[0]}$`);
+  const near = await posOf(`^crystal-${ia}$`);
   const pulledBy = Math.hypot(near.x - a.x, near.y - a.y, near.z - a.z);
   console.log(`grip with the ray on a crystal: it came ${(pulledBy * 100).toFixed(0)} cm towards the controller (${(await lastLog('pulled by')) ?? 'no pull logged'})`);
   await squeeze(0); await sleep(0.8);
-  const back = await posOf(`^crystal-${pair[0]}$`);
+  const back = await posOf(`^crystal-${ia}$`);
   console.log(Math.hypot(back.x - a.x, back.y - a.y, back.z - a.z) < 0.005 ? 'let go in the air: back in its place' : `let go in the air: left at ${back.x.toFixed(3)}, ${back.y.toFixed(3)}, ${back.z.toFixed(3)} (wrong)`);
+  await letGo();
 
-  // 2. Pulled and carried to its partner: the pair joins and is given.
-  const before = await lastLog('orb ');
+  // 2. Pulled, the ray turned to its partner (or, with no pair, the creature) and let go there.
+  // The creature's middle is a little above its feet.
+  const aim = async (c) => {
+    const to = c ?? (await posOf('^line-'));
+    await pointAt(c ? to : { ...to, y: to.y + 0.05 });
+    return c ? 'its partner' : 'the creature';
+  };
+  let before = await lastLog('orb ');
+  await pointAt(a); await sleep(0.4);
+  await squeeze(1); await sleep(0.8);
+  const on = await aim(b); await sleep(0.6);
+  await squeeze(0); await sleep(1);
+  await letGo();
+  let after = await lastLog('orb ');
+  console.log(after !== before ? `ray on ${on}, let go: ${after}` : `ray on ${on}, let go: nothing given (wrong)`);
+
+  // 3. Pulled and carried to its partner: the pair joins and is given.
+  [ia, a, b] = await nextPair();
+  before = after;
+  if (!b) {
+    await pointAt(a); await sleep(0.4);
+    await squeeze(1); await sleep(0.8);
+    const on = await aim(b); await sleep(0.6);
+    await squeeze(0); await sleep(1);
+    await letGo();
+    after = await lastLog('orb ');
+    console.log(after !== before ? `ray on ${on}, let go: ${after}` : `ray on ${on}, let go: nothing given (wrong)`);
+    [ia, a, b] = await nextPair();
+    before = after;
+  }
   await pointAt(a); await sleep(0.4);
   await squeeze(1); await sleep(0.6);
+  const ctl = w(a.x, a.y, a.z + 0.3);
   const target = w(b.x, b.y + 0.02, b.z);
   for (const k of [0.25, 0.5, 0.75, 1]) {
     await cli('xr', 'set-transform', gripAt({ x: ctl.x + (target.x - ctl.x) * k, y: ctl.y + (target.y - ctl.y) * k, z: ctl.z - 0.05 + (target.z - ctl.z + 0.05) * k }));
@@ -482,8 +523,19 @@ if (mode === 'pull') {
   }
   await sleep(1.2);
   await squeeze(0); await sleep(1);
-  const after = await lastLog('orb ');
+  after = await lastLog('orb ');
   console.log(after !== before ? `carried to its partner: ${after}` : 'carried to its partner: no orb given (wrong)');
+
+  // 4. One crystal pulled and let go with the ray on the creature: given (right or not).
+  [ia, a, b] = await nextPair();
+  before = after;
+  await pointAt(a); await sleep(0.4);
+  await squeeze(1); await sleep(0.8);
+  await aim(undefined); await sleep(0.6);
+  await squeeze(0); await sleep(1);
+  await letGo();
+  after = await lastLog('orb ');
+  console.log(after !== before ? `ray on the creature, let go: ${after}` : 'ray on the creature, let go: nothing given (wrong)');
 }
 
 // A finished run leaves no XR session behind: an idle emulated session keeps

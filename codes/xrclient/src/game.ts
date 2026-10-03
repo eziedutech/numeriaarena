@@ -86,6 +86,8 @@ const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
 const SQUEEZE = 'xr-standard-squeeze';
 const PULL_RATE = 18;
 const PULL_BACK_S = 0.35;
+// How near the creature's middle a ray must point to give it a pulled crystal (radians).
+const CREATURE_AIM = 0.15;
 const CRYSTAL_RAY_PAPER = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
 /**
  * Anything the player can act on grows this much while it is pointed at or a
@@ -426,6 +428,7 @@ export class GameSystem extends createSystem({
   private head = new Vector3();
   private a = new Vector3();
   private b = new Vector3();
+  private c = new Vector3();
   private creatureWorld = new Vector3();
   private mergeWith?: Entity;
   private mergeHeld = 0;
@@ -2207,7 +2210,9 @@ export class GameSystem extends createSystem({
           if (held > BALLOON_HOLD_S) on = false;
         }
       } else {
-        on = e.hasComponent(Hovered) || near(obj);
+        // A crystal under a controller's ray is hovered through its box (addRayTarget).
+        const rayTarget = obj.userData.rayTarget as Entity | undefined;
+        on = e.hasComponent(Hovered) || !!rayTarget?.hasComponent(Hovered) || near(obj);
       }
       obj.userData.hovered = on;
       if (obj.userData.choice) {
@@ -2482,6 +2487,8 @@ export class GameSystem extends createSystem({
       held.object3D!.getWorldPosition(this.a);
       if (this.a.distanceTo(this.creatureWorld) < GIVE_DIST) offering = held;
     }
+    // A pulled crystal is also given with the ray on the creature (not on a crystal).
+    if (this.pulled && !this.aimedCrystal(this.pulled.side) && this.aimsAtCreature(this.pulled.side)) offering = this.pulled.e;
     this.offering = offering;
     // The creature leans in (grows a little) while it can take the answer.
     const s = this.creatureScale * (offering ? READY_SCALE : 1);
@@ -2624,7 +2631,7 @@ export class GameSystem extends createSystem({
     const box = new Mesh(CRYSTAL_RAY_BOX, CRYSTAL_RAY_PAPER);
     box.name = 'crystal-ray-target';
     box.userData.crystal = e;
-    box.pointerEventsType = (_id: number, type: string) => type === 'ray' && this.controllersOnly();
+    box.pointerEventsType = (_id: number, type: string) => type === 'ray' && this.controllersOnly() && e !== this.pulled?.e;
     box.addEventListener('pointerdown', (event: { stopPropagation(): void }) => {
       event.stopPropagation();
       // After the press is sent out: a second click joins and removes the
@@ -2657,7 +2664,14 @@ export class GameSystem extends createSystem({
       }
       if (!pad?.getButtonPressed(SQUEEZE)) {
         this.pulled = undefined;
-        if (p.e === this.offering) this.released(p.e);
+        obj.pointerEventsType = { deny: 'ray' };
+        // Let go with the ray on another crystal: the two join.
+        const other = this.aimedCrystal(p.side);
+        const multi = this.input.xr.multiPointers[p.side] as unknown as { shouldHideRay(): boolean };
+        const to = other ? `on ${other.object3D!.name}` : p.e === this.offering ? 'to the creature' : 'in the air';
+        console.info(`[game] ${obj.name} let go ${to} (ray ${multi.shouldHideRay() ? 'hidden' : 'shown'})`);
+        if (other) this.merge(p.e, other);
+        else if (p.e === this.offering) this.released(p.e);
         else this.tween(obj, p.home, PULL_BACK_S, 0.03, obj.scale.x);
         return;
       }
@@ -2675,9 +2689,28 @@ export class GameSystem extends createSystem({
       this.unselect();
       this.endDemo(true);
       this.pulled = { e, side, home: e.object3D!.position.clone() };
+      // Held at the grip it would take the grip pointer, which IWSDK puts
+      // before the ray and so hides it; the ray stays to choose where it goes.
+      e.object3D!.pointerEventsType = { deny: ['ray', 'grab'] };
       console.info(`[game] ${e.object3D!.name} pulled by the ${side} grip`);
       return;
     }
+  }
+
+  /** The crystal a controller's ray is on, other than the one it pulled. */
+  private aimedCrystal(side: (typeof SIDES)[number]): Entity | undefined {
+    const hit = this.input.xr.multiPointers[side].getPointer('ray').getIntersection();
+    const e = hit?.object.userData.crystal as Entity | undefined;
+    return e?.active && e !== this.pulled?.e && !e.hasComponent(Grabbed) ? e : undefined;
+  }
+
+  /** Whether a controller's ray points at the creature (within CREATURE_AIM of its middle). */
+  private aimsAtCreature(side: (typeof SIDES)[number]): boolean {
+    const ray = this.player.raySpaces[side];
+    ray.getWorldPosition(this.a);
+    ray.getWorldQuaternion(this.touchQuat);
+    this.b.set(0, 0, -1).applyQuaternion(this.touchQuat);
+    return this.b.angleTo(this.c.copy(this.creatureWorld).sub(this.a)) < CREATURE_AIM;
   }
 
   /** Lets go of the crystal chosen by a click (all but `keep`, which a hand has just taken). */
