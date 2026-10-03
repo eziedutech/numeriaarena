@@ -79,8 +79,11 @@ const WAVE = 6;
 const PRESS_GRACE_MS = 300;
 /** A crystal merges when it comes this close to another one (meters). */
 const MERGE_DIST = 0.05;
-/** Space between crystals in the row; wider than the merge distance. */
-const CRYSTAL_GAP = 0.095;
+/** Space between crystals in the row: wider than the merge distance, and their price cards stay apart. */
+const CRYSTAL_GAP = 0.12;
+/** Half the open book's width; a crystal past it stands on the desk, clear of the book's side. */
+const BOOK_HALF_W = 0.165;
+const BOOK_SIDE_GAP = 0.008;
 // The unseen box a controller's ray clicks a crystal by (see addRayTarget), narrower than the gap.
 const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
 // The grip pulls a crystal under the ray to the controller (see runPull): how fast it follows, how long it flies back.
@@ -133,10 +136,10 @@ const BALLOON_GAP = 0.1;
  * On the pages, behind the book's front edge, so the hands point down at them
  * from further off; the price cards end at the edge (0.105 m).
  */
-const CRYSTAL_Z = 0.05;
+const CRYSTAL_Z = 0.04;
 /** Height of a crystal's price card, and how far it leans back (radians). */
 const CRYSTAL_TAG_H = 0.03;
-const CRYSTAL_TAG_LEAN = 0.3;
+const CRYSTAL_TAG_LEAN = 0.55;
 /** One paper colour per answer choice; the colour says nothing about the answer. */
 const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fractions, ACCENTS.decimals, ACCENTS.measurement];
 /** Balloon Burst question card, above the balloons so nothing hides it. */
@@ -1981,7 +1984,10 @@ export class GameSystem extends createSystem({
     offer.crystals.forEach((c, i) => {
       const m = makeCrystal(CRYSTAL_COLORS[i % CRYSTAL_COLORS.length], i);
       m.name = `crystal-${i}`;
-      m.position.set((i - (n - 1) / 2) * CRYSTAL_GAP, PAGE_TOP + CRYSTAL_HALF, CRYSTAL_Z);
+      const x = (i - (n - 1) / 2) * CRYSTAL_GAP;
+      const onBook = Math.abs(x) < BOOK_HALF_W;
+      const out = Math.sign(x) * Math.max(Math.abs(x), BOOK_HALF_W + BOOK_SIDE_GAP + CRYSTAL_HALF);
+      m.position.set(onBook ? x : out, (onBook ? PAGE_TOP : 0) + CRYSTAL_HALF, CRYSTAL_Z);
       const e = this.add(m);
       e.addComponent(Crystal, { index: i });
       e.addComponent(OneHandGrabbable);
