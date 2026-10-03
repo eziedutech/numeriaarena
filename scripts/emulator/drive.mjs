@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal | grip
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -24,6 +24,7 @@ const METHOD = {
   'xr animate-to': 'animate_to',
   'xr set-input-mode': 'set_input_mode',
   'xr set-select-value': 'set_select_value',
+  'xr set-gamepad-state': 'set_gamepad_state',
   'ecs find': 'ecs_find_entities',
   'ecs query': 'ecs_query_entity',
   'browser logs': 'get_console_logs',
@@ -413,12 +414,34 @@ if (mode === 'crystal') {
   console.log(after !== before ? `second click: ${after}` : 'second click: no orb given (wrong)');
 }
 
+// With controllers the grip still picks a crystal up and carries it.
+if (mode === 'grip') {
+  await fresh();
+  const last = (await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '';
+  await card(0.135);
+  for (let k = 0; k < 20 && ((await lastLog('\\[game\\] offer \\d+ orb_forge')) ?? '') === last; k++) await sleep(0.5);
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(1.5);
+  const c = await posOf('^crystal-0$');
+  // The controller's pose is its ray origin; its grip sits about 5 cm behind and 1.6 cm below (world).
+  const at = (dx, dy) => { const p = w(c.x + dx, c.y + dy, c.z); return { device: 'controller-right', position: { x: p.x, y: p.y + 0.016, z: p.z - 0.05 }, orientation: ID }; };
+  await cli('xr', 'set-transform', at(0, 0)); await sleep(0.5);
+  const squeeze = (v) => cli('xr', 'set-gamepad-state', { device: 'controller-right', buttons: [{ index: 1, value: v, touched: v > 0 }] });
+  await squeeze(1); await sleep(0.4);
+  const held = (await posOf('^crystal-0$'))?.comps.some((x) => x.componentId === 'Grabbed');
+  for (const k of [0.25, 0.5, 0.75, 1]) { await cli('xr', 'set-transform', at(0, 0.08 * k)); await sleep(0.15); }
+  await sleep(0.4);
+  const moved = (await posOf('^crystal-0$'))?.y - c.y;
+  await squeeze(0); await sleep(0.4);
+  console.log(`grip at the crystal: ${held ? 'held' : 'not held (wrong)'}, raised ${(moved * 100).toFixed(1)} cm with the controller`);
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
 // mouse pops them) and controllers instead of hands.
-if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
