@@ -1,8 +1,9 @@
-import { type AnimationMixer, Box3, type Group, type MeshBasicMaterial, Vector3 } from '@iwsdk/core';
+import { type AnimationMixer, Box3, type Group, type Mesh, type MeshBasicMaterial, Vector3 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { type Figure, forgetMixers, makeBot } from './art/models.js';
 import type { Poster } from './art/rooms.js';
+import { uiImage, type UiName } from './art/ui2d.js';
 import { type ClassMoment, classroom } from './class-events.js';
 
 /** The robot's height in its poster, and where its feet stand (from the poster's centre). */
@@ -13,6 +14,14 @@ const NAME_Y = -0.245;
 const STATUS_Y = -0.29;
 const NAME_H = 0.045;
 const STATUS_H = 0.028;
+/**
+ * A rival's paper speech bubble over its robot's head, as on its window on
+ * the desk but sized for the wall; it stays as long as there.
+ */
+const BUBBLE_Y = 0.22;
+const BUBBLE_SCALE = 3;
+const BUBBLE_MAX_W = 0.3;
+const BUBBLE_S = 1.6;
 /** How long each moment plays, in seconds, and the clip it plays (once). */
 const MOMENT_S: Record<ClassMoment, number> = { working: 0, right: 1.2, missed: 0.8, cheer: 1.6, clap: 1.4 };
 const MOMENT_CLIP: Partial<Record<ClassMoment, string>> = { right: 'cheer', cheer: 'cheer', clap: 'wave' };
@@ -23,6 +32,11 @@ interface PosterBot {
   /** The robot's resting place in the poster. */
   rest: Vector3;
   mixer?: AnimationMixer;
+  /** Poster centre, for the speech bubble. */
+  at: Vector3;
+  bubble?: Mesh;
+  bubbleLeft: number;
+  bubbleSeq: number;
   name: Label;
   status: Label;
   moment: ClassMoment;
@@ -33,7 +47,8 @@ interface PosterBot {
  * The two rivals in the virtual bedroom: a robot in each poster beside the
  * window. Playing alone they are only posters, still. In a race they come
  * to life as on their windows on the desk: idle, a hop and a cheer for a
- * right answer, a shake for a miss, their names and points under them.
+ * right answer, a shake for a miss, their names and points under them, and
+ * their speech bubbles; the rival windows on the desk then stand aside.
  * Everything is added to the room's group, so it goes when the room goes.
  */
 export class BedroomLife {
@@ -61,9 +76,12 @@ export class BedroomLife {
       fig.root.traverse((o) => (mixer ??= o.userData.mixer as AnimationMixer | undefined));
       const name = this.label(NAME_H, p.x, p.y + NAME_Y, p.z);
       const status = this.label(STATUS_H, p.x, p.y + STATUS_Y, p.z);
-      this.bots.push({ desk: p.desk, fig, rest, mixer, name, status, moment: 'working', momentLeft: 0 });
+      const at = new Vector3(p.x, p.y, p.z);
+      const seq = classroom.bubbleSeq[p.desk - 1];
+      this.bots.push({ desk: p.desk, fig, rest, mixer, at, bubbleLeft: 0, bubbleSeq: seq, name, status, moment: 'working', momentLeft: 0 });
     }
     this.still(true);
+    classroom.posters = this.bots.length > 0;
     console.info(`[room] bedroom life: ${this.bots.length} robot posters`);
   }
 
@@ -86,7 +104,32 @@ export class BedroomLife {
       b.status.mesh.visible = !on;
       b.moment = 'working';
       b.momentLeft = 0;
+      this.dropBubble(b);
     }
+  }
+
+  /** A new speech bubble from the race goes up over the robot's head. */
+  private showBubble(b: PosterBot): void {
+    const d = b.desk - 1;
+    if (classroom.bubbleSeq[d] === b.bubbleSeq) return;
+    b.bubbleSeq = classroom.bubbleSeq[d];
+    this.dropBubble(b);
+    const image = classroom.bubble[d] ? uiImage(classroom.bubble[d] as UiName, BUBBLE_SCALE, BUBBLE_MAX_W) : null;
+    if (!image) return;
+    image.position.set(b.at.x, b.at.y + BUBBLE_Y, b.at.z + 0.012);
+    this.room.add(image);
+    b.bubble = image;
+    b.bubbleLeft = BUBBLE_S;
+  }
+
+  private dropBubble(b: PosterBot): void {
+    if (!b.bubble) return;
+    b.bubble.removeFromParent();
+    b.bubble.geometry.dispose();
+    const mat = b.bubble.material as MeshBasicMaterial;
+    mat.map?.dispose();
+    mat.dispose();
+    b.bubble = undefined;
   }
 
   update(dt: number): void {
@@ -122,6 +165,8 @@ export class BedroomLife {
         this.shownStatus[d] = classroom.status[d];
         b.status.set(classroom.status[d] || ' ');
       }
+      this.showBubble(b);
+      if (b.bubble && (b.bubbleLeft -= dt) <= 0) this.dropBubble(b);
       this.pose(b, dt);
     }
   }
@@ -142,7 +187,9 @@ export class BedroomLife {
 
   /** The robots stop animating and leave the room's group, so the room's clean-up never frees the shared model; labels free their canvases. */
   dispose(): void {
+    classroom.posters = false;
     for (const b of this.bots) {
+      this.dropBubble(b);
       forgetMixers(b.fig.root);
       b.fig.root.removeFromParent();
       for (const l of [b.name, b.status]) {

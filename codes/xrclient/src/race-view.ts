@@ -5,7 +5,7 @@ import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
 import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
 import type { Emote, Highlight, RaceState, Recap } from './game/core.js';
-import { classClock, classEvent, classRaceOn, classroom } from './class-events.js';
+import { classBubble, classClock, classEvent, classRaceOn, classroom } from './class-events.js';
 import { RaceCard, type RowSnapshot } from './race-card.js';
 import { T } from './text.js';
 
@@ -182,6 +182,7 @@ export class RaceScene {
       w.flash.mesh.visible = true;
     }
     w.flashLeft = FLASH_S;
+    if (bubble) classBubble(desk, bubble);
   }
 
   emote(desk: number, emote: Emote): void {
@@ -274,6 +275,8 @@ export class RaceScene {
       if (this.bannerLeft <= 0) this.clearBanner();
     }
     for (const w of this.windows) {
+      // In the bedroom the rivals are in the posters beside the window; the desk keeps its middle free.
+      w.frame.visible = !classroom.posters;
       if (w.flashLeft > 0) {
         w.flashLeft -= delta;
         if (w.flashLeft <= 0) {

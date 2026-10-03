@@ -26,11 +26,22 @@ export const classroom = {
   recap: false,
   /** Moments not yet shown, oldest first. Only the newest few are kept. */
   events: [] as ClassEvent[],
+  /** Each rival's latest paper speech bubble (a UI image name), and a count that goes up with each. */
+  bubble: ['', ''],
+  bubbleSeq: [0, 0],
+  /** The bedroom's robot posters are up: they stand in for the rival windows on the desk. */
+  posters: false,
 };
 
 export function classEvent(desk: number, moment: ClassMoment): void {
   classroom.events.push({ desk, moment });
   if (classroom.events.length > 8) classroom.events.shift();
+}
+
+/** A rival's speech bubble (NICE, YAY, GOT IT), for the room that shows the rivals. */
+export function classBubble(desk: number, bubble: string): void {
+  classroom.bubble[desk - 1] = bubble;
+  classroom.bubbleSeq[desk - 1] += 1;
 }
 
 export function classRaceOn(on: boolean): void {
@@ -46,6 +57,8 @@ export function classRaceOn(on: boolean): void {
   classroom.roundMs = 0;
   classroom.recap = false;
   classroom.events.length = 0;
+  classroom.bubble[0] = '';
+  classroom.bubble[1] = '';
 }
 
 export function classClock(msLeft: number | null): void {
