@@ -542,11 +542,20 @@ if (mode === 'pull') {
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
-// mouse pops them) and controllers instead of hands.
+// mouse pops them) and controllers instead of hands. The headset and the
+// controllers go back to IWER's own resting poses: left where a run put them
+// (the head low over the desk and tilted down, a controller at a crystal),
+// the next session showed the controllers a hand's width from the eyes, huge.
 if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip', 'pull'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
+  await cli('xr', 'set-transform', { device: 'headset', position: { x: 0, y: 1.6, z: 0 }, orientation: ID }).catch(() => {});
+  for (const [side, x] of [['left', -0.25], ['right', 0.25]]) {
+    for (const kind of ['controller', 'hand']) {
+      await cli('xr', 'set-transform', { device: `${kind}-${side}`, position: { x, y: 1.5, z: -0.4 }, orientation: ID }).catch(() => {});
+    }
+  }
   await cli('xr', 'exit').catch(() => {});
   console.log(`done in ${Math.round((Date.now() - t0) / 1000)} s`);
 }
