@@ -45,10 +45,18 @@ const PINCH_WAIT_S = 6;
  * the hands start behind and above what they act on (controllers rest about
  * 0.4 m ahead and 0.1 m below the eyes), so a pointer comes down onto it.
  */
-const SEATED_DROP_M = 0.55;
+export const SEATED_DROP_M = 0.55;
 const SEATED_REACH_M = 0.7;
 /** Everything on the desk in the headset, this much larger than the browser view, to read from further away. */
-const HEADSET_SCALE = 1.2;
+const HEADSET_SCALE = 1.32;
+/**
+ * In the headset everything on the desk sits this much further from the
+ * player than where it was placed (the larger scale above keeps it the same
+ * size to the eye), so the hands and the cards are not crowded at the chest.
+ */
+const HEADSET_PUSH_M = 0.1;
+/** Pushed back on a detected table, the book stays at least this far inside its far edge. */
+const FAR_EDGE_INSET_M = 0.2;
 /**
  * The curtain's radius sits between the card (0.4 m) and the book (about
  * 0.9 m away), so only the card stays bright. Darker while the player must
@@ -324,8 +332,8 @@ export class DeskSystem extends createSystem({
     this.forward.y = 0;
     if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
     this.forward.normalize();
-    const x = this.head.x + this.forward.x * SEATED_REACH_M;
-    const z = this.head.z + this.forward.z * SEATED_REACH_M;
+    const x = this.head.x + this.forward.x * (SEATED_REACH_M + HEADSET_PUSH_M);
+    const z = this.head.z + this.forward.z * (SEATED_REACH_M + HEADSET_PUSH_M);
     target.position.set(x, this.head.y - SEATED_DROP_M, z);
     target.rotation.set(0, Math.atan2(this.head.x - x, this.head.z - z), 0);
   }
@@ -371,6 +379,11 @@ export class DeskSystem extends createSystem({
       const z = inset(this.box.min.z, this.box.max.z, this.head.z);
       this.root.position.set(x, this.box.max.y, z);
       this.root.rotation.set(0, Math.atan2(this.head.x - x, this.head.z - z), 0);
+      this.root.translateZ(-HEADSET_PUSH_M);
+      const keep = (lo: number, hi: number, v: number) =>
+        hi - lo > 2 * FAR_EDGE_INSET_M ? Math.min(Math.max(v, lo + FAR_EDGE_INSET_M), hi - FAR_EDGE_INSET_M) : v;
+      this.root.position.x = keep(this.box.min.x, this.box.max.x, this.root.position.x);
+      this.root.position.z = keep(this.box.min.z, this.box.max.z, this.root.position.z);
       this.setPlaced(true, 1);
       console.info(`[desk] placed on detected table at y=${this.box.max.y.toFixed(3)}`);
       return true;

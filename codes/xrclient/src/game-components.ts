@@ -32,6 +32,8 @@ const Games = {
   Home: 'home',
   Language: 'lang',
   BigText: 'bigtext',
+  /** ROOM, floating over the desk menu in the headset: the room around the desk. */
+  Room: 'room',
   Town: 'town',
   /** PRACTICE AGAIN, on a practice's results. */
   Again: 'again',

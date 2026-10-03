@@ -21,6 +21,7 @@ import {
   PlaneGeometry,
   Shape,
   ShapeGeometry,
+  SphereGeometry,
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
@@ -428,6 +429,7 @@ export function makeBalloon(color: number): Group {
     new Vector3().subVectors(BALLOON_KNOT, BALLOON_TAG_TOP).normalize(),
   );
   g.add(cord);
+  g.add(balloonHitShell());
   // Its own materials, so one balloon can fade away without the others.
   g.traverse((o) => {
     const mesh = o as Mesh;
@@ -772,6 +774,18 @@ const GORE_SHEETS = 8;
  * tone of `color`, darker at the edges of the view and lighter where it faces
  * the light, so the balloon reads as folded paper, not a faceted ball.
  */
+/**
+ * An unseen egg round the gores, so a ray anywhere on the balloon's outline
+ * hits it, not only where it crosses one of the thin sheets.
+ */
+function balloonHitShell(): Mesh {
+  const shell = new Mesh(new SphereGeometry(1, 12, 8), new MeshBasicMaterial({ visible: false }));
+  shell.name = 'balloon-hit';
+  shell.scale.set(GORE_HALF_WIDTH, (GORE_TOP - GORE_BOTTOM) / 2, GORE_HALF_WIDTH);
+  shell.position.y = (GORE_TOP + GORE_BOTTOM) / 2;
+  return shell;
+}
+
 function paperGoreBalloon(color: number): Group {
   const g = new Group();
   g.name = 'balloon';

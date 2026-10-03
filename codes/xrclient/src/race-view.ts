@@ -5,6 +5,7 @@ import { Label } from './art/label.js';
 import { makeBadge, makeBot, makePortal, makeStar, type Figure } from './art/models.js';
 import { placeUiImage, uiImage, UI_HEIGHT, type UiName } from './art/ui2d.js';
 import type { Emote, Highlight, RaceState, Recap } from './game/core.js';
+import { classClock, classEvent, classRaceOn, classroom } from './class-events.js';
 import { RaceCard, type RowSnapshot } from './race-card.js';
 import { T } from './text.js';
 
@@ -98,7 +99,10 @@ export class RaceScene {
     private desk: Object3D,
     botNames: [string, string],
   ) {
+    // In the virtual classroom the rivals also sit at the desks beside the player.
+    classRaceOn(true);
     botNames.forEach((name, i) => {
+      classroom.names[i] = T.bot(name);
       const frame = makePortal(BOT_COLORS[i]);
       frame.name = `rival-window-${i + 1}`;
       frame.position.copy(WINDOW_POS[i]);
@@ -152,6 +156,7 @@ export class RaceScene {
     }
     this.desk.add(group);
     this.banner = group;
+    classroom.board = text;
     this.bannerLeft = seconds;
   }
 
@@ -183,6 +188,7 @@ export class RaceScene {
     const w = this.windows[desk - 1];
     this.flash(desk, T.emote[emote], w && (`robot_${EMOTE_BUBBLE[emote]}_${w.tone}` as UiName));
     w?.bot.play(EMOTE_CLIP[emote], true);
+    classEvent(desk, emote === 'clap' ? 'clap' : 'cheer');
   }
 
   working(desk: number, prompt: string): void {
@@ -190,12 +196,14 @@ export class RaceScene {
     if (!w) return;
     w.work.set(prompt);
     w.work.mesh.visible = true;
+    classEvent(desk, 'working');
   }
 
   answered(desk: number, correct: boolean): void {
     const w = this.windows[desk - 1];
     this.flash(desk, correct ? T.right : T.missed, correct && w ? (`robot_got_it_${w.tone}` as UiName) : undefined);
     if (correct) this.windows[desk - 1].work.mesh.visible = false;
+    classEvent(desk, correct ? 'right' : 'missed');
   }
 
   /** Time is up: the rivals' questions leave their windows. */
@@ -206,6 +214,7 @@ export class RaceScene {
   /** The clock of the round that is on, in its row of the race card; null between rounds. */
   clock(msLeft: number | null): void {
     this.card?.clock(msLeft === null ? null : T.clock(msLeft), msLeft !== null && msLeft <= CLOCK_WARN_MS);
+    classClock(msLeft);
   }
 
   /**
@@ -215,7 +224,7 @@ export class RaceScene {
   show(state: RaceState): void {
     this.windows.forEach((w, i) => {
       const d = state.desks[i + 1];
-      if (d) w.status.set(`${T.place(d.place)}  ${T.rival(d.folded, d.points)}`);
+      if (d) w.status.set((classroom.status[i] = `${T.place(d.place)}  ${T.rival(d.folded, d.points)}`));
     });
     if (!this.card && state.plan?.length) {
       this.card = new RaceCard(state.plan);
@@ -285,6 +294,9 @@ export class RaceScene {
     // round-by-round summary beside them.
     for (const w of this.windows) w.status.mesh.visible = false;
     this.card?.clock(null, false);
+    classClock(null);
+    classroom.recap = true;
+    classroom.board = T.recapTitle;
     const card = new Group();
     card.name = 'race-recap';
     card.position.set(0, 0.2, 0.02);
@@ -329,6 +341,7 @@ export class RaceScene {
 
   /** Removes every object this view created. */
   dispose(): void {
+    classRaceOn(false);
     for (const w of this.windows) this.stage.remove(w.entity);
     this.windows = [];
     for (const e of this.recapItems) this.stage.remove(e);

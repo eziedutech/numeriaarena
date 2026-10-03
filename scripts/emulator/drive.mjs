@@ -1,5 +1,5 @@
 // Emulator test driver for Numeria Arena: drives the IWSDK runtime with hand input.
-// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal | grip | pull
+// Usage (dev server must be up): node scripts/emulator/drive.mjs race | orb 3 | balloon 3 | quit | brush | click | crystal | grip | pull | room [race] | sit
 // Offsets below were measured in the IWER emulator (metaQuest3, living_room).
 //
 // Commands go straight to the dev server's runtime bridge through the CLI's own
@@ -130,7 +130,7 @@ export async function seat() {
 
 export async function card(x) {
   // Tapped from above and in front: menu envelopes lean back on the table.
-  for (const k of [1, 0.7, 0.45, 0.3, 0.2, 0.1, 0]) { await tip(x, 0.012 + 0.06 * k, 0.16 + 0.05 * k); await sleep(0.15); }
+  for (const k of [1, 0.7, 0.45, 0.3, 0.2, 0.1, 0]) { await tip(x, 0.012 + 0.06 * k, 0.11 + 0.05 * k); await sleep(0.15); }
   await sleep(0.3);
   await tip(x, 0.2, 0.35); await sleep(2.5);
 }
@@ -274,8 +274,36 @@ export async function raceMatch(maxMinutes = 12) {
   return recap;
 }
 
+/**
+ * Zia's seated pose for testing by hand: the eyes 1.15 m over the floor, the
+ * controllers and hands 10 cm lower and 40 cm ahead, all looking straight ahead.
+ * IWER keeps the last pose into the next session, so a run ends here.
+ */
+const SIT_HEAD_Y = 1.15;
+const SIT_HAND_Y = 1.05;
+
+export async function sitDown() {
+  await cli('xr', 'set-transform', { device: 'headset', position: { x: 0, y: SIT_HEAD_Y, z: 0 }, orientation: ID });
+  for (const [side, x] of [['left', -0.25], ['right', 0.25]]) {
+    for (const kind of ['controller', 'hand']) {
+      await cli('xr', 'set-transform', { device: `${kind}-${side}`, position: { x, y: SIT_HAND_Y, z: -0.4 }, orientation: ID }).catch(() => {});
+    }
+  }
+}
+
 const mode = process.argv[2];
 const t0 = Date.now();
+
+// Seats the emulator for a hand test: waits up to 2 minutes for an XR session
+// (the pose can only be set inside one), then leaves the session running.
+if (mode === 'sit') {
+  let ok = false;
+  for (let i = 0; i < 240 && !ok; i++) {
+    ok = await sitDown().then(() => true, () => false);
+    if (!ok) await sleep(0.5);
+  }
+  console.log(ok ? `seated: head ${SIT_HEAD_Y} m, controllers ${SIT_HAND_Y} m` : 'no XR session within 2 minutes');
+}
 
 if (mode === 'race') {
   await fresh();
@@ -538,24 +566,64 @@ if (mode === 'pull') {
   console.log(after !== before ? `ray on the creature, let go: ${after}` : 'ray on the creature, let go: nothing given (wrong)');
 }
 
+// The floating ROOM card: a ray resting on it does nothing; each trigger click moves to the next room,
+// three clicks go round (class, bedroom, my room) and leave the setting as it was.
+if (mode === 'room') {
+  await fresh();
+  await cli('xr', 'set-input-mode', { mode: 'controller' });
+  await sleep(2);
+  const aim = async () => {
+    const c = await posOf('^menu-room$');
+    if (!c) throw new Error('no ROOM card over the desk menu');
+    await cli('xr', 'set-transform', { device: 'controller-right', position: w(c.x, c.y, c.z + 0.3), orientation: ID });
+    return c;
+  };
+  const c = await aim();
+  console.log(`ROOM card at ${c.x.toFixed(3)}, ${c.y.toFixed(3)}, ${c.z.toFixed(3)} (desk top ${D.p[1].toFixed(3)})`);
+  const before = await lastLog('\\[menu\\] room ');
+  await sleep(1.5);
+  console.log((await lastLog('\\[menu\\] room ')) === before ? 'ray on the card, no trigger: nothing changed' : 'changed without the trigger (wrong)');
+  const press = async (k) => {
+    await aim(); await sleep(0.3);
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 1 }); await sleep(0.2);
+    await cli('xr', 'set-select-value', { device: 'controller-right', value: 0 }); await sleep(1.5);
+    console.log(`click ${k + 1}: ${await lastLog('\\[menu\\] room ')} / ${await lastLog('\\[room\\] ')}`);
+  };
+  // `room race`: a whole race in the classroom, the rivals at the desks beside the player.
+  await press(0);
+  console.log((await logs('\\[room\\] classroom life', 1))[0] ?? 'no classroom life (wrong)');
+  try {
+    if (process.argv[3] === 'race') {
+      await raceMatch();
+      console.log((await logs('\\[room\\] (the rivals|on the board)', 12)).join('\n'));
+      await sleep(4);
+    }
+  } finally {
+    // Round to the real room again, as the page was found (the menu comes back after a race).
+    let menu = null;
+    for (let k = 0; k < 30 && !menu; k++) { menu = await posOf('^menu-room$'); if (!menu) await sleep(1); }
+    if (menu) {
+      await press(1);
+      await press(2);
+    } else {
+      console.log('no desk menu to go back to MY ROOM: press ROOM twice by hand');
+    }
+  }
+}
+
 // A finished run leaves no XR session behind: an idle emulated session keeps
 // rendering the room and the game for both eyes and loads the machine.
 // It also hands the page back as it found it: Y off again (hand touches on
 // balloons are ignored in the emulator; left on, a controller swept by the
 // mouse pops them) and controllers instead of hands. The headset and the
-// controllers go back to IWER's own resting poses: left where a run put them
+// controllers go to the seated pose (sitDown): left where a run put them
 // (the head low over the desk and tilted down, a controller at a crystal),
 // the next session showed the controllers a hand's width from the eyes, huge.
-if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip', 'pull'].includes(mode)) {
+if (['race', 'orb', 'balloon', 'quit', 'brush', 'click', 'crystal', 'grip', 'pull', 'room'].includes(mode)) {
   await allowPokes();
   // A run that ended the session itself (brush) has nothing left to switch or close.
   await cli('xr', 'set-input-mode', { mode: 'controller' }).catch(() => {});
-  await cli('xr', 'set-transform', { device: 'headset', position: { x: 0, y: 1.6, z: 0 }, orientation: ID }).catch(() => {});
-  for (const [side, x] of [['left', -0.25], ['right', 0.25]]) {
-    for (const kind of ['controller', 'hand']) {
-      await cli('xr', 'set-transform', { device: `${kind}-${side}`, position: { x, y: 1.5, z: -0.4 }, orientation: ID }).catch(() => {});
-    }
-  }
+  await sitDown().catch(() => {});
   await cli('xr', 'exit').catch(() => {});
   console.log(`done in ${Math.round((Date.now() - t0) / 1000)} s`);
 }

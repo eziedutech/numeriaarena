@@ -3,6 +3,7 @@
  * another table with the same keys.
  */
 import type { Highlight } from './game/core.js';
+import type { Room } from './settings.js';
 
 const ORDINAL = ['1ST', '2ND', '3RD'];
 const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}TH`;
@@ -66,6 +67,8 @@ export const EN = {
   /** The settings cards on the desk: a small caption over a large value. */
   langCaption: 'LANGUAGE',
   bigCaption: 'BIG NUMBERS',
+  roomCaption: 'ROOM',
+  roomName: { here: 'MY ROOM', classroom: 'CLASS', bedroom: 'BEDROOM' } as Record<Room, string>,
   onOff: (on: boolean): string => (on ? 'ON' : 'OFF'),
   best: (points: number, stars: number) => `BEST: ${points} PTS${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'FOLD TOWN: SOON',
@@ -73,6 +76,9 @@ export const EN = {
   quit: 'QUIT',
   quitSure: 'SURE?',
   quitAgain: 'Press again to quit',
+  /** The emulator-only card beside HOME that seats or stands the test headset (dev-seat.ts). */
+  devSit: 'SIT',
+  devStand: 'STAND',
   /** Placing the book in the headset. */
   ready: 'Ready!',
   findingTable: 'Finding your table',
@@ -140,12 +146,16 @@ export const ID: Text = {
   bigText: (_on: boolean) => 'ANGKA BESAR',
   langCaption: 'BAHASA',
   bigCaption: 'ANGKA BESAR',
+  roomCaption: 'RUANG',
+  roomName: { here: 'RUANGANKU', classroom: 'KELAS', bedroom: 'KAMAR' } as Record<Room, string>,
   onOff: (on: boolean) => (on ? 'NYALA' : 'MATI'),
   best: (points: number, stars: number) => `TERBAIK: ${points} POIN${stars ? `, ${stars} ★` : ''}`,
   townSoon: 'KOTA LIPAT: SEGERA',
   quit: 'KELUAR',
   quitSure: 'YAKIN?',
   quitAgain: 'Tekan lagi untuk keluar',
+  devSit: 'DUDUK',
+  devStand: 'BERDIRI',
   ready: 'Siap!',
   findingTable: 'Mencari mejamu',
   pinchToPlace: (s: number) => `Cubit untuk menaruh buku, atau tunggu ${s} detik`,

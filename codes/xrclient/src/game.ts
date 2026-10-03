@@ -70,7 +70,7 @@ import { RaceScene, type Stage } from './race-view.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore } from './storage.js';
 import { T, useLanguage } from './text.js';
-import { bigText, getLang, onSettings, setBigText, setLang, textScale } from './settings.js';
+import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
 import { townSticker } from './home/town-sticker.js';
 
 const WAVE = 6;
@@ -122,10 +122,10 @@ const READY_SCALE = 1.15;
  */
 const STAND = new Vector3(0, 0.023, -0.03);
 /**
- * Rows just in front of the book (its pages reach 0.105 m forward), close to
- * it, so in the headset they stand ahead of and below the resting hands.
+ * Rows over the front edge of the book (its pages reach 0.105 m forward), so in
+ * the headset they stand ahead of and below the resting hands.
  */
-const BALLOON_Z = 0.13;
+const BALLOON_Z = 0.08;
 /** Lane spacing: wider than a balloon (0.063 m), so neighbours never touch. */
 const BALLOON_GAP = 0.08;
 const CRYSTAL_Z = 0.15;
@@ -157,9 +157,14 @@ const HOME = new Vector3(0, 0.023, -0.215);
  */
 const SETTINGS_X = [-0.265, -0.385];
 const SETTINGS_SCALE = 1.05;
-const BEST_AT = new Vector3(0.26, 0.097, 0.16);
+/** The ROOM card floats here in the desk's frame (above LANGUAGE and BIG NUMBERS), tipped back this much. */
+const ROOM_CARD_AT = [-0.325, 0.3, 0.01] as const;
+const ROOM_CARD_TILT = -0.35;
+/** Room names run longer than ON or EN, so they are printed a little smaller. */
+const ROOM_VALUE_H = 0.024;
+const BEST_AT = new Vector3(0.26, 0.097, 0.11);
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
-const TOWN_W = 0.15;
+const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
  * First time a game appears on this device the paper hand shows how to play
@@ -216,7 +221,7 @@ const LINE_SIZE = 5;
 const LINE_Z = -0.245;
 /** Space between two animals in the line. */
 const LINE_SPACE = 0.014;
-const LINE_SCALE = 0.68;
+const LINE_SCALE = 0.85;
 const LINE_PAPER = 0xfbf6ec;
 /** Where an animal goes after its turn: off the back right of the table. */
 const EXIT = new Vector3(0.38, 0.023, LINE_Z);
@@ -253,9 +258,9 @@ const RISE_TO = 0.32;
 const BALLOON_H = 0.117;
 const SIGHT_MARGIN = 0.005;
 /** Balloons always rise at least this far, even for an unusual viewpoint. */
-const MIN_CEILING = 0.07;
+const MIN_CEILING = 0.1;
 /** The bottom of a balloon's climb, just above the table, its speed, and how fast it grows in and fades out. */
-const BOB_LOW = 0.005;
+const BOB_LOW = 0.04;
 const RISE_SPEED = 0.035;
 const RISE_GROW_M = 0.025;
 const RISE_FADE_M = 0.035;
@@ -299,7 +304,7 @@ const QUESTION_INK = 0x1f4fa3;
 /** Menu envelopes lean back this far (radians) from upright. */
 const ENVELOPE_TILT = 1.3;
 /** Envelopes lie this far in front of the book's front edge (desk frame z). */
-const ENVELOPE_Z = 0.16;
+const ENVELOPE_Z = 0.11;
 /** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
 const FLAP_S = 0.45;
 const LETTER_S = 0.35;
@@ -339,7 +344,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'town' | 'again' | 'games' | 'done' | 'quit';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'town' | 'again' | 'games' | 'done' | 'quit';
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -571,11 +576,8 @@ export class GameSystem extends createSystem({
       // controller pushed through a balloon, is not a choice).
       this.queries.pressedBalloons.subscribe('qualify', (e) => {
         const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
-        if (!browser && this.controllersOnly()) {
-          if (this.pressMeant()) this.popBalloon(e, true);
-          else console.info('[game] balloon brushed by a controller without its trigger: ignored');
-          return;
-        }
+        // A trigger click goes through clickAimedBalloon, which also takes the clicks IWSDK's press missed.
+        if (!browser && this.controllersOnly()) return;
         // In the emulator the hands move with the view and the body, so a
         // "poke" is usually an accident: there, T chooses (Y allows pokes).
         if (!browser && this.onEmulator && !this.emulatorPokes) {
@@ -650,6 +652,12 @@ export class GameSystem extends createSystem({
     if (pressed === 'lang') {
       console.info('[menu] language toggled');
       setLang(getLang() === 'en' ? 'id' : 'en');
+      return;
+    }
+    if (pressed === 'room') {
+      const next = ROOMS[(ROOMS.indexOf(getRoom()) + 1) % ROOMS.length];
+      console.info(`[menu] room ${next}`);
+      setRoom(next);
       return;
     }
     if (pressed === 'bigtext') {
@@ -922,6 +930,11 @@ export class GameSystem extends createSystem({
       this.addSettingCard('lang', T.langCaption, getLang().toUpperCase(), SETTINGS_X[0], 0xfff8ec);
       // Teal while big numbers are on, plain paper while off.
       this.addSettingCard('bigtext', T.bigCaption, T.onOff(bigText()), SETTINGS_X[1], bigText() ? 0x3fb6a0 : 0xfff8ec);
+      // The room is not part of the game: its card floats above the desk,
+      // tipped towards the seat. Plain paper in the real room, teal in a virtual one.
+      const room = this.addSettingCard('room', T.roomCaption, T.roomName[getRoom()], ROOM_CARD_AT[0], getRoom() === 'here' ? 0xfff8ec : 0x3fb6a0, ROOM_VALUE_H);
+      room.position.set(ROOM_CARD_AT[0], ROOM_CARD_AT[1], ROOM_CARD_AT[2]);
+      room.rotation.x = ROOM_CARD_TILT;
       this.addTownSticker();
       this.showHint();
     }
@@ -1260,18 +1273,19 @@ export class GameSystem extends createSystem({
    * A settings card on the desk: a small caption on top and its value large
    * below ("LANGUAGE" over "ID"), so the value reads from the seat.
    */
-  private addSettingCard(choice: ButtonChoice, caption: string, value: string, x: number, color: number): void {
+  private addSettingCard(choice: ButtonChoice, caption: string, value: string, x: number, color: number, valueH = 0.034): Object3D {
     const button = this.addButton(choice, '', x, color, SETTINGS_SCALE);
     // Printed straight on the card (no paper of their own), the value about
     // as tall as HOME's letters and the caption as wide as the card allows.
     for (const [text, height, y] of [
       [caption, 0.016, 0.017],
-      [value, 0.034, -0.008],
+      [value, valueH, -0.008],
     ] as const) {
       const l = new Label(text, { height, card: false });
       l.mesh.position.set(0, y, 0.002);
       button.add(l.mesh);
     }
+    return button;
   }
 
   private start(choice: MenuChoice, resume?: RaceCheckpoint): void {
@@ -1926,6 +1940,7 @@ export class GameSystem extends createSystem({
       g.scale.setScalar(0.001);
       const e = this.add(g);
       e.addComponent(Balloon, { index: i });
+      g.userData.balloon = e;
       e.addComponent(PokeInteractable);
       this.clickable(e);
       // The answer card hangs on the balloon's string, below it, so the
@@ -2470,6 +2485,7 @@ export class GameSystem extends createSystem({
       this.prompt.pulse(1 + PROMPT_PULSE * k);
     }
 
+    this.clickAimedBalloon();
     this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();
@@ -2694,6 +2710,25 @@ export class GameSystem extends createSystem({
       e.object3D!.pointerEventsType = { deny: ['ray', 'grab'] };
       console.info(`[game] ${e.object3D!.name} pulled by the ${side} grip`);
       return;
+    }
+  }
+
+  /**
+   * A trigger click with a controller's ray on a balloon, where its dot is,
+   * pops it. IWSDK's own press on a balloon missed some first clicks while
+   * the dot was already on it (it rises and bobs under the ray).
+   */
+  private clickAimedBalloon(): void {
+    if (!this.controllersOnly() || this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
+    for (const side of SIDES) {
+      if (!this.input.xr.gamepads[side]?.getSelectStart()) continue;
+      const hit = this.input.xr.multiPointers[side].getPointer('ray').getIntersection();
+      for (let o = hit?.object; o; o = o.parent ?? undefined) {
+        const e = o.userData.balloon as Entity | undefined;
+        if (!e) continue;
+        if (e.active && e.hasComponent(Balloon)) this.popBalloon(e, true);
+        return;
+      }
     }
   }
 
