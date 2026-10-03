@@ -126,8 +126,8 @@ const STAND = new Vector3(0, 0.023, -0.03);
  * the headset they stand ahead of and below the resting hands.
  */
 const BALLOON_Z = 0.08;
-/** Lane spacing: wider than a balloon (0.063 m), so neighbours never touch. */
-const BALLOON_GAP = 0.08;
+/** Lane spacing: 3.7 cm clear between neighbours (a balloon is 0.063 m wide). */
+const BALLOON_GAP = 0.1;
 const CRYSTAL_Z = 0.15;
 /** Height of a crystal's price card, and how far it leans back (radians). */
 const CRYSTAL_TAG_H = 0.03;
@@ -135,7 +135,7 @@ const CRYSTAL_TAG_LEAN = 0.3;
 /** One paper colour per answer choice; the colour says nothing about the answer. */
 const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fractions, ACCENTS.decimals, ACCENTS.measurement];
 /** Balloon Burst question card, above the balloons so nothing hides it. */
-const PROMPT_POS = new Vector3(0, 0.3, STAND.z);
+const PROMPT_POS = new Vector3(0, 0.36, STAND.z);
 /** The portal at the back of the book, where creatures come from and go home to. */
 /** Behind the book, where the paper bird of the old stand-in flies to. */
 const HOME = new Vector3(0, 0.023, -0.215);
@@ -249,11 +249,11 @@ const BALLOON_COLORS = [0xf2716b, 0x3469c4, 0x3fb6a0, 0xf9c74f];
 /**
  * Drifting balloons. A seated child's eye is about 0.35 to 0.45 m above the
  * table; the line from there to the bottom of the question card crosses the
- * balloon row at about 0.35 m. A balloon (0.117 m tall) drifts no higher than
+ * balloon row at about 0.40 m. A balloon (0.117 m tall) drifts no higher than
  * where its top meets that line, so it never covers the question.
  */
 /** Upper bound; the live eye line usually sets a lower one (`balloonCeiling`). */
-const RISE_TO = 0.32;
+const RISE_TO = 0.38;
 /** Balloon height from its origin (the old basket's foot) to its crown, and the gap kept below the eye line. */
 const BALLOON_H = 0.117;
 const SIGHT_MARGIN = 0.005;
@@ -266,8 +266,8 @@ const RISE_GROW_M = 0.025;
 const RISE_FADE_M = 0.035;
 /** A fading balloon's top may pass the line of sight to the question by this much. */
 const FADE_PAST_M = 0.015;
-/** More lanes than balloons, so a balloon always finds a free one. */
-const BALLOON_LANES = 6;
+/** More lanes than balloons (at most 4), so a balloon always finds a free one; the row stays within HOME on the right. */
+const BALLOON_LANES = 5;
 /**
  * A balloon poke: the hand moves at 5 cm/s or more, not mostly sideways
  * (a sweep across the row) and mostly forward or down into the balloon
@@ -292,7 +292,7 @@ const POP_S = 1.8;
 const PROMPT_PULSE = 0.05;
 const PROMPT_PULSE_S = 1.1;
 /** Where the points are shown: the practice score, or the race scoreboard's middle row. */
-const SCORE_AT = new Vector3(0, 0.36, -0.15);
+const SCORE_AT = new Vector3(0, 0.42, -0.15);
 const BOARD_AT = new Vector3(0, 0.424, -0.15);
 /** A right answer's creature flies up to the points in this many seconds. */
 const TO_SCORE_S = 1.0;
@@ -471,7 +471,7 @@ export class GameSystem extends createSystem({
 
   init(): void {
     this.score = new Label(T.title, { height: 0.04 });
-    this.score.mesh.position.set(0, 0.36, -0.15);
+    this.score.mesh.position.copy(SCORE_AT);
     this.score.mesh.name = 'score-label';
     this.labels.add(this.score.mesh);
     this.timerBar = new Mesh(new PlaneGeometry(TIMER_W, 0.016), paper(CORRECT, { doubleSide: true }));
@@ -809,6 +809,18 @@ export class GameSystem extends createSystem({
   }
 
   private emulatorTouch(): void {
+    // Something outside the game (the emulator's SIT card) that a hand's ray is on takes T as its press.
+    for (const side of SIDES) {
+      const multi = this.input.xr.multiPointers[side];
+      if (multi.getActiveKind() !== 'ray') continue;
+      for (let o = multi.getPointer('ray').getIntersection()?.object; o; o = o.parent ?? undefined) {
+        const touch = o.userData.onTouch as (() => void) | undefined;
+        if (!touch) continue;
+        console.info(`[emulator] T touch: ${o.name}`);
+        touch();
+        return;
+      }
+    }
     // What a hand's ray already highlights comes first; otherwise the object
     // nearest either hand's pointing direction within a cone (a moving
     // balloon is hard to hit exactly).

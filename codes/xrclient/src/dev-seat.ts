@@ -1,4 +1,4 @@
-import { Box3, type Entity, Group, Matrix4, Ray, Vector3, VisibilityState, createSystem } from '@iwsdk/core';
+import { Box3, type Entity, Group, Matrix4, Ray, RayInteractable, Vector3, VisibilityState, createSystem } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { Builder, chair } from './art/rooms.js';
@@ -45,6 +45,8 @@ const CARD_AT = new Vector3(0.375, 0.032, 0.11);
 const CARD_SCALE = 0.32;
 /** The card's face, in its own frame, for the controllers' rays. */
 const CARD_BOX = new Box3(new Vector3(-0.15, -0.1, -0.01), new Vector3(0.15, 0.1, 0.02));
+/** One click can reach the card both ways (the trigger check and IWSDK's press): the second is dropped. */
+const TOGGLE_GAP_MS = 400;
 
 function emulator(): EmulatedDevice | undefined {
   if (!import.meta.env.DEV) return undefined;
@@ -62,6 +64,7 @@ export class DevSeatSystem extends createSystem({
   private ray = new Ray();
   private inverse = new Matrix4();
   private dir = new Vector3();
+  private toggledAt = -Infinity;
 
   /** Made once the emulator and the desk are up, as a child of the desk. */
   private build(desk: Entity): void {
@@ -84,7 +87,13 @@ export class DevSeatSystem extends createSystem({
     group.position.copy(CARD_AT);
     group.scale.setScalar(CARD_SCALE);
     group.visible = false;
-    this.world.createTransformEntity(group, { parent: desk });
+    // A hand's ray reaches the card through IWSDK (its pinch presses it); controllers through the check in update.
+    group.addEventListener('pointerdown', () => {
+      if (group.visible) queueMicrotask(() => this.toggle(desk));
+    });
+    // The emulator's T (game.ts emulatorTouch) presses it too.
+    group.userData.onTouch = () => group.visible && this.toggle(desk);
+    this.world.createTransformEntity(group, { parent: desk }).addComponent(RayInteractable);
     this.card = group;
   }
 
@@ -106,7 +115,7 @@ export class DevSeatSystem extends createSystem({
     if (!show) return;
     card.updateMatrixWorld();
     // A trigger click with a controller's ray on the card, from any distance
-    // (IWSDK's ray only took it from close by). Hands have no trigger: they never press it.
+    // (IWSDK's ray only took it from close by). Hands pinch through IWSDK's press instead.
     this.inverse.copy(card.matrixWorld).invert();
     for (const side of ['left', 'right'] as const) {
       if (!this.input.xr.gamepads[side]?.getSelectStart()) continue;
@@ -135,7 +144,8 @@ export class DevSeatSystem extends createSystem({
 
   private toggle(desk: Entity): void {
     const device = emulator();
-    if (!device) return;
+    if (!device || performance.now() - this.toggledAt < TOGGLE_GAP_MS) return;
+    this.toggledAt = performance.now();
     const sit = !this.seated(device, desk);
     const head = sit ? (desk.object3D?.position.y ?? 0) + SEATED_EYES_ABOVE_DESK_M : STAND_HEAD_M;
     const hands = head - HANDS_BELOW_EYES_M;
