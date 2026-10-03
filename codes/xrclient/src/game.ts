@@ -90,6 +90,10 @@ const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
 const SQUEEZE = 'xr-standard-squeeze';
 const PULL_RATE = 18;
 const PULL_BACK_S = 0.35;
+/** A crystal a hand's pinch took is carried this far under the hand's ray origin, clear of the ray. */
+const HAND_CARRY_DROP = 0.05;
+/** Both hands on a crystal: the right one's counts (see crystalFocus). */
+const HAND_ORDER = ['right', 'left'] as const;
 // How near the creature's middle a ray must point to give it a pulled crystal (radians).
 const CREATURE_AIM = 0.15;
 const CRYSTAL_RAY_PAPER = new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
@@ -405,8 +409,13 @@ export class GameSystem extends createSystem({
   private species: Species = 'dog';
   /** The held crystal or orb currently close enough to be given. */
   private offering?: Entity;
-  /** A crystal pulled from afar by a controller's grip (see runPull): where it came from, which hand has it. */
-  private pulled?: { e: Entity; side: (typeof SIDES)[number]; home: Vector3 };
+  /**
+   * A crystal pulled from afar by a controller's grip, or taken by a hand's
+   * pinch (see runPull): where it came from, which hand has it.
+   */
+  private pulled?: { e: Entity; side: (typeof SIDES)[number]; home: Vector3; hand: boolean };
+  /** The one crystal the hands point at or reach this frame, the right hand first. */
+  private crystalFocus?: Entity;
   private touchQuat = new Quaternion();
   private tipPos = [new Vector3(), new Vector3()];
   private tipVel = [new Vector3(), new Vector3()];
@@ -2255,9 +2264,11 @@ export class GameSystem extends createSystem({
           if (held > BALLOON_HOLD_S) on = false;
         }
       } else {
-        // A crystal under a controller's or a hand's ray is hovered through its box (addRayTarget).
+        // A crystal under a controller's ray is hovered through its box (addRayTarget);
+        // with hands only the one crystal they are on, the right hand's first.
         const rayTarget = obj.userData.rayTarget as Entity | undefined;
-        on = e.hasComponent(Hovered) || !!rayTarget?.hasComponent(Hovered) || near(obj);
+        if (immersive && !controllers) on = e === this.crystalFocus;
+        else on = e.hasComponent(Hovered) || !!rayTarget?.hasComponent(Hovered) || near(obj);
       }
       obj.userData.hovered = on;
       if (obj.userData.choice) {
@@ -2275,7 +2286,38 @@ export class GameSystem extends createSystem({
     };
     for (const e of this.queries.balloons.entities) ease(e, false);
     for (const e of this.queries.buttons.entities) ease(e, true);
+    this.crystalFocus = immersive && !controllers ? this.handCrystal() : undefined;
     for (const e of this.queries.crystals.entities) ease(e, !e.hasComponent(Grabbed) && e !== this.pulled?.e);
+  }
+
+  /**
+   * The crystal the hands are on: the right hand's ray or fingertip first,
+   * then the left's, so two hands on two crystals never light both.
+   */
+  private handCrystal(): Entity | undefined {
+    for (const side of HAND_ORDER) {
+      const aimed = this.aimedCrystal(side);
+      if (aimed) return aimed;
+      const tip = this.tipPos[side === 'right' ? 0 : 1];
+      let best = HOVER_REACH;
+      let found: Entity | undefined;
+      for (const e of this.queries.crystals.entities) {
+        if (e === this.pulled?.e || e.hasComponent(Grabbed) || !e.object3D) continue;
+        const d = e.object3D.getWorldPosition(this.a).distanceTo(tip);
+        if (d < best) {
+          best = d;
+          found = e;
+        }
+      }
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  /** A hand's pinch began this frame (IWSDK keeps it per hand, one edge a frame; not public). */
+  private handPinchStart(side: (typeof SIDES)[number]): boolean {
+    const state = (this.input.xr as unknown as { handSelectFrameState?: Record<string, { start: boolean }> }).handSelectFrameState;
+    return !!state?.[side]?.start;
   }
 
   /**
@@ -2694,6 +2736,8 @@ export class GameSystem extends createSystem({
       type === 'ray' && this.world.visibilityState.peek() !== VisibilityState.NonImmersive && e !== this.pulled?.e;
     box.addEventListener('pointerdown', (event: { stopPropagation(): void }) => {
       event.stopPropagation();
+      // A hand's pinch takes the crystal into the hand instead (runPull).
+      if (!this.controllersOnly()) return;
       // After the press is sent out: a second click joins and removes the
       // crystals, and with them listeners the pointer is still walking through.
       if (this.pressMeant()) queueMicrotask(() => e.active && this.clickCrystal(e));
@@ -2714,15 +2758,19 @@ export class GameSystem extends createSystem({
   private runPull(delta: number): void {
     const p = this.pulled;
     const playing = this.phase === 'playing' && this.kind === 'orb_forge' && !!this.offer;
+    const controllers = this.controllersOnly();
+    const hands = !controllers && this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
     if (p) {
       const pad = this.input.xr.gamepads[p.side];
       const obj = p.e.active ? p.e.object3D : undefined;
       // Taken up close by IWSDK's own grab as well: that one carries it.
-      if (!obj || !playing || !this.controllersOnly() || p.e.hasComponent(Grabbed)) {
+      if (!obj || !playing || (p.hand ? !hands : !controllers) || p.e.hasComponent(Grabbed)) {
         this.pulled = undefined;
+        if (obj) obj.pointerEventsType = { deny: 'ray' };
         return;
       }
-      if (!pad?.getButtonPressed(SQUEEZE)) {
+      // A controller lets go by opening the grip; a hand by its next pinch.
+      if (p.hand ? this.handPinchStart(p.side) : !pad?.getButtonPressed(SQUEEZE)) {
         this.pulled = undefined;
         obj.pointerEventsType = { deny: 'ray' };
         // Let go with the ray on another crystal: the two join.
@@ -2735,24 +2783,27 @@ export class GameSystem extends createSystem({
         else this.tween(obj, p.home, PULL_BACK_S, 0.03, obj.scale.x);
         return;
       }
-      this.player.gripSpaces[p.side].getWorldPosition(this.a);
+      // In the emulator a hand's grip space does not follow it; its ray origin does.
+      if (p.hand) {
+        this.player.raySpaces[p.side].getWorldPosition(this.a);
+        this.a.y -= HAND_CARRY_DROP;
+      } else this.player.gripSpaces[p.side].getWorldPosition(this.a);
       obj.parent!.worldToLocal(this.a);
       obj.position.lerp(this.a, 1 - Math.exp(-PULL_RATE * delta));
       return;
     }
-    if (!playing || !this.controllersOnly()) return;
-    for (const side of SIDES) {
-      if (!this.input.xr.gamepads[side]?.getButtonDown(SQUEEZE)) continue;
-      const hit = this.input.xr.multiPointers[side].getPointer('ray').getIntersection();
-      const e = hit?.object.userData.crystal as Entity | undefined;
+    if (!playing || !(controllers || hands)) return;
+    for (const side of hands ? HAND_ORDER : SIDES) {
+      if (hands ? !this.handPinchStart(side) : !this.input.xr.gamepads[side]?.getButtonDown(SQUEEZE)) continue;
+      const e = hands ? this.aimedCrystal(side) : (this.input.xr.multiPointers[side].getPointer('ray').getIntersection()?.object.userData.crystal as Entity | undefined);
       if (!e?.active || e.hasComponent(Grabbed) || this.tweens.some((t) => t.obj === e.object3D)) continue;
       this.unselect();
       this.endDemo(true);
-      this.pulled = { e, side, home: e.object3D!.position.clone() };
+      this.pulled = { e, side, home: e.object3D!.position.clone(), hand: hands };
       // Held at the grip it would take the grip pointer, which IWSDK puts
       // before the ray and so hides it; the ray stays to choose where it goes.
       e.object3D!.pointerEventsType = { deny: ['ray', 'grab'] };
-      console.info(`[game] ${e.object3D!.name} pulled by the ${side} grip`);
+      console.info(`[game] ${e.object3D!.name} pulled by the ${side} ${hands ? 'pinch' : 'grip'}`);
       return;
     }
   }
@@ -2776,9 +2827,12 @@ export class GameSystem extends createSystem({
     }
   }
 
-  /** The crystal a controller's ray is on, other than the one it pulled. */
+  /** The crystal a controller's or hand's ray is on, other than the one it pulled. */
   private aimedCrystal(side: (typeof SIDES)[number]): Entity | undefined {
-    const hit = this.input.xr.multiPointers[side].getPointer('ray').getIntersection();
+    const multi = this.input.xr.multiPointers[side];
+    // A hand's ray only counts while it is the hand's pointer (not touch or grab up close).
+    if (!this.controllersOnly() && multi.getActiveKind() !== 'ray') return undefined;
+    const hit = multi.getPointer('ray').getIntersection();
     const e = hit?.object.userData.crystal as Entity | undefined;
     return e?.active && e !== this.pulled?.e && !e.hasComponent(Grabbed) ? e : undefined;
   }
