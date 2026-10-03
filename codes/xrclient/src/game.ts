@@ -578,6 +578,11 @@ export class GameSystem extends createSystem({
         const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
         // A trigger click goes through clickAimedBalloon, which also takes the clicks IWSDK's press missed.
         if (!browser && this.controllersOnly()) return;
+        // A pinch with a hand's ray on the balloon is a choice, like a trigger click.
+        if (!browser && this.handRayOn(e)) {
+          this.popBalloon(e, true);
+          return;
+        }
         // In the emulator the hands move with the view and the body, so a
         // "poke" is usually an accident: there, T chooses (Y allows pokes).
         if (!browser && this.onEmulator && !this.emulatorPokes) {
@@ -805,8 +810,8 @@ export class GameSystem extends createSystem({
 
   private emulatorTouch(): void {
     // What a hand's ray already highlights comes first; otherwise the object
-    // nearest either hand's pointing direction within a cone (balloons are
-    // not ray targets in XR, and a moving one is hard to hit exactly).
+    // nearest either hand's pointing direction within a cone (a moving
+    // balloon is hard to hit exactly).
     let e: Entity | undefined;
     for (const q of [this.queries.balloons, this.queries.crystals, this.queries.buttons]) {
       for (const cand of q.entities) if (!e && cand.hasComponent(Hovered)) e = cand;
@@ -2217,6 +2222,8 @@ export class GameSystem extends createSystem({
           // pointer (and grows a little) for as long as it is pointed at, so the
           // cursor stays on it until the click.
           on = e.hasComponent(Hovered);
+        } else if (this.handRayOn(e)) {
+          on = true;
         } else {
           // A fingertip at the envelope, for a while: a hand resting there must not hold it forever.
           on = nearBalloon(obj);
@@ -2442,7 +2449,6 @@ export class GameSystem extends createSystem({
     const controllers = this.controllersOnly();
     if (controllers !== this.wasControllers) {
       this.wasControllers = controllers;
-      for (const b of this.queries.balloons.entities) if (b.hasComponent(PokeInteractable)) this.setClickable(b);
       if (!controllers && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) this.unselect();
       this.pointRays(controllers);
     }
@@ -2579,13 +2585,12 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * Mouse clicks outside the headset; in it, balloons also take a trigger
-   * click while the player holds controllers (hands touch them instead).
-   * Crystals take theirs through a box of their own (addRayTarget).
+   * Mouse clicks outside the headset; in it, balloons also take a ray: a
+   * trigger click or a hand's pinch (hands can touch them too). Crystals
+   * take theirs through a box of their own (addRayTarget).
    */
   private setClickable(e: Entity): void {
-    const want =
-      this.world.visibilityState.peek() === VisibilityState.NonImmersive || (e.hasComponent(Balloon) && this.controllersOnly());
+    const want = this.world.visibilityState.peek() === VisibilityState.NonImmersive || e.hasComponent(Balloon);
     if (want && !e.hasComponent(RayInteractable)) e.addComponent(RayInteractable);
     else if (!want && e.hasComponent(RayInteractable)) e.removeComponent(RayInteractable);
   }
@@ -2606,6 +2611,20 @@ export class GameSystem extends createSystem({
       if (ray) ray.rayDisplayMode = controllers ? RAY_VISIBLE : RAY_ON_TARGET;
     }
     console.info(`[input] ${controllers ? 'controllers: ray always shown, no touch' : 'hands: touch, ray on a target'}`);
+  }
+
+  /** Whether a hand's ray, not its touch, is on balloon `e`. */
+  private handRayOn(e: Entity): boolean {
+    for (const side of SIDES) {
+      const multi = this.input.xr.multiPointers[side];
+      if (multi.getActiveKind() !== 'ray') continue;
+      for (let o = multi.getPointer('ray').getIntersection()?.object; o; o = o.parent ?? undefined) {
+        if (!o.userData.balloon) continue;
+        if (o.userData.balloon === e) return true;
+        break;
+      }
+    }
+    return false;
   }
 
   /** In the headset with controllers and no tracked hand (hands touch, controllers click). */
