@@ -64,8 +64,10 @@ export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0.2, y: 1.55, w: 3.28, h: 1.2 };
 export const CLASS_CLOCK = { x: 2.6, y: 2.45, r: 0.17 };
 
-/** A darker wood than the desks, so the floor never reads as another desk. */
-const FLOOR_WOOD = 0x9a7350;
+/** A darker wood than the desks, so the bedroom's study desk stands out from the light floor. */
+const DARK_WOOD = 0x9a7350;
+/** The grout under both rooms' floor tiles. */
+const GROUT = 0xcfcbc2;
 /** The home page's own backdrop (index.html, desk.ts PREVIEW_BASE), so the rooms feel like the game. */
 const WALL = 0xe0c780;
 /** The wall a shade and two shades darker, where two walls or a wall and the ceiling meet. */
@@ -178,6 +180,19 @@ function merge(list: BufferGeometry[], colors?: number[]): BufferGeometry | unde
   if (col) merged.setAttribute('color', new Float32BufferAttribute(col, 3));
   merged.computeVertexNormals();
   return merged;
+}
+
+/** White floor tiles over the grout, every other one a shade warmer. */
+function tiledFloor(b: Builder, x0: number, x1: number, z0: number, z1: number): void {
+  const tile = 0.4;
+  for (let x = x0; x < x1 - 0.01; x += tile) {
+    for (let z = z0; z < z1 - 0.01; z += tile) {
+      const w = Math.min(tile, x1 - x) - 0.008;
+      const d = Math.min(tile, z1 - z) - 0.008;
+      const odd = (Math.round((x - x0) / tile) + Math.round((z - z0) / tile)) % 2;
+      b.box(odd ? 0xf1eee7 : 0xf8f6f1, w, 0.004, d, x + w / 2 + 0.004, 0, z + d / 2 + 0.004);
+    }
+  }
 }
 
 /** Floor, ceiling and four walls of a room spanning x0..x1 and z0..z1. */
@@ -305,7 +320,9 @@ function classroom(deskTop: number): Group {
   const z0 = CLASS_FRONT_Z;
   const z1 = 4.4;
   const height = 3.0;
-  shell(b, x0, x1, z0, z1, height, FLOOR_WOOD);
+  // The same tiled floor as the bedroom.
+  shell(b, x0, x1, z0, z1, height, GROUT);
+  tiledFloor(b, x0, x1, z0, z1);
   // A soft green band on the lower walls.
   const band = 0xb5d8cb;
   b.box(band, x1 - x0, 0.9, 0.02, (x0 + x1) / 2, 0.45, z0 + 0.01);
@@ -358,14 +375,15 @@ function classroom(deskTop: number): Group {
     seats.push({ x, z: 0.4, ry, role });
   }
   // Classmates' desks in the rows ahead and behind, each a little off line,
-  // chairs pushed in or out. Some have a classmate at work.
+  // chairs pushed in or out. Some have a classmate at work, never the desk
+  // straight ahead of the player: its chair stays empty, so nobody sits between the player and the board.
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
     for (const x of [-1.85, 0, 1.85]) {
       const ry = b.jitter(0.09);
       desk(b, x + b.jitter(0.08), z + b.jitter(0.06), 1.15, 0.6, KID_DESK_TOP, ry);
-      if (z < 0 || x > 0) seats.push({ x: x + b.jitter(0.05), z: z + 0.43, ry, role: 'class' });
+      if ((z < 0 && x !== 0) || (z > 0 && x > 0)) seats.push({ x: x + b.jitter(0.05), z: z + 0.43, ry, role: 'class' });
       else chair(b, x + b.jitter(0.15), z + 0.5 + Math.abs(b.jitter(0.14)), ry + b.jitter(0.25), chairColors[n % 4]);
       // Something left on some desks.
       if (n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, 0.73, z, b.jitter(0.4));
@@ -399,20 +417,11 @@ function bedroom(deskTop: number): Group {
   const z0 = -0.62;
   const z1 = 3.4;
   const height = 2.7;
-  // White floor tiles over grey grout, every other one a shade warmer.
-  shell(b, x0, x1, z0, z1, height, 0xcfcbc2);
-  const tile = 0.4;
-  for (let x = x0; x < x1 - 0.01; x += tile) {
-    for (let z = z0; z < z1 - 0.01; z += tile) {
-      const w = Math.min(tile, x1 - x) - 0.008;
-      const d = Math.min(tile, z1 - z) - 0.008;
-      const odd = (Math.round((x - x0) / tile) + Math.round((z - z0) / tile)) % 2;
-      b.box(odd ? 0xf1eee7 : 0xf8f6f1, w, 0.004, d, x + w / 2 + 0.004, 0, z + d / 2 + 0.004);
-    }
-  }
+  shell(b, x0, x1, z0, z1, height, GROUT);
+  tiledFloor(b, x0, x1, z0, z1);
   // The study desk under the book, against the front wall, with a window above:
   // a darker wood, so it stands out from the light floor.
-  desk(b, 0, -0.18, 1.2, 0.8, deskTop - 0.003, 0, FLOOR_WOOD);
+  desk(b, 0, -0.18, 1.2, 0.8, deskTop - 0.003, 0, DARK_WOOD);
   windowOnFrontWall(b, z0, 0, deskTop + 0.85, 1.3, 1.0);
   // Curtains hang to the sides in soft folds, dark so the window does not dazzle.
   for (const side of [-1, 1]) {
