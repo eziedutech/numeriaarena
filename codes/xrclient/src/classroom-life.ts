@@ -147,8 +147,6 @@ export class ClassroomLife {
   /** Each standings row: its place, name and points. */
   private standRows: Label[][] = [];
   private meBand: Group;
-  /** How much higher the classroom's desks are than the paper classmates are drawn for. */
-  private lift: number;
   private shownStandings = '';
   private wallCard: Object3D | null = null;
   private hourHand: Group;
@@ -162,7 +160,6 @@ export class ClassroomLife {
 
   constructor(private room: Group) {
     const seats = (room.userData.seats ?? []) as Seat[];
-    this.lift = ((room.userData.deskTop as number | undefined) ?? KID_DESK_TOP) - KID_DESK_TOP;
     let n = 0;
     for (const seat of seats) {
       const desk = seat.role === 'left' ? 1 : seat.role === 'right' ? 2 : 0;
@@ -171,7 +168,9 @@ export class ClassroomLife {
         { shirt, chair: CHAIRS[(n + desk) % CHAIRS.length], hair: KID_HAIRS[n % KID_HAIRS.length], tufts: n % 2 === 1 },
         31 + n * 7,
       );
-      fig.root.position.set(seat.x, this.lift, seat.z);
+      // Lifted from the desk the classmates are drawn for to the seat's own.
+      const lift = seat.top - KID_DESK_TOP;
+      fig.root.position.set(seat.x, lift, seat.z);
       fig.root.rotation.y = seat.ry;
       room.add(fig.root);
       const dx = PLAYER_X - seat.x;
@@ -201,8 +200,8 @@ export class ClassroomLife {
         kid.name = this.label(' ', 0.07, true);
         kid.status = this.label(' ', 0.05, true);
         const yaw = Math.atan2(PLAYER_X - seat.x, PLAYER_Z - seat.z);
-        kid.name.mesh.position.set(seat.x, 1.45 + this.lift, seat.z - 0.05);
-        kid.status.mesh.position.set(seat.x, 1.36 + this.lift, seat.z - 0.05);
+        kid.name.mesh.position.set(seat.x, 1.45 + lift, seat.z - 0.05);
+        kid.status.mesh.position.set(seat.x, 1.36 + lift, seat.z - 0.05);
         kid.name.mesh.rotation.y = yaw;
         kid.status.mesh.rotation.y = yaw;
         fig.root.visible = false;
@@ -265,7 +264,7 @@ export class ClassroomLife {
     box.setFromObject(fig.root);
     const x = seat.x - SEAT_BACK * Math.sin(seat.ry);
     const z = seat.z - SEAT_BACK * Math.cos(seat.ry);
-    const rest = new Vector3(x, KID_DESK_TOP + this.lift - box.min.y, z);
+    const rest = new Vector3(x, seat.top - box.min.y, z);
     const yaw = Math.atan2(PLAYER_X - x, PLAYER_Z - z);
     fig.root.position.copy(rest);
     fig.root.rotation.set(0, yaw, 0);

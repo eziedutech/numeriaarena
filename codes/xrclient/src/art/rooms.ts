@@ -33,6 +33,8 @@ export interface Seat {
   ry: number;
   /** The rivals' seats ahead left and right of the player, or a classmate's. */
   role: 'left' | 'right' | 'class';
+  /** The top of the seat's desk; the classmate (or the rival's robot) is lifted to it. */
+  top: number;
 }
 
 /**
@@ -64,6 +66,12 @@ export const KID_DESK_TOP = 0.72;
  * either side of the middle column (the player's) are wide.
  */
 const CLASS_COLUMN_X = 2.75;
+/**
+ * How much lower than the player's the other desks are: a little beside and
+ * behind, more ahead, so the desks ahead do not stand up into the view of the board.
+ */
+const CLASS_DESK_DROP = 0.08;
+const CLASS_FRONT_DESK_DROP = 0.2;
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0, y: 1.55, w: 3.28, h: 1.2 };
@@ -386,13 +394,14 @@ function classroom(deskTop: number): Group {
   chair(b, -0.9, -2.95, Math.PI, 0x3469c4);
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
   desk(b, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
-  // Three rows of three desks, all as high as the player's. Beside the
-  // player, a classmate at work at each desk; their own chairs come with them.
-  const top = deskTop - 0.003;
+  // Three rows of three desks, a little lower than the player's, the row
+  // ahead lower still. Beside the player, a classmate at work at each desk;
+  // their own chairs come with them.
+  const side = Math.max(KID_DESK_TOP, deskTop - CLASS_DESK_DROP);
   const seats: Seat[] = [];
   for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
-    desk(b, x, -0.03, 1.0, 0.6, top);
-    seats.push({ x, z: 0.4, ry: 0, role: 'class' });
+    desk(b, x, -0.03, 1.0, 0.6, side);
+    seats.push({ x, z: 0.4, ry: 0, role: 'class', top: side });
   }
   // The rows ahead and behind, in straight lines, chairs pushed in. The race's
   // rivals sit at the desks ahead left and right. Nobody sits at the desk
@@ -400,11 +409,12 @@ function classroom(deskTop: number): Group {
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
+    const top = z < 0 ? Math.max(KID_DESK_TOP - 0.06, deskTop - CLASS_FRONT_DESK_DROP) : side;
     for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
       const rival = z < 0 && x !== 0;
       desk(b, x, z, x === 0 ? 1.15 : 1.0, 0.6, top);
-      if (rival) seats.push({ x, z: z + 0.43, ry: 0, role: x < 0 ? 'left' : 'right' });
-      else if (z > 0 && x > 0) seats.push({ x, z: z + 0.43, ry: 0, role: 'class' });
+      if (rival) seats.push({ x, z: z + 0.43, ry: 0, role: x < 0 ? 'left' : 'right', top });
+      else if (z > 0 && x > 0) seats.push({ x, z: z + 0.43, ry: 0, role: 'class', top });
       else chair(b, x, z + 0.45, 0, chairColors[n % 4]);
       // A book or a sheet left on the desks nobody races at (the rivals' stay clear for their robots).
       if (!rival && n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, top + 0.01, z, 0.15);
@@ -424,7 +434,6 @@ function classroom(deskTop: number): Group {
   for (const x of [-1.5, 1.5]) for (const z of [-1.8, 0.4, 2.6]) b.box(0xfffdf6, 1.2, 0.05, 0.3, x, height - 0.03, z);
   const group = b.build('room-classroom');
   group.userData.seats = seats;
-  group.userData.deskTop = top;
   return group;
 }
 
