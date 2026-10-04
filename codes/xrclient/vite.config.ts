@@ -86,7 +86,7 @@ export default defineConfig({
     // Shared content (templates, skills) lives beside the app in codes/content.
     fs: { allow: ['.', '../content'] },
     // The API (codes/backrust/server) runs beside it; same paths as production.
-    proxy: { '/api': 'http://localhost:3321' },
+    proxy: { '/api': { target: 'http://localhost:3321', ws: true } },
   },
   build: {
     outDir: 'dist',

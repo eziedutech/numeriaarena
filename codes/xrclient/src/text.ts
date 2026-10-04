@@ -14,6 +14,8 @@ export const EN = {
   race: 'Robot Race',
   bot: (name: string) => `${name.toUpperCase()} (BOT)`,
   you: 'YOU',
+  /** At the desk before a Class Match is started. */
+  classWaiting: 'Waiting for the class to start...',
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
   place: ordinal,
   /** A rival's line above its window, for example "4 SOLVED, 380 PTS". */
@@ -108,6 +110,7 @@ export const ID: Text = {
   race: 'Lomba Robot',
   bot: (name: string) => `${name.toUpperCase()} (BOT)`,
   you: 'KAMU',
+  classWaiting: 'Menunggu kelas dimulai...',
   wave: (n: number, total: number) => `Gelombang ${n} dari ${total}`,
   place: ORDINAL_ID,
   rival: (solved: number, points: number) => `${solved} BENAR, ${points} POIN`,

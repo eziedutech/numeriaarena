@@ -14,8 +14,10 @@ import {
   signOut,
   startTeacher,
   teacherState,
+  openRoom,
   type Me,
 } from './teacher.js';
+import { ClassRace } from '../game/class-race.js';
 import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
@@ -28,7 +30,8 @@ import { townSticker } from './town-sticker.js';
  * only.
  */
 export type Device = 'computer' | 'xr' | 'smartboard';
-export type PlayMode = 'practice' | 'race' | 'resume';
+/** `class`: the seat joined on the home page (`ClassRace.pending`), to the desk. */
+export type PlayMode = 'practice' | 'race' | 'resume' | 'class';
 
 const INK = '#3a3f4b';
 const PAPER = '#fff8ec';
@@ -408,12 +411,7 @@ export class Home {
     const kept = readCheckpoint();
     const robots: [string, string] = kept ? [t.robots[0], t.resumeSub(kept.next, kept.next >= kept.card.length)] : [t.robots[0], t.robots[1]];
     this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
-    const mates = this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.studentCode());
-    mates.classList.add('muted');
-    const note = el('div', 'note shadow', this.stage);
-    note.textContent = t.studentFirst;
-    note.style.left = '214px';
-    note.style.top = '528px';
+    this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.joinRoom());
     this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
 
     // Right: who you are, and learning more.
@@ -435,7 +433,7 @@ export class Home {
       card.style.color = PAPER;
       card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
       this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.message(t.myClasses[0], t.classesSoon), true);
-      this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.message(t.openRoom[0], t.classesSoon), true);
+      this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
@@ -452,7 +450,7 @@ export class Home {
       }
     }
     this.card('right', row++, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
-    this.card('right', row++, t.watch, 'watch', COLORS.violet, () => this.message(t.watch[0], t.soonBody.watch), true);
+    this.card('right', row++, t.watch, 'watch', COLORS.violet, () => this.watch());
 
     // The town the player builds with the Folds they earn: a small round
     // paper sticker with the town standing up on it.
@@ -706,6 +704,176 @@ export class Home {
     this.actions(body, veil, () => {
       veil.remove();
       this.message(t.student[0], t.serverSoon);
+    });
+  }
+
+  /** Six boxes for a room's code; reads it back in capitals. */
+  private codeBoxes(body: HTMLElement): () => string {
+    const row = el('div', 'row', body);
+    const boxes: HTMLInputElement[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      const box = el('input', 'box', row);
+      box.maxLength = 1;
+      box.autocapitalize = 'characters';
+      box.setAttribute('aria-label', `${i + 1}`);
+      box.style.textTransform = 'uppercase';
+      box.addEventListener('input', () => {
+        // A pasted code fills the boxes from here on.
+        const text = box.value.replace(/[^a-z0-9]/gi, '').toUpperCase();
+        for (let k = 0; k < text.length && i + k < 6; k += 1) boxes[i + k].value = text[k];
+        if (text.length > 0) (boxes[Math.min(5, i + text.length)] ?? box).focus();
+      });
+      boxes.push(box);
+    }
+    return () => boxes.map((b) => b.value.trim().toUpperCase()).join('');
+  }
+
+  /** RACE MY CLASSMATES: a room's code, then its lobby. */
+  private joinRoom(): void {
+    const t = this.t;
+    if (ClassRace.pending) {
+      this.lobby(ClassRace.pending);
+      return;
+    }
+    const { veil, body } = this.popup(t.classmates[0]);
+    el('div', 'step', body).textContent = t.roomCode;
+    const code = this.codeBoxes(body);
+    const fail = this.errorLine(body);
+    let busy = false;
+    this.actions(body, veil, () => {
+      if (busy) return;
+      const c = code();
+      if (c.length !== 6) {
+        fail('code_length');
+        return;
+      }
+      if (!online()) {
+        fail('offline');
+        return;
+      }
+      busy = true;
+      fail();
+      const line = body.querySelector('.err');
+      if (line) line.textContent = t.joining;
+      ClassRace.join(c).then(
+        (link) => {
+          ClassRace.pending = link;
+          veil.remove();
+          this.lobby(link);
+        },
+        (e: Error) => {
+          busy = false;
+          fail(e.message);
+        },
+      );
+    });
+  }
+
+  /** Who is in the room so far, START for the first seat, and the way to the desk. */
+  private lobby(link: ClassRace): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.lobbyTitle);
+    const leave = () => {
+      if (ClassRace.pending === link) ClassRace.pending = undefined;
+      link.onChange = undefined;
+      link.free();
+    };
+    veil.addEventListener('click', (e) => {
+      if (e.target === veil) leave();
+    });
+    el('p', '', body).textContent = t.lobbyYou(link.name);
+    const seats = el('p', '', body);
+    const names = el('p', '', body);
+    const state = el('p', '', body);
+    const start = el('button', 'btn wide shadow', body);
+    start.style.background = COLORS.coral;
+    start.appendChild(paperText(t.lobbyStart, 17, PAPER));
+    start.setAttribute('aria-label', t.lobbyStart);
+    start.addEventListener('click', () => link.start());
+    const desk = el('button', 'btn wide shadow', body);
+    desk.style.background = COLORS.teal;
+    desk.appendChild(paperText(t.toDesk, 17, PAPER));
+    desk.setAttribute('aria-label', t.toDesk);
+    desk.addEventListener('click', () => {
+      link.onChange = undefined;
+      veil.remove();
+      this.onPlay('class', this.device === 'xr' ? 'xr' : 'computer');
+    });
+    const draw = () => {
+      const l = link.lobby;
+      seats.textContent = l ? t.lobbySeats(l.names.length, l.seats) : '';
+      names.textContent = l ? l.names.join(', ') : '';
+      state.textContent = link.started ? t.lobbyOn : t.lobbyWait;
+      start.style.display = link.seat === 0 && !link.started ? '' : 'none';
+    };
+    link.onChange = draw;
+    draw();
+    const row = el('div', 'actions', body);
+    const close = el('button', 'btn shadow', row);
+    close.style.background = '#f1e3c4';
+    close.appendChild(paperText(t.cancel, 16, INK));
+    close.setAttribute('aria-label', t.cancel);
+    close.addEventListener('click', () => {
+      leave();
+      veil.remove();
+    });
+  }
+
+  /** The class screen for a watch code, in a new tab: `/screen` on this site. */
+  private openScreen(code: string, host?: string, play?: string): void {
+    const hash = host ? `#host=${encodeURIComponent(host)}&play=${encodeURIComponent(play ?? '')}` : '';
+    const url = `${location.origin}/screen?code=${encodeURIComponent(code)}${hash}`;
+    window.open(url, '_blank', 'noopener');
+  }
+
+  /** WATCH A MATCH: a watch code, or the demo match of robots. */
+  private watch(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.watch[0]);
+    el('div', 'step', body).textContent = t.watchCode;
+    const code = this.codeBoxes(body);
+    const fail = this.errorLine(body);
+    const demo = el('button', 'btn wide shadow', body);
+    demo.style.background = COLORS.violet;
+    demo.appendChild(paperText(t.watchDemo, 17, PAPER));
+    demo.setAttribute('aria-label', t.watchDemo);
+    demo.addEventListener('click', () => {
+      veil.remove();
+      this.openScreen('WATCHX');
+    });
+    this.actions(body, veil, () => {
+      const c = code();
+      if (c.length !== 6) {
+        fail('code_length');
+        return;
+      }
+      veil.remove();
+      this.openScreen(c);
+    });
+  }
+
+  /** OPEN A CLASS ROOM: a room of three seats, its codes, and its class screen. */
+  private openRoom(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.openRoom[0]);
+    const info = el('p', '', body);
+    info.textContent = t.joining;
+    const fail = this.errorLine(body);
+    this.actions(body, veil);
+    void openRoom(3).then((room) => {
+      if (typeof room === 'string') {
+        info.textContent = '';
+        fail(room);
+        return;
+      }
+      info.textContent = t.roomOpened(room.play_code);
+      el('p', '', body).textContent = t.roomWatch(room.watch_code);
+      const screen = el('button', 'btn wide shadow', body);
+      screen.style.background = COLORS.coral;
+      screen.appendChild(paperText(t.openScreen, 17, PAPER));
+      screen.setAttribute('aria-label', t.openScreen);
+      screen.addEventListener('click', () => this.openScreen(room.watch_code, room.host_token, room.play_code));
+      body.insertBefore(screen, body.querySelector('.actions'));
     });
   }
 

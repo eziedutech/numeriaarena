@@ -23,6 +23,12 @@ const WINDOW_SCALE = 0.78;
 const CARD_POS = new Vector3(0.395, 0.19, 0.08);
 const CARD_YAW = -0.65;
 const CARD_SCALE = 0.85;
+/** A rival at one of the two windows: a robot, or a classmate in a Class Match. */
+export interface Rival {
+  name: string;
+  bot: boolean;
+}
+
 /** Frame colours match the robots: cobalt (a) and teal (b). */
 const BOT_COLORS = [0x3469c4, 0x3fb6a0];
 const EMOTE_CLIP: Record<Emote, string> = { thumbs_up: 'cheer', clap: 'wave' };
@@ -98,12 +104,13 @@ export class RaceScene {
   constructor(
     private stage: Stage,
     private desk: Object3D,
-    private botNames: [string, string],
+    private rivals: Rival[],
   ) {
     // In the virtual classroom the rivals also sit at the desks ahead of the player.
     classRaceOn(true);
-    botNames.forEach((name, i) => {
-      classroom.names[i] = T.bot(name);
+    rivals.forEach(({ name, bot: isBot }, i) => {
+      const shown = isBot ? T.bot(name) : name.toUpperCase();
+      classroom.names[i] = shown;
       const frame = makePortal(BOT_COLORS[i]);
       frame.name = `rival-window-${i + 1}`;
       frame.position.copy(WINDOW_POS[i]);
@@ -116,13 +123,13 @@ export class RaceScene {
       bot.root.scale.setScalar(0.95);
       frame.add(bot.root);
       const nameplate = `race_name_${name.toLowerCase()}`;
-      if (nameplate in UI_HEIGHT) {
+      if (isBot && nameplate in UI_HEIGHT) {
         placeUiImage(nameplate as UiName, frame, [0, -0.08, 0.008], {
           scale: 1.15,
-          fallback: () => stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false).mesh,
+          fallback: () => stage.label(shown, 0.026, frame, -0.08, 0.008, false).mesh,
         });
       } else {
-        stage.label(T.bot(name), 0.026, frame, -0.08, 0.008, false);
+        stage.label(shown, isBot ? 0.026 : 0.02, frame, -0.08, 0.008, false);
       }
       const status = stage.label(T.rival(0, 0), 0.02, frame, 0.078, 0.008, false);
       const work = stage.label(' ', 0.02, frame, 0.036, 0.008, false);
@@ -244,7 +251,7 @@ export class RaceScene {
     const me = state.desks[0];
     if (me) for (const c of this.cards()) c.player(me.place, me.points);
     classroom.standings = state.desks.flatMap((d, i) =>
-      d ? [{ place: d.place, name: i === 0 ? T.you : this.botNames[i - 1].toUpperCase(), points: d.points, me: i === 0 }] : [],
+      d ? [{ place: d.place, name: i === 0 ? T.you : (this.rivals[i - 1]?.name ?? '').toUpperCase(), points: d.points, me: i === 0 }] : [],
     );
   }
 
@@ -332,7 +339,8 @@ export class RaceScene {
     card.position.set(0, 0.2, 0.02);
     const e = this.stage.add(card);
     this.recapItems.push(e);
-    const own = recap.players.find((p) => !p.bot);
+    // The player is first in the recap, the rivals after.
+    const own = recap.players[0];
     for (let i = 0; i < 3; i += 1) {
       const star = makeStar(i < (own?.stars ?? 0));
       star.position.set((i - 1) * 0.07, 0.11, 0);
@@ -345,7 +353,7 @@ export class RaceScene {
     });
     const rows = [...recap.players].sort((a, b) => a.place - b.place);
     rows.forEach((p, i) => {
-      const who = p.bot ? T.bot(p.name) : playerName;
+      const who = p === own ? playerName : p.bot ? T.bot(p.name) : p.name.toUpperCase();
       const y = 0.014 - i * RECAP_ROW;
       const row = this.stage.label(`${T.place(p.place)}  ${who}: ${p.points}`, RECAP_TEXT, card, y, 0.004, false);
       if (!p.highlight) return;

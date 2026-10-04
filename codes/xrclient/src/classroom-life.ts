@@ -352,7 +352,7 @@ export class ClassroomLife {
       const robots = classroom.robots;
       for (const k of this.kids) {
         if (!k.desk) continue;
-        const bot = robots ? k.bot : undefined;
+        const bot = robots[k.desk - 1] ? k.bot : undefined;
         k.fig.root.visible = racing && !bot;
         if (k.bot) {
           k.bot.fig.root.visible = racing && !!bot;
@@ -378,7 +378,7 @@ export class ClassroomLife {
       }
       this.recap = false;
       console.info(
-        racing ? `[room] the rivals sit down at the desks ahead (${robots ? 'robots' : 'classmates'})` : '[room] the rivals leave their desks',
+        racing ? `[room] the rivals sit down at the desks ahead (${robots.map((r) => (r ? 'robot' : 'classmate')).join(', ')})` : '[room] the rivals leave their desks',
       );
     }
     // Moments from the race, newest last.

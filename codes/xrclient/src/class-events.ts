@@ -53,10 +53,10 @@ export const classroom = {
   bubble: ['', ''],
   bubbleSeq: [0, 0],
   /**
-   * The rivals are the game's robots, as in a solo race; a Class Match of
-   * classmates sets this false and the classroom seats paper classmates instead.
+   * Whether each rival is one of the game's robots, as in a solo race; a
+   * classmate in a Class Match sits at the desk ahead as a paper classmate.
    */
-  robots: true,
+  robots: [true, true] as [boolean, boolean],
   /** The room shows the rivals (the bedroom's posters, the classroom's desks ahead): the rival windows on the desk stand aside. */
   rivalsInRoom: false,
 };

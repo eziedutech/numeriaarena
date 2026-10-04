@@ -230,6 +230,27 @@ export async function register(form: Registration): Promise<string | undefined> 
   }
 }
 
+export interface OpenedRoom {
+  play_code: string;
+  watch_code: string;
+  host_token: string;
+  seats: number;
+}
+
+/** Opens a class room on the server; resolves with its codes, or an error code. */
+export async function openRoom(seats: number): Promise<OpenedRoom | string> {
+  const user = auth?.currentUser;
+  if (!user) return 'signed_out';
+  try {
+    const res = await call(user, '/rooms', { method: 'POST', body: JSON.stringify({ seats }) });
+    if (!res.ok) return errorCode(res);
+    return (await res.json()) as OpenedRoom;
+  } catch (e) {
+    console.warn('[teacher] open room failed', e);
+    return 'offline';
+  }
+}
+
 /** Firebase's own error code (auth/popup-closed-by-user and the like), or a generic one. */
 export function authErrorCode(e: unknown): string {
   return typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : 'unknown';

@@ -64,6 +64,7 @@ import {
   type RaceVerdict,
   type Verdict,
 } from './game/core.js';
+import { ClassRace } from './game/class-race.js';
 import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
 import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb, type MenuButtonValue } from './game-components.js';
@@ -256,6 +257,7 @@ const RACE_POLL_S = 0.1;
 /** Seconds between the last event of a match and the recap card. */
 const RECAP_DELAY_S = 2.0;
 const BOT_NAMES: [string, string] = ['Clip', 'Crease'];
+const BOT_RIVALS = BOT_NAMES.map((name) => ({ name, bot: true }));
 /**
  * The speed bonus runs out at the expected answer time (8 s, the core's
  * default); the strip shows it. It never fails an answer.
@@ -465,7 +467,10 @@ export class GameSystem extends createSystem({
   private mergeHeld = 0;
 
   // Race against two rival bots
-  private race?: Race;
+  /** The race on: against robots on this device, or a Class Match on the server. */
+  private race?: Race | ClassRace;
+  /** A Class Match answer is with the server; the desk waits for its verdict. */
+  private judging = false;
   private raceScene?: RaceScene;
   private raceState?: RaceState;
   private racePoll = 0;
@@ -1334,7 +1339,7 @@ export class GameSystem extends createSystem({
     return button;
   }
 
-  private start(choice: MenuChoice, resume?: RaceCheckpoint): void {
+  private start(choice: MenuChoice, resume?: RaceCheckpoint, link?: ClassRace): void {
     this.phase = 'loading';
     // Started from the home page, the 3D menu (which puts the score on the desk) never showed.
     const desk = this.deskEntity()?.object3D;
@@ -1346,7 +1351,7 @@ export class GameSystem extends createSystem({
     this.practiceBase = this.practiceTotal;
     if (choice === 'race') {
       this.phase = 'loading';
-      this.startRace(resume).then(() => this.addQuitCardSafely()).catch((error) => {
+      this.startRace(resume, link).then(() => this.addQuitCardSafely()).catch((error) => {
         console.error('[race] could not start', error);
         this.showMenu();
       });
@@ -1377,7 +1382,8 @@ export class GameSystem extends createSystem({
   private pauseWhileAway(): void {
     const state = this.world.visibilityState.peek();
     const away = state === VisibilityState.Hidden || state === VisibilityState.VisibleBlurred;
-    if (away && this.pausedAt === undefined) {
+    // A Class Match keeps the server's clock, which one player cannot stop.
+    if (away && this.pausedAt === undefined && !(this.race instanceof ClassRace)) {
       this.pausedAt = Date.now();
       this.pausedPerf = performance.now();
       console.info(`[game] paused (${state})`);
@@ -1390,10 +1396,11 @@ export class GameSystem extends createSystem({
     }
   }
 
-  private async startRace(resume?: RaceCheckpoint): Promise<void> {
+  private async startRace(resume?: RaceCheckpoint, link?: ClassRace): Promise<void> {
+    if (link) return this.startClass(link);
     const race = await Race.create(resume ? resume.seed : Date.now() >>> 0, BOT_NAMES);
     this.race = race;
-    this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, BOT_NAMES);
+    this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, BOT_RIVALS);
     this.recapIn = -1;
     if (resume) {
       // The same race, rebuilt call by call, with the game clock where it
@@ -1415,9 +1422,33 @@ export class GameSystem extends createSystem({
     this.phase = 'playing';
   }
 
+  /**
+   * A Class Match: the desk waits for the class to start, then plays the
+   * server's match with the classmates (or bots) at the two rival windows.
+   */
+  private async startClass(link: ClassRace): Promise<void> {
+    if (ClassRace.pending === link) ClassRace.pending = undefined;
+    this.race = link;
+    link.setClock(() => this.now());
+    if (!link.started) {
+      this.score.set(T.classWaiting);
+      this.score.mesh.visible = true;
+      await link.whenStarted();
+      if (this.race !== link) return;
+    }
+    const rivals = link.rivalSeats();
+    classroom.robots = [rivals[0]?.bot ?? true, rivals[1]?.bot ?? true];
+    this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, rivals);
+    this.recapIn = -1;
+    this.score.mesh.visible = false;
+    this.refreshRace();
+    console.info(`[class] at seat ${link.seat} as ${link.name}, rivals ${rivals.map((r) => r.name).join(', ')}`);
+    this.phase = 'playing';
+  }
+
   /** Keeps what this race needs to pick up again from round `next` (1-based). */
   private saveCheckpoint(next: number): void {
-    if (!this.race || !this.raceScene) return;
+    if (!(this.race instanceof Race) || !this.raceScene) return;
     const cp: RaceCheckpoint = {
       v: 1,
       seed: this.race.seed,
@@ -1452,7 +1483,8 @@ export class GameSystem extends createSystem({
     this.racePoll = RACE_POLL_S;
     const events = race.tick(this.now());
     for (const ev of events) this.onRaceEvent(ev);
-    if (events.length > 0) this.refreshRace();
+    // A Class Match's scores come in views of their own, after the verdicts.
+    if (events.length > 0 || (race instanceof ClassRace && race.takeFresh())) this.refreshRace();
     // The player's desk takes the next creature once the last one is gone.
     if (this.phase === 'playing' && !this.offer && this.queries.creatures.entities.size === 0) {
       const offer = race.playerNext();
@@ -1557,8 +1589,9 @@ export class GameSystem extends createSystem({
     this.clearPlay();
     this.removeQuitCard();
     this.raceScene.showRecap(recap, T.you);
-    const own = recap.players.find((p) => !p.bot);
-    if (own) this.saveBest(own.points, own.stars);
+    // The best kept on the device is the race against the robots.
+    const own = recap.players[0];
+    if (own && this.race instanceof Race) this.saveBest(own.points, own.stars);
     this.addChoiceButton('done', T.done, 0, 0x3469c4);
   }
 
@@ -1571,6 +1604,8 @@ export class GameSystem extends createSystem({
     this.race?.free();
     this.race = undefined;
     this.raceState = undefined;
+    this.judging = false;
+    classroom.robots = [true, true];
     this.score.set(T.title);
     this.score.mesh.visible = true;
     this.backToMenu();
@@ -1745,9 +1780,25 @@ export class GameSystem extends createSystem({
       });
       return;
     }
+    this.playMode(mode);
+  }
+
+  private playMode(mode: PlayMode): void {
     if (mode === 'race') this.start('race');
     else if (mode === 'resume') this.resumeRace();
+    else if (mode === 'class') this.playClass();
     else this.showMenu('practice');
+  }
+
+  /** Takes the seat the home page joined, to the desk. */
+  private playClass(): void {
+    const link = ClassRace.pending;
+    if (!link) {
+      console.warn('[class] no room joined');
+      this.showMenu();
+      return;
+    }
+    this.start('race', undefined, link);
   }
 
   /** Picks up the race kept on this device, or starts a new one if it has gone stale meanwhile. */
@@ -2026,7 +2077,7 @@ export class GameSystem extends createSystem({
   // ------------------------------------------------------------ answers
 
   private popBalloon(e: Entity, deliberate = false): void {
-    if (this.phase !== 'playing' || !this.offer) return;
+    if (this.phase !== 'playing' || !this.offer || this.judging) return;
     // A finger still extended from the last pop must not burst a new balloon.
     if (performance.now() - this.shownAt < PRESS_GRACE_MS) return;
     if (!deliberate && !this.pokedForward(e)) {
@@ -2039,8 +2090,12 @@ export class GameSystem extends createSystem({
     this.lastBalloon = index;
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
-    if (this.race) {
-      const v = this.raceAnswer(() => this.race!.answerBalloon(this.offer!.offer_id, index, timeMs, this.now()));
+    const race = this.race;
+    if (race instanceof ClassRace) {
+      this.classAnswer(race.answerBalloon(this.offer.offer_id, index), (v) => this.balloonVerdict(e, index, v));
+      return;
+    } else if (race) {
+      const v = this.raceAnswer(() => race.answerBalloon(this.offer!.offer_id, index, timeMs, this.now()));
       if (!v) return;
       verdict = v;
     } else if (this.core) {
@@ -2048,12 +2103,19 @@ export class GameSystem extends createSystem({
     } else {
       return;
     }
+    this.balloonVerdict(e, index, verdict);
+  }
+
+  private balloonVerdict(e: Entity, index: number, verdict: Verdict | RaceVerdict): void {
+    if (!this.offer) return;
     console.info(
       `[game] balloon ${index} ${this.offer.balloons[index]?.text}: ${verdict.correct ? 'right' : 'wrong'}, ` +
         `expected ${verdict.expected_text}, +${verdict.points}, total ${verdict.total_points}`,
     );
-    const obj = e.object3D!;
-    if (verdict.correct) {
+    const obj = e.object3D;
+    if (!obj) {
+      // The balloon went while the server judged.
+    } else if (verdict.correct) {
       this.tween(obj, obj.position.clone(), 0.15, 0, 1.6, () => this.remove(e));
     } else {
       this.tween(obj, obj.position.clone(), 0.2, 0, 0.01, () => this.remove(e));
@@ -2063,12 +2125,16 @@ export class GameSystem extends createSystem({
 
   private submitOrb(picks: number[]): void {
     this.lastPicks = picks;
-    if (!this.offer) return;
+    if (!this.offer || this.judging) return;
     this.endDemo(true);
     const timeMs = performance.now() - this.shownAt;
     let verdict: Verdict | RaceVerdict;
-    if (this.race) {
-      const v = this.raceAnswer(() => this.race!.answerOrb(this.offer!.offer_id, picks, timeMs, this.now()));
+    const race = this.race;
+    if (race instanceof ClassRace) {
+      this.classAnswer(race.answerOrb(this.offer.offer_id, picks), (v) => this.orbVerdict(v));
+      return;
+    } else if (race) {
+      const v = this.raceAnswer(() => race.answerOrb(this.offer!.offer_id, picks, timeMs, this.now()));
       if (!v) return;
       verdict = v;
     } else if (this.core) {
@@ -2076,6 +2142,34 @@ export class GameSystem extends createSystem({
     } else {
       return;
     }
+    this.orbVerdict(verdict);
+  }
+
+  /**
+   * A Class Match answer goes to the server; its verdict counts only for the
+   * creature still on the desk. A refused answer (after the bell, or the
+   * connection dropped and the server closed the creature) clears the desk.
+   */
+  private classAnswer(judged: Promise<RaceVerdict>, then: (v: RaceVerdict) => void): void {
+    const offerId = this.offer?.offer_id;
+    this.judging = true;
+    judged.then(
+      (v) => {
+        this.judging = false;
+        if (this.offer?.offer_id === offerId && this.race) then(v);
+      },
+      (error) => {
+        this.judging = false;
+        if (this.offer?.offer_id !== offerId || !this.race) return;
+        console.info('[class] answer not counted:', String(error));
+        this.clearPlay();
+        if (this.phase === 'between') this.phase = 'playing';
+      },
+    );
+  }
+
+  private orbVerdict(verdict: Verdict | RaceVerdict): void {
+    if (!this.offer) return;
     console.info(
       `[game] orb ${verdict.built_text ?? '?'} for ${this.offer.target?.text}: ${verdict.correct ? 'right' : 'wrong'}, ` +
         `attempt ${verdict.attempt}, +${verdict.points}, total ${verdict.total_points}`,
@@ -2545,9 +2639,7 @@ export class GameSystem extends createSystem({
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
       this.pendingXr = undefined;
-      if (mode === 'race') this.start('race');
-      else if (mode === 'resume') this.resumeRace();
-      else this.showMenu('practice');
+      this.playMode(mode);
     } else if (this.phase === 'menu' && placed && !onHome && this.queries.buttons.entities.size === 0 && this.queries.creatures.entities.size === 0) {
       this.showMenu();
     }
