@@ -778,15 +778,19 @@ export class Home {
   /**
    * Who is in the room so far, and how it starts: in a teacher's room only
    * the teacher (from the class screen), in an open room once everyone has
-   * pressed I'M READY. When the countdown starts every classmate is taken to
-   * their desk, where it counts down to the first wave together.
+   * pressed I'M READY. Waiting at the desk early is allowed: the server
+   * hands out no creature before the countdown ends. When it starts, a
+   * computer goes to the desk by itself; a headset cannot open its session
+   * without a press, so there the button turns into TO MY DESK NOW.
    */
   private lobby(link: ClassRace): void {
     const t = this.t;
     const { veil, body } = this.popup(t.lobbyTitle);
+    let stopTimer = () => {};
     const leave = () => {
       if (ClassRace.pending === link) ClassRace.pending = undefined;
       link.onChange = undefined;
+      stopTimer();
       link.free();
     };
     veil.addEventListener('click', (e) => {
@@ -797,25 +801,46 @@ export class Home {
     el('div', 'step', body).textContent = t.lobbyIn;
     const names = el('div', 'names', body);
     const state = el('p', '', body);
+    const early = el('p', '', body);
+    early.textContent = t.deskEarly;
     const ready = el('button', 'btn wide shadow', body);
     ready.style.background = COLORS.coral;
     ready.appendChild(paperText(t.lobbyReady, 17, PAPER));
     ready.setAttribute('aria-label', t.lobbyReady);
     ready.addEventListener('click', () => link.ready());
+    let timer = 0;
+    stopTimer = () => window.clearInterval(timer);
     const toDesk = () => {
       link.onChange = undefined;
+      window.clearInterval(timer);
       veil.remove();
       this.onPlay('class', this.device === 'xr' ? 'xr' : 'computer');
     };
     const desk = el('button', 'btn wide shadow', body);
-    desk.style.background = COLORS.teal;
-    desk.appendChild(paperText(t.toDesk, 17, PAPER));
-    desk.setAttribute('aria-label', t.toDesk);
     desk.addEventListener('click', toDesk);
+    let label = '';
+    const deskLabel = (text: string, background: string, ink: string) => {
+      if (label === text) return;
+      label = text;
+      desk.replaceChildren(paperText(text, 17, ink));
+      desk.style.background = background;
+      desk.setAttribute('aria-label', text);
+    };
     const draw = () => {
-      if (!link.shut && (link.started || link.startsIn() !== null)) {
+      const left = link.startsIn();
+      const starting = !link.shut && (link.started || left !== null);
+      if (starting && this.device !== 'xr') {
         // Starting: everyone goes to their desk now, nobody is left in the lobby.
         toDesk();
+        return;
+      }
+      if (starting) {
+        state.textContent = left === null ? t.lobbyOn : t.lobbyStarting(Math.ceil(left / 1000));
+        early.style.display = 'none';
+        ready.style.display = 'none';
+        deskLabel(t.toDesk, COLORS.coral, PAPER);
+        // The countdown ticks on here until the press.
+        if (!timer) timer = window.setInterval(draw, 250);
         return;
       }
       const l = link.lobby;
@@ -836,7 +861,9 @@ export class Home {
           ? t.lobbyReadyWait(readyNow, l?.names.length ?? 0)
           : t.lobbyWait;
       ready.style.display = open && !link.shut && link.seat !== null && !l?.ready[link.seat] ? '' : 'none';
+      early.style.display = link.shut ? 'none' : '';
       desk.style.display = link.shut ? 'none' : '';
+      deskLabel(t.waitAtDesk, '#f1e3c4', INK);
     };
     link.onChange = draw;
     draw();
