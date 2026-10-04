@@ -3,7 +3,7 @@ import { type AnimationMixer, Box3, type Group, type Mesh, type MeshBasicMateria
 import { Label } from './art/label.js';
 import { type Figure, forgetMixers, makeBot } from './art/models.js';
 import { KID_HAIRS, type PaperFigure, paperKid, paperTeacher } from './art/paper-kid.js';
-import { Builder, CLASS_BOARD, CLASS_CLOCK, CLASS_FRONT_Z, type Seat } from './art/rooms.js';
+import { Builder, CLASS_BOARD, CLASS_CLOCK, CLASS_FRONT_Z, KID_DESK_TOP, type Seat } from './art/rooms.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { type ClassMoment, classroom } from './class-events.js';
 
@@ -18,8 +18,14 @@ const CHAIRS = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
 const MOMENT_S: Record<ClassMoment, number> = { working: 0, right: 1.6, missed: 1.2, cheer: 1.8, clap: 1.6 };
 /** The clip a rival robot plays (once) for a moment, as in the bedroom's posters. */
 const BOT_CLIP: Partial<Record<ClassMoment, string>> = { right: 'cheer', cheer: 'cheer', clap: 'wave' };
-/** A rival robot stands at its chair (it has no seated pose), about as tall as a seated classmate. */
-const BOT_H = 1.1;
+/**
+ * A rival robot stands on its desk, a pop-up as on the bedroom's posters (it
+ * has no seated pose): standing on the floor it hid behind the player's desk.
+ * Its head comes just under its name.
+ */
+const BOT_H = 0.5;
+/** How far the chair is behind the desk's middle (rooms.ts). */
+const SEAT_BACK = 0.43;
 /** A rival's paper speech bubble over its name, turned to the player; it stays as long as on its window. */
 const BUBBLE_Y = 1.6;
 const BUBBLE_SCALE = 3;
@@ -187,15 +193,17 @@ export class ClassroomLife {
     console.info(`[room] classroom life: ${this.kids.length} classmates and the teacher`);
   }
 
-  /** A rival robot at its chair, its feet on the floor and its face (+Z) to the player; hidden until a race. */
+  /** A rival robot on the middle of its desk, its face (+Z) to the player; hidden until a race. */
   private rivalBot(desk: number, seat: Seat): RivalBot {
     const fig = makeBot(desk === 1 ? 0 : 1, RIVAL_COLORS[desk - 1]);
     const box = new Box3().setFromObject(fig.root);
     const size = box.getSize(new Vector3());
     fig.root.scale.setScalar(size.y > 0 ? BOT_H / size.y : 1);
     box.setFromObject(fig.root);
-    const rest = new Vector3(seat.x, -box.min.y, seat.z);
-    const yaw = Math.atan2(PLAYER_X - seat.x, PLAYER_Z - seat.z);
+    const x = seat.x - SEAT_BACK * Math.sin(seat.ry);
+    const z = seat.z - SEAT_BACK * Math.cos(seat.ry);
+    const rest = new Vector3(x, KID_DESK_TOP - box.min.y, z);
+    const yaw = Math.atan2(PLAYER_X - x, PLAYER_Z - z);
     fig.root.position.copy(rest);
     fig.root.rotation.set(0, yaw, 0);
     fig.root.visible = false;
@@ -237,7 +245,7 @@ export class ClassroomLife {
     if (k.momentLeft > 0) {
       k.momentLeft -= dt;
       const f = Math.max(0, k.momentLeft) / MOMENT_S[k.moment];
-      if (k.moment === 'right' || k.moment === 'cheer') hop = Math.abs(Math.sin((1 - f) * Math.PI * 2)) * 0.08 * f;
+      if (k.moment === 'right' || k.moment === 'cheer') hop = Math.abs(Math.sin((1 - f) * Math.PI * 2)) * 0.05 * f;
       else if (k.moment === 'missed') shake = Math.sin((1 - f) * Math.PI * 6) * 0.12 * f;
     }
     b.fig.root.position.set(b.rest.x, b.rest.y + hop, b.rest.z);
@@ -288,6 +296,15 @@ export class ClassroomLife {
           k.bot.fig.root.visible = racing && !!bot;
           if (k.bot.mixer) k.bot.mixer.timeScale = racing && bot ? 1 : 0;
           k.bot.fig.play('idle');
+        }
+        // The name and points over the robot on the desk, or over the classmate on the chair.
+        const at = bot ? bot.rest : k.fig.root.position;
+        const lz = bot ? at.z : at.z - 0.05;
+        for (const l of [k.name, k.status]) {
+          if (!l) continue;
+          l.mesh.position.x = at.x;
+          l.mesh.position.z = lz;
+          l.mesh.rotation.y = Math.atan2(PLAYER_X - at.x, PLAYER_Z - lz);
         }
         if (k.name) k.name.mesh.visible = racing;
         if (k.status) k.status.mesh.visible = racing;
