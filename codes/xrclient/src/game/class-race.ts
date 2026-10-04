@@ -72,7 +72,7 @@ type ServerMsg =
   | { type: 'error'; code: string };
 
 /** Errors that end the join; others are answers to one action. */
-const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first'];
+const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class'];
 /** After a `wait` (between rounds, the last seconds of one), ask again this much later. */
 const ASK_AGAIN_MS = 800;
 /** A dropped connection is tried again this often, this many times. */

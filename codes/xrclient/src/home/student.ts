@@ -94,6 +94,49 @@ export async function checkStudent(): Promise<void> {
   }
 }
 
+/** The room the teacher opened for this student's class: its play code, or null with none open. */
+export async function studentRoom(): Promise<{ play_code: string | null; class_label: string } | string> {
+  const s = current;
+  if (!s) return 'signed_out';
+  try {
+    const res = await fetch(`${API}/student/room`, { headers: { Authorization: `Bearer ${s.token}` } });
+    if (res.status === 401 && current?.token === s.token) set(null);
+    if (!res.ok) return errorCode(res);
+    return (await res.json()) as { play_code: string | null; class_label: string };
+  } catch {
+    return 'offline';
+  }
+}
+
+/** A race against the robots or a practice played on the student's own. */
+export type OwnPlay =
+  | { kind: 'race'; points: number; folded: number; place: number; stars: number; duration_ms: number }
+  | { kind: 'practice'; game: string; points: number; folded: number; right: number; total: number; duration_ms: number };
+
+/**
+ * Tells the teacher's class page about a play on the student's own, kept
+ * apart from the class's matches. Signed out, nothing is sent; offline, the
+ * play is not kept.
+ */
+export function reportPlay(play: OwnPlay): void {
+  const s = current;
+  if (!s) return;
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const client_id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  fetch(`${API}/student/plays`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.token}` },
+    body: JSON.stringify({ ...play, client_id, duration_ms: Math.max(0, Math.round(play.duration_ms)) }),
+  })
+    .then((res) => {
+      if (res.status === 401 && current?.token === s.token) set(null);
+    })
+    .catch(() => {
+      // Out of reach: this play is simply not counted.
+    });
+}
+
 /** Signs out here at once, and tells the server when it can. */
 export async function studentSignOut(): Promise<void> {
   const s = current;

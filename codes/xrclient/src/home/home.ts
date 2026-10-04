@@ -25,7 +25,7 @@ import {
 import { ClassRace } from '../game/class-race.js';
 import { avatarOf, avatarSvg } from './avatar.js';
 import { pictureSvg } from './pictures.js';
-import { checkStudent, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
+import { checkStudent, studentRoom, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
 import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
@@ -920,13 +920,15 @@ export class Home {
       return;
     }
     const { veil, body } = this.popup(t.classmates[0]);
-    el('div', 'step', body).textContent = t.roomCode;
+    // A student in a class seat: the room their teacher opened, without a code.
+    const mine = studentState() ? el('div', '', body) : undefined;
+    const step = el('div', 'step', body);
+    step.textContent = t.roomCode;
     const code = this.codeBoxes(body);
     const fail = this.errorLine(body);
     let busy = false;
-    this.actions(body, veil, () => {
+    const go = (c: string) => {
       if (busy) return;
-      const c = code();
       if (c.length !== 6) {
         fail('code_length');
         return;
@@ -950,7 +952,28 @@ export class Home {
           fail(e.message);
         },
       );
-    });
+    };
+    this.actions(body, veil, () => go(code()));
+    if (mine) {
+      void studentRoom().then((r) => {
+        if (typeof r === 'string') {
+          mine.remove();
+          return;
+        }
+        step.textContent = t.orTypeCode;
+        if (r.play_code) {
+          const play = r.play_code;
+          const b = el('button', 'btn wide shadow', mine);
+          const text = t.joinClassRoom(r.class_label);
+          b.style.background = COLORS.coral;
+          b.appendChild(paperText(text, 17, PAPER));
+          b.setAttribute('aria-label', text);
+          b.addEventListener('click', () => go(play));
+        } else {
+          el('p', '', mine).textContent = t.noClassRoom(r.class_label);
+        }
+      });
+    }
   }
 
   /**
@@ -1226,6 +1249,12 @@ export class Home {
       watch.textContent = t.roomWatch(room.watch_code);
       body.insertBefore(watch, actions);
       shown.push(watch);
+      if (room.class_label) {
+        const only = el('p', '', body);
+        only.textContent = t.roomOnlyClass(room.class_label);
+        body.insertBefore(only, actions);
+        shown.push(only);
+      }
       button(t.openScreen, COLORS.coral, PAPER, () => this.openScreen(room.watch_code, room.host_token, room.play_code));
       button(t.closeRoom, '#f1e3c4', INK, () => sure(room));
       fresh();
@@ -1249,12 +1278,30 @@ export class Home {
       });
       button(t.keepOpen, '#f1e3c4', INK, () => show(room));
     };
+    // With classes of their own, the teacher picks one (only its seats sit down) or anyone.
     const open = () => {
       if (busy) return;
       busy = true;
       clear();
       info.textContent = t.joining;
-      void openRoom(3).then((room) => {
+      void myClasses().then((classes) => {
+        busy = false;
+        const active = typeof classes === 'string' ? [] : classes.filter((c) => c.status === 'active');
+        if (active.length === 0) {
+          openFor();
+          return;
+        }
+        info.textContent = t.roomForWhich;
+        for (const c of active) button(t.roomForClass(c.label), COLORS.teal, PAPER, () => openFor(c.id));
+        button(t.roomForAnyone, '#f1e3c4', INK, () => openFor());
+      });
+    };
+    const openFor = (classId?: string) => {
+      if (busy) return;
+      busy = true;
+      clear();
+      info.textContent = t.joining;
+      void openRoom(3, classId).then((room) => {
         busy = false;
         if (typeof room === 'string') {
           info.textContent = '';

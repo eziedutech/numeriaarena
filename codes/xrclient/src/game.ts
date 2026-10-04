@@ -75,6 +75,7 @@ import { LocalStore } from './storage.js';
 import { T, useLanguage } from './text.js';
 import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
 import { townSticker } from './home/town-sticker.js';
+import { reportPlay } from './home/student.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -405,6 +406,8 @@ export class GameSystem extends createSystem({
   /** The practice session's running total when this practice began: its own points count from here. */
   private practiceBase = 0;
   private practiceTotal = 0;
+  /** When the race or practice began (performance.now()), for the play kept on the student's seat. */
+  private playStartedAt = 0;
   /** When the desk menu last appeared (performance.now()), for MENU_GRACE_MS. */
   private menuShownAt = 0;
   private practiceCards: Mesh[] = [];
@@ -1354,6 +1357,7 @@ export class GameSystem extends createSystem({
     this.played = 0;
     this.practiceRight = 0;
     this.practiceBase = this.practiceTotal;
+    this.playStartedAt = performance.now();
     if (choice === 'race') {
       this.phase = 'loading';
       this.startRace(resume, link).then(() => this.addQuitCardSafely()).catch((error) => {
@@ -1639,7 +1643,17 @@ export class GameSystem extends createSystem({
     this.raceScene.showRecap(recap, this.race instanceof ClassRace ? this.race.name.toUpperCase() || T.you : T.you);
     // The best kept on the device is the race against the robots.
     const own = recap.players[0];
-    if (own && this.race instanceof Race) this.saveBest(own.points, own.stars);
+    if (own && this.race instanceof Race) {
+      this.saveBest(own.points, own.stars);
+      reportPlay({
+        kind: 'race',
+        points: own.points,
+        folded: own.folded,
+        place: own.place,
+        stars: own.stars,
+        duration_ms: performance.now() - this.playStartedAt,
+      });
+    }
     this.addChoiceButton('done', T.done, 0, 0x3469c4);
   }
 
@@ -1675,6 +1689,15 @@ export class GameSystem extends createSystem({
     this.removeQuitCard();
     this.saveAnswers();
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
+    reportPlay({
+      kind: 'practice',
+      game: this.kind,
+      points,
+      folded: this.practiceRight,
+      right: this.practiceRight,
+      total: WAVE,
+      duration_ms: performance.now() - this.playStartedAt,
+    });
     const desk = this.deskEntity()?.object3D;
     if (!desk) {
       this.backToMenu();

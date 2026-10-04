@@ -236,14 +236,16 @@ export interface OpenedRoom {
   watch_code: string;
   host_token: string;
   seats: number;
+  /** The teacher's class the room is for (only its seats sit down); null for anyone. */
+  class_label?: string | null;
 }
 
-/** Opens a class room on the server; resolves with its codes, or an error code. */
-export async function openRoom(seats: number): Promise<OpenedRoom | string> {
+/** Opens a class room on the server, for one class when given; resolves with its codes, or an error code. */
+export async function openRoom(seats: number, classId?: string): Promise<OpenedRoom | string> {
   const user = auth?.currentUser;
   if (!user) return 'signed_out';
   try {
-    const res = await call(user, '/rooms', { method: 'POST', body: JSON.stringify({ seats }) });
+    const res = await call(user, '/rooms', { method: 'POST', body: JSON.stringify({ seats, class_id: classId }) });
     if (!res.ok) return errorCode(res);
     return (await res.json()) as OpenedRoom;
   } catch (e) {
