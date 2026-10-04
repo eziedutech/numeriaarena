@@ -81,11 +81,17 @@ const TEXT = {
     keepOpen: "KEEP IT OPEN",
     history: "ROOMS SO FAR",
     historyNone: "No rooms yet. The rooms you open show here, with each match's results.",
+    historySummary: (rooms: number, matches: number) =>
+      `${rooms} ${rooms === 1 ? "room" : "rooms"}, ${matches} ${matches === 1 ? "match" : "matches"} played. The newest first.`,
     historyOpen: "OPEN",
     historyClosed: "CLOSED",
-    historyNoMatch: "No match played.",
-    historyUnfinished: "Stopped before the end.",
-    historyPoints: (n: number) => `${n} points`,
+    historyMeta: (seats: number, matches: number) =>
+      `${seats} seats · ${matches === 0 ? "no match yet" : `${matches} ${matches === 1 ? "match" : "matches"}`}`,
+    historyMatch: (n: number) => `Match ${n}`,
+    historyUntil: (end: string, n: number) => ` to ${end} (${n} min)`,
+    historyUnfinished: "Stopped before the end",
+    historyCols: ["Place", "Player", "Points", "Stars"],
+    historySeat: "Seat",
     robot: "robot",
     locale: "en-GB",
     regTitle: "ABOUT YOU",
@@ -168,12 +174,18 @@ const TEXT = {
     closeYes: "YA, TUTUP",
     keepOpen: "BIARKAN TERBUKA",
     history: "RUANG SEBELUMNYA",
-    historyNone: "Belum ada ruang. Ruang yang kamu buka tampil di sini, dengan hasil tiap pertandingan.",
+    historyNone: "Belum ada ruang. Ruang yang Anda buka tampil di sini, dengan hasil tiap pertandingan.",
+    historySummary: (rooms: number, matches: number) =>
+      `${rooms} ruang, ${matches} pertandingan dimainkan. Yang terbaru di atas.`,
     historyOpen: "TERBUKA",
     historyClosed: "DITUTUP",
-    historyNoMatch: "Belum ada pertandingan.",
-    historyUnfinished: "Berhenti sebelum selesai.",
-    historyPoints: (n: number) => `${n} poin`,
+    historyMeta: (seats: number, matches: number) =>
+      `${seats} kursi · ${matches === 0 ? "belum ada pertandingan" : `${matches} pertandingan`}`,
+    historyMatch: (n: number) => `Pertandingan ${n}`,
+    historyUntil: (end: string, n: number) => ` sampai ${end} (${n} menit)`,
+    historyUnfinished: "Berhenti sebelum selesai",
+    historyCols: ["Peringkat", "Pemain", "Poin", "Bintang"],
+    historySeat: "Kursi",
     robot: "robot",
     locale: "id-ID",
     regTitle: "TENTANG ANDA",
@@ -602,48 +614,80 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
       (e) => setError(errorCode(e)),
     );
   }, [user, version]);
-  const when = (iso: string) => new Date(iso).toLocaleString(t.locale, { dateStyle: "medium", timeStyle: "short" });
+  const day = (iso: string) => new Date(iso).toLocaleDateString(t.locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString(t.locale, { hour: "2-digit", minute: "2-digit" });
+  const matches = rooms?.reduce((n, r) => n + r.matches.length, 0) ?? 0;
   return (
-    <section className="paper-sheet">
+    <section className="paper-sheet history">
       <h2>{t.history}</h2>
       <ErrorLine t={t} code={error} />
       {rooms?.length === 0 && <p className="soft">{t.historyNone}</p>}
-      {rooms?.map((r) => (
-        <div key={r.id} className="past-room">
-          <div className="past-head">
+      {rooms && rooms.length > 0 && <p className="soft">{t.historySummary(rooms.length, matches)}</p>}
+      {rooms?.map((r, i) => (
+        // The newest room starts unfolded; the others fold to one line each.
+        <details key={r.id} className="past-room" open={i === 0}>
+          <summary className="past-head">
             <strong className="past-code">{r.play_code}</strong>
-            <span className="soft">{when(r.created_at)}</span>
             <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
-          </div>
-          {r.matches.length === 0 && <p className="soft">{t.historyNoMatch}</p>}
-          {r.matches.map((m) => (
-            <div key={m.started_at} className="past-match">
-              <span className="soft">{when(m.started_at)}</span>
-              {m.players ? (
-                <div className="past-players">
-                  {[...m.players]
-                    .sort((a, b) => a.place - b.place)
-                    .map((p) => (
-                      <span key={p.name}>
-                        {p.place}. {p.name}
-                        {p.bot ? ` (${t.robot})` : ""}: {t.historyPoints(p.points)} {"\u2605".repeat(p.stars)}
-                      </span>
-                    ))}
-                </div>
-              ) : (
-                <div className="past-players">
-                  {m.seats.map((s) => (
-                    <span key={s.name}>
-                      {s.name}
-                      {s.bot ? ` (${t.robot})` : ""}
-                    </span>
-                  ))}
-                  <span className="soft">{t.historyUnfinished}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+            <span className="past-when">
+              {day(r.created_at)}, {clock(r.created_at)}
+            </span>
+            <span className="soft past-meta">{t.historyMeta(r.seats, r.matches.length)}</span>
+          </summary>
+          {r.matches.map((m, n) => {
+            const minutes = m.ended_at ? Math.max(1, Math.round((Date.parse(m.ended_at) - Date.parse(m.started_at)) / 60000)) : 0;
+            return (
+              <div key={m.started_at} className="past-match">
+                <p className="past-match-head">
+                  <strong>{t.historyMatch(n + 1)}</strong>
+                  <span className="soft">
+                    {clock(m.started_at)}
+                    {m.ended_at ? t.historyUntil(clock(m.ended_at), minutes) : ""}
+                  </span>
+                  {!m.players && <span className="past-state">{t.historyUnfinished}</span>}
+                </p>
+                <table className="past-table">
+                  <thead>
+                    <tr>
+                      <th>{m.players ? t.historyCols[0] : t.historySeat}</th>
+                      <th>{t.historyCols[1]}</th>
+                      {m.players && <th className="num">{t.historyCols[2]}</th>}
+                      {m.players && <th>{t.historyCols[3]}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {m.players
+                      ? [...m.players]
+                          .sort((a, b) => a.place - b.place)
+                          .map((p) => (
+                            <tr key={p.name} className={p.bot ? "bot" : ""}>
+                              <td>{p.place}</td>
+                              <td>
+                                {p.name}
+                                {p.bot && <span className="soft"> ({t.robot})</span>}
+                              </td>
+                              <td className="num">{p.points}</td>
+                              <td className="stars" aria-label={`${p.stars}/3`}>
+                                {"\u2605".repeat(p.stars)}
+                                <span className="dim">{"\u2605".repeat(Math.max(0, 3 - p.stars))}</span>
+                              </td>
+                            </tr>
+                          ))
+                      : m.seats.map((s, k) => (
+                          <tr key={s.name} className={s.bot ? "bot" : ""}>
+                            <td>{k + 1}</td>
+                            <td>
+                              {s.name}
+                              {s.bot && <span className="soft"> ({t.robot})</span>}
+                            </td>
+                          </tr>
+                        ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </details>
       ))}
     </section>
   );

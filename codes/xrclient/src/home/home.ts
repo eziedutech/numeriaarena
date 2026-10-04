@@ -17,6 +17,7 @@ import {
   openRoom,
   myRooms,
   closeRoom,
+  roomHistory,
   type OpenedRoom,
   type Me,
 } from './teacher.js';
@@ -58,6 +59,8 @@ const ICONS: Record<string, string> = {
     '<rect width="54" height="54" fill="#fff8ec"/><circle cx="27" cy="19" r="9" fill="#3469c4"/><path d="M9 46q0-16 18-16t18 16z" fill="#3469c4"/><path d="M27 10a9 9 0 0 1 0 18zM27 30q18 0 18 16H27z" fill="#2a54a0"/>',
   classes:
     '<rect width="54" height="54" fill="#fff8ec"/><rect x="8" y="8" width="17" height="17" fill="#e8b64c"/><rect x="29" y="8" width="17" height="17" fill="#e8b64c"/><rect x="8" y="29" width="17" height="17" fill="#e8b64c"/><rect x="29" y="29" width="17" height="17" fill="#c9962f"/>',
+  history:
+    '<rect width="54" height="54" fill="#fff8ec"/><rect x="9" y="8" width="36" height="38" fill="#3469c4"/><path d="M27 8h18v38H27z" fill="#2a54a0"/><rect x="15" y="16" width="24" height="3" fill="#fff8ec"/><rect x="15" y="24" width="24" height="3" fill="#fff8ec"/><rect x="15" y="32" width="16" height="3" fill="#fff8ec"/>',
   room: '<rect width="54" height="54" fill="#fff8ec"/><rect x="7" y="9" width="40" height="26" fill="#f2716b"/><path d="M27 9h20v26H27z" fill="#c9554f"/><rect x="18" y="17" width="18" height="10" fill="#fff8ec"/><rect x="25" y="35" width="4" height="9" fill="#3a3f4b"/>',
   teacher: '<rect width="54" height="54" fill="#3469c4"/><path d="M9 14h17v28H9z" fill="#fff8ec"/><path d="M28 14h17v28H28z" fill="#f3e6c9"/><rect x="26" y="12" width="2" height="32" fill="#3a3f4b"/><rect x="13" y="20" width="9" height="2" fill="#3469c4"/><rect x="13" y="25" width="9" height="2" fill="#3469c4"/>',
   tips: '<rect width="54" height="54" fill="#3fb6a0"/><circle cx="27" cy="22" r="12" fill="#fff8ec"/><path d="M27 10a12 12 0 0 1 0 24z" fill="#f3e6c9"/><rect x="21" y="34" width="12" height="4" fill="#fff8ec"/><rect x="22" y="40" width="10" height="4" fill="#f3e6c9"/>',
@@ -149,6 +152,19 @@ const CSS = `
 #home .tick .mark { flex: none; width: 26px; height: 26px; background: #f1e3c4; display: flex; align-items: center;
   justify-content: center; }
 #home .tick.on .mark { background: ${COLORS.teal}; }
+#home .past { max-height: 52vh; overflow-y: auto; margin: 8px 0; }
+#home .past-room { border-top: 2px solid rgba(58, 63, 75, 0.12); padding: 10px 2px; }
+#home .past-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
+#home .past-head b { font-size: 19px; letter-spacing: 0.1em; }
+#home .past-head .state { font-size: 12px; font-weight: 700; padding: 2px 7px; background: #e8dcc0; }
+#home .past-head .state.on { background: #bfe3c9; }
+#home .past-head .meta { margin-left: auto; color: #5d6270; }
+#home .past table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 6px; }
+#home .past caption { text-align: left; font-weight: 700; font-size: 13px; color: #5d6270; padding: 4px 0; }
+#home .past td { padding: 3px 6px; border-bottom: 1px solid rgba(58, 63, 75, 0.08); }
+#home .past td.num { text-align: right; font-variant-numeric: tabular-nums; }
+#home .past td.stars { color: #e2a21b; letter-spacing: 0.1em; width: 4em; }
+#home .past tr.bot td { color: #5d6270; }
 #home .names { display: flex; flex-wrap: wrap; gap: 8px; }
 #home .names span { background: #f1e3c4; padding: 7px 11px; font-weight: 700; font-size: 16px; }
 #home .names span.me { background: ${COLORS.sun}; }
@@ -440,6 +456,7 @@ export class Home {
       card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
       this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.message(t.myClasses[0], t.classesSoon), true);
       this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
+      this.card('right', row++, t.history, 'history', COLORS.cobalt, () => this.history());
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
@@ -908,6 +925,68 @@ export class Home {
       }
       veil.remove();
       this.openScreen(c);
+    });
+  }
+
+  /**
+   * ROOMS SO FAR: the teacher's newest rooms, each with its matches' results,
+   * the same list as on the teacher page.
+   */
+  private history(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.history[0]);
+    const info = el('p', '', body);
+    info.textContent = t.joining;
+    const fail = this.errorLine(body);
+    this.actions(body, veil);
+    const actions = body.querySelector('.actions');
+    const when = (iso: string, date: boolean) =>
+      date
+        ? new Date(iso).toLocaleString(t.locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : new Date(iso).toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' });
+    void roomHistory().then((rooms) => {
+      if (typeof rooms === 'string') {
+        info.textContent = '';
+        fail(rooms);
+        return;
+      }
+      if (rooms.length === 0) {
+        info.textContent = t.historyNone;
+        return;
+      }
+      info.remove();
+      const list = el('div', 'past', body);
+      body.insertBefore(list, actions);
+      // The ten newest here; the teacher page keeps the rest.
+      for (const r of rooms.slice(0, 10)) {
+        const room = el('div', 'past-room', list);
+        const head = el('div', 'past-head', room);
+        el('b', '', head).textContent = r.play_code;
+        const state = el('span', r.open ? 'state on' : 'state', head);
+        state.textContent = r.open ? t.historyOpen : t.historyClosed;
+        el('span', '', head).textContent = when(r.created_at, true);
+        el('span', 'meta', head).textContent = t.historyMeta(r.seats, r.matches.length);
+        r.matches.forEach((m, n) => {
+          const table = el('table', '', room);
+          const range = m.ended_at ? `${when(m.started_at, false)} - ${when(m.ended_at, false)}` : `${when(m.started_at, false)}, ${t.historyUnfinished}`;
+          el('caption', '', table).textContent = `${t.historyMatch(n + 1)} · ${range}`;
+          const rows = m.players
+            ? [...m.players].sort((a, b) => a.place - b.place).map((p) => [String(p.place), p.name, p.bot, String(p.points), '★'.repeat(p.stars)] as const)
+            : m.seats.map((s, k) => [String(k + 1), s.name, s.bot, '', ''] as const);
+          for (const [place, name, bot, points, stars] of rows) {
+            const tr = el('tr', bot ? 'bot' : '', table);
+            el('td', 'num', tr).textContent = place;
+            el('td', '', tr).textContent = bot ? `${name} (${t.robot})` : name;
+            el('td', 'num', tr).textContent = points;
+            el('td', 'stars', tr).textContent = stars;
+          }
+        });
+      }
+      if (rooms.length > 10) {
+        const more = el('p', '', body);
+        more.textContent = t.historyAll;
+        body.insertBefore(more, actions);
+      }
     });
   }
 

@@ -266,6 +266,35 @@ export async function myRooms(): Promise<OpenedRoom[] | string> {
   }
 }
 
+/** A room this adult opened, open or closed, with each match's results. */
+export interface PastRoom {
+  id: string;
+  play_code: string;
+  seats: number;
+  created_at: string;
+  open: boolean;
+  matches: {
+    started_at: string;
+    ended_at: string | null;
+    seats: { name: string; bot: boolean }[];
+    players: { name: string; bot: boolean; points: number; place: number; stars: number }[] | null;
+  }[];
+}
+
+/** Every room this adult opened, the newest first; or an error code. */
+export async function roomHistory(): Promise<PastRoom[] | string> {
+  const user = auth?.currentUser;
+  if (!user) return 'signed_out';
+  try {
+    const res = await call(user, '/rooms/history');
+    if (!res.ok) return errorCode(res);
+    return ((await res.json()) as { rooms: PastRoom[] }).rooms;
+  } catch (e) {
+    console.warn('[teacher] room history failed', e);
+    return 'offline';
+  }
+}
+
 /** Closes a room this adult opened: its codes stop working at once. */
 export async function closeRoom(id: string): Promise<true | string> {
   const user = auth?.currentUser;

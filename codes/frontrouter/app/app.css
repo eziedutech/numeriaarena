@@ -418,16 +418,47 @@ button.tool {
   margin-top: 8px;
 }
 
-.past-room {
-  border-top: 2px solid rgba(58, 63, 75, 0.12);
-  padding: 12px 0;
+.history h2 {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
+.past-room {
+  border-top: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+.past-room:last-child {
+  border-bottom: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+/* One line per room: code, state, when, size; the matches unfold below it. */
 .past-head {
-  display: flex;
-  gap: 14px;
-  align-items: baseline;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 7.5em 7em 1fr auto 1em;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 4px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.past-head::-webkit-details-marker {
+  display: none;
+}
+
+.past-head::after {
+  content: "\25BE";
+  color: var(--ink-soft);
+  transition: transform 0.15s;
+}
+
+.past-room:not([open]) .past-head::after {
+  transform: rotate(-90deg);
+}
+
+.past-head:hover {
+  background: rgba(58, 63, 75, 0.04);
 }
 
 .past-code {
@@ -436,8 +467,10 @@ button.tool {
 }
 
 .past-state {
-  font-size: 13px;
+  justify-self: start;
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   padding: 2px 8px;
   background: #e8dcc0;
 }
@@ -446,15 +479,79 @@ button.tool {
   background: #bfe3c9;
 }
 
-.past-match {
-  margin-top: 8px;
+.past-meta {
+  text-align: right;
 }
 
-.past-players {
+.past-match {
+  margin: 0 4px 14px;
+  padding-left: 14px;
+  border-left: 3px solid #e8dcc0;
+}
+
+.past-match-head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin: 4px 0 6px;
+}
+
+.past-table {
+  width: 100%;
+  max-width: 560px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.past-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 4px 8px;
+  border-bottom: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+.past-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(58, 63, 75, 0.08);
+}
+
+.past-table th:first-child,
+.past-table td:first-child {
+  width: 5.5em;
+}
+
+.past-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.past-table .stars {
+  color: #e2a21b;
+  letter-spacing: 0.1em;
+}
+
+.past-table .stars .dim {
+  color: rgba(58, 63, 75, 0.18);
+}
+
+.past-table tr.bot td {
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .past-head {
+    grid-template-columns: auto auto 1fr 1em;
+  }
+
+  .past-meta {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
 }
 
 .tool .soon {
