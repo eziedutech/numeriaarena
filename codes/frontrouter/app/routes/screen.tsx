@@ -138,6 +138,7 @@ const TEXT = {
       end: "The match is over.",
     },
     stored: "Results saved.",
+    history: "HISTORY",
     errors: {
       room_not_found: "No room has that code. Check the code, or watch the demo match.",
       room_closed: "The teacher closed this room.",
@@ -214,6 +215,7 @@ const TEXT = {
       end: "Pertandingan selesai.",
     },
     stored: "Hasil tersimpan.",
+    history: "RIWAYAT",
     errors: {
       room_not_found: "Tidak ada ruang dengan kode itu. Periksa kodenya, atau tonton pertandingan demo.",
       room_closed: "Guru menutup ruang ini.",
@@ -257,11 +259,13 @@ interface Live {
   work: Record<number, { en: string; id: string } | undefined>;
   last: Record<number, boolean | undefined>;
   feed: { key: number; text: (t: Text) => string }[];
+  /** Each seat's last points won, shown rising by its total for a moment. */
+  gain: Record<number, { key: number; points: number } | undefined>;
   cheerAt: number;
   error?: string;
 }
 
-const EMPTY: Live = { status: "connecting", stored: false, work: {}, last: {}, feed: [], cheerAt: 0 };
+const EMPTY: Live = { status: "connecting", stored: false, work: {}, last: {}, feed: [], gain: {}, cheerAt: 0 };
 
 /** The watch connection: reconnects on a drop, and keeps the room's clock against this one. */
 function useRoom(code: string, host?: string) {
@@ -352,7 +356,7 @@ function reduce(l: Live, msg: ServerMsg, feedKey: { current: number }): Live {
       switch (e.type) {
         case "wave_start":
           // A new match in the same room (the demo) starts at wave 0.
-          if (e.wave === 0 && l.recap) return { ...l, recap: undefined, stored: false, work: {}, last: {}, feed: [] };
+          if (e.wave === 0 && l.recap) return { ...l, recap: undefined, stored: false, work: {}, last: {}, feed: [], gain: {} };
           return { ...l, work: {}, last: {} };
         case "seat_working":
           return { ...l, work: { ...l.work, [e.seat]: e.prompt }, last: { ...l.last, [e.seat]: undefined } };
@@ -364,6 +368,7 @@ function reduce(l: Live, msg: ServerMsg, feedKey: { current: number }): Live {
             work: finished ? { ...l.work, [e.seat]: undefined } : l.work,
             last: { ...l.last, [e.seat]: e.correct },
             feed: e.correct ? line((t) => t.feed.right(n, e.points)) : l.feed,
+            gain: e.correct && e.points > 0 ? { ...l.gain, [e.seat]: { key: feedKey.current, points: e.points } } : l.gain,
           };
         }
         case "seat_away": {
@@ -505,11 +510,16 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
         <section className="arena-board">
           <Header t={t} view={v} remaining={v.ends_at_ms === null ? null : v.ends_at_ms - now()} breakLeft={v.until_ms === undefined ? null : v.until_ms - now()} />
           <Standings t={t} lang={lang} view={v} live={live} />
-          <ol className="arena-feed" aria-live="polite">
-            {live.feed.map((f) => (
-              <li key={f.key}>{f.text(t)}</li>
-            ))}
-          </ol>
+          {live.feed.length > 0 && (
+            <section className="arena-history">
+              <h2>{t.history}</h2>
+              <ol className="arena-feed" aria-live="polite">
+                {live.feed.map((f) => (
+                  <li key={f.key}>{f.text(t)}</li>
+                ))}
+              </ol>
+            </section>
+          )}
         </section>
       )}
       <div className="arena-foot">
@@ -671,6 +681,7 @@ function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; l
       {rows.map(({ s, i }) => {
         const work = live.work[i];
         const last = live.last[i];
+        const gain = live.gain[i];
         return (
           <li key={i} className={s.away ? "arena-row away" : "arena-row"}>
             <span className="arena-place">{t.place(s.place)}</span>
@@ -685,6 +696,11 @@ function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; l
               </span>
             </span>
             <span className="arena-points">
+              {gain && (
+                <span key={gain.key} className="arena-gain" aria-hidden="true">
+                  +{gain.points}
+                </span>
+              )}
               {s.points}
               <small> {t.points}</small>
               <small className="soft">
