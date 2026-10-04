@@ -23,6 +23,8 @@ import {
   type Me,
 } from './teacher.js';
 import { ClassRace } from '../game/class-race.js';
+import { pictureSvg } from './pictures.js';
+import { checkStudent, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
 import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
@@ -67,18 +69,6 @@ const ICONS: Record<string, string> = {
   tips: '<rect width="54" height="54" fill="#3fb6a0"/><circle cx="27" cy="22" r="12" fill="#fff8ec"/><path d="M27 10a12 12 0 0 1 0 24z" fill="#f3e6c9"/><rect x="21" y="34" width="12" height="4" fill="#fff8ec"/><rect x="22" y="40" width="10" height="4" fill="#f3e6c9"/>',
   watch: '<rect width="54" height="54" fill="#b198ea"/><path d="M5 27q22-20 44 0q-22 20-44 0z" fill="#fff8ec"/><path d="M27 12q11 3 22 15q-11 12-22 15z" fill="#f3e6c9"/><circle cx="27" cy="27" r="7" fill="#3a3f4b"/>',
 };
-
-const SYMBOLS = [
-  '<path d="M17 3 21 13 32 13 23 20 26 31 17 24 8 31 11 20 2 13 13 13z" fill="#e8b64c"/>',
-  '<circle cx="17" cy="17" r="12" fill="#3469c4"/>',
-  '<path d="M17 4 31 30H3z" fill="#3fb6a0"/>',
-  '<rect x="5" y="5" width="24" height="24" fill="#f2716b"/>',
-  '<path d="M17 30C3 20 3 8 10 6c4-1 6 2 7 4 1-2 3-5 7-4 7 2 7 14-7 24z" fill="#f2716b"/>',
-  '<path d="M4 22q13-22 26 0z" fill="#e8b64c"/>',
-  '<path d="M17 3 31 17 17 31 3 17z" fill="#b198ea"/>',
-  '<path d="M6 8h22v6H6zM6 20h22v6H6z" fill="#3469c4"/>',
-  '<path d="M13 4h8v9h9v8h-9v9h-8v-9H4v-8h9z" fill="#3fb6a0"/>',
-];
 
 const CSS = `
 #home { position: fixed; inset: 0; z-index: 5; pointer-events: none; overflow: hidden;
@@ -138,7 +128,13 @@ const CSS = `
 #home .seatno { font-size: 15px; font-weight: 700; min-height: 20px; margin: -4px 0 4px; }
 #home .row + .row { margin-top: 6px; }
 #home .sym { width: 48px; height: 48px; }
-#home .sym.on { background: ${COLORS.teal}; }
+#home .sym:hover { background: #ecd7ab; }
+#home .slots { margin-bottom: 4px; }
+#home .slot { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  background: #fffdf8; border: 2px dashed #c9b88f; font-weight: 700; color: #5d6270; box-sizing: border-box; }
+#home .slot.on { border: 2px solid ${COLORS.teal}; }
+#home .seat.undo { width: auto; padding: 0 10px; font-size: 14px; }
+#home .seat.undo:disabled { opacity: 0.5; cursor: default; }
 #home .btn { padding: 12px 18px; border: 0; cursor: pointer; display: flex; align-items: center; }
 #home .actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
 #home .wide { width: 100%; margin-top: 10px; justify-content: flex-start; font-family: inherit; font-weight: 700; font-size: 17px;
@@ -283,6 +279,8 @@ export class Home {
     onNetwork(() => {
       if (this.shown) this.render();
     });
+    onStudent(() => this.render());
+    void checkStudent();
     onTeacher((s) => {
       this.render();
       if (s.kind === 'out') this.askedToRegister = false;
@@ -333,6 +331,8 @@ export class Home {
     this.shown = true;
     // Drawn again on every return: a race left meanwhile changes the robots card.
     this.render();
+    // A seat given a new picture or emptied by the teacher signs out here.
+    void checkStudent();
     this.root.style.display = 'block';
     document.body.classList.add('home-open');
     this.back.style.display = 'none';
@@ -459,7 +459,11 @@ export class Home {
       this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
       this.card('right', row++, t.history, 'history', COLORS.cobalt, () => this.history());
     } else {
-      this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
+      const student = studentState();
+      if (student) {
+        const hi = [t.studentHi(student.pseudonym), t.studentSeat(student.class_label, student.seat)];
+        this.card('right', row++, hi, 'student', COLORS.sun, () => this.studentCard(student));
+      } else this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
       if (teacher.kind === 'error' && teacher.code === 'offline') {
         const sub = card.querySelector('.sub');
@@ -684,16 +688,15 @@ export class Home {
     this.actions(body, veil);
   }
 
+  /**
+   * I'M IN A CLASS: the class code, the seat number and the three pictures
+   * in the order on the student's card; the device then stays in that seat.
+   */
   private studentCode(): void {
     const t = this.t;
     const { veil, body } = this.popup(t.student[0]);
     el('div', 'step', body).textContent = t.classCode;
-    const code = el('div', 'row', body);
-    for (let i = 0; i < 6; i += 1) {
-      const box = el('input', 'box', code);
-      box.maxLength = 1;
-      box.addEventListener('input', () => (box.nextElementSibling as HTMLInputElement | null)?.focus());
-    }
+    const code = this.codeBoxes(body);
     el('div', 'step', body).textContent = t.seat;
     // Two rows of 0 to 9: tens, then ones (seat 1 is 0 then 1, seat 40 is 4 then 0).
     const digits = [-1, -1];
@@ -717,18 +720,85 @@ export class Home {
       }
     });
     el('div', 'step', body).textContent = t.picture;
-    const pics = el('div', 'row', body);
-    SYMBOLS.forEach((sym) => {
+    // The three picked so far, in order, then the nine to pick from.
+    const picked: number[] = [];
+    const slots = el('div', 'row slots', body);
+    const showPicked = () => {
+      slots.replaceChildren();
+      for (let k = 0; k < 3; k += 1) {
+        const n = picked[k];
+        const slot = el('span', n === undefined ? 'slot' : 'slot on', slots);
+        if (n === undefined) slot.textContent = String(k + 1);
+        else slot.innerHTML = pictureSvg(n, 32);
+        slot.setAttribute('aria-label', n === undefined ? `${k + 1}` : `${k + 1}: ${t.pictureNames[n]}`);
+      }
+      const undo = el('button', 'seat undo', slots);
+      undo.textContent = t.undoPicture;
+      undo.setAttribute('aria-label', t.undoPicture);
+      undo.disabled = picked.length === 0;
+      undo.addEventListener('click', () => {
+        picked.pop();
+        showPicked();
+      });
+    };
+    const pics = el('div', 'row pics', body);
+    t.pictureNames.forEach((name, n) => {
       const b = el('button', 'sym', pics);
-      b.innerHTML = `<svg width="30" height="30" viewBox="0 0 34 34">${sym}</svg>`;
+      b.innerHTML = pictureSvg(n, 36);
+      b.setAttribute('aria-label', name);
+      b.title = name;
       b.addEventListener('click', () => {
-        if (b.classList.contains('on') || pics.querySelectorAll('.on').length < 3) b.classList.toggle('on');
+        if (picked.length < 3) picked.push(n);
+        showPicked();
       });
     });
+    showPicked();
+    const fail = this.errorLine(body);
+    let busy = false;
     this.actions(body, veil, () => {
-      veil.remove();
-      this.message(t.student[0], t.studentSoon);
+      if (busy) return;
+      const c = code();
+      const seat = digits[0] * 10 + digits[1];
+      if (c.length !== 6) return fail('code_length');
+      if (digits.some((d) => d < 0) || seat < 1) return fail('seat_pick');
+      if (picked.length !== 3) return fail('picture');
+      if (!online()) return fail('offline');
+      busy = true;
+      fail();
+      const line = body.querySelector('.err');
+      if (line) line.textContent = t.joining;
+      void studentSignIn(c, seat, [...picked]).then((r) => {
+        busy = false;
+        if (r === true) {
+          veil.remove();
+          const s = studentState();
+          if (s) this.studentCard(s, true);
+          return;
+        }
+        fail(r);
+        // A wrong try starts the pictures again.
+        if (r === 'wrong_picture') {
+          picked.length = 0;
+          showPicked();
+        }
+      });
     });
+  }
+
+  /** The signed-in seat: who, which class, and SIGN OUT for a shared device. */
+  private studentCard(s: Student, welcome = false): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.studentHi(s.pseudonym));
+    el('div', 'step', body).textContent = t.studentSeat(s.class_label, s.seat);
+    el('p', '', body).textContent = welcome ? t.studentWelcome : t.studentKept;
+    const out = el('button', 'btn wide shadow', body);
+    out.appendChild(paperText(t.signOut, 16, INK));
+    out.setAttribute('aria-label', t.signOut);
+    out.addEventListener('click', () => {
+      veil.remove();
+      void studentSignOut();
+    });
+    this.actions(body, veil);
   }
 
   /** Six boxes for a room's code; reads it back in capitals. */
