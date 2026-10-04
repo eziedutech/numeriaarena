@@ -727,6 +727,40 @@ button.tool {
   font-weight: 700;
 }
 
+.arena-gone {
+  position: relative;
+  border-top: 8px solid #f2716b;
+}
+
+.arena-gone h1 {
+  margin-top: 6px;
+}
+
+.arena-gone a.btn {
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.arena-gone-code {
+  display: inline-block;
+  background: #f1e3c4;
+  padding: 4px 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-decoration: line-through;
+  transform: rotate(-2deg);
+}
+
+.arena-gone-row {
+  display: flex;
+  gap: 10px;
+}
+
+.arena-gone-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
 .arena-cheer {
   font-size: 22px;
   font-weight: 700;

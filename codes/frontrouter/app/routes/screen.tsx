@@ -83,6 +83,21 @@ const TEXT = {
     demo: "WATCH THE DEMO MATCH",
     connecting: "Connecting...",
     lost: "The connection dropped. Trying again...",
+    gone: {
+      room_not_found: "THIS ROOM IS NOT OPEN",
+      room_closed: "THIS ROOM IS CLOSED",
+      other: "THE SCREEN COULD NOT JOIN",
+    } as Record<string, string>,
+    goneWhy: {
+      room_not_found:
+        "Check the code. A room stays open while its class plays; it ends when the teacher closes it, and when the game's server is updated.",
+      room_closed: "The teacher closed this room. The match is over.",
+      other: "Reload the page, or try the code again in a moment.",
+    } as Record<string, string>,
+    goneHost: "To race again, open a new room in the game: OPEN A CLASS ROOM. Every finished match is kept under ROOMS SO FAR.",
+    goneResults: "SEE ROOMS SO FAR",
+    goneOther: "Watch another room",
+    reload: "RELOAD",
     joinWith: "Join with code",
     joinHow: "In the game: RACE MY CLASSMATES, then this code.",
     seatsTaken: (n: number, of: number) => `${n} of ${of} seats taken. Robots fill the empty seats.`,
@@ -144,6 +159,21 @@ const TEXT = {
     demo: "TONTON PERTANDINGAN DEMO",
     connecting: "Menyambung...",
     lost: "Sambungan putus. Mencoba lagi...",
+    gone: {
+      room_not_found: "RUANG INI TIDAK DIBUKA",
+      room_closed: "RUANG INI SUDAH DITUTUP",
+      other: "LAYAR TIDAK BISA MASUK",
+    } as Record<string, string>,
+    goneWhy: {
+      room_not_found:
+        "Periksa kodenya. Ruang terbuka selama kelasnya bermain; ruang berakhir saat guru menutupnya, dan saat server game diperbarui.",
+      room_closed: "Guru menutup ruang ini. Pertandingan sudah selesai.",
+      other: "Muat ulang halaman, atau coba kodenya lagi sebentar lagi.",
+    } as Record<string, string>,
+    goneHost: "Untuk lomba lagi, buka ruang baru di game: BUKA RUANG KELAS. Setiap pertandingan yang selesai tersimpan di RUANG SEBELUMNYA.",
+    goneResults: "LIHAT RUANG SEBELUMNYA",
+    goneOther: "Tonton ruang lain",
+    reload: "MUAT ULANG",
     joinWith: "Masuk dengan kode",
     joinHow: "Di game: LOMBA DENGAN TEMAN, lalu kode ini.",
     seatsTaken: (n: number, of: number) => `${n} dari ${of} kursi terisi. Robot mengisi kursi kosong.`,
@@ -450,8 +480,8 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
   if (live.status === "failed") {
     return (
       <>
-        <p className="arena-banner err">{errorText}</p>
-        <AskCode t={t} />
+        {live.recap && <RecapCard t={t} recap={live.recap} stored={live.stored} />}
+        <RoomGone t={t} code={code} error={live.error ?? "other"} host={host} />
       </>
     );
   }
@@ -495,6 +525,55 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
         {errorText && <span className="err">{errorText}</span>}
       </div>
     </>
+  );
+}
+
+/** The room is gone (a wrong code, closed by the teacher, or ended by a server update). */
+function RoomGone({ t, code, error, host }: { t: Text; code: string; error: string; host?: string }) {
+  const known = error === "room_not_found" || error === "room_closed";
+  const key = known ? error : "other";
+  const [other, setOther] = useState("");
+  const [bad, setBad] = useState(false);
+  return (
+    <section className="paper-sheet narrow arena-gone" role="status">
+      <span className="arena-gone-code">{code}</span>
+      <h1>{t.gone[key]}</h1>
+      <p>{t.goneWhy[key]}</p>
+      {!known && (
+        <button type="button" className="btn wide blue" onClick={() => location.reload()}>
+          {t.reload}
+        </button>
+      )}
+      {host && known && (
+        <>
+          <p>{t.goneHost}</p>
+          <a className="btn wide blue" href="/manage">
+            {t.goneResults}
+          </a>
+        </>
+      )}
+      <h2>{t.goneOther}</h2>
+      <div className="arena-gone-row">
+        <input
+          className="field arena-code-field"
+          aria-label={t.codeLabel}
+          maxLength={6}
+          autoCapitalize="characters"
+          value={other}
+          onChange={(e) => {
+            setBad(false);
+            setOther(e.target.value.replace(/[^a-z0-9]/giu, "").toUpperCase());
+          }}
+        />
+        <button type="button" className="btn blue" onClick={() => (other.length === 6 ? go(other) : setBad(true))}>
+          {t.watch}
+        </button>
+      </div>
+      {bad && <p className="err">{t.errors.code_length}</p>}
+      <button type="button" className="btn wide" onClick={() => go(DEMO_CODE)}>
+        {t.demo}
+      </button>
+    </section>
   );
 }
 
