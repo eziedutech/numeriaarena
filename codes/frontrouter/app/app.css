@@ -773,3 +773,252 @@ button.tool {
   text-align: center;
   font-weight: 700;
 }
+
+/* MY CLASSES: the list, a class's seats, and the sign-in cards for the printer. */
+.tool-on.on {
+  background: #f4b98f;
+}
+
+.classes h2 {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.classes .row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.class-row {
+  display: grid;
+  grid-template-columns: 6em 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 12px 14px;
+  background: #f1e3c4;
+}
+
+.class-row:hover {
+  background: #ecd7ab;
+}
+
+.class-row.old {
+  color: var(--ink-soft);
+  background: #f5ecd9;
+}
+
+.class-label {
+  font-size: 20px;
+}
+
+.class-code,
+.class-join .room-code {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.class-code {
+  font-size: 18px;
+}
+
+.class-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.class-join {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #f1e3c4;
+}
+
+.class-join .room-code {
+  font-size: 36px;
+}
+
+.cards-ready {
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #bfe3c9;
+}
+
+.cards-ready p {
+  margin: 0 0 8px;
+}
+
+.past-table.seats {
+  max-width: none;
+}
+
+.past-table.seats td {
+  vertical-align: middle;
+}
+
+.past-table.seats td:first-child,
+.past-table.seats th:first-child {
+  width: 3.5em;
+}
+
+.seat-no {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.field.name {
+  padding: 5px 8px;
+  min-width: 9em;
+}
+
+.seat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.past-state.lock {
+  background: #f8c2bf;
+}
+
+.class-tools {
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .class-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .past-table.seats th:nth-child(3),
+  .past-table.seats td:nth-child(3),
+  .past-table.seats th:nth-child(4),
+  .past-table.seats td:nth-child(4) {
+    display: none;
+  }
+}
+
+@media screen {
+  .print-cards {
+    display: none;
+  }
+}
+
+@media print {
+  body:has(.print-cards) > :not(.print-cards) {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .print-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    color: #000;
+  }
+
+  .sign-card {
+    break-inside: avoid;
+    border: 1px dashed #777;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .sign-card p {
+    margin: 0;
+  }
+
+  .sign-game {
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+
+  .sign-top {
+    display: flex;
+    justify-content: space-between;
+    margin: 6px 0 2px;
+  }
+
+  .sign-top > div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sign-small {
+    font-size: 11px;
+    color: #444;
+  }
+
+  .sign-code {
+    font-size: 26px;
+    letter-spacing: 0.12em;
+  }
+
+  .sign-seat {
+    font-size: 26px;
+    text-align: right;
+  }
+
+  .sign-name {
+    font-weight: 700;
+    margin-bottom: 4px !important;
+  }
+
+  .sign-pictures {
+    display: flex;
+    gap: 14px;
+    list-style: none;
+    padding: 0;
+    margin: 2px 0 8px;
+    counter-reset: pic;
+  }
+
+  .sign-pictures li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    counter-increment: pic;
+  }
+
+  .sign-pictures li::before {
+    content: counter(pic);
+    font-size: 11px;
+  }
+
+  .sign-line {
+    border-bottom: 1px solid #000;
+    padding-bottom: 2px;
+    margin-bottom: 4px !important;
+  }
+
+  .sign-pictures svg {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

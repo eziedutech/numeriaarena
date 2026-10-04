@@ -281,6 +281,31 @@ export interface PastRoom {
   }[];
 }
 
+/** A standing class of this teacher (MY CLASSES); the code is null once archived. */
+export interface ClassRow {
+  id: string;
+  label: string;
+  grade: number;
+  school_year: string;
+  join_code: string | null;
+  status: 'active' | 'archived';
+  seats: number;
+}
+
+/** This teacher's classes, the active ones first; or an error code. */
+export async function myClasses(): Promise<ClassRow[] | string> {
+  const user = auth?.currentUser;
+  if (!user) return 'signed_out';
+  try {
+    const res = await call(user, '/classes');
+    if (!res.ok) return errorCode(res);
+    return ((await res.json()) as { classes: ClassRow[] }).classes;
+  } catch (e) {
+    console.warn('[teacher] classes failed', e);
+    return 'offline';
+  }
+}
+
 /** Every room this adult opened, the newest first; or an error code. */
 export async function roomHistory(): Promise<PastRoom[] | string> {
   const user = auth?.currentUser;

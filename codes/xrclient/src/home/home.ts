@@ -17,6 +17,7 @@ import {
   openRoom,
   myRooms,
   closeRoom,
+  myClasses,
   roomHistory,
   type OpenedRoom,
   type Me,
@@ -454,7 +455,7 @@ export class Home {
       card.style.background = COLORS.cobalt;
       card.style.color = PAPER;
       card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
-      this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.message(t.myClasses[0], t.classesSoon), true);
+      this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.classes());
       this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
       this.card('right', row++, t.history, 'history', COLORS.cobalt, () => this.history());
     } else {
@@ -925,6 +926,44 @@ export class Home {
       }
       veil.remove();
       this.openScreen(c);
+    });
+  }
+
+  /**
+   * MY CLASSES: the teacher's classes with their codes; making a class and
+   * printing its cards happen on the teacher page.
+   */
+  private classes(): void {
+    const t = this.t;
+    const { veil, body } = this.popup(t.myClasses[0]);
+    const info = el('p', '', body);
+    info.textContent = t.joining;
+    const fail = this.errorLine(body);
+    const link = el('a', '', el('p', '', body));
+    link.href = '/manage#classes';
+    link.textContent = t.classesLink;
+    link.style.color = COLORS.cobalt;
+    this.actions(body, veil);
+    void myClasses().then((classes) => {
+      if (typeof classes === 'string') {
+        info.textContent = '';
+        fail(classes);
+        return;
+      }
+      if (classes.length === 0) {
+        info.textContent = t.classesNone;
+        return;
+      }
+      info.textContent = t.classesHow;
+      const list = el('div', 'past', body);
+      body.insertBefore(list, link.parentElement);
+      for (const c of classes) {
+        const head = el('div', 'past-head', el('div', 'past-room', list));
+        el('b', '', head).textContent = c.label;
+        if (c.join_code) el('span', 'state on', head).textContent = c.join_code;
+        else el('span', 'state', head).textContent = t.classArchived;
+        el('span', 'meta', head).textContent = `${t.classMeta(c.grade, c.seats)}${c.school_year ? ` · ${c.school_year}` : ''}`;
+      }
     });
   }
 

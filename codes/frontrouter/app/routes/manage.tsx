@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, sendEmailLink, signInConfigured, signInWith, signOut, watchUser } from "../auth";
+import { ClassesTool, MyClasses } from "../classes";
 import { useLang, type Lang } from "../legal";
 
 export function meta({}: Route.MetaArgs) {
@@ -11,7 +12,7 @@ export function meta({}: Route.MetaArgs) {
 
 /**
  * One door for adults: teachers and organisers see their account, sign up
- * if they have not, and (soon) their classes; admins also see the organiser
+ * if they have not, and their classes; admins also see the organiser
  * gate. Every right is checked again by the server.
  */
 
@@ -62,12 +63,10 @@ const TEXT = {
     pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
     suspendedBody: "This account is suspended. Write to numeria@eziedutech.dev if you think this is a mistake.",
     admin: "Admin",
-    soon: "SOON",
     tools: [
-      ["MY CLASSES", "Seats, sign-in cards and reports"],
+      ["MY CLASSES", "Seats, sign-in cards and students' names"],
       ["OPEN A CLASS ROOM", "A room code on the class screen"],
     ],
-    toolsSoon: "Classes with seats open with the next update of the class server.",
     opening: "Opening a room...",
     roomPlay: "Students press RACE MY CLASSMATES in the game and enter",
     roomWatch: "Watch code (for a screen or parents):",
@@ -156,12 +155,10 @@ const TEXT = {
     pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
     suspendedBody: "Akun ini ditangguhkan. Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     admin: "Admin",
-    soon: "SEGERA",
     tools: [
-      ["KELAS SAYA", "Kursi, kartu masuk, dan laporan"],
+      ["KELAS SAYA", "Kursi, kartu masuk, dan nama siswa"],
       ["BUKA RUANG KELAS", "Kode ruang di layar kelas"],
     ],
-    toolsSoon: "Kelas dengan kursi dibuka di pembaruan server kelas berikutnya.",
     opening: "Membuka ruang...",
     roomPlay: "Siswa menekan LOMBA DENGAN TEMAN di game lalu memasukkan",
     roomWatch: "Kode tonton (untuk layar atau orang tua):",
@@ -352,7 +349,7 @@ export default function Manage() {
               <Organizers t={t} user={user} />
             </>
           ) : (
-            <Account t={t} user={user} me={me} onChange={() => loadMe(user)} />
+            <Account t={t} lang={lang} user={user} me={me} onChange={() => loadMe(user)} />
           )}
         </>
       )}
@@ -437,10 +434,14 @@ function AccountHead({ t, me }: { t: Text; me: Me }) {
 }
 
 /** The signed-in adult: who, where, the approval status, the sign-up form if needed, and the class tools. */
-function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onChange: () => void }) {
+function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: User; me: Me; onChange: () => void }) {
   const org = me.organizer?.org;
   // Bumped when a room opens or closes, so the history reads again.
   const [rooms, setRooms] = useState(0);
+  // The game's MY CLASSES card links to /manage#classes, which opens them at once.
+  const [classes, setClasses] = useState(false);
+  useEffect(() => setClasses(window.location.hash === "#classes"), []);
+  const working = me.organizer && me.organizer.status !== "suspended";
   return (
     <>
       <section className="paper-sheet">
@@ -459,18 +460,16 @@ function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onCha
       {!me.organizer ? (
         <SignUp t={t} user={user} me={me} onDone={onChange} />
       ) : (
-        <section className="paper-sheet">
-          <div className="tools">
-            <div className="tool">
-              <span className="soon">{t.soon}</span>
-              <strong>{t.tools[0][0]}</strong>
-              <span className="soft">{t.tools[0][1]}</span>
+        working && (
+          <section className="paper-sheet">
+            <div className="tools">
+              <ClassesTool title={t.tools[0][0]} sub={t.tools[0][1]} open={classes} onOpen={() => setClasses(!classes)} />
+              <OpenRoom t={t} user={user} onChange={() => setRooms((n) => n + 1)} />
             </div>
-            {me.organizer.status !== "suspended" && <OpenRoom t={t} user={user} onChange={() => setRooms((n) => n + 1)} />}
-          </div>
-          <p className="soft">{t.toolsSoon}</p>
-        </section>
+          </section>
+        )
       )}
+      {working && classes && <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} />}
       {me.organizer && <RoomHistory t={t} user={user} version={rooms} />}
     </>
   );
