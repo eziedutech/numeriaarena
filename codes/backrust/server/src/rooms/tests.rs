@@ -192,6 +192,54 @@ async fn two_classmates_and_a_bot_race_to_the_recap() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_adult_finds_the_rooms_they_opened() {
+    let rooms = rooms();
+    let first = rooms.open(3, Some(7)).await.unwrap();
+    tokio::time::advance(Duration::from_millis(10)).await;
+    let second = rooms.open(2, Some(7)).await.unwrap();
+    rooms.open(3, Some(8)).await.unwrap();
+    rooms.open(3, None).await.unwrap();
+    let mine = rooms.hosted_by(7);
+    let codes: Vec<&str> = mine.iter().map(|(o, _)| o.play_code.as_str()).collect();
+    assert_eq!(codes, [second.play_code.as_str(), first.play_code.as_str()]);
+    assert_eq!(mine[0].0.host_token, second.host_token);
+    assert_eq!(mine[0].1, 2);
+    // A closed room is gone from the list.
+    rooms.forget(&[&first.play_code, &first.watch_code]);
+    assert_eq!(rooms.hosted_by(7).len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn only_its_host_closes_a_room_and_it_cannot_be_joined_again() {
+    let rooms = rooms();
+    let opened = rooms.open(3, Some(7)).await.unwrap();
+    let mut seat = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    let mut screen = join(&rooms, &opened.watch_code, None, None).await.unwrap();
+    assert!(!rooms.close(&opened.id, 8).await);
+    assert!(rooms.close(&opened.id, 7).await);
+    for c in [&mut seat, &mut screen] {
+        c.until(|m| {
+            matches!(
+                m,
+                ServerMsg::Error {
+                    code: "room_closed"
+                }
+            )
+            .then_some(())
+        })
+        .await;
+        // Then the room is gone and its sockets close.
+        assert!(c.inbox.recv().await.is_none());
+    }
+    assert!(rooms.hosted_by(7).is_empty());
+    assert!(matches!(
+        join(&rooms, &opened.play_code, None, None).await,
+        Err("room_not_found")
+    ));
+    assert!(!rooms.close(&opened.id, 7).await);
+}
+
+#[tokio::test(start_paused = true)]
 async fn seats_fill_then_the_room_is_full() {
     let rooms = rooms();
     let opened = rooms.open(2, None).await.unwrap();

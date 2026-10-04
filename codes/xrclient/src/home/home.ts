@@ -15,6 +15,9 @@ import {
   startTeacher,
   teacherState,
   openRoom,
+  myRooms,
+  closeRoom,
+  type OpenedRoom,
   type Me,
 } from './teacher.js';
 import { ClassRace } from '../game/class-race.js';
@@ -803,8 +806,9 @@ export class Home {
       const l = link.lobby;
       seats.textContent = l ? t.lobbySeats(l.names.length, l.seats) : '';
       names.textContent = l ? t.lobbyIn(l.names.join(', ')) : '';
-      state.textContent = link.started ? t.lobbyOn : t.lobbyWait;
-      start.style.display = link.seat === 0 && !link.started ? '' : 'none';
+      state.textContent = link.shut ? t.roomClosed : link.started ? t.lobbyOn : t.lobbyWait;
+      start.style.display = link.seat === 0 && !link.started && !link.shut ? '' : 'none';
+      desk.style.display = link.shut ? 'none' : '';
     };
     link.onChange = draw;
     draw();
@@ -852,7 +856,11 @@ export class Home {
     });
   }
 
-  /** OPEN A CLASS ROOM: a room of three seats, its codes, and its class screen. */
+  /**
+   * OPEN A CLASS ROOM: the teacher's room still open (found again after a
+   * reload), or a new one of three seats; its codes, its class screen, and
+   * a way to close it for good.
+   */
   private openRoom(): void {
     const t = this.t;
     const { veil, body } = this.popup(t.openRoom[0]);
@@ -860,25 +868,76 @@ export class Home {
     info.textContent = t.joining;
     const fail = this.errorLine(body);
     this.actions(body, veil);
-    void openRoom(3).then((room) => {
-      if (typeof room === 'string') {
-        info.textContent = '';
-        fail(room);
-        return;
-      }
+    const actions = body.querySelector('.actions');
+    let shown: HTMLElement[] = [];
+    let busy = false;
+    const button = (text: string, background: string, ink: string, onClick: () => void) => {
+      const b = el('button', 'btn wide shadow', body);
+      b.style.background = background;
+      b.appendChild(paperText(text, 17, ink));
+      b.setAttribute('aria-label', text);
+      b.addEventListener('click', onClick);
+      body.insertBefore(b, actions);
+      shown.push(b);
+    };
+    const clear = () => {
+      for (const e of shown) e.remove();
+      shown = [];
+      fail();
+    };
+    const fresh = () => button(t.newRoom, COLORS.teal, PAPER, () => open());
+    const show = (room: OpenedRoom) => {
+      clear();
       info.textContent = t.roomOpened(room.play_code);
       const watch = el('p', '', body);
       watch.textContent = t.roomWatch(room.watch_code);
-      const screen = el('button', 'btn wide shadow', body);
-      screen.style.background = COLORS.coral;
-      screen.appendChild(paperText(t.openScreen, 17, PAPER));
-      screen.setAttribute('aria-label', t.openScreen);
-      screen.addEventListener('click', () => this.openScreen(room.watch_code, room.host_token, room.play_code));
-      // Above CLOSE: the codes, then the class screen.
-      const actions = body.querySelector('.actions');
       body.insertBefore(watch, actions);
-      body.insertBefore(screen, actions);
-    });
+      shown.push(watch);
+      button(t.openScreen, COLORS.coral, PAPER, () => this.openScreen(room.watch_code, room.host_token, room.play_code));
+      button(t.closeRoom, '#f1e3c4', INK, () => {
+        if (busy || !window.confirm(t.closeSure)) return;
+        busy = true;
+        void closeRoom(room.id).then((r) => {
+          busy = false;
+          if (r === true) list(false);
+          else fail(r);
+        });
+      });
+      fresh();
+    };
+    const open = () => {
+      if (busy) return;
+      busy = true;
+      clear();
+      info.textContent = t.joining;
+      void openRoom(3).then((room) => {
+        busy = false;
+        if (typeof room === 'string') {
+          info.textContent = '';
+          fail(room);
+        } else {
+          show(room);
+        }
+      });
+    };
+    // The newest room still open; with none, a new one (on opening the card) or a note (after closing).
+    const list = (openIfNone: boolean) => {
+      void myRooms().then((rooms) => {
+        if (typeof rooms === 'string') {
+          info.textContent = '';
+          fail(rooms);
+        } else if (rooms[0]) {
+          show(rooms[0]);
+        } else if (openIfNone) {
+          open();
+        } else {
+          clear();
+          info.textContent = t.roomClosed;
+          fresh();
+        }
+      });
+    };
+    list(true);
   }
 
   private errorText(code: string): string {

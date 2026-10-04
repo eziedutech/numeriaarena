@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use sqlx::postgres::PgPoolOptions;
 
 pub struct Config {
@@ -54,7 +54,8 @@ pub fn router(state: State) -> Router {
         .route("/api/organizer", post(organizer::register))
         .route("/api/admin/organizers", get(admin::list))
         .route("/api/admin/organizers/{id}", post(admin::decide))
-        .route("/api/rooms", post(rooms::create))
+        .route("/api/rooms", post(rooms::create).get(rooms::mine))
+        .route("/api/rooms/{id}", delete(rooms::close))
         .route("/api/ws", get(rooms::ws))
         .with_state(state)
 }

@@ -1436,6 +1436,10 @@ export class GameSystem extends createSystem({
       await link.whenStarted();
       if (this.race !== link) return;
     }
+    if (link.shut) {
+      this.classClosed();
+      return;
+    }
     const rivals = link.rivalSeats();
     classroom.robots = [rivals[0]?.bot ?? true, rivals[1]?.bot ?? true];
     this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, rivals);
@@ -1481,6 +1485,10 @@ export class GameSystem extends createSystem({
     this.racePoll -= delta;
     if (this.racePoll > 0 || this.phase === 'recap') return;
     this.racePoll = RACE_POLL_S;
+    if (race instanceof ClassRace && race.shut) {
+      this.classClosed();
+      return;
+    }
     const events = race.tick(this.now());
     for (const ev of events) this.onRaceEvent(ev);
     // A Class Match's scores come in views of their own, after the verdicts.
@@ -1593,6 +1601,13 @@ export class GameSystem extends createSystem({
     const own = recap.players[0];
     if (own && this.race instanceof Race) this.saveBest(own.points, own.stars);
     this.addChoiceButton('done', T.done, 0, 0x3469c4);
+  }
+
+  /** The teacher closed the Class Match room: back to the menu, saying so. */
+  private classClosed(): void {
+    console.info('[class] the room was closed');
+    this.endRace();
+    this.score.set(T.classClosed);
   }
 
   private endRace(): void {

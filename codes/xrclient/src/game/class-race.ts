@@ -87,6 +87,8 @@ export class ClassRace {
   lobby?: Lobby;
   /** Called when the lobby changes or the match starts (`view` arrives). */
   onChange?: () => void;
+  /** Its teacher closed the room: the match is over for this seat. */
+  shut = false;
 
   private ws?: WebSocket;
   private token: string | null = null;
@@ -130,12 +132,12 @@ export class ClassRace {
 
   /** Resolves once the match is on (its first view came). */
   whenStarted(): Promise<void> {
-    if (this.state) return Promise.resolve();
+    if (this.state || this.shut) return Promise.resolve();
     return new Promise((resolve) => {
       const before = this.onChange;
       this.onChange = () => {
         before?.();
-        if (this.state) {
+        if (this.state || this.shut) {
           this.onChange = before;
           resolve();
         }
@@ -266,7 +268,13 @@ export class ClassRace {
         this.recapMsg = msg;
         break;
       case 'error':
-        if (msg.code === 'wait') {
+        if (msg.code === 'room_closed') {
+          this.shut = true;
+          this.closed = true;
+          this.judging?.reject(new Error(msg.code));
+          this.judging = undefined;
+          this.onChange?.();
+        } else if (msg.code === 'wait') {
           this.asked = false;
           this.askAt = this.clock() + ASK_AGAIN_MS;
         } else if (this.judging) {

@@ -118,6 +118,7 @@ const TEXT = {
     stored: "Results saved.",
     errors: {
       room_not_found: "No room has that code. Check the code, or watch the demo match.",
+      room_closed: "The teacher closed this room.",
       hello_first: "The screen could not join. Reload the page.",
       not_host: "Only the room's host can start it.",
       no_players: "Nobody has taken a seat yet.",
@@ -174,6 +175,7 @@ const TEXT = {
     stored: "Hasil tersimpan.",
     errors: {
       room_not_found: "Tidak ada ruang dengan kode itu. Periksa kodenya, atau tonton pertandingan demo.",
+      room_closed: "Guru menutup ruang ini.",
       hello_first: "Layar tidak bisa masuk. Muat ulang halaman.",
       not_host: "Hanya tuan rumah ruang yang bisa memulai.",
       no_players: "Belum ada yang duduk.",
@@ -190,7 +192,7 @@ type Text = (typeof TEXT)["en"];
 const DEMO_CODE = "WATCHX";
 const FEED_LINES = 8;
 /** Errors that end the watching; others are answers to START or CHEER. */
-const FATAL = ["room_not_found", "hello_first"];
+const FATAL = ["room_not_found", "hello_first", "room_closed"];
 
 function wsUrl(): string {
   return `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/ws`;
@@ -246,6 +248,8 @@ function useRoom(code: string, host?: string) {
         }
         if (msg.type === "welcome") seen(msg.now_ms);
         if (msg.type === "event") seen(msg.event.at_ms);
+        // A closed or unknown room stays that way: no more tries.
+        if (msg.type === "error" && FATAL.includes(msg.code)) closed = true;
         setLive((l) => reduce(l, msg, feedKey));
       };
       s.onclose = () => {

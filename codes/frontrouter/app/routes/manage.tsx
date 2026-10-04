@@ -74,6 +74,9 @@ const TEXT = {
     roomSeats: "3 seats; robots fill the empty ones.",
     openScreen: "OPEN THE CLASS SCREEN",
     newRoom: "NEW ROOM",
+    closeRoom: "CLOSE THE ROOM",
+    closeSure: "Close this room? Nobody can join it again, and a match on now stops.",
+    roomClosed: "The room is closed.",
     regTitle: "ABOUT YOU",
     regIntro: "One time only. Students never see your email.",
     yourName: "Your name (shown to your classes)",
@@ -148,6 +151,9 @@ const TEXT = {
     roomSeats: "3 kursi; robot mengisi yang kosong.",
     openScreen: "BUKA LAYAR KELAS",
     newRoom: "RUANG BARU",
+    closeRoom: "TUTUP RUANG",
+    closeSure: "Tutup ruang ini? Tidak ada yang bisa masuk lagi, dan pertandingan yang berjalan berhenti.",
+    roomClosed: "Ruang sudah ditutup.",
     regTitle: "TENTANG ANDA",
     regIntro: "Hanya sekali. Siswa tidak pernah melihat email Anda.",
     yourName: "Nama Anda (tampil di kelas Anda)",
@@ -434,30 +440,60 @@ function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onCha
 }
 
 interface OpenedRoom {
+  id: string;
   play_code: string;
   watch_code: string;
   host_token: string;
 }
 
-/** OPEN A CLASS ROOM: a room of three seats, its codes, and the class screen that starts it. */
+/**
+ * OPEN A CLASS ROOM: the newest room this teacher still has open (so a reload
+ * finds it again), or a new one of three seats; its codes, the class screen
+ * that starts it, and CLOSE THE ROOM, after which its codes stop working.
+ */
 function OpenRoom({ t, user }: { t: Text; user: User }) {
-  const [room, setRoom] = useState<OpenedRoom>();
+  // undefined while asking the server, null with no room open.
+  const [room, setRoom] = useState<OpenedRoom | null>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [closed, setClosed] = useState(false);
+  const newest = () => api<{ rooms: OpenedRoom[] }>(user, "/rooms").then((r) => r.rooms[0] ?? null);
+  useEffect(() => {
+    newest().then(setRoom, (e) => {
+      setRoom(null);
+      setError(errorCode(e));
+    });
+  }, [user]);
   const open = () => {
     if (busy) return;
     setBusy(true);
     setError("");
+    setClosed(false);
     api<OpenedRoom>(user, "/rooms", { method: "POST", body: JSON.stringify({ seats: 3 }) })
       .then(setRoom, (e) => setError(errorCode(e)))
+      .finally(() => setBusy(false));
+  };
+  const close = () => {
+    if (!room || busy || !window.confirm(t.closeSure)) return;
+    setBusy(true);
+    setError("");
+    api(user, `/rooms/${encodeURIComponent(room.id)}`, { method: "DELETE" })
+      .then(newest)
+      .then(
+        (next) => {
+          setRoom(next);
+          setClosed(true);
+        },
+        (e) => setError(errorCode(e)),
+      )
       .finally(() => setBusy(false));
   };
   const [title, sub] = t.tools[1];
   if (!room) {
     return (
-      <button type="button" className="tool tool-on" onClick={open} disabled={busy}>
+      <button type="button" className="tool tool-on" onClick={open} disabled={busy || room === undefined}>
         <strong>{title}</strong>
-        <span className="soft">{busy ? t.opening : sub}</span>
+        <span className="soft">{busy || room === undefined ? t.opening : closed ? t.roomClosed : sub}</span>
         <ErrorLine t={t} code={error} />
       </button>
     );
@@ -480,7 +516,11 @@ function OpenRoom({ t, user }: { t: Text; user: User }) {
         <button type="button" className="btn small" onClick={open} disabled={busy}>
           {t.newRoom}
         </button>
+        <button type="button" className="btn small" onClick={close} disabled={busy}>
+          {t.closeRoom}
+        </button>
       </div>
+      <ErrorLine t={t} code={error} />
     </div>
   );
 }

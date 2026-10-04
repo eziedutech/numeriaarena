@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::Json;
-use axum::extract::State as Extract;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Path, State as Extract};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use foldlings_core::class_match::{
@@ -137,6 +137,16 @@ impl Content {
 struct Entry {
     tx: mpsc::Sender<Cmd>,
     watch: bool,
+    /// On the play code of a room an adult opened: theirs to find again.
+    hosted: Option<Arc<Hosted>>,
+}
+
+/// A room as its creator sees it, kept while the room is open.
+struct Hosted {
+    by: i64,
+    opened: Opened,
+    seats: usize,
+    at: Instant,
 }
 
 /// Every open room by its codes.
@@ -175,6 +185,39 @@ impl Rooms {
         }
     }
 
+    /// The rooms `user` opened that are still open, the newest first.
+    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize)> {
+        let map = self.codes.lock().expect("codes");
+        let mut mine: Vec<&Arc<Hosted>> = map
+            .values()
+            .filter_map(|e| e.hosted.as_ref())
+            .filter(|h| h.by == user)
+            .collect();
+        mine.sort_by_key(|h| std::cmp::Reverse(h.at));
+        mine.iter().map(|h| (h.opened.clone(), h.seats)).collect()
+    }
+
+    /// Closes room `id` for the adult who opened it: its codes go at once, so
+    /// nobody joins again, and everyone in it is told. False if it is not theirs.
+    pub async fn close(&self, id: &str, user: i64) -> bool {
+        let tx = {
+            let mut map = self.codes.lock().expect("codes");
+            let Some(h) = map
+                .values()
+                .filter_map(|e| e.hosted.clone())
+                .find(|h| h.by == user && h.opened.id == id)
+            else {
+                return false;
+            };
+            map.remove(&h.opened.watch_code);
+            map.remove(&h.opened.play_code).map(|e| e.tx)
+        };
+        if let Some(tx) = tx {
+            let _ = tx.send(Cmd::Close).await;
+        }
+        true
+    }
+
     /// Two fresh codes, registered together so they can never collide.
     fn register(&self, tx: &mpsc::Sender<Cmd>) -> (String, String) {
         let mut map = self.codes.lock().expect("codes");
@@ -194,6 +237,7 @@ impl Rooms {
             Entry {
                 tx: tx.clone(),
                 watch: false,
+                hosted: None,
             },
         );
         map.insert(
@@ -201,6 +245,7 @@ impl Rooms {
             Entry {
                 tx: tx.clone(),
                 watch: true,
+                hosted: None,
             },
         );
         (play, watch)
@@ -236,6 +281,16 @@ impl Rooms {
                 return Err(e);
             }
         }
+        if let Some(by) = created_by
+            && let Some(e) = self.codes.lock().expect("codes").get_mut(&opened.play_code)
+        {
+            e.hosted = Some(Arc::new(Hosted {
+                by,
+                opened: opened.clone(),
+                seats,
+                at: Instant::now(),
+            }));
+        }
         let room = Room::new(
             self.clone(),
             opened.id.clone(),
@@ -251,10 +306,14 @@ impl Rooms {
     /// The public demo: bots racing on a loop, watched with `DEMO_CODE`.
     pub fn open_demo(self: &Arc<Self>) {
         let (tx, rx) = mpsc::channel(256);
-        self.codes
-            .lock()
-            .expect("codes")
-            .insert(DEMO_CODE.into(), Entry { tx, watch: true });
+        self.codes.lock().expect("codes").insert(
+            DEMO_CODE.into(),
+            Entry {
+                tx,
+                watch: true,
+                hosted: None,
+            },
+        );
         let mut room = Room::new(self.clone(), "demo".into(), None, DEMO_CODE.into(), None, 3);
         room.demo = true;
         tokio::spawn(room.run(rx));
@@ -276,6 +335,8 @@ enum Cmd {
     Leave {
         conn: u64,
     },
+    /// Its host closed it: everyone out, and the room ends.
+    Close,
 }
 
 struct Slot {
@@ -312,6 +373,8 @@ struct Room {
     done_at: Option<f64>,
     idle_since: Option<f64>,
     demo: bool,
+    /// Closed by its host; the room ends after this command.
+    shut: bool,
 }
 
 impl Room {
@@ -342,6 +405,7 @@ impl Room {
             done_at: None,
             idle_since: Some(0.0),
             demo: false,
+            shut: false,
         }
     }
 
@@ -357,7 +421,12 @@ impl Room {
         loop {
             tokio::select! {
                 cmd = rx.recv() => match cmd {
-                    Some(cmd) => self.handle(cmd).await,
+                    Some(cmd) => {
+                        self.handle(cmd).await;
+                        if self.shut {
+                            break;
+                        }
+                    }
                     None => break,
                 },
                 _ = every.tick() => {
@@ -510,6 +579,18 @@ impl Room {
                 }
             }
             Cmd::Leave { conn } => self.drop_conn(conn),
+            Cmd::Close => {
+                // What was answered is kept; the match does not go on.
+                if self.game.is_some() && self.done_at.is_none() {
+                    self.flush(false).await;
+                } else if self.commit_retry.is_some() {
+                    self.flush(true).await;
+                }
+                self.broadcast(&ServerMsg::Error {
+                    code: "room_closed",
+                });
+                self.shut = true;
+            }
             Cmd::Msg { conn, msg } => {
                 // Time first, so an answer after the bell finds its creature gone.
                 self.pump(now).await;
@@ -841,6 +922,44 @@ pub async fn create(
         "host_token": opened.host_token,
         "seats": body.seats,
     })))
+}
+
+/// `GET /api/rooms`: the rooms the signed-in adult opened that are still
+/// open, the newest first, so a reloaded page finds its room again.
+pub async fn mine(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    let rooms: Vec<Value> = state
+        .rooms
+        .hosted_by(user.id)
+        .into_iter()
+        .map(|(o, seats)| {
+            json!({
+                "id": o.id,
+                "play_code": o.play_code,
+                "watch_code": o.watch_code,
+                "host_token": o.host_token,
+                "seats": seats,
+            })
+        })
+        .collect();
+    Ok(Json(json!({ "rooms": rooms })))
+}
+
+/// `DELETE /api/rooms/{id}`: the adult who opened the room closes it.
+pub async fn close(
+    Extract(state): Extract<State>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    if !state.rooms.close(&id, user.id).await {
+        return Err(ApiError(StatusCode::NOT_FOUND, "room_not_found"));
+    }
+    tracing::info!("room {id} closed by its host");
+    Ok(Json(json!({ "closed": id })))
 }
 
 /// `GET /api/ws`: one headset or screen in one room.

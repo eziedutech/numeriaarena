@@ -231,6 +231,7 @@ export async function register(form: Registration): Promise<string | undefined> 
 }
 
 export interface OpenedRoom {
+  id: string;
   play_code: string;
   watch_code: string;
   host_token: string;
@@ -247,6 +248,33 @@ export async function openRoom(seats: number): Promise<OpenedRoom | string> {
     return (await res.json()) as OpenedRoom;
   } catch (e) {
     console.warn('[teacher] open room failed', e);
+    return 'offline';
+  }
+}
+
+/** The rooms this adult opened that are still open, the newest first; or an error code. */
+export async function myRooms(): Promise<OpenedRoom[] | string> {
+  const user = auth?.currentUser;
+  if (!user) return 'signed_out';
+  try {
+    const res = await call(user, '/rooms');
+    if (!res.ok) return errorCode(res);
+    return ((await res.json()) as { rooms: OpenedRoom[] }).rooms;
+  } catch (e) {
+    console.warn('[teacher] rooms failed', e);
+    return 'offline';
+  }
+}
+
+/** Closes a room this adult opened: its codes stop working at once. */
+export async function closeRoom(id: string): Promise<true | string> {
+  const user = auth?.currentUser;
+  if (!user) return 'signed_out';
+  try {
+    const res = await call(user, `/rooms/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return res.ok ? true : errorCode(res);
+  } catch (e) {
+    console.warn('[teacher] close room failed', e);
     return 'offline';
   }
 }
