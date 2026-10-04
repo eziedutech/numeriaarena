@@ -1441,7 +1441,9 @@ export class GameSystem extends createSystem({
           return;
         }
         const left = link.startsIn();
-        const text = left === null ? T.classWaiting : T.classStarting(Math.ceil(left / 1000));
+        // The made-up name too: the class screen calls this desk by it.
+        const me = link.name.toUpperCase() || T.you;
+        const text = left === null ? T.classWaitingAs(me) : T.classStartingAs(me, Math.ceil(left / 1000));
         if (text !== shown) {
           shown = text;
           this.score.set(text);
@@ -1459,7 +1461,7 @@ export class GameSystem extends createSystem({
     }
     const rivals = link.rivalSeats();
     classroom.robots = [rivals[0]?.bot ?? true, rivals[1]?.bot ?? true];
-    this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, rivals);
+    this.raceScene = new RaceScene(this.stage, this.deskEntity()!.object3D!, rivals, link.name.toUpperCase() || T.you);
     this.recapIn = -1;
     this.score.mesh.visible = false;
     this.refreshRace();
@@ -1613,7 +1615,7 @@ export class GameSystem extends createSystem({
     this.phase = 'recap';
     this.clearPlay();
     this.removeQuitCard();
-    this.raceScene.showRecap(recap, T.you);
+    this.raceScene.showRecap(recap, this.race instanceof ClassRace ? this.race.name.toUpperCase() || T.you : T.you);
     // The best kept on the device is the race against the robots.
     const own = recap.players[0];
     if (own && this.race instanceof Race) this.saveBest(own.points, own.stars);

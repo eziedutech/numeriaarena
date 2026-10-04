@@ -105,6 +105,8 @@ export class RaceScene {
     private stage: Stage,
     private desk: Object3D,
     private rivals: Rival[],
+    /** The player's name on the boards: YOU, or in a Class Match the made-up name the class screen shows. */
+    private me: string = T.you,
   ) {
     // In the virtual classroom the rivals also sit at the desks ahead of the player.
     classRaceOn(true);
@@ -236,14 +238,14 @@ export class RaceScene {
       if (d) w.status.set((classroom.status[i] = `${T.place(d.place)}  ${T.rival(d.folded, d.points)}`));
     });
     if (!this.card && state.plan?.length) {
-      this.card = new RaceCard(state.plan);
+      this.card = new RaceCard(state.plan, this.me);
       this.card.root.position.copy(CARD_POS);
       this.card.root.rotation.y = CARD_YAW;
       this.card.root.scale.setScalar(CARD_SCALE);
       this.cardEntity = this.stage.add(this.card.root);
       // A room with the race's boards puts up a twin of the card on its wall.
       if (classroom.boards) {
-        this.wallCard = new RaceCard(state.plan);
+        this.wallCard = new RaceCard(state.plan, this.me);
         classroom.wallCardSize = this.wallCard.size;
         classroom.wallCard = this.wallCard.root;
       }
@@ -251,7 +253,7 @@ export class RaceScene {
     const me = state.desks[0];
     if (me) for (const c of this.cards()) c.player(me.place, me.points);
     classroom.standings = state.desks.flatMap((d, i) =>
-      d ? [{ place: d.place, name: i === 0 ? T.you : (this.rivals[i - 1]?.name ?? '').toUpperCase(), points: d.points, me: i === 0 }] : [],
+      d ? [{ place: d.place, name: i === 0 ? this.me : (this.rivals[i - 1]?.name ?? '').toUpperCase(), points: d.points, me: i === 0 }] : [],
     );
   }
 

@@ -99,7 +99,11 @@ export class RaceCard {
   private clockLate = false;
   private t = 0;
 
-  constructor(plan: RoundPlan[]) {
+  /** `me`: the player's name on the card's top line (YOU, or a Class Match's made-up name). */
+  constructor(
+    plan: RoundPlan[],
+    private me?: string,
+  ) {
     this.root.name = 'race-card';
     this.rows = plan.map((p) => ({ plan: p, status: 'later', stamps: [], moreX: 0, hidden: 0 }));
     if (this.rows[0]) this.rows[0].status = 'next';
@@ -295,7 +299,7 @@ export class RaceCard {
     c.translate(m, m);
     drawCard(c, w, h, m, CREAM, 'race-card');
     // The player's line: place and points.
-    const you = T.youRow(this.head.place, this.head.points);
+    const you = T.youRow(this.head.place, this.head.points, this.me);
     const room = w - 2 * px(PAD);
     let headPx = px(HEAD_TEXT_H);
     const natural = glyphWidth(you, headPx);
