@@ -101,6 +101,9 @@ const TEXT = {
     goneHost: "To race again, make a new room under RACE ROOMS on the teacher page, or NEW RACE ROOM in the game. Every finished match is kept under ROOMS SO FAR.",
     goneResults: "SEE ROOMS SO FAR",
     goneOther: "Watch another room",
+    ended: "THE MATCH IS OVER",
+    endedSaved: "The results above are kept under ROOMS SO FAR on the teacher page. This room is closed now.",
+    endedClosed: "This room is closed now.",
     reload: "RELOAD",
     joinWith: "Join with code",
     joinHow: "In the game: RACE MY CLASSMATES, then this code.",
@@ -181,6 +184,9 @@ const TEXT = {
     goneHost: "Untuk lomba lagi, buat ruang baru di RUANG LOMBA pada halaman guru, atau BUAT RUANG LOMBA di game. Setiap pertandingan yang selesai tersimpan di RUANG SEBELUMNYA.",
     goneResults: "LIHAT RUANG SEBELUMNYA",
     goneOther: "Tonton ruang lain",
+    ended: "PERTANDINGAN SELESAI",
+    endedSaved: "Hasil di atas tersimpan di RUANG SEBELUMNYA pada halaman guru. Ruang ini sudah ditutup.",
+    endedClosed: "Ruang ini sudah ditutup.",
     reload: "MUAT ULANG",
     joinWith: "Masuk dengan kode",
     joinHow: "Di game: LOMBA DENGAN TEMAN, lalu kode ini.",
@@ -493,7 +499,7 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
     return (
       <>
         {live.recap && <RecapCard t={t} recap={live.recap} stored={live.stored} />}
-        <RoomGone t={t} code={code} error={live.error ?? "other"} host={host} />
+        <RoomGone t={t} code={code} error={live.error ?? "other"} host={host} ended={live.recap ? { stored: live.stored } : undefined} />
       </>
     );
   }
@@ -546,17 +552,20 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
   );
 }
 
-/** The room is gone (a wrong code, closed by the teacher, or ended by a server update). */
-function RoomGone({ t, code, error, host }: { t: Text; code: string; error: string; host?: string }) {
-  const known = error === "room_not_found" || error === "room_closed";
+/**
+ * The room is gone (a wrong code, closed by the teacher, or ended by a server update).
+ * After a match the screen saw end, that is no fault: it says the match is over.
+ */
+function RoomGone({ t, code, error, host, ended }: { t: Text; code: string; error: string; host?: string; ended?: { stored: boolean } }) {
+  const known = ended !== undefined || error === "room_not_found" || error === "room_closed";
   const key = known ? error : "other";
   const [other, setOther] = useState("");
   const [bad, setBad] = useState(false);
   return (
-    <section className="paper-sheet narrow arena-gone" role="status">
+    <section className={ended ? "paper-sheet narrow arena-gone ended" : "paper-sheet narrow arena-gone"} role="status">
       <span className="arena-gone-code">{code}</span>
-      <h1>{t.gone[key]}</h1>
-      <p>{t.goneWhy[key]}</p>
+      <h1>{ended ? t.ended : t.gone[key]}</h1>
+      <p>{ended ? (ended.stored ? t.endedSaved : t.endedClosed) : t.goneWhy[key]}</p>
       {!known && (
         <button type="button" className="btn wide blue" onClick={() => location.reload()}>
           {t.reload}

@@ -781,6 +781,14 @@ button.tool {
   border-top: 8px solid #f2716b;
 }
 
+.arena-gone.ended {
+  border-top-color: #3fb6a0;
+}
+
+.arena-gone.ended .arena-gone-code {
+  text-decoration: none;
+}
+
 .arena-gone h1 {
   margin-top: 6px;
 }
