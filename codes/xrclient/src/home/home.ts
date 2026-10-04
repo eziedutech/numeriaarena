@@ -867,13 +867,17 @@ export class Home {
         return;
       }
       info.textContent = t.roomOpened(room.play_code);
-      el('p', '', body).textContent = t.roomWatch(room.watch_code);
+      const watch = el('p', '', body);
+      watch.textContent = t.roomWatch(room.watch_code);
       const screen = el('button', 'btn wide shadow', body);
       screen.style.background = COLORS.coral;
       screen.appendChild(paperText(t.openScreen, 17, PAPER));
       screen.setAttribute('aria-label', t.openScreen);
       screen.addEventListener('click', () => this.openScreen(room.watch_code, room.host_token, room.play_code));
-      body.insertBefore(screen, body.querySelector('.actions'));
+      // Above CLOSE: the codes, then the class screen.
+      const actions = body.querySelector('.actions');
+      body.insertBefore(watch, actions);
+      body.insertBefore(screen, actions);
     });
   }
 

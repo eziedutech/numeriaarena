@@ -67,7 +67,13 @@ const TEXT = {
       ["MY CLASSES", "Seats, sign-in cards and reports"],
       ["OPEN A CLASS ROOM", "A room code on the class screen"],
     ],
-    toolsSoon: "Classes and class rooms open with the next update of the class server.",
+    toolsSoon: "Classes with seats open with the next update of the class server.",
+    opening: "Opening a room...",
+    roomPlay: "Students press RACE MY CLASSMATES in the game and enter",
+    roomWatch: "Watch code (for a screen or parents):",
+    roomSeats: "3 seats; robots fill the empty ones.",
+    openScreen: "OPEN THE CLASS SCREEN",
+    newRoom: "NEW ROOM",
     regTitle: "ABOUT YOU",
     regIntro: "One time only. Students never see your email.",
     yourName: "Your name (shown to your classes)",
@@ -135,7 +141,13 @@ const TEXT = {
       ["KELAS SAYA", "Kursi, kartu masuk, dan laporan"],
       ["BUKA RUANG KELAS", "Kode ruang di layar kelas"],
     ],
-    toolsSoon: "Kelas dan ruang kelas dibuka di pembaruan server kelas berikutnya.",
+    toolsSoon: "Kelas dengan kursi dibuka di pembaruan server kelas berikutnya.",
+    opening: "Membuka ruang...",
+    roomPlay: "Siswa menekan LOMBA DENGAN TEMAN di game lalu memasukkan",
+    roomWatch: "Kode tonton (untuk layar atau orang tua):",
+    roomSeats: "3 kursi; robot mengisi yang kosong.",
+    openScreen: "BUKA LAYAR KELAS",
+    newRoom: "RUANG BARU",
     regTitle: "TENTANG ANDA",
     regIntro: "Hanya sekali. Siswa tidak pernah melihat email Anda.",
     yourName: "Nama Anda (tampil di kelas Anda)",
@@ -407,18 +419,69 @@ function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onCha
       ) : (
         <section className="paper-sheet">
           <div className="tools">
-            {t.tools.map(([title, sub]) => (
-              <div key={title} className="tool">
-                <span className="soon">{t.soon}</span>
-                <strong>{title}</strong>
-                <span className="soft">{sub}</span>
-              </div>
-            ))}
+            <div className="tool">
+              <span className="soon">{t.soon}</span>
+              <strong>{t.tools[0][0]}</strong>
+              <span className="soft">{t.tools[0][1]}</span>
+            </div>
+            {me.organizer.status !== "suspended" && <OpenRoom t={t} user={user} />}
           </div>
           <p className="soft">{t.toolsSoon}</p>
         </section>
       )}
     </>
+  );
+}
+
+interface OpenedRoom {
+  play_code: string;
+  watch_code: string;
+  host_token: string;
+}
+
+/** OPEN A CLASS ROOM: a room of three seats, its codes, and the class screen that starts it. */
+function OpenRoom({ t, user }: { t: Text; user: User }) {
+  const [room, setRoom] = useState<OpenedRoom>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const open = () => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    api<OpenedRoom>(user, "/rooms", { method: "POST", body: JSON.stringify({ seats: 3 }) })
+      .then(setRoom, (e) => setError(errorCode(e)))
+      .finally(() => setBusy(false));
+  };
+  const [title, sub] = t.tools[1];
+  if (!room) {
+    return (
+      <button type="button" className="tool tool-on" onClick={open} disabled={busy}>
+        <strong>{title}</strong>
+        <span className="soft">{busy ? t.opening : sub}</span>
+        <ErrorLine t={t} code={error} />
+      </button>
+    );
+  }
+  // The host token stays in the hash, which the browser never sends to a server.
+  const screen = `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
+  return (
+    <div className="tool">
+      <strong>{title}</strong>
+      <span>{t.roomPlay}</span>
+      <span className="room-code">{room.play_code}</span>
+      <span className="soft">
+        {t.roomWatch} <strong>{room.watch_code}</strong>
+      </span>
+      <span className="soft">{t.roomSeats}</span>
+      <div className="row">
+        <a className="btn small" href={screen} target="_blank" rel="noopener">
+          {t.openScreen}
+        </a>
+        <button type="button" className="btn small" onClick={open} disabled={busy}>
+          {t.newRoom}
+        </button>
+      </div>
+    </div>
   );
 }
 

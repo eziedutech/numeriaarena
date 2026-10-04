@@ -388,6 +388,36 @@ body {
   background: #f1e3c4;
 }
 
+button.tool {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  cursor: pointer;
+}
+
+.tool-on {
+  background: #f7c9a8;
+  box-shadow: 3px 4px 0 rgba(60, 40, 20, 0.18);
+}
+
+.tool-on:hover {
+  background: #f4b98f;
+}
+
+.tool .room-code {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.tool .row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
 .tool .soon {
   position: absolute;
   right: -6px;
