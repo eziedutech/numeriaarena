@@ -436,27 +436,36 @@ export class Home {
       off.setAttribute('role', 'status');
     }
 
-    // Left: ways to play.
-    const left = el('div', 'head', this.stage);
-    left.style.left = '40px';
-    left.appendChild(paperText(t.play, 30, INK));
-    this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
-    // A race left before its results can pick up again: the card says from where.
-    const kept = readCheckpoint();
-    const robots: [string, string] = kept ? [t.robots[0], t.resumeSub(kept.next, kept.next >= kept.card.length)] : [t.robots[0], t.robots[1]];
-    this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
-    this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.joinRoom());
-    this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
-
-    // Right: who you are, and learning more.
-    const right = el('div', 'head', this.stage);
-    right.style.left = '1210px';
-    right.appendChild(paperText(t.you, 30, INK));
     // Student and teacher sign-in hide each other: a signed-in teacher gets
     // their own card and the class tools in place of the student code, and a
     // student in a class seat gets their pass in place of both sign-ins.
     const teacher = teacherState();
     const student = studentState();
+    // A race left before its results can pick up again: the card says from where.
+    const kept = readCheckpoint();
+    const robots: [string, string] = kept ? [t.robots[0], t.resumeSub(kept.next, kept.next >= kept.card.length)] : [t.robots[0], t.robots[1]];
+
+    // Left: ways to play, or for a signed-in teacher the class tools.
+    const left = el('div', 'head', this.stage);
+    left.style.left = '40px';
+    if (teacher.kind === 'in') {
+      left.appendChild(paperText(t.teach, 30, INK));
+      this.card('left', 0, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
+      this.card('left', 1, t.myClasses, 'classes', COLORS.teal, () => this.classes());
+      this.card('left', 2, t.history, 'history', COLORS.cobalt, () => this.history());
+      this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
+    } else {
+      left.appendChild(paperText(t.play, 30, INK));
+      this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
+      this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
+      this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.joinRoom());
+      this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
+    }
+
+    // Right: who you are, and learning more.
+    const right = el('div', 'head', this.stage);
+    right.style.left = '1210px';
+    right.appendChild(paperText(t.you, 30, INK));
     let row = 0;
     if (teacher.kind === 'in') {
       const me = teacher.me;
@@ -468,9 +477,9 @@ export class Home {
       card.style.background = COLORS.cobalt;
       card.style.color = PAPER;
       card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
-      this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.classes());
-      this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
-      this.card('right', row++, t.history, 'history', COLORS.cobalt, () => this.history());
+      // The games themselves, to see what the students play.
+      this.card('right', row++, t.tryPractice, 'practice', COLORS.teal, () => this.play('practice'));
+      this.card('right', row++, kept ? [t.tryRobots[0], robots[1]] : t.tryRobots, 'robots', COLORS.cobalt, () => this.play('race'));
     } else if (student) {
       // A device in a class seat is a student's: no teacher sign-in here.
       const look = avatarOf(student.pseudonym);
