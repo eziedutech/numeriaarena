@@ -75,9 +75,9 @@ const TEXT = {
       "A race room has 6 desks, so the class races in groups, one group a match: seats 01 to 06 are group A, 07 to 12 group B, and so on. Pick another group for a seat here; the class screen calls the groups in turn.",
     byNumber: "GROUPS BY SEAT NUMBER",
     tooBig: (g: string, n: number) => `Group ${g} has ${n} seats, but a room has 6 desks: the last to come wait for another turn.`,
-    official: (n: number, stars: number) => `${n} ${n === 1 ? "race" : "races"} · ${stars}★`,
+    official: (n: number, stars: number) => [`${n} ${n === 1 ? "race" : "races"}`, `${stars}★`],
     lastOfficial: (place: number, points: number) => `last: ${place}${place === 1 ? "st" : place === 2 ? "nd" : place === 3 ? "rd" : "th"}, ${points} pts`,
-    own: (races: number, practices: number) => `${races} with robots · ${practices} ${practices === 1 ? "practice" : "practices"}`,
+    own: (races: number, practices: number) => [`${races} with robots`, `${practices} ${practices === 1 ? "practice" : "practices"}`],
     otherRooms: (n: number) => `${n} in rooms for anyone`,
     days: (n: number) => `on ${n} ${n === 1 ? "day" : "days"}`,
     recordsNote:
@@ -157,9 +157,9 @@ const TEXT = {
       "Ruang lomba punya 6 meja, jadi kelas berlomba per kelompok, satu kelompok satu pertandingan: kursi 01 sampai 06 kelompok A, 07 sampai 12 kelompok B, dan seterusnya. Pilih kelompok lain untuk sebuah kursi di sini; layar kelas memanggil kelompok bergiliran.",
     byNumber: "KELOMPOK MENURUT NOMOR KURSI",
     tooBig: (g: string, n: number) => `Kelompok ${g} punya ${n} kursi, padahal ruang punya 6 meja: yang datang terakhir menunggu giliran lain.`,
-    official: (n: number, stars: number) => `${n} lomba · ${stars}★`,
+    official: (n: number, stars: number) => [`${n} lomba`, `${stars}★`],
     lastOfficial: (place: number, points: number) => `terakhir: ke-${place}, ${points} poin`,
-    own: (races: number, practices: number) => `${races} lawan robot · ${practices} latihan`,
+    own: (races: number, practices: number) => [`${races} lawan robot`, `${practices} latihan`],
     otherRooms: (n: number) => `${n} di ruang umum`,
     days: (n: number) => `dalam ${n} hari`,
     recordsNote:
@@ -634,16 +634,22 @@ function ClassPage({
                   ))}
                 </select>
               </td>
-              <td>
-                {t.official(s.official.matches, s.official.stars)}
+              <td className="seat-stats">
+                {t.official(s.official.matches, s.official.stars).map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
                 {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
               </td>
-              <td>
-                {t.own(s.own.races, s.own.practices)}
+              <td className="seat-stats">
+                {t.own(s.own.races, s.own.practices).map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
                 {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
                 {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
               </td>
-              <td>{s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}</td>
+              <td className="seat-stats">
+                {s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}
+              </td>
               <td className="seat-actions">
                 {active && (
                   <>

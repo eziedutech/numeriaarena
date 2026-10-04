@@ -354,6 +354,13 @@ body {
   font-size: 24px;
 }
 
+/* A seat's numbers: one fact a line, none broken across two. */
+.seat-stats div,
+.seat-stats > span {
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
 .soft {
   color: var(--ink-soft);
   font-size: 14px;
