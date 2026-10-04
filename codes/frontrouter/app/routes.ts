@@ -6,4 +6,5 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("data-deletion", "routes/data-deletion.tsx"),
   route("manage", "routes/manage.tsx"),
+  route("screen", "routes/screen.tsx"),
 ] satisfies RouteConfig;

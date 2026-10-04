@@ -436,3 +436,156 @@ body {
   background: #3fb6a0;
   color: var(--paper);
 }
+
+/* The Arena Screen: a class match on the projector, large enough for the back row. */
+.arena {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.arena-board {
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 24px 28px;
+}
+
+.arena-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.arena-head h1 {
+  margin: 0;
+  font-size: 34px;
+}
+
+.arena-clock {
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.arena-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  font-size: 26px;
+}
+
+.arena-row:nth-child(odd) {
+  background: #f6ecd6;
+}
+
+.arena-row.away {
+  opacity: 0.6;
+}
+
+.arena-place {
+  font-weight: 700;
+  color: var(--cobalt);
+}
+
+.arena-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.arena-name .tag {
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+.arena-work {
+  flex-basis: 100%;
+  font-size: 18px;
+  color: var(--ink-soft);
+  min-height: 22px;
+}
+
+.arena-points {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.arena-points small {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.arena-feed {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  font-size: 18px;
+  color: var(--ink-soft);
+}
+
+.arena-feed li + li {
+  margin-top: 4px;
+}
+
+.arena-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.arena-banner {
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.arena-cheer {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f2716b;
+}
+
+.arena-lobby {
+  text-align: center;
+}
+
+.arena-play-code {
+  font-size: 88px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 4px 0;
+  color: var(--cobalt);
+}
+
+.arena-names {
+  list-style: none;
+  padding: 0;
+  font-size: 22px;
+}
+
+.arena-code-field {
+  font-size: 28px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-align: center;
+  font-weight: 700;
+}
