@@ -1,4 +1,5 @@
 import type { DeskView, Emote, GameKind, RaceEvent, RaceOffer, RaceState, RaceVerdict, Recap } from './core.js';
+import { studentState } from '../home/student.js';
 
 /**
  * A Class Match from the server, seen from one seat, in the shape of the
@@ -174,7 +175,8 @@ export class ClassRace {
     const ws = new WebSocket(wsUrl());
     this.ws = ws;
     ws.addEventListener('open', () => {
-      this.send({ type: 'hello', code: this.code, resume: this.token ?? undefined });
+      // A device signed in to a class seat races under that seat's pseudonym.
+      this.send({ type: 'hello', code: this.code, resume: this.token ?? undefined, student: studentState()?.token });
     });
     ws.addEventListener('message', (e) => {
       let msg: ServerMsg;

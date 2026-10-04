@@ -346,6 +346,8 @@ enum Cmd {
         watch: bool,
         resume: Option<String>,
         host: Option<String>,
+        /// A class seat signed in on this device: its id and pseudonym.
+        student: Option<(i64, String)>,
         out: mpsc::Sender<ServerMsg>,
         reply: oneshot::Sender<Result<u64, &'static str>>,
     },
@@ -363,6 +365,8 @@ enum Cmd {
 struct Slot {
     name: String,
     token: String,
+    /// The class seat racing here, when a signed-in student took it.
+    seat_id: Option<i64>,
     conn: Option<u64>,
     ready: bool,
 }
@@ -566,15 +570,22 @@ impl Room {
                 watch,
                 resume,
                 host,
+                student,
                 out,
                 reply,
             } => {
                 let conn = self.next_conn;
+                // A class seat already in the room (another tab, a reload)
+                // takes its own place back, like a resume token.
                 let seat = if watch {
                     None
                 } else if let Some(s) = resume
                     .as_ref()
                     .and_then(|t| self.slots.iter().position(|s| &s.token == t))
+                    .or_else(|| {
+                        let id = student.as_ref()?.0;
+                        self.slots.iter().position(|s| s.seat_id == Some(id))
+                    })
                 {
                     if let Some(old) = self.slots[s].conn {
                         self.drop_conn(old);
@@ -587,9 +598,17 @@ impl Room {
                     let _ = reply.send(Err("room_full"));
                     return;
                 } else {
-                    let name = self.pseudonym();
+                    // A signed-in student races under their seat's pseudonym,
+                    // unless a seat from another class has it in this room.
+                    let (seat_id, name) = match student {
+                        Some((id, name)) if self.slots.iter().all(|s| s.name != name) => {
+                            (Some(id), name)
+                        }
+                        other => (other.map(|(id, _)| id), self.pseudonym()),
+                    };
                     self.slots.push(Slot {
                         name,
+                        seat_id,
                         token: random_hex(),
                         conn: None,
                         ready: false,
@@ -1104,9 +1123,10 @@ pub async fn close(
 /// `GET /api/ws`: one headset or screen in one room.
 pub async fn ws(Extract(state): Extract<State>, upgrade: WebSocketUpgrade) -> Response {
     let rooms = state.rooms.clone();
+    let db = state.db.clone();
     upgrade
         .max_message_size(4096)
-        .on_upgrade(move |socket| connection(rooms, socket))
+        .on_upgrade(move |socket| connection(rooms, db, socket))
 }
 
 async fn send_json(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
@@ -1116,12 +1136,18 @@ async fn send_json(socket: &mut WebSocket, msg: &ServerMsg) -> bool {
     }
 }
 
-async fn connection(rooms: Arc<Rooms>, mut socket: WebSocket) {
+async fn connection(rooms: Arc<Rooms>, db: sqlx::PgPool, mut socket: WebSocket) {
     let hello = match tokio::time::timeout(HELLO_WITHIN, socket.recv()).await {
         Ok(Some(Ok(Message::Text(t)))) => serde_json::from_str::<ClientMsg>(&t).ok(),
         _ => None,
     };
-    let Some(ClientMsg::Hello { code, resume, host }) = hello else {
+    let Some(ClientMsg::Hello {
+        code,
+        resume,
+        host,
+        student,
+    }) = hello
+    else {
         send_json(
             &mut socket,
             &ServerMsg::Error {
@@ -1143,12 +1169,24 @@ async fn connection(rooms: Arc<Rooms>, mut socket: WebSocket) {
         return;
     };
     drop(rooms);
+    // A token that has run out or was signed out races as a guest.
+    let student = match student {
+        Some(token) => match crate::classes::student(&db, &token).await {
+            Ok(s) => s.map(|s| (s.seat_id, s.pseudonym)),
+            Err(e) => {
+                tracing::warn!("student lookup failed: {e}");
+                None
+            }
+        },
+        None => None,
+    };
     let (out, mut inbox) = mpsc::channel(OUTBOX);
     let (reply, joined) = oneshot::channel();
     let join = Cmd::Join {
         watch: entry.watch,
         resume,
         host,
+        student,
         out,
         reply,
     };

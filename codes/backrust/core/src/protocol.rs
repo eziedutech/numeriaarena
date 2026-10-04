@@ -14,13 +14,17 @@ use crate::race::{RaceOffer, RaceVerdict};
 pub enum ClientMsg {
     /// Join a room with its play code (a seat) or its watch code (watching).
     /// `resume` is the token from an earlier `welcome`, to take one's seat back;
-    /// `host` the token the room's creator got, to start it from a watch screen.
+    /// `host` the token the room's creator got, to start it from a watch screen;
+    /// `student` the token of a class seat signed in on this device, to race
+    /// under that seat's pseudonym.
     Hello {
         code: String,
         #[serde(default)]
         resume: Option<String>,
         #[serde(default)]
         host: Option<String>,
+        #[serde(default)]
+        student: Option<String>,
     },
     /// Start the countdown to the match: only a class room's host (its
     /// teacher's class screen), so no classmate starts before the others.
@@ -124,6 +128,7 @@ mod tests {
                 code: "K7QW2M".into(),
                 resume: None,
                 host: None,
+                student: None,
             }
         );
         let m: ClientMsg =

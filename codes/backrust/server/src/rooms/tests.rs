@@ -66,6 +66,16 @@ async fn join(
     resume: Option<String>,
     host: Option<String>,
 ) -> Result<Client, &'static str> {
+    join_with(rooms, code, resume, host, None).await
+}
+
+async fn join_with(
+    rooms: &Rooms,
+    code: &str,
+    resume: Option<String>,
+    host: Option<String>,
+    student: Option<(i64, String)>,
+) -> Result<Client, &'static str> {
     let entry = rooms.find(code).ok_or("room_not_found")?;
     let (out, inbox) = mpsc::channel(OUTBOX);
     let (reply, joined) = oneshot::channel();
@@ -75,6 +85,7 @@ async fn join(
             watch: entry.watch,
             resume,
             host,
+            student,
             out,
             reply,
         })
@@ -364,6 +375,37 @@ async fn in_a_class_room_only_the_teacher_starts_after_a_countdown() {
     assert_eq!(
         join(&rooms, &opened.play_code, None, None).await.err(),
         Some("match_started")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_student_signed_in_to_a_seat_races_under_its_pseudonym() {
+    let rooms = rooms();
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
+    let welcome = |m: &ServerMsg| match m {
+        ServerMsg::Welcome { seat, name, .. } => Some((*seat, name.clone())),
+        _ => None,
+    };
+    let fox = || Some((7, "Red Fox 03".to_string()));
+    let mut a = join_with(&rooms, &opened.play_code, None, None, fox())
+        .await
+        .unwrap();
+    assert_eq!(a.until(welcome).await, (Some(0), Some("Red Fox 03".into())));
+    // A seat of another class with the same pseudonym gets a made-up one.
+    let other = Some((9, "Red Fox 03".to_string()));
+    let mut b = join_with(&rooms, &opened.play_code, None, None, other)
+        .await
+        .unwrap();
+    let (seat, name) = b.until(welcome).await;
+    assert_eq!(seat, Some(1));
+    assert_ne!(name.as_deref(), Some("Red Fox 03"));
+    // The same seat again (a reload, another tab) takes its own place back.
+    let mut again = join_with(&rooms, &opened.play_code, None, None, fox())
+        .await
+        .unwrap();
+    assert_eq!(
+        again.until(welcome).await,
+        (Some(0), Some("Red Fox 03".into()))
     );
 }
 
