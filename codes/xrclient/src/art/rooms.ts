@@ -57,10 +57,13 @@ const POSTER_H = 0.66;
 const POSTER_COLORS = [0x3469c4, 0x3fb6a0];
 const POSTER_TINTS = [0xe6edf8, 0xe2f3ee];
 
-/** Classmates' desk tops. */
+/** The desk top the paper classmates are drawn for; the classroom lifts them to its own desks. */
 export const KID_DESK_TOP = 0.72;
-/** The classroom's side columns of desks, either side of the player's. */
-const CLASS_COLUMN_X = 1.3;
+/**
+ * The classroom's side columns of desks, close to the walls, so the aisles
+ * either side of the middle column (the player's) are wide.
+ */
+const CLASS_COLUMN_X = 2.75;
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0, y: 1.55, w: 3.28, h: 1.2 };
@@ -71,8 +74,8 @@ export const CLASS_CLOCK = { x: 0, y: 2.5, r: 0.17 };
  * its rounds on the right (classroom-life.ts writes them).
  */
 export const CLASS_WHITEBOARDS = [
-  { x: -2.55, y: 1.55, w: 1.3, h: 1.3 },
-  { x: 2.55, y: 1.55, w: 1.3, h: 1.3 },
+  { x: -2.6, y: 1.55, w: 1.5, h: 1.5 },
+  { x: 2.6, y: 1.55, w: 1.5, h: 1.5 },
 ];
 
 /** A darker wood than the desks, so the bedroom's study desk stands out from the light floor. */
@@ -383,34 +386,35 @@ function classroom(deskTop: number): Group {
   chair(b, -0.9, -2.95, Math.PI, 0x3469c4);
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
   desk(b, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
-  // The desks beside the player, a classmate at work at each; their own chairs come with them.
+  // Three rows of three desks, all as high as the player's. Beside the
+  // player, a classmate at work at each desk; their own chairs come with them.
+  const top = deskTop - 0.003;
   const seats: Seat[] = [];
   for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
-    desk(b, x, -0.03, 1.0, 0.6, KID_DESK_TOP);
+    desk(b, x, -0.03, 1.0, 0.6, top);
     seats.push({ x, z: 0.4, ry: 0, role: 'class' });
   }
   // The rows ahead and behind, in straight lines, chairs pushed in. The race's
-  // rivals sit at the desks ahead left and right, in view without turning the
-  // head. Nobody sits at the desk straight ahead: its chair stays empty, so
-  // the board is in clear view.
+  // rivals sit at the desks ahead left and right. Nobody sits at the desk
+  // straight ahead: its chair stays empty, so the board is in clear view.
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
     for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
       const rival = z < 0 && x !== 0;
-      desk(b, x, z, x === 0 ? 1.15 : 1.0, 0.6, KID_DESK_TOP);
+      desk(b, x, z, x === 0 ? 1.15 : 1.0, 0.6, top);
       if (rival) seats.push({ x, z: z + 0.43, ry: 0, role: x < 0 ? 'left' : 'right' });
       else if (z > 0 && x > 0) seats.push({ x, z: z + 0.43, ry: 0, role: 'class' });
       else chair(b, x, z + 0.45, 0, chairColors[n % 4]);
       // A book or a sheet left on the desks nobody races at (the rivals' stay clear for their robots).
-      if (!rival && n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, 0.73, z, 0.15);
-      if (!rival && n % 4 === 1) b.box(FRAME, 0.21, 0.004, 0.29, x + 0.2, 0.722, z + 0.02, -0.1);
+      if (!rival && n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, top + 0.01, z, 0.15);
+      if (!rival && n % 4 === 1) b.box(FRAME, 0.21, 0.004, 0.29, x + 0.2, top + 0.002, z + 0.02, -0.1);
       n += 1;
     }
   }
   // A school bag on the floor by the next desk.
-  b.block(0xf2716b, 0.32, 0.36, 0.16, 0.75, 0, 0.95, 0.5);
-  b.block(0xd9564f, 0.24, 0.14, 0.04, 0.75 + 0.07, 0.05, 0.95 + 0.1, 0.5);
+  b.block(0xf2716b, 0.32, 0.36, 0.16, 2.0, 0, 0.95, 0.5);
+  b.block(0xd9564f, 0.24, 0.14, 0.04, 2.0 + 0.07, 0.05, 0.95 + 0.1, 0.5);
   // A low shelf along the back wall with books.
   b.block(DESK_WOOD, 2.4, 0.9, 0.36, -1.6, 0, z1 - 0.2);
   b.box(0xc49f71, 2.36, 0.02, 0.34, -1.6, 0.46, z1 - 0.2);
@@ -420,6 +424,7 @@ function classroom(deskTop: number): Group {
   for (const x of [-1.5, 1.5]) for (const z of [-1.8, 0.4, 2.6]) b.box(0xfffdf6, 1.2, 0.05, 0.3, x, height - 0.03, z);
   const group = b.build('room-classroom');
   group.userData.seats = seats;
+  group.userData.deskTop = top;
   return group;
 }
 

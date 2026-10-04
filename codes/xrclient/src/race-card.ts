@@ -119,6 +119,11 @@ export class RaceCard {
     return HEAD_H + this.rows.length * ROW_H + PAD;
   }
 
+  /** The paper's width and height in the card's own units, centred on its origin. */
+  get size(): { w: number; h: number } {
+    return { w: CARD_W, h: this.height };
+  }
+
   /** Card-local centre of row `i` (the card's origin is its centre). */
   private rowCentreY(i: number): number {
     return this.height / 2 - HEAD_H - (i + 0.5) * ROW_H;

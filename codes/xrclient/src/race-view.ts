@@ -98,7 +98,7 @@ export class RaceScene {
   constructor(
     private stage: Stage,
     private desk: Object3D,
-    botNames: [string, string],
+    private botNames: [string, string],
   ) {
     // In the virtual classroom the rivals also sit at the desks ahead of the player.
     classRaceOn(true);
@@ -237,13 +237,14 @@ export class RaceScene {
       // A room with the race's boards puts up a twin of the card on its wall.
       if (classroom.boards) {
         this.wallCard = new RaceCard(state.plan);
+        classroom.wallCardSize = this.wallCard.size;
         classroom.wallCard = this.wallCard.root;
       }
     }
     const me = state.desks[0];
     if (me) for (const c of this.cards()) c.player(me.place, me.points);
     classroom.standings = state.desks.flatMap((d, i) =>
-      d ? [{ place: d.place, name: i === 0 ? T.you : classroom.names[i - 1], points: d.points, me: i === 0 }] : [],
+      d ? [{ place: d.place, name: i === 0 ? T.you : this.botNames[i - 1].toUpperCase(), points: d.points, me: i === 0 }] : [],
     );
   }
 

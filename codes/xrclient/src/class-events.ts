@@ -40,6 +40,8 @@ export const classroom = {
    */
   boards: false,
   wallCard: null as Object3D | null,
+  /** The wall card's paper size, before any scale. */
+  wallCardSize: { w: 0, h: 0 },
   /** Ms left in the round that is on, and the round's length; null between rounds. */
   clockMs: null as number | null,
   roundMs: 0,

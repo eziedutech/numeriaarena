@@ -49,20 +49,28 @@ const TEACHER_BOARD_X = 1.4;
  * it is fresh. About 20 cm tall, so it reads from the player's seat 3.8 m away;
  * a long question is narrowed to the board.
  */
-const BOARD_TEXT_H = 0.2;
-const BOARD_MAX_W = 2.6;
+const BOARD_TEXT_H = 0.34;
+const BOARD_MAX_W = 3.1;
 const NEWS_S = 2.5;
-/** The left whiteboard's standings: title, rows, and the widest a line may be. */
-const STAND_TITLE_H = 0.11;
-const STAND_ROW_H = 0.1;
-const STAND_ROW_Y = 0.23;
+/**
+ * The left whiteboard's standings: a title and a row per player in three
+ * columns (place, name, points), the player's row on a pale blue band.
+ * Each column has a widest its text may be.
+ */
+const STAND_TITLE_H = 0.17;
+const STAND_ROW_H = 0.17;
+const STAND_ROW_Y = 0.25;
 const STAND_ROWS = 4;
-const STAND_MAX_W = 1.15;
+const STAND_COLS = [
+  { dx: -0.5, maxW: 0.38 },
+  { dx: 0.04, maxW: 0.66 },
+  { dx: 0.53, maxW: 0.34 },
+];
 const MARKER = 0x2b2f38;
-const MARKER_ME = 0x3469c4;
+const ME_BAND = 0xd6e4fa;
 /** The race card's twin fills the right whiteboard, a little inside its frame. */
-const WALL_CARD_W = 1.15;
-const WALL_CARD_H = 1.18;
+const WALL_CARD_W = 1.4;
+const WALL_CARD_H = 1.42;
 
 /** A rival as one of the game's robots, standing at its chair, its face to the player. */
 interface RivalBot {
@@ -136,8 +144,11 @@ export class ClassroomLife {
   private news = '';
   private newsAge = NEWS_S;
   private standTitle: Label;
-  /** Each standings line twice, in marker and in the player's blue; one of each pair shows. */
-  private standRows: [Label, Label][] = [];
+  /** Each standings row: its place, name and points. */
+  private standRows: Label[][] = [];
+  private meBand: Group;
+  /** How much higher the classroom's desks are than the paper classmates are drawn for. */
+  private lift: number;
   private shownStandings = '';
   private wallCard: Object3D | null = null;
   private hourHand: Group;
@@ -151,6 +162,7 @@ export class ClassroomLife {
 
   constructor(private room: Group) {
     const seats = (room.userData.seats ?? []) as Seat[];
+    this.lift = ((room.userData.deskTop as number | undefined) ?? KID_DESK_TOP) - KID_DESK_TOP;
     let n = 0;
     for (const seat of seats) {
       const desk = seat.role === 'left' ? 1 : seat.role === 'right' ? 2 : 0;
@@ -159,7 +171,7 @@ export class ClassroomLife {
         { shirt, chair: CHAIRS[(n + desk) % CHAIRS.length], hair: KID_HAIRS[n % KID_HAIRS.length], tufts: n % 2 === 1 },
         31 + n * 7,
       );
-      fig.root.position.set(seat.x, 0, seat.z);
+      fig.root.position.set(seat.x, this.lift, seat.z);
       fig.root.rotation.y = seat.ry;
       room.add(fig.root);
       const dx = PLAYER_X - seat.x;
@@ -186,11 +198,11 @@ export class ClassroomLife {
       };
       if (desk) {
         // The rival's name and points over its head, turned to the player.
-        kid.name = this.label(' ', 0.055, true);
-        kid.status = this.label(' ', 0.04, true);
+        kid.name = this.label(' ', 0.07, true);
+        kid.status = this.label(' ', 0.05, true);
         const yaw = Math.atan2(PLAYER_X - seat.x, PLAYER_Z - seat.z);
-        kid.name.mesh.position.set(seat.x, 1.42, seat.z - 0.05);
-        kid.status.mesh.position.set(seat.x, 1.35, seat.z - 0.05);
+        kid.name.mesh.position.set(seat.x, 1.45 + this.lift, seat.z - 0.05);
+        kid.status.mesh.position.set(seat.x, 1.36 + this.lift, seat.z - 0.05);
         kid.name.mesh.rotation.y = yaw;
         kid.status.mesh.rotation.y = yaw;
         fig.root.visible = false;
@@ -215,17 +227,24 @@ export class ClassroomLife {
     const wb = CLASS_WHITEBOARDS[0];
     const wz = CLASS_FRONT_Z + 0.05;
     this.standTitle = this.label(T.standings, STAND_TITLE_H, false, MARKER);
-    this.standTitle.mesh.position.set(wb.x, wb.y + wb.h / 2 - 0.16, wz);
+    this.standTitle.mesh.position.set(wb.x, wb.y + wb.h / 2 - 0.15, wz);
     this.standTitle.mesh.visible = false;
     for (let i = 0; i < STAND_ROWS; i += 1) {
-      const y = wb.y + wb.h / 2 - 0.42 - i * STAND_ROW_Y;
-      const pair = [this.label(' ', STAND_ROW_H, false, MARKER), this.label(' ', STAND_ROW_H, false, MARKER_ME)] as [Label, Label];
-      for (const l of pair) {
-        l.mesh.position.set(wb.x, y, wz);
+      const y = wb.y + wb.h / 2 - 0.43 - i * STAND_ROW_Y;
+      const row = STAND_COLS.map((c) => {
+        const l = this.label(' ', STAND_ROW_H, false, MARKER);
+        l.mesh.position.set(wb.x + c.dx, y, wz);
         l.mesh.visible = false;
-      }
-      this.standRows.push(pair);
+        return l;
+      });
+      this.standRows.push(row);
     }
+    const band = new Builder(11);
+    band.box(ME_BAND, wb.w - 0.08, STAND_ROW_Y - 0.03, 0.004, 0, 0, 0);
+    this.meBand = band.build('room-standings-me');
+    this.meBand.position.set(wb.x, 0, wz - 0.006);
+    this.meBand.visible = false;
+    room.add(this.meBand);
     classroom.boards = true;
     // The clock's hands at its centre and the round's time as a ring of segments.
     const cz = CLASS_FRONT_Z + 0.05;
@@ -246,7 +265,7 @@ export class ClassroomLife {
     box.setFromObject(fig.root);
     const x = seat.x - SEAT_BACK * Math.sin(seat.ry);
     const z = seat.z - SEAT_BACK * Math.cos(seat.ry);
-    const rest = new Vector3(x, KID_DESK_TOP - box.min.y, z);
+    const rest = new Vector3(x, KID_DESK_TOP + this.lift - box.min.y, z);
     const yaw = Math.atan2(PLAYER_X - x, PLAYER_Z - z);
     fig.root.position.copy(rest);
     fig.root.rotation.set(0, yaw, 0);
@@ -411,14 +430,20 @@ export class ClassroomLife {
     if (key === this.shownStandings) return;
     this.shownStandings = key;
     this.standTitle.mesh.visible = rows.length > 0;
-    this.standRows.forEach(([plain, me], i) => {
+    this.meBand.visible = false;
+    this.standRows.forEach((labels, i) => {
       const r = rows[i];
-      plain.mesh.visible = !!r && !r.me;
-      me.mesh.visible = !!r && r.me;
-      if (!r) return;
-      const l = r.me ? me : plain;
-      l.set(T.standingRow(r.place, r.name, r.points));
-      l.pulse(Math.min(1, STAND_MAX_W / l.width));
+      const texts = r ? [T.place(r.place), r.name, String(r.points)] : [];
+      labels.forEach((l, c) => {
+        l.mesh.visible = !!r;
+        if (!r) return;
+        l.set(texts[c]);
+        l.pulse(Math.min(1, STAND_COLS[c].maxW / l.width));
+      });
+      if (r?.me) {
+        this.meBand.visible = true;
+        this.meBand.position.y = labels[0].mesh.position.y;
+      }
     });
   }
 
@@ -429,19 +454,15 @@ export class ClassroomLife {
     if (this.wallCard?.parent === this.room) this.wallCard.removeFromParent();
     this.wallCard = card;
     if (!card) return;
-    card.position.set(0, 0, 0);
-    card.rotation.set(0, 0, 0);
-    card.scale.setScalar(1);
-    card.updateMatrixWorld(true);
-    const box = new Box3().setFromObject(card);
-    const size = box.getSize(new Vector3());
-    const mid = box.getCenter(new Vector3());
-    const s = Math.min(WALL_CARD_W / Math.max(size.x, 0.01), WALL_CARD_H / Math.max(size.y, 0.01));
+    // The paper's own size: a bounding box would also count the card's hidden parts.
+    const size = classroom.wallCardSize;
+    const s = Math.min(WALL_CARD_W / Math.max(size.w, 0.01), WALL_CARD_H / Math.max(size.h, 0.01));
     const wb = CLASS_WHITEBOARDS[1];
+    card.rotation.set(0, 0, 0);
     card.scale.setScalar(s);
-    card.position.set(wb.x - mid.x * s, wb.y - mid.y * s, CLASS_FRONT_Z + 0.05);
+    card.position.set(wb.x, wb.y, CLASS_FRONT_Z + 0.05);
     this.room.add(card);
-    console.info(`[room] the race card goes up on the right whiteboard, ${(size.x * s).toFixed(2)} x ${(size.y * s).toFixed(2)} m`);
+    console.info(`[room] the race card goes up on the right whiteboard, ${(size.w * s).toFixed(2)} x ${(size.h * s).toFixed(2)} m`);
   }
 
   private pose(k: Kid, dt: number): void {
