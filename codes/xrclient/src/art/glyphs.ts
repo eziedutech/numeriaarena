@@ -70,6 +70,8 @@ export function glyphWidth(text: string, px: number): number {
     }
     const ch = key(raw);
     const g = atlas.glyphs[ch];
+    // A character the paper font lacks is left out rather than breaking the line.
+    if (!g) continue;
     // Digits take the same width, so a running clock or score never wobbles.
     w += (/\d/u.test(ch) ? atlas.tabular_advance : g.advance) * s + (atlas.kerning[prev + ch] ?? 0) * s;
     prev = ch;
@@ -118,6 +120,7 @@ export function drawGlyphs(c: CanvasRenderingContext2D, text: string, x: number,
     }
     const ch = key(raw);
     const g = atlas.glyphs[ch];
+    if (!g) continue;
     pen += (atlas.kerning[prev + ch] ?? 0) * s;
     const [cx, cy, cw, ch2] = g.cell;
     const tab = /\d/u.test(ch) ? (atlas.tabular_advance - g.advance) / 2 : 0;
