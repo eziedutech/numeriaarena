@@ -91,6 +91,7 @@ export class RaceScene {
   /** The race card on the right, made once the core sends the plan of rounds. */
   private card?: RaceCard;
   private cardEntity?: Entity;
+  private wallCard?: RaceCard;
   /** Where the viewer's eye is. */
   readonly eye = new Vector3();
 
@@ -214,7 +215,7 @@ export class RaceScene {
 
   /** The clock of the round that is on, in its row of the race card; null between rounds. */
   clock(msLeft: number | null): void {
-    this.card?.clock(msLeft === null ? null : T.clock(msLeft), msLeft !== null && msLeft <= CLOCK_WARN_MS);
+    for (const c of this.cards()) c.clock(msLeft === null ? null : T.clock(msLeft), msLeft !== null && msLeft <= CLOCK_WARN_MS);
     classClock(msLeft);
   }
 
@@ -233,9 +234,22 @@ export class RaceScene {
       this.card.root.rotation.y = CARD_YAW;
       this.card.root.scale.setScalar(CARD_SCALE);
       this.cardEntity = this.stage.add(this.card.root);
+      // A room with the race's boards puts up a twin of the card on its wall.
+      if (classroom.boards) {
+        this.wallCard = new RaceCard(state.plan);
+        classroom.wallCard = this.wallCard.root;
+      }
     }
     const me = state.desks[0];
-    if (me) this.card?.player(me.place, me.points);
+    if (me) for (const c of this.cards()) c.player(me.place, me.points);
+    classroom.standings = state.desks.flatMap((d, i) =>
+      d ? [{ place: d.place, name: i === 0 ? T.you : classroom.names[i - 1], points: d.points, me: i === 0 }] : [],
+    );
+  }
+
+  /** The race card on the desk and its twin on the classroom's wall, when there is one. */
+  private cards(): RaceCard[] {
+    return [this.card, this.wallCard].filter((c): c is RaceCard => !!c);
   }
 
   /** The race card's rows, to keep with a race checkpoint. */
@@ -245,31 +259,43 @@ export class RaceScene {
 
   /** Puts the race card's rows back after a checkpoint (the card must exist: call `show` first). */
   restoreCard(rows: RowSnapshot[]): void {
-    this.card?.restore(rows);
+    for (const c of this.cards()) c.restore(rows);
   }
 
   /** Round `index` (0-based, the boss last) is on. */
   roundOn(index: number): void {
-    this.card?.roundOn(index);
+    for (const c of this.cards()) c.roundOn(index);
   }
 
   /** Round `index` is over; the player made `gained` points in it. */
   roundDone(index: number, gained: number): void {
-    this.card?.roundDone(index, gained);
+    for (const c of this.cards()) c.roundDone(index, gained);
   }
 
   /** An animal of round `index` joins its row: coloured when folded, white when it got away. */
   stamp(index: number, species: Species, color: number, folded: boolean): void {
-    this.card?.stamp(index, species, color, folded);
+    for (const c of this.cards()) c.stamp(index, species, color, folded);
   }
 
-  /** Where the next animal of round `index` stands on the card, in the desk's space; null without a card. */
+  /**
+   * Where the next animal of round `index` stands on the card, in the desk's
+   * space; null without a card. With the card on the classroom's wall, the
+   * animal flies across the room to it.
+   */
   stampTarget(index: number): Vector3 | null {
+    const wall = this.wallCard;
+    if (wall && classroom.boards && wall.root.parent) {
+      const at = wall.stampTarget(index, new Vector3());
+      wall.root.parent.localToWorld(at);
+      return this.desk.worldToLocal(at);
+    }
     return this.card ? this.card.stampTarget(index, new Vector3()) : null;
   }
 
   update(delta: number): void {
-    this.card?.update(delta);
+    for (const c of this.cards()) c.update(delta);
+    // With the race's boards in the room, the card on the desk stands aside.
+    if (this.card) this.card.root.visible = !(classroom.boards && this.wallCard?.root.parent);
     if (this.banner && this.bannerLeft > 0) {
       this.bannerLeft -= delta;
       if (this.bannerLeft <= 0) this.clearBanner();
@@ -296,7 +322,7 @@ export class RaceScene {
     // The results show the points once, large; the race card stays as the
     // round-by-round summary beside them.
     for (const w of this.windows) w.status.mesh.visible = false;
-    this.card?.clock(null, false);
+    for (const c of this.cards()) c.clock(null, false);
     classClock(null);
     classroom.recap = true;
     classroom.board = T.recapTitle;
@@ -354,5 +380,8 @@ export class RaceScene {
     this.card?.dispose();
     this.card = undefined;
     this.cardEntity = undefined;
+    classroom.wallCard = null;
+    this.wallCard?.dispose();
+    this.wallCard = undefined;
   }
 }

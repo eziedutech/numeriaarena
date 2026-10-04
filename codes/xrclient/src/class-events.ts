@@ -1,9 +1,20 @@
+import type { Object3D } from '@iwsdk/core';
+
 /**
  * What the race tells the virtual classroom: who sits at the desks ahead,
- * what they are doing, the round on the board and the clock. The race view
- * writes it; the classroom reads it each frame. Neither knows the other.
+ * what they are doing, the question on the board, the standings and rounds
+ * on the whiteboards, and the clock. The race view and the game write it;
+ * the classroom reads it each frame. Neither knows the other.
  */
 export type ClassMoment = 'working' | 'right' | 'missed' | 'cheer' | 'clap';
+
+/** One line of the standings: a player's place, name and points. */
+export interface ClassStanding {
+  place: number;
+  name: string;
+  points: number;
+  me: boolean;
+}
 
 export interface ClassEvent {
   /** 1 or 2: the classmate on the left or the right. */
@@ -17,8 +28,18 @@ export const classroom = {
   /** Each rival's name, and its place and points as on its window. */
   names: ['', ''],
   status: ['', ''],
-  /** Written on the board: the round that is on, the boss round, time up. Empty: a clean board. */
+  /** The race's news: the round that is on, the boss round, time up. Empty: nothing new. */
   board: '',
+  /** The player's question as on its card; the board shows it, the news between questions. */
+  question: '',
+  /** Every player's place and points, the player's own marked. */
+  standings: [] as ClassStanding[],
+  /**
+   * The room has the race's boards (the classroom's whiteboards): the race card
+   * on the desk stands aside, and its twin `wallCard` goes up on the right whiteboard.
+   */
+  boards: false,
+  wallCard: null as Object3D | null,
   /** Ms left in the round that is on, and the round's length; null between rounds. */
   clockMs: null as number | null,
   roundMs: 0,
@@ -58,6 +79,8 @@ export function classRaceOn(on: boolean): void {
   classroom.status[0] = '';
   classroom.status[1] = '';
   classroom.board = '';
+  classroom.question = '';
+  classroom.standings = [];
   classroom.clockMs = null;
   classroom.roundMs = 0;
   classroom.recap = false;

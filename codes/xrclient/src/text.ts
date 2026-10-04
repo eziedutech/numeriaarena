@@ -23,6 +23,9 @@ export const EN = {
   bossRow: 'BOSS ×2',
   gameShort: { balloon_burst: 'BALLOONS', orb_forge: 'CRYSTALS' },
   youRow: (place: number, points: number) => `YOU  ${ordinal(place)}  ${points} PTS`,
+  /** The classroom's left whiteboard: its title, and a line per player, for example "1ST  YOU  380". */
+  standings: 'STANDINGS',
+  standingRow: (place: number, name: string, points: number) => `${ordinal(place)}  ${name}  ${points}`,
   nextRound: 'NEXT',
   /** Countdown, for example "0:42". */
   clock: (ms: number) => {
@@ -112,6 +115,8 @@ export const ID: Text = {
   bossRow: 'BOS ×2',
   gameShort: { balloon_burst: 'BALON', orb_forge: 'KRISTAL' },
   youRow: (place: number, points: number) => `KAMU  ${ORDINAL_ID(place)}  ${points} POIN`,
+  standings: 'PERINGKAT',
+  standingRow: (place: number, name: string, points: number) => `${ORDINAL_ID(place)}  ${name}  ${points}`,
   nextRound: 'BERIKUTNYA',
   clock: EN.clock,
   timeUp: 'Waktu habis!',

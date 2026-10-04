@@ -63,8 +63,17 @@ export const KID_DESK_TOP = 0.72;
 const CLASS_COLUMN_X = 1.3;
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
-export const CLASS_BOARD = { x: 0.2, y: 1.55, w: 3.28, h: 1.2 };
-export const CLASS_CLOCK = { x: 2.6, y: 2.45, r: 0.17 };
+export const CLASS_BOARD = { x: 0, y: 1.55, w: 3.28, h: 1.2 };
+/** Centred over the board. */
+export const CLASS_CLOCK = { x: 0, y: 2.5, r: 0.17 };
+/**
+ * A whiteboard either side of the board: the race's standings on the left,
+ * its rounds on the right (classroom-life.ts writes them).
+ */
+export const CLASS_WHITEBOARDS = [
+  { x: -2.55, y: 1.55, w: 1.3, h: 1.3 },
+  { x: 2.55, y: 1.55, w: 1.3, h: 1.3 },
+];
 
 /** A darker wood than the desks, so the bedroom's study desk stands out from the light floor. */
 const DARK_WOOD = 0x9a7350;
@@ -313,12 +322,14 @@ function books(b: Builder, x0: number, y: number, z: number, depth: number, coun
 
 /**
  * A classroom about 7 x 8 m: the player at a desk in the second row, a
- * chalkboard ahead, windows on the left, other desks and chairs around.
+ * chalkboard ahead with a whiteboard either side, windows on the left, other
+ * desks and chairs around. Everything stands square to the walls and
+ * centred on the player, so nothing reads as crooked.
  */
 function classroom(deskTop: number): Group {
   const b = new Builder(7);
-  const x0 = -3.3;
-  const x1 = 3.7;
+  const x0 = -3.5;
+  const x1 = 3.5;
   const z0 = CLASS_FRONT_Z;
   const z1 = 4.4;
   const height = 3.0;
@@ -335,10 +346,16 @@ function classroom(deskTop: number): Group {
   const board = 0x3f6b57;
   b.box(DESK_WOOD, CLASS_BOARD.w + 0.12, CLASS_BOARD.h + 0.12, 0.04, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.02);
   b.box(board, CLASS_BOARD.w, CLASS_BOARD.h, 0.03, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.045);
-  b.box(DESK_WOOD, 3.3, 0.04, 0.09, 0.2, 0.93, z0 + 0.07);
-  b.box(FRAME, 0.08, 0.012, 0.012, -0.6, 0.957, z0 + 0.08, 0.3);
-  b.box(0xf9c74f, 0.07, 0.012, 0.012, -0.45, 0.957, z0 + 0.08, -0.2);
-  // A round clock without numbers above the board, and a corner board with paper shapes.
+  b.box(DESK_WOOD, 3.3, 0.04, 0.09, CLASS_BOARD.x, 0.93, z0 + 0.07);
+  b.box(FRAME, 0.08, 0.012, 0.012, -0.8, 0.957, z0 + 0.08, 0.3);
+  b.box(0xf9c74f, 0.07, 0.012, 0.012, -0.65, 0.957, z0 + 0.08, -0.2);
+  // The whiteboards: a grey aluminium frame, a white face and a marker tray.
+  for (const wb of CLASS_WHITEBOARDS) {
+    b.box(0xc3c7cd, wb.w + 0.06, wb.h + 0.06, 0.03, wb.x, wb.y, z0 + 0.015);
+    b.box(0xfdfdfb, wb.w, wb.h, 0.02, wb.x, wb.y, z0 + 0.035);
+    b.box(0xc3c7cd, wb.w * 0.6, 0.025, 0.06, wb.x, wb.y - wb.h / 2 - 0.03, z0 + 0.05);
+  }
+  // A round clock without numbers over the board, and a board of paper shapes on the back wall.
   // (The classroom life adds its hands and the race's time on its face.)
   b.cylinder(FRAME, CLASS_CLOCK.r, 0.04, CLASS_CLOCK.x, CLASS_CLOCK.y, z0 + 0.02, Math.PI / 2, 20);
   b.cylinder(0x3a3f4b, CLASS_CLOCK.r + 0.015, 0.035, CLASS_CLOCK.x, CLASS_CLOCK.y, z0 + 0.015, Math.PI / 2, 20);
@@ -359,39 +376,35 @@ function classroom(deskTop: number): Group {
   b.box(FRAME, 0.07, 2.18, 0.08, x1 - 0.03, 1.09, -1.88);
   b.cylinder(METAL, 0.025, 0.06, x1 - 0.08, 1.0, -2.05, 0, 8);
   // The teacher's desk, with a few papers and a mug on it.
-  desk(b, -0.2, -2.45, 1.4, 0.7, 0.76, 0.06, 0xb0835a);
-  b.box(FRAME, 0.3, 0.008, 0.22, -0.5, 0.765, -2.4, 0.2);
-  b.box(0xf6e3c0, 0.3, 0.008, 0.22, -0.46, 0.773, -2.43, -0.1);
-  b.cylinder(0xf2716b, 0.04, 0.09, 0.25, 0.805, -2.5);
-  chair(b, -0.25, -2.95, Math.PI + 0.25, 0x3469c4);
+  desk(b, -0.9, -2.45, 1.4, 0.7, 0.76, 0, 0xb0835a);
+  b.box(FRAME, 0.3, 0.008, 0.22, -1.2, 0.765, -2.4, 0.2);
+  b.box(0xf6e3c0, 0.3, 0.008, 0.22, -1.16, 0.773, -2.43, -0.1);
+  b.cylinder(0xf2716b, 0.04, 0.09, -0.45, 0.805, -2.5);
+  chair(b, -0.9, -2.95, Math.PI, 0x3469c4);
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
   desk(b, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
   // The desks beside the player, a classmate at work at each; their own chairs come with them.
   const seats: Seat[] = [];
   for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
-    const ry = x < 0 ? 0.06 : -0.06;
-    desk(b, x, -0.03, 1.0, 0.6, KID_DESK_TOP, ry);
-    seats.push({ x, z: 0.4, ry, role: 'class' });
+    desk(b, x, -0.03, 1.0, 0.6, KID_DESK_TOP);
+    seats.push({ x, z: 0.4, ry: 0, role: 'class' });
   }
-  // The rows ahead and behind, each desk a little off line, chairs pushed in
-  // or out. The race's rivals sit at the desks ahead left and right, in view
-  // without turning the head, turned a little to the board. Nobody sits at
-  // the desk straight ahead: its chair stays empty, so the board is in clear view.
+  // The rows ahead and behind, in straight lines, chairs pushed in. The race's
+  // rivals sit at the desks ahead left and right, in view without turning the
+  // head. Nobody sits at the desk straight ahead: its chair stays empty, so
+  // the board is in clear view.
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
     for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
       const rival = z < 0 && x !== 0;
-      const ry = rival ? (x < 0 ? -0.12 : 0.12) : b.jitter(0.09);
-      const dx = rival ? 0 : b.jitter(0.08);
-      const dz = rival ? 0 : b.jitter(0.06);
-      desk(b, x + dx, z + dz, x === 0 ? 1.15 : 1.0, 0.6, KID_DESK_TOP, ry);
-      if (rival) seats.push({ x: x + 0.43 * Math.sin(ry), z: z + 0.43 * Math.cos(ry), ry, role: x < 0 ? 'left' : 'right' });
-      else if (z > 0 && x > 0) seats.push({ x: x + b.jitter(0.05), z: z + 0.43, ry, role: 'class' });
-      else chair(b, x + b.jitter(0.15), z + 0.5 + Math.abs(b.jitter(0.14)), ry + b.jitter(0.25), chairColors[n % 4]);
-      // Something left on some desks.
-      if (n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, 0.73, z, b.jitter(0.4));
-      if (n % 4 === 1) b.box(FRAME, 0.21, 0.004, 0.29, x + 0.2, 0.722, z + 0.02, b.jitter(0.5));
+      desk(b, x, z, x === 0 ? 1.15 : 1.0, 0.6, KID_DESK_TOP);
+      if (rival) seats.push({ x, z: z + 0.43, ry: 0, role: x < 0 ? 'left' : 'right' });
+      else if (z > 0 && x > 0) seats.push({ x, z: z + 0.43, ry: 0, role: 'class' });
+      else chair(b, x, z + 0.45, 0, chairColors[n % 4]);
+      // A book or a sheet left on the desks nobody races at (the rivals' stay clear for their robots).
+      if (!rival && n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, 0.73, z, 0.15);
+      if (!rival && n % 4 === 1) b.box(FRAME, 0.21, 0.004, 0.29, x + 0.2, 0.722, z + 0.02, -0.1);
       n += 1;
     }
   }

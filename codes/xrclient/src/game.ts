@@ -68,6 +68,7 @@ import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
 import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb, type MenuButtonValue } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
+import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore } from './storage.js';
 import { T, useLanguage } from './text.js';
@@ -2523,6 +2524,8 @@ export class GameSystem extends createSystem({
   }
 
   update(delta: number): void {
+    // The classroom's board shows the player's question as on its card.
+    classroom.question = this.race ? (this.prompt?.value ?? '') : '';
     if (this.pausedAt !== undefined) return;
     // Hands put down or picked up mid-game: balloons follow (touch or trigger click).
     const controllers = this.controllersOnly();

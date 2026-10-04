@@ -1,11 +1,12 @@
-import { type AnimationMixer, Box3, type Group, type Mesh, type MeshBasicMaterial, Vector3 } from '@iwsdk/core';
+import { type AnimationMixer, Box3, type Group, type Mesh, type MeshBasicMaterial, type Object3D, Vector3 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
 import { type Figure, forgetMixers, makeBot } from './art/models.js';
 import { KID_HAIRS, type PaperFigure, paperKid, paperTeacher } from './art/paper-kid.js';
-import { Builder, CLASS_BOARD, CLASS_CLOCK, CLASS_FRONT_Z, KID_DESK_TOP, type Seat } from './art/rooms.js';
+import { Builder, CLASS_BOARD, CLASS_CLOCK, CLASS_FRONT_Z, CLASS_WHITEBOARDS, KID_DESK_TOP, type Seat } from './art/rooms.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { type ClassMoment, classroom } from './class-events.js';
+import { T } from './text.js';
 
 /** Where the seated player's head is in the room's frame, for glances and name cards. */
 const PLAYER_X = 0;
@@ -38,10 +39,30 @@ const BOX_VERTS = 36;
 const CLOCK_WARN_MS = 10_000;
 const CHALK = 0xf4f1e6;
 const TEACHER_Z = -3.0;
-const TEACHER_X_MIN = 0.75;
-const TEACHER_X_MAX = 2.3;
+/** The teacher keeps to the right half of the green board, clear of the whiteboards. */
+const TEACHER_X_MIN = 0.95;
+const TEACHER_X_MAX = 1.55;
 /** Where the teacher stands to point at what is written on the board. */
-const TEACHER_BOARD_X = 1.25;
+const TEACHER_BOARD_X = 1.4;
+/**
+ * Chalk on the green board: the player's question, or the race's news while
+ * it is fresh. About 20 cm tall, so it reads from the player's seat 3.8 m away;
+ * a long question is narrowed to the board.
+ */
+const BOARD_TEXT_H = 0.2;
+const BOARD_MAX_W = 2.6;
+const NEWS_S = 2.5;
+/** The left whiteboard's standings: title, rows, and the widest a line may be. */
+const STAND_TITLE_H = 0.11;
+const STAND_ROW_H = 0.1;
+const STAND_ROW_Y = 0.23;
+const STAND_ROWS = 4;
+const STAND_MAX_W = 1.15;
+const MARKER = 0x2b2f38;
+const MARKER_ME = 0x3469c4;
+/** The race card's twin fills the right whiteboard, a little inside its frame. */
+const WALL_CARD_W = 1.15;
+const WALL_CARD_H = 1.18;
 
 /** A rival as one of the game's robots, standing at its chair, its face to the player. */
 interface RivalBot {
@@ -112,6 +133,13 @@ export class ClassroomLife {
   private board: Label;
   private boardText = '';
   private boardAge = 0;
+  private news = '';
+  private newsAge = NEWS_S;
+  private standTitle: Label;
+  /** Each standings line twice, in marker and in the player's blue; one of each pair shows. */
+  private standRows: [Label, Label][] = [];
+  private shownStandings = '';
+  private wallCard: Object3D | null = null;
   private hourHand: Group;
   private minuteHand: Group;
   private timeLeft: Mesh;
@@ -180,9 +208,25 @@ export class ClassroomLife {
     this.teacher.root.rotation.y = this.tyaw;
     room.add(this.teacher.root);
     // Chalk on the board, upper half, clear of the teacher's head.
-    this.board = this.label(' ', 0.17, false, CHALK);
-    this.board.mesh.position.set(CLASS_BOARD.x, CLASS_BOARD.y + 0.22, CLASS_FRONT_Z + 0.065);
+    this.board = this.label(' ', BOARD_TEXT_H, false, CHALK);
+    this.board.mesh.position.set(CLASS_BOARD.x, CLASS_BOARD.y + 0.12, CLASS_FRONT_Z + 0.065);
     this.board.mesh.visible = false;
+    // The standings on the left whiteboard, the race card goes up on the right one.
+    const wb = CLASS_WHITEBOARDS[0];
+    const wz = CLASS_FRONT_Z + 0.05;
+    this.standTitle = this.label(T.standings, STAND_TITLE_H, false, MARKER);
+    this.standTitle.mesh.position.set(wb.x, wb.y + wb.h / 2 - 0.16, wz);
+    this.standTitle.mesh.visible = false;
+    for (let i = 0; i < STAND_ROWS; i += 1) {
+      const y = wb.y + wb.h / 2 - 0.42 - i * STAND_ROW_Y;
+      const pair = [this.label(' ', STAND_ROW_H, false, MARKER), this.label(' ', STAND_ROW_H, false, MARKER_ME)] as [Label, Label];
+      for (const l of pair) {
+        l.mesh.position.set(wb.x, y, wz);
+        l.mesh.visible = false;
+      }
+      this.standRows.push(pair);
+    }
+    classroom.boards = true;
     // The clock's hands at its centre and the round's time as a ring of segments.
     const cz = CLASS_FRONT_Z + 0.05;
     this.hourHand = this.hand('room-clock-hour', 0.075, 0.016, cz);
@@ -355,7 +399,49 @@ export class ClassroomLife {
     for (const k of this.kids) if (k.fig.root.visible) this.pose(k, dt);
     this.walkTeacher(dt);
     this.writeBoard(dt);
+    this.writeStandings();
+    this.hangWallCard();
     this.tickClock();
+  }
+
+  /** The race's standings on the left whiteboard, best first, the player's line in blue. */
+  private writeStandings(): void {
+    const rows = classroom.racing ? [...classroom.standings].sort((a, b) => a.place - b.place) : [];
+    const key = rows.map((r) => `${r.place}|${r.name}|${r.points}|${r.me}`).join(';');
+    if (key === this.shownStandings) return;
+    this.shownStandings = key;
+    this.standTitle.mesh.visible = rows.length > 0;
+    this.standRows.forEach(([plain, me], i) => {
+      const r = rows[i];
+      plain.mesh.visible = !!r && !r.me;
+      me.mesh.visible = !!r && r.me;
+      if (!r) return;
+      const l = r.me ? me : plain;
+      l.set(T.standingRow(r.place, r.name, r.points));
+      l.pulse(Math.min(1, STAND_MAX_W / l.width));
+    });
+  }
+
+  /** The race card's twin, when the race has one, fills the right whiteboard. */
+  private hangWallCard(): void {
+    const card = classroom.wallCard;
+    if (card === this.wallCard) return;
+    if (this.wallCard?.parent === this.room) this.wallCard.removeFromParent();
+    this.wallCard = card;
+    if (!card) return;
+    card.position.set(0, 0, 0);
+    card.rotation.set(0, 0, 0);
+    card.scale.setScalar(1);
+    card.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(card);
+    const size = box.getSize(new Vector3());
+    const mid = box.getCenter(new Vector3());
+    const s = Math.min(WALL_CARD_W / Math.max(size.x, 0.01), WALL_CARD_H / Math.max(size.y, 0.01));
+    const wb = CLASS_WHITEBOARDS[1];
+    card.scale.setScalar(s);
+    card.position.set(wb.x - mid.x * s, wb.y - mid.y * s, CLASS_FRONT_Z + 0.05);
+    this.room.add(card);
+    console.info(`[room] the race card goes up on the right whiteboard, ${(size.x * s).toFixed(2)} x ${(size.y * s).toFixed(2)} m`);
   }
 
   private pose(k: Kid, dt: number): void {
@@ -473,17 +559,25 @@ export class ClassroomLife {
   }
 
   private writeBoard(dt: number): void {
-    const text = classroom.racing ? classroom.board : '';
-    if (text !== this.boardText) {
-      this.boardText = text;
-      this.boardAge = 0;
-      if (text) {
-        this.board.set(text);
+    const news = classroom.racing ? classroom.board : '';
+    if (news !== this.news) {
+      this.news = news;
+      this.newsAge = 0;
+      if (news) {
         // The teacher goes over to point at it.
         this.tTarget = TEACHER_BOARD_X;
         this.tPointLeft = 2.2;
-        console.info(`[room] on the board: ${text}`);
+        console.info(`[room] on the board: ${news}`);
       }
+    }
+    this.newsAge += dt;
+    // Fresh news first, then the player's question; the news stays between questions.
+    const question = classroom.racing ? classroom.question : '';
+    const text = news && (this.newsAge < NEWS_S || !question) ? news : question;
+    if (text !== this.boardText) {
+      this.boardText = text;
+      this.boardAge = 0;
+      if (text) this.board.set(text);
     }
     this.boardAge += dt;
     const mat = this.board.mesh.material as MeshBasicMaterial;
@@ -497,7 +591,7 @@ export class ClassroomLife {
     const k = Math.min(1, this.boardAge / 0.5);
     this.board.mesh.visible = true;
     mat.opacity = k;
-    this.board.pulse(1 + (1 - k) * 0.15);
+    this.board.pulse(Math.min(1, BOARD_MAX_W / this.board.width) * (1 + (1 - k) * 0.15));
   }
 
   private tickClock(): void {
@@ -526,6 +620,10 @@ export class ClassroomLife {
    */
   dispose(): void {
     classroom.rivalsInRoom = false;
+    classroom.boards = false;
+    // The race card belongs to the race, which frees it.
+    if (this.wallCard?.parent === this.room) this.wallCard.removeFromParent();
+    this.wallCard = null;
     for (const k of this.rivals) {
       if (!k) continue;
       this.dropBubble(k);

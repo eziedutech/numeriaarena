@@ -172,6 +172,11 @@ export class Label {
     return this.text;
   }
 
+  /** The label's own width in meters, before any pulse. */
+  get width(): number {
+    return this.baseX;
+  }
+
   set(text: string): void {
     if (text === this.text) return;
     this.text = text;
