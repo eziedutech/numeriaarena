@@ -1,5 +1,5 @@
 /**
- * What the race tells the virtual classroom: who sits beside the player,
+ * What the race tells the virtual classroom: who sits at the desks ahead,
  * what they are doing, the round on the board and the clock. The race view
  * writes it; the classroom reads it each frame. Neither knows the other.
  */
@@ -12,7 +12,7 @@ export interface ClassEvent {
 }
 
 export const classroom = {
-  /** A race is on: the two rivals sit at the desks beside the player. */
+  /** A race is on: the two rivals sit at the desks ahead left and right of the player. */
   racing: false,
   /** Each rival's name, and its place and points as on its window. */
   names: ['', ''],
@@ -29,8 +29,13 @@ export const classroom = {
   /** Each rival's latest paper speech bubble (a UI image name), and a count that goes up with each. */
   bubble: ['', ''],
   bubbleSeq: [0, 0],
-  /** The bedroom's robot posters are up: they stand in for the rival windows on the desk. */
-  posters: false,
+  /**
+   * The rivals are the game's robots, as in a solo race; a Class Match of
+   * classmates sets this false and the classroom seats paper classmates instead.
+   */
+  robots: true,
+  /** The room shows the rivals (the bedroom's posters, the classroom's desks ahead): the rival windows on the desk stand aside. */
+  rivalsInRoom: false,
 };
 
 export function classEvent(desk: number, moment: ClassMoment): void {

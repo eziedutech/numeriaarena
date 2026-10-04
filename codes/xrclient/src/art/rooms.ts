@@ -31,7 +31,7 @@ export interface Seat {
   x: number;
   z: number;
   ry: number;
-  /** The rivals' seats beside the player, or a classmate in another row. */
+  /** The rivals' seats ahead left and right of the player, or a classmate's. */
   role: 'left' | 'right' | 'class';
 }
 
@@ -59,6 +59,8 @@ const POSTER_TINTS = [0xe6edf8, 0xe2f3ee];
 
 /** Classmates' desk tops. */
 export const KID_DESK_TOP = 0.72;
+/** The classroom's side columns of desks, either side of the player's. */
+const CLASS_COLUMN_X = 1.3;
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0.2, y: 1.55, w: 3.28, h: 1.2 };
@@ -364,26 +366,28 @@ function classroom(deskTop: number): Group {
   chair(b, -0.25, -2.95, Math.PI + 0.25, 0x3469c4);
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
   desk(b, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
-  // The desks beside the player, where the race's rivals sit; their own chairs come with them.
+  // The desks beside the player, a classmate at work at each; their own chairs come with them.
   const seats: Seat[] = [];
-  for (const [x, role] of [
-    [-1.35, 'left'],
-    [1.35, 'right'],
-  ] as const) {
+  for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
     const ry = x < 0 ? 0.06 : -0.06;
     desk(b, x, -0.03, 1.0, 0.6, KID_DESK_TOP, ry);
-    seats.push({ x, z: 0.4, ry, role });
+    seats.push({ x, z: 0.4, ry, role: 'class' });
   }
-  // Classmates' desks in the rows ahead and behind, each a little off line,
-  // chairs pushed in or out. Some have a classmate at work, never the desk
-  // straight ahead of the player: its chair stays empty, so nobody sits between the player and the board.
+  // The rows ahead and behind, each desk a little off line, chairs pushed in
+  // or out. The race's rivals sit at the desks ahead left and right, in view
+  // without turning the head, turned a little to the board. Nobody sits at
+  // the desk straight ahead: its chair stays empty, so the board is in clear view.
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
-    for (const x of [-1.85, 0, 1.85]) {
-      const ry = b.jitter(0.09);
-      desk(b, x + b.jitter(0.08), z + b.jitter(0.06), 1.15, 0.6, KID_DESK_TOP, ry);
-      if ((z < 0 && x !== 0) || (z > 0 && x > 0)) seats.push({ x: x + b.jitter(0.05), z: z + 0.43, ry, role: 'class' });
+    for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
+      const rival = z < 0 && x !== 0;
+      const ry = rival ? (x < 0 ? -0.12 : 0.12) : b.jitter(0.09);
+      const dx = rival ? 0 : b.jitter(0.08);
+      const dz = rival ? 0 : b.jitter(0.06);
+      desk(b, x + dx, z + dz, x === 0 ? 1.15 : 1.0, 0.6, KID_DESK_TOP, ry);
+      if (rival) seats.push({ x: x + 0.43 * Math.sin(ry), z: z + 0.43 * Math.cos(ry), ry, role: x < 0 ? 'left' : 'right' });
+      else if (z > 0 && x > 0) seats.push({ x: x + b.jitter(0.05), z: z + 0.43, ry, role: 'class' });
       else chair(b, x + b.jitter(0.15), z + 0.5 + Math.abs(b.jitter(0.14)), ry + b.jitter(0.25), chairColors[n % 4]);
       // Something left on some desks.
       if (n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, 0.73, z, b.jitter(0.4));

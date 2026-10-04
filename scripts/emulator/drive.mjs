@@ -605,11 +605,13 @@ if (mode === 'room') {
     await cli('xr', 'set-select-value', { device: 'controller-right', value: 0 }); await sleep(1.5);
     console.log(`click ${k + 1}: ${await lastLog('\\[menu\\] room ')} / ${await lastLog('\\[room\\] ')}`);
   };
-  // `room race`: a whole race in the classroom, the rivals at the desks beside the player.
+  // `room race`: a whole race in the classroom, the rivals at the desks ahead of the player.
   await press(0);
   console.log((await logs('\\[room\\] classroom life', 1))[0] ?? 'no classroom life (wrong)');
   try {
     if (process.argv[3] === 'race') {
+      // The race's cards are poked with the hand, as in `race`; ROOM goes back to the controller after.
+      await cli('xr', 'set-input-mode', { mode: 'hand' }); await sleep(1);
       await raceMatch();
       console.log((await logs('\\[room\\] (the rivals|on the board)', 12)).join('\n'));
       await sleep(4);
@@ -619,6 +621,7 @@ if (mode === 'room') {
     let menu = null;
     for (let k = 0; k < 30 && !menu; k++) { menu = await posOf('^menu-room$'); if (!menu) await sleep(1); }
     if (menu) {
+      await cli('xr', 'set-input-mode', { mode: 'controller' }); await sleep(1);
       await press(1);
       await press(2);
     } else {

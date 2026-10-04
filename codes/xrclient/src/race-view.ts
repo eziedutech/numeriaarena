@@ -99,7 +99,7 @@ export class RaceScene {
     private desk: Object3D,
     botNames: [string, string],
   ) {
-    // In the virtual classroom the rivals also sit at the desks beside the player.
+    // In the virtual classroom the rivals also sit at the desks ahead of the player.
     classRaceOn(true);
     botNames.forEach((name, i) => {
       classroom.names[i] = T.bot(name);
@@ -275,8 +275,8 @@ export class RaceScene {
       if (this.bannerLeft <= 0) this.clearBanner();
     }
     for (const w of this.windows) {
-      // In the bedroom the rivals are in the posters beside the window; the desk keeps its middle free.
-      w.frame.visible = !classroom.posters;
+      // In a virtual room the rivals are in the room (posters, desks ahead); the desk keeps its middle free.
+      w.frame.visible = !classroom.rivalsInRoom;
       if (w.flashLeft > 0) {
         w.flashLeft -= delta;
         if (w.flashLeft <= 0) {

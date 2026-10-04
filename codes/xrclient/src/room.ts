@@ -21,7 +21,7 @@ export class RoomSystem extends createSystem({
   desks: { required: [DeskRoot] },
 }) {
   private shown?: Entity;
-  /** The classmates, teacher, board and clock in the classroom; the robot posters in the bedroom. */
+  /** The rivals, classmates, teacher, board and clock in the classroom; the robot posters in the bedroom. */
   private life?: ClassroomLife | BedroomLife;
   /** What the shown room was built for; rebuilt when any of it changes. */
   private room: Room = 'here';

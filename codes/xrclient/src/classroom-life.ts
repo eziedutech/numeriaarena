@@ -1,8 +1,10 @@
-import { type Group, type Mesh, type MeshBasicMaterial } from '@iwsdk/core';
+import { type AnimationMixer, Box3, type Group, type Mesh, type MeshBasicMaterial, Vector3 } from '@iwsdk/core';
 
 import { Label } from './art/label.js';
+import { type Figure, forgetMixers, makeBot } from './art/models.js';
 import { KID_HAIRS, type PaperFigure, paperKid, paperTeacher } from './art/paper-kid.js';
 import { Builder, CLASS_BOARD, CLASS_CLOCK, CLASS_FRONT_Z, type Seat } from './art/rooms.js';
+import { uiImage, type UiName } from './art/ui2d.js';
 import { type ClassMoment, classroom } from './class-events.js';
 
 /** Where the seated player's head is in the room's frame, for glances and name cards. */
@@ -14,6 +16,15 @@ const CLASS_COLORS = [0xf2716b, 0xf9c74f, 0x5db85b, 0xb198ea, 0xf8961e];
 const CHAIRS = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
 /** How long each moment plays on a rival, in seconds. */
 const MOMENT_S: Record<ClassMoment, number> = { working: 0, right: 1.6, missed: 1.2, cheer: 1.8, clap: 1.6 };
+/** The clip a rival robot plays (once) for a moment, as in the bedroom's posters. */
+const BOT_CLIP: Partial<Record<ClassMoment, string>> = { right: 'cheer', cheer: 'cheer', clap: 'wave' };
+/** A rival robot stands at its chair (it has no seated pose), about as tall as a seated classmate. */
+const BOT_H = 1.1;
+/** A rival's paper speech bubble over its name, turned to the player; it stays as long as on its window. */
+const BUBBLE_Y = 1.6;
+const BUBBLE_SCALE = 3;
+const BUBBLE_MAX_W = 0.3;
+const BUBBLE_S = 1.6;
 /** Segments of the race's time around the clock face. */
 const CLOCK_SEGMENTS = 24;
 /** Box geometry drawn without an index: vertices per segment. */
@@ -26,10 +37,23 @@ const TEACHER_X_MAX = 2.3;
 /** Where the teacher stands to point at what is written on the board. */
 const TEACHER_BOARD_X = 1.25;
 
+/** A rival as one of the game's robots, standing at its chair, its face to the player. */
+interface RivalBot {
+  fig: Figure;
+  mixer?: AnimationMixer;
+  rest: Vector3;
+  yaw: number;
+}
+
 interface Kid {
   fig: PaperFigure;
-  /** 0: a classmate in another row; 1 or 2: the rival on the left or the right. */
+  /** 0: a classmate; 1 or 2: the rival ahead on the left or the right. */
   desk: number;
+  /** The same rival as a robot, shown instead of the paper classmate while the rivals are robots. */
+  bot?: RivalBot;
+  bubble?: Mesh;
+  bubbleLeft: number;
+  bubbleSeq: number;
   /** Turn of the head towards the player, from the seat. */
   glanceYaw: number;
   moment: ClassMoment;
@@ -56,16 +80,20 @@ function ease(now: number, to: number, rate: number, dt: number): number {
 }
 
 /**
- * Life in the virtual classroom: the two rivals at the desks beside the
- * player while a race is on, classmates at work in the other rows, the
+ * Life in the virtual classroom: the two rivals at the desks ahead left and
+ * right of the player while a race is on (the game's robots in a solo race,
+ * paper classmates in a Class Match), with their names, points and speech
+ * bubbles, so the rival windows on the desk stand aside; classmates at work
+ * beside and behind the player; the
  * teacher walking by the board and pointing at what the race writes on it,
  * and the clock keeping real time with the round's time left on its face.
  * Everything is added to the room's group, so it goes when the room goes.
  */
 export class ClassroomLife {
   private kids: Kid[] = [];
-  /** The rivals on the left and the right. */
+  /** The rivals ahead on the left and the right. */
   private rivals: (Kid | undefined)[] = [undefined, undefined];
+  private recap = false;
   /** Minutes the local clock is behind UTC, read once. */
   private tzMin = new Date().getTimezoneOffset();
   private teacher: PaperFigure;
@@ -119,6 +147,8 @@ export class ClassroomLife {
         aRx: 1.2,
         aRz: -0.1,
         phase: Math.random() * 6,
+        bubbleLeft: 0,
+        bubbleSeq: 0,
       };
       if (desk) {
         // The rival's name and points over its head, turned to the player.
@@ -132,6 +162,7 @@ export class ClassroomLife {
         fig.root.visible = false;
         kid.name.mesh.visible = false;
         kid.status.mesh.visible = false;
+        kid.bot = this.rivalBot(desk, seat);
       } else {
         n += 1;
       }
@@ -152,7 +183,65 @@ export class ClassroomLife {
     this.minuteHand = this.hand('room-clock-minute', 0.12, 0.011, cz + 0.004);
     this.timeLeft = this.ring('room-clock-time', 0x3fb6a0);
     this.timeWarn = this.ring('room-clock-warn', 0xf2716b);
+    classroom.rivalsInRoom = this.rivals.some((k) => k);
     console.info(`[room] classroom life: ${this.kids.length} classmates and the teacher`);
+  }
+
+  /** A rival robot at its chair, its feet on the floor and its face (+Z) to the player; hidden until a race. */
+  private rivalBot(desk: number, seat: Seat): RivalBot {
+    const fig = makeBot(desk === 1 ? 0 : 1, RIVAL_COLORS[desk - 1]);
+    const box = new Box3().setFromObject(fig.root);
+    const size = box.getSize(new Vector3());
+    fig.root.scale.setScalar(size.y > 0 ? BOT_H / size.y : 1);
+    box.setFromObject(fig.root);
+    const rest = new Vector3(seat.x, -box.min.y, seat.z);
+    const yaw = Math.atan2(PLAYER_X - seat.x, PLAYER_Z - seat.z);
+    fig.root.position.copy(rest);
+    fig.root.rotation.set(0, yaw, 0);
+    fig.root.visible = false;
+    this.room.add(fig.root);
+    let mixer: AnimationMixer | undefined;
+    fig.root.traverse((o) => (mixer ??= o.userData.mixer as AnimationMixer | undefined));
+    if (mixer) mixer.timeScale = 0;
+    return { fig, mixer, rest, yaw };
+  }
+
+  /** A new speech bubble from the race goes up over the rival's name. */
+  private showBubble(k: Kid, d: number): void {
+    if (classroom.bubbleSeq[d] === k.bubbleSeq) return;
+    k.bubbleSeq = classroom.bubbleSeq[d];
+    this.dropBubble(k);
+    const image = classroom.bubble[d] ? uiImage(classroom.bubble[d] as UiName, BUBBLE_SCALE, BUBBLE_MAX_W) : null;
+    if (!image || !k.name) return;
+    image.position.set(k.name.mesh.position.x, BUBBLE_Y, k.name.mesh.position.z);
+    image.rotation.y = k.name.mesh.rotation.y;
+    this.room.add(image);
+    k.bubble = image;
+    k.bubbleLeft = BUBBLE_S;
+  }
+
+  private dropBubble(k: Kid): void {
+    if (!k.bubble) return;
+    k.bubble.removeFromParent();
+    k.bubble.geometry.dispose();
+    const mat = k.bubble.material as MeshBasicMaterial;
+    mat.map?.dispose();
+    mat.dispose();
+    k.bubble = undefined;
+  }
+
+  /** A hop for a right answer or a cheer, a shake of the body for a miss, as in the bedroom's posters. */
+  private botPose(k: Kid, b: RivalBot, dt: number): void {
+    let hop = 0;
+    let shake = 0;
+    if (k.momentLeft > 0) {
+      k.momentLeft -= dt;
+      const f = Math.max(0, k.momentLeft) / MOMENT_S[k.moment];
+      if (k.moment === 'right' || k.moment === 'cheer') hop = Math.abs(Math.sin((1 - f) * Math.PI * 2)) * 0.08 * f;
+      else if (k.moment === 'missed') shake = Math.sin((1 - f) * Math.PI * 6) * 0.12 * f;
+    }
+    b.fig.root.position.set(b.rest.x, b.rest.y + hop, b.rest.z);
+    b.fig.root.rotation.set(0, b.yaw, shake);
   }
 
   private label(text: string, height: number, card: boolean, ink?: number): Label {
@@ -190,15 +279,28 @@ export class ClassroomLife {
     const racing = classroom.racing;
     if (racing !== this.racing) {
       this.racing = racing;
+      const robots = classroom.robots;
       for (const k of this.kids) {
         if (!k.desk) continue;
-        k.fig.root.visible = racing;
+        const bot = robots ? k.bot : undefined;
+        k.fig.root.visible = racing && !bot;
+        if (k.bot) {
+          k.bot.fig.root.visible = racing && !!bot;
+          if (k.bot.mixer) k.bot.mixer.timeScale = racing && bot ? 1 : 0;
+          k.bot.fig.play('idle');
+        }
         if (k.name) k.name.mesh.visible = racing;
         if (k.status) k.status.mesh.visible = racing;
         k.moment = 'working';
         k.momentLeft = 0;
+        // Only the bubbles of this race.
+        k.bubbleSeq = classroom.bubbleSeq[k.desk - 1];
+        this.dropBubble(k);
       }
-      console.info(racing ? '[room] the rivals sit down beside the player' : '[room] the rivals leave their desks');
+      this.recap = false;
+      console.info(
+        racing ? `[room] the rivals sit down at the desks ahead (${robots ? 'robots' : 'classmates'})` : '[room] the rivals leave their desks',
+      );
     }
     // Moments from the race, newest last.
     while (classroom.events.length) {
@@ -208,7 +310,14 @@ export class ClassroomLife {
         k.moment = e.moment;
         k.momentLeft = MOMENT_S[e.moment];
         if (e.moment === 'working') k.lookLeft = 0;
+        const clip = BOT_CLIP[e.moment];
+        if (clip && k.bot?.fig.root.visible) k.bot.fig.play(clip, true);
       }
+    }
+    if (racing && classroom.recap !== this.recap) {
+      this.recap = classroom.recap;
+      // The results are up: the robots wave at the player (the classmates turn to the player in pose).
+      if (this.recap) for (const k of this.rivals) if (k?.bot?.fig.root.visible) k.bot.fig.play('wave', true);
     }
     for (let i = 0; i < 2; i += 1) {
       const k = this.rivals[i];
@@ -221,6 +330,10 @@ export class ClassroomLife {
         this.shownStatus[i] = classroom.status[i];
         k.status.set(classroom.status[i] || ' ');
       }
+      if (!racing) continue;
+      this.showBubble(k, i);
+      if (k.bubble && (k.bubbleLeft -= dt) <= 0) this.dropBubble(k);
+      if (k.bot?.fig.root.visible) this.botPose(k, k.bot, dt);
     }
     for (const k of this.kids) if (k.fig.root.visible) this.pose(k, dt);
     this.walkTeacher(dt);
@@ -389,8 +502,20 @@ export class ClassroomLife {
     ring.geometry.setDrawRange(0, left * BOX_VERTS);
   }
 
-  /** The labels' canvases and materials; the meshes' geometry goes with the room. */
+  /**
+   * The labels' canvases and materials; the meshes' geometry goes with the room.
+   * The robots stop animating and leave the room's group first, so the room's
+   * clean-up never frees the shared model.
+   */
   dispose(): void {
+    classroom.rivalsInRoom = false;
+    for (const k of this.rivals) {
+      if (!k) continue;
+      this.dropBubble(k);
+      if (!k.bot) continue;
+      forgetMixers(k.bot.fig.root);
+      k.bot.fig.root.removeFromParent();
+    }
     for (const l of this.labels) {
       const mat = l.mesh.material as MeshBasicMaterial;
       mat.map?.dispose();

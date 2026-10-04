@@ -81,7 +81,7 @@ export class BedroomLife {
       this.bots.push({ desk: p.desk, fig, rest, mixer, at, bubbleLeft: 0, bubbleSeq: seq, name, status, moment: 'working', momentLeft: 0 });
     }
     this.still(true);
-    classroom.posters = this.bots.length > 0;
+    classroom.rivalsInRoom = this.bots.length > 0;
     console.info(`[room] bedroom life: ${this.bots.length} robot posters`);
   }
 
@@ -187,7 +187,7 @@ export class BedroomLife {
 
   /** The robots stop animating and leave the room's group, so the room's clean-up never frees the shared model; labels free their canvases. */
   dispose(): void {
-    classroom.posters = false;
+    classroom.rivalsInRoom = false;
     for (const b of this.bots) {
       this.dropBubble(b);
       forgetMixers(b.fig.root);
