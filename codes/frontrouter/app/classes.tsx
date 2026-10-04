@@ -30,6 +30,13 @@ interface Seat {
   pseudonym: string;
   locked: boolean;
   last_seen_at: string | null;
+  /** Matches in rooms the teacher opened for this class: the official record. */
+  official: { matches: number; stars: number };
+  last_official: { at: string; place: number; points: number; stars: number } | null;
+  /** Matches in rooms for anyone, never added to the official record. */
+  other_rooms: { matches: number; last_at: string | null };
+  /** Races against the robots and practices on the student's own, as the game reports them. */
+  own: { races: number; practices: number; days: number; last_at: string | null };
 }
 
 /** A sign-in card, only in this page's memory. */
@@ -59,7 +66,14 @@ const TEXT = {
     make: "MAKE THE CLASS",
     cancel: "CANCEL",
     signInHow: "Students press I'M IN A CLASS in the game, enter this code, tap their seat and their three pictures.",
-    cols: ["Seat", "Name (this browser only)", "Pseudonym", "Last played", ""],
+    cols: ["Seat", "Name (this browser only)", "Pseudonym", "Class races", "Own play", "Last played", ""],
+    official: (n: number, stars: number) => `${n} ${n === 1 ? "race" : "races"} · ${stars}★`,
+    lastOfficial: (place: number, points: number) => `last: ${place}${place === 1 ? "st" : place === 2 ? "nd" : place === 3 ? "rd" : "th"}, ${points} pts`,
+    own: (races: number, practices: number) => `${races} with robots · ${practices} ${practices === 1 ? "practice" : "practices"}`,
+    otherRooms: (n: number) => `${n} in rooms for anyone`,
+    days: (n: number) => `on ${n} ${n === 1 ? "day" : "days"}`,
+    recordsNote:
+      "Class races are the official record: rooms you open for this class. Own play counts races with robots, practices and rooms for anyone, kept apart; the game reports them, so they show how often a student plays, not a grade.",
     namePlaceholder: "Name",
     never: "not yet",
     locked: "LOCKED",
@@ -128,7 +142,14 @@ const TEXT = {
     make: "BUAT KELAS",
     cancel: "BATAL",
     signInHow: "Siswa menekan AKU DI KELAS di game, memasukkan kode ini, lalu menekan nomor kursi dan tiga gambarnya.",
-    cols: ["Kursi", "Nama (hanya di browser ini)", "Samaran", "Terakhir main", ""],
+    cols: ["Kursi", "Nama (hanya di browser ini)", "Samaran", "Lomba kelas", "Main sendiri", "Terakhir main", ""],
+    official: (n: number, stars: number) => `${n} lomba · ${stars}★`,
+    lastOfficial: (place: number, points: number) => `terakhir: ke-${place}, ${points} poin`,
+    own: (races: number, practices: number) => `${races} lawan robot · ${practices} latihan`,
+    otherRooms: (n: number) => `${n} di ruang umum`,
+    days: (n: number) => `dalam ${n} hari`,
+    recordsNote:
+      "Lomba kelas adalah catatan resmi: ruang yang Anda buka untuk kelas ini. Main sendiri menghitung lomba lawan robot, latihan, dan ruang umum, disimpan terpisah; game yang melaporkannya, jadi ini menunjukkan seberapa sering siswa bermain, bukan nilai.",
     namePlaceholder: "Nama",
     never: "belum",
     locked: "TERKUNCI",
@@ -539,6 +560,7 @@ function ClassPage({
       )}
       <ErrorLine t={t} code={error} />
       {note && <p role="status">{note}</p>}
+      <p className="soft">{t.recordsNote}</p>
       <table className="past-table seats">
         <thead>
           <tr>
@@ -563,6 +585,15 @@ function ClassPage({
                 />
               </td>
               <td>{s.pseudonym}</td>
+              <td>
+                {t.official(s.official.matches, s.official.stars)}
+                {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
+              </td>
+              <td>
+                {t.own(s.own.races, s.own.practices)}
+                {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
+                {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
+              </td>
               <td>{s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}</td>
               <td className="seat-actions">
                 {active && (

@@ -993,8 +993,10 @@ button.tool {
 
   .past-table.seats th:nth-child(3),
   .past-table.seats td:nth-child(3),
-  .past-table.seats th:nth-child(4),
-  .past-table.seats td:nth-child(4) {
+  .past-table.seats th:nth-child(5),
+  .past-table.seats td:nth-child(5),
+  .past-table.seats th:nth-child(6),
+  .past-table.seats td:nth-child(6) {
     display: none;
   }
 }

@@ -590,6 +590,8 @@ interface PastRoom {
   play_code: string;
   kind: "class" | "open";
   seats: number;
+  /** The class the room was opened for, or null for a room for anyone. */
+  class_label?: string | null;
   created_at: string;
   open: boolean;
   matches: {
@@ -627,6 +629,7 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
         <details key={r.id} className="past-room" open={i === 0}>
           <summary className="past-head">
             <strong className="past-code">{r.play_code}</strong>
+            {r.class_label && <span className="past-state">{r.class_label}</span>}
             <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
             <span className="past-when">
               {day(r.created_at)}, {clock(r.created_at)}
