@@ -76,8 +76,9 @@ const EN = {
   ones: 'Ones',
   seatIs: 'Seat',
   picture: '3. Your picture password (3 pictures)',
-  serverSoon:
-    'Class sign-in opens when the class server is ready. Until then you can practise and race the robots without signing in.',
+  studentSoon:
+    'Signing in to your class seat comes to the game in the next update. Until then you can practise and race the robots without signing in.',
+  teacherOff: 'Teacher sign-in is not set up in this copy of the game. Use the teacher page on the Numeria Arena site.',
   teacherIntro: 'For teachers and club organisers. Students never sign in here.',
   /** Shown on the home page while there is no network. */
   offline: 'OFFLINE: RESULTS KEPT ON THIS DEVICE',
@@ -160,7 +161,6 @@ const EN = {
     board:
       'Two boards: MY CLASS and GLOBAL. Each ranks HIGH STRIKE (the best race scores) and CITY BUILDER (the biggest Fold Towns), for this month or for all time. Players show only as made-up names, like BLUE CRANE 07.',
     town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
-    watch: 'Watching a class match with a watch code, and the always-on demo match, come with the class server.',
     smartboard: 'On a smartboard the whole class helps the headset players. This mode is coming in a later update.',
     accessibility:
       'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
@@ -260,8 +260,9 @@ const ID: typeof EN = {
   ones: 'Satuan',
   seatIs: 'Kursi',
   picture: '3. Sandi gambarmu (3 gambar)',
-  serverSoon:
-    'Masuk kelas dibuka saat server kelas siap. Sampai saat itu kamu tetap bisa berlatih dan lomba melawan robot tanpa masuk.',
+  studentSoon:
+    'Masuk ke kursi kelasmu hadir di game pada pembaruan berikutnya. Sampai saat itu kamu tetap bisa berlatih dan lomba melawan robot tanpa masuk.',
+  teacherOff: 'Masuk guru belum disiapkan di salinan game ini. Pakai halaman guru di situs Numeria Arena.',
   teacherIntro: 'Untuk guru dan pembina klub. Siswa tidak pernah masuk di sini.',
   offline: 'OFFLINE: HASIL DISIMPAN DI PERANGKAT',
   offlineSignIn: 'Masuk membutuhkan internet. Berlatih dan lomba lawan robot tetap bisa tanpa internet, dan hasilnya menunggu di perangkat ini.',
@@ -332,7 +333,6 @@ const ID: typeof EN = {
     board:
       'Dua papan: KELASKU dan GLOBAL. Masing-masing memeringkat HIGH STRIKE (skor lomba terbaik) dan CITY BUILDER (Kota Lipat terbesar), untuk bulan ini atau sepanjang masa. Pemain hanya tampil dengan nama samaran, misalnya BLUE CRANE 07.',
     town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
-    watch: 'Menonton pertandingan kelas dengan kode tonton, dan pertandingan demo, hadir bersama server kelas.',
     smartboard: 'Di smartboard, seluruh kelas membantu pemain headset. Mode ini hadir di pembaruan berikutnya.',
     accessibility:
       'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',

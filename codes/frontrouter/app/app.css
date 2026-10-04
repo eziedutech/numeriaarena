@@ -554,17 +554,6 @@ button.tool {
   }
 }
 
-.tool .soon {
-  position: absolute;
-  right: -6px;
-  top: -8px;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 2px 6px;
-}
-
 .field.short {
   width: 90px;
   text-align: center;

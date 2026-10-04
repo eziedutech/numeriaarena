@@ -727,7 +727,7 @@ export class Home {
     });
     this.actions(body, veil, () => {
       veil.remove();
-      this.message(t.student[0], t.serverSoon);
+      this.message(t.student[0], t.studentSoon);
     });
   }
 
@@ -1149,7 +1149,7 @@ export class Home {
     const t = this.t;
     this.signInAsked = true;
     if (!signInConfigured) {
-      this.message(t.teacher[0], t.serverSoon);
+      this.message(t.teacher[0], t.teacherOff);
       return;
     }
     if (!online()) {
