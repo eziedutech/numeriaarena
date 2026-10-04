@@ -23,6 +23,7 @@ import {
   type Me,
 } from './teacher.js';
 import { ClassRace } from '../game/class-race.js';
+import { avatarOf, avatarSvg } from './avatar.js';
 import { pictureSvg } from './pictures.js';
 import { checkStudent, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
 import { online, onNetwork } from '../offline.js';
@@ -97,6 +98,16 @@ const CSS = `
 #home .card svg { width: 54px; height: 54px; flex: none; }
 #home .card.muted { filter: saturate(0.25) brightness(0.92); }
 #home .card .soon { position: absolute; right: -8px; top: -10px; background: ${INK}; padding: 2px 6px; }
+#home .card.me { padding-left: 8px; }
+#home .card.me svg { outline: 3px solid ${PAPER}; transform: rotate(-4deg); box-shadow: 0 3px 6px rgba(58, 45, 20, 0.25); }
+#home .idcard { display: flex; align-items: center; gap: 22px; margin: -22px -26px 6px; padding: 22px 26px; }
+#home .idcard canvas { display: block; }
+#home .idcard canvas + canvas { margin-top: 4px; }
+#home .idcard .av { flex: none; background: ${PAPER}; padding: 6px; transform: rotate(-4deg); }
+#home .idcard .av svg { display: block; }
+#home .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#home .chips span { background: ${PAPER}; color: ${INK}; font-weight: 700; font-size: 15px; padding: 4px 10px; }
+#home .actions .out { margin-right: auto; }
 #home .town { position: absolute; left: 34px; top: 6px; width: 300px; background: none; border: 0; padding: 0;
   text-align: left; cursor: pointer; transition: transform 0.12s; }
 #home .town:hover { transform: scale(1.04); }
@@ -442,8 +453,10 @@ export class Home {
     right.style.left = '1210px';
     right.appendChild(paperText(t.you, 30, INK));
     // Student and teacher sign-in hide each other: a signed-in teacher gets
-    // their own card and the class tools in place of the student code.
+    // their own card and the class tools in place of the student code, and a
+    // student in a class seat gets their pass in place of both sign-ins.
     const teacher = teacherState();
+    const student = studentState();
     let row = 0;
     if (teacher.kind === 'in') {
       const me = teacher.me;
@@ -458,12 +471,25 @@ export class Home {
       this.card('right', row++, t.myClasses, 'classes', COLORS.sun, () => this.classes());
       this.card('right', row++, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
       this.card('right', row++, t.history, 'history', COLORS.cobalt, () => this.history());
+    } else if (student) {
+      // A device in a class seat is a student's: no teacher sign-in here.
+      const look = avatarOf(student.pseudonym);
+      const name = student.pseudonym.toUpperCase();
+      const sub = t.studentSeat(student.class_label, student.seat);
+      const card = this.card('right', row++, [name, sub], 'student', look.colour, () => this.studentCard(student));
+      card.classList.add('me');
+      card.style.borderLeft = `8px solid ${look.colour}`;
+      const icon = card.querySelector('svg');
+      if (icon) {
+        icon.setAttribute('viewBox', '0 0 64 64');
+        icon.innerHTML = look.inner;
+      }
+      const badge = el('span', 'soon', card);
+      badge.style.background = COLORS.teal;
+      badge.appendChild(paperText(t.inClass, 12, PAPER));
+      card.setAttribute('aria-label', `${t.studentHi(student.pseudonym)}. ${sub}. ${t.inClass}`);
     } else {
-      const student = studentState();
-      if (student) {
-        const hi = [t.studentHi(student.pseudonym), t.studentSeat(student.class_label, student.seat)];
-        this.card('right', row++, hi, 'student', COLORS.sun, () => this.studentCard(student));
-      } else this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
+      this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
       if (teacher.kind === 'error' && teacher.code === 'offline') {
         const sub = card.querySelector('.sub');
@@ -510,10 +536,12 @@ export class Home {
       const policy = keys[i] === 'Privacy' || keys[i] === 'For parents' ? { href: '/privacy', label: t.fullPolicy } : undefined;
       b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]], policy));
     });
-    // Teachers and admins: the full teacher page on the site.
-    const teachers = el('button', '', footer);
-    teachers.textContent = t.teacherPage;
-    teachers.addEventListener('click', () => window.location.assign('/manage'));
+    // Teachers and admins: the full teacher page on the site (not on a student's device).
+    if (!student) {
+      const teachers = el('button', '', footer);
+      teachers.textContent = t.teacherPage;
+      teachers.addEventListener('click', () => window.location.assign('/manage'));
+    }
     el('span', '', footer).textContent = VERSION;
 
     this.back.innerHTML = '';
@@ -785,20 +813,45 @@ export class Home {
     });
   }
 
-  /** The signed-in seat: who, which class, and SIGN OUT for a shared device. */
+  /**
+   * The signed-in seat as a class pass: the paper avatar on a band of its
+   * colour, the pseudonym, the class and seat, and SIGN OUT for a shared device.
+   */
   private studentCard(s: Student, welcome = false): void {
     const t = this.t;
-    const { veil, body } = this.popup(t.studentHi(s.pseudonym));
-    el('div', 'step', body).textContent = t.studentSeat(s.class_label, s.seat);
+    const look = avatarOf(s.pseudonym);
+    const name = s.pseudonym.toUpperCase();
+    const veil = el('div', 'veil', this.stage);
+    const body = el('div', 'pop shadow', veil);
+    body.setAttribute('role', 'dialog');
+    body.setAttribute('aria-label', t.studentHi(s.pseudonym));
+    veil.addEventListener('click', (e) => {
+      if (e.target === veil) veil.remove();
+    });
+    const band = el('div', 'idcard', body);
+    band.style.background = look.colour;
+    el('div', 'av shadow', band).innerHTML = avatarSvg(s.pseudonym, 104);
+    const who = el('div', '', band);
+    who.appendChild(paperText(t.hello, 18, PAPER));
+    who.appendChild(paperText(name, name.length > 14 ? 26 : 30, PAPER));
+    const chips = el('div', 'chips', who);
+    el('span', '', chips).textContent = s.class_label;
+    el('span', '', chips).textContent = t.seatNo(s.seat);
     el('p', '', body).textContent = welcome ? t.studentWelcome : t.studentKept;
-    const out = el('button', 'btn wide shadow', body);
-    out.appendChild(paperText(t.signOut, 16, INK));
+    const row = el('div', 'actions', body);
+    const out = el('button', 'btn shadow out', row);
+    out.style.background = COLORS.coral;
+    out.appendChild(paperText(t.signOut, 16, PAPER));
     out.setAttribute('aria-label', t.signOut);
     out.addEventListener('click', () => {
       veil.remove();
       void studentSignOut();
     });
-    this.actions(body, veil);
+    const close = el('button', 'btn shadow', row);
+    close.style.background = '#f1e3c4';
+    close.appendChild(paperText(t.close, 16, INK));
+    close.setAttribute('aria-label', t.close);
+    close.addEventListener('click', () => veil.remove());
   }
 
   /** Six boxes for a room's code; reads it back in capitals. */
