@@ -802,7 +802,7 @@ export class Home {
     const draw = () => {
       const l = link.lobby;
       seats.textContent = l ? t.lobbySeats(l.names.length, l.seats) : '';
-      names.textContent = l ? l.names.join(', ') : '';
+      names.textContent = l ? t.lobbyIn(l.names.join(', ')) : '';
       state.textContent = link.started ? t.lobbyOn : t.lobbyWait;
       start.style.display = link.seat === 0 && !link.started ? '' : 'none';
     };
