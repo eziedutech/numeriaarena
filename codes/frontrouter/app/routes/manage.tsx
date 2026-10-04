@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, sendEmailLink, signInConfigured, signInWith, signOut, watchUser } from "../auth";
-import { ClassesTool, MyClasses } from "../classes";
+import { MyClasses } from "../classes";
 import { useLang, type Lang } from "../legal";
 
 export function meta({}: Route.MetaArgs) {
@@ -63,19 +63,28 @@ const TEXT = {
     pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
     suspendedBody: "This account is suspended. Write to numeria@eziedutech.dev if you think this is a mistake.",
     admin: "Admin",
-    tools: [
-      ["MY CLASSES", "Seats, sign-in cards and students' names"],
-      ["OPEN A CLASS ROOM", "A room code on the class screen"],
+    tabs: [
+      ["MY CLASSES", "Seats, sign-in cards and each student's records"],
+      ["RACE ROOMS", "New races, the class screen, past results"],
     ],
-    opening: "Opening a room...",
+    raceTitle: "NEW RACE ROOM",
+    raceFor: "Who races in it?",
+    forClass: (l: string) => `ONLY CLASS ${l}`,
+    forAnyone: "OPEN TO ANYONE",
+    raceForNote:
+      "A room for a class seats only its students, signed in to their seats, and its results go to each seat's official record. A room open to anyone takes any player with the code and is counted apart.",
+    noClasses: "No class yet: make one under MY CLASSES to race as a class.",
+    openRooms: "ACTIVE ROOMS",
+    noOpenRooms: "No room is active now.",
+    roomFor: (l: string | null | undefined) => (l ? `Class ${l}` : "Open to anyone"),
+    opening: "Making a room...",
     roomPlay: "Students press RACE MY CLASSMATES in the game and enter",
+    roomPlayClass: (l: string) => `Students of ${l} press RACE MY CLASSMATES in the game and join with one button, or enter`,
     roomWatch: "Watch code (for a screen or parents):",
     roomSeats: "3 seats; robots fill the empty ones.",
     openScreen: "OPEN THE CLASS SCREEN",
-    newRoom: "NEW ROOM",
     closeRoom: "CLOSE THE ROOM",
     closeSure: "Close this room? Nobody can join it again, and a match on now stops.",
-    roomClosed: "The room is closed.",
     closeYes: "YES, CLOSE IT",
     keepOpen: "KEEP IT OPEN",
     history: "ROOMS SO FAR",
@@ -155,19 +164,28 @@ const TEXT = {
     pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
     suspendedBody: "Akun ini ditangguhkan. Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     admin: "Admin",
-    tools: [
-      ["KELAS SAYA", "Kursi, kartu masuk, dan nama siswa"],
-      ["BUKA RUANG KELAS", "Kode ruang di layar kelas"],
+    tabs: [
+      ["KELAS SAYA", "Kursi, kartu masuk, dan catatan tiap siswa"],
+      ["RUANG LOMBA", "Lomba baru, layar kelas, hasil sebelumnya"],
     ],
-    opening: "Membuka ruang...",
+    raceTitle: "BUAT RUANG LOMBA",
+    raceFor: "Siapa yang berlomba?",
+    forClass: (l: string) => `HANYA KELAS ${l}`,
+    forAnyone: "TERBUKA UNTUK SIAPA SAJA",
+    raceForNote:
+      "Ruang untuk kelas hanya menerima siswanya yang sudah masuk ke kursi, dan hasilnya masuk ke catatan resmi tiap kursi. Ruang terbuka menerima siapa saja yang punya kodenya dan dihitung terpisah.",
+    noClasses: "Belum ada kelas: buat dulu di KELAS SAYA untuk berlomba sebagai kelas.",
+    openRooms: "RUANG AKTIF",
+    noOpenRooms: "Tidak ada ruang yang aktif.",
+    roomFor: (l: string | null | undefined) => (l ? `Kelas ${l}` : "Terbuka untuk siapa saja"),
+    opening: "Membuat ruang...",
     roomPlay: "Siswa menekan LOMBA DENGAN TEMAN di game lalu memasukkan",
+    roomPlayClass: (l: string) => `Siswa ${l} menekan LOMBA DENGAN TEMAN di game lalu bergabung dengan satu tombol, atau memasukkan`,
     roomWatch: "Kode tonton (untuk layar atau orang tua):",
     roomSeats: "3 kursi; robot mengisi yang kosong.",
     openScreen: "BUKA LAYAR KELAS",
-    newRoom: "RUANG BARU",
     closeRoom: "TUTUP RUANG",
     closeSure: "Tutup ruang ini? Tidak ada yang bisa masuk lagi, dan pertandingan yang berjalan berhenti.",
-    roomClosed: "Ruang sudah ditutup.",
     closeYes: "YA, TUTUP",
     keepOpen: "BIARKAN TERBUKA",
     history: "RUANG SEBELUMNYA",
@@ -434,14 +452,38 @@ function AccountHead({ t, me }: { t: Text; me: Me }) {
 }
 
 /** The signed-in adult: who, where, the approval status, the sign-up form if needed, and the class tools. */
+type Tab = "classes" | "rooms";
+
 function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: User; me: Me; onChange: () => void }) {
   const org = me.organizer?.org;
-  // Bumped when a room opens or closes, so the history reads again.
+  // Bumped when a room opens or closes, so the open rooms and the history read again.
   const [rooms, setRooms] = useState(0);
-  // The game's MY CLASSES card links to /manage#classes, which opens them at once.
-  const [classes, setClasses] = useState(false);
-  useEffect(() => setClasses(window.location.hash === "#classes"), []);
+  // The game links to /manage#classes and /manage#rooms, which open that tab.
+  const [tab, setTab] = useState<Tab>("classes");
+  useEffect(() => setTab(window.location.hash === "#rooms" ? "rooms" : "classes"), []);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState("");
   const working = me.organizer && me.organizer.status !== "suspended";
+  const show = (next: Tab) => {
+    setTab(next);
+    window.history.replaceState(null, "", `#${next}`);
+  };
+  // A race room of three seats, for one class or for anyone; the RACE ROOMS tab then shows it.
+  const openRoom = (classId?: string) => {
+    if (opening) return;
+    setOpening(true);
+    setOpenError("");
+    show("rooms");
+    api<OpenedRoom>(user, "/rooms", {
+      method: "POST",
+      body: JSON.stringify({ seats: 3, kind: "class", class_id: classId }),
+    })
+      .then(
+        () => setRooms((n) => n + 1),
+        (e) => setOpenError(errorCode(e)),
+      )
+      .finally(() => setOpening(false));
+  };
   return (
     <>
       <section className="paper-sheet">
@@ -457,20 +499,39 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
           </>
         )}
       </section>
-      {!me.organizer ? (
-        <SignUp t={t} user={user} me={me} onDone={onChange} />
-      ) : (
-        working && (
-          <section className="paper-sheet">
-            <div className="tools">
-              <ClassesTool title={t.tools[0][0]} sub={t.tools[0][1]} open={classes} onOpen={() => setClasses(!classes)} />
-              <OpenRoom t={t} user={user} onChange={() => setRooms((n) => n + 1)} />
-            </div>
-          </section>
-        )
+      {!me.organizer && <SignUp t={t} user={user} me={me} onDone={onChange} />}
+      {working && (
+        <section className="paper-sheet">
+          <div className="tools" role="tablist">
+            {(["classes", "rooms"] as Tab[]).map((k, i) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                id={`tab-${k}`}
+                aria-selected={tab === k}
+                aria-controls={`panel-${k}`}
+                className={tab === k ? "tool tool-on on" : "tool tool-on"}
+                onClick={() => show(k)}
+              >
+                <strong>{t.tabs[i][0]}</strong>
+                <span className="soft">{t.tabs[i][1]}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
-      {working && classes && <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} />}
-      {me.organizer && <RoomHistory t={t} user={user} version={rooms} />}
+      {working && tab === "classes" && (
+        <div role="tabpanel" id="panel-classes" aria-labelledby="tab-classes">
+          <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} onRace={openRoom} />
+        </div>
+      )}
+      {me.organizer && (!working || tab === "rooms") && (
+        <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms">
+          {working && <RaceRooms t={t} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
+          <RoomHistory t={t} user={user} version={rooms} />
+        </div>
+      )}
     </>
   );
 }
@@ -480,108 +541,137 @@ interface OpenedRoom {
   play_code: string;
   watch_code: string;
   host_token: string;
+  class_label?: string | null;
+}
+
+interface ClassChoice {
+  id: string;
+  label: string;
+  status: "active" | "archived";
 }
 
 /**
- * OPEN A CLASS ROOM: the newest room this teacher still has open (so a reload
- * finds it again), or a new one of three seats; its codes, the class screen
- * that starts it, and CLOSE THE ROOM, after which its codes stop working.
+ * RACE ROOMS: open a room of three seats for one of this teacher's classes
+ * (only its signed-in seats, the official record) or for anyone with the
+ * code; then every room still open, each with its codes, the class screen
+ * that starts it, and CLOSE THE ROOM. Rooms live in the server's memory, so
+ * a reload finds them again until they close or the server is updated.
  */
-function OpenRoom({ t, user, onChange }: { t: Text; user: User; onChange: () => void }) {
-  // undefined while asking the server, null with no room open.
-  const [room, setRoom] = useState<OpenedRoom | null>();
-  const [busy, setBusy] = useState(false);
+function RaceRooms({
+  t,
+  user,
+  version,
+  opening,
+  openError,
+  onOpen,
+  onChange,
+}: {
+  t: Text;
+  user: User;
+  version: number;
+  opening: boolean;
+  openError: string;
+  onOpen: (classId?: string) => void;
+  onChange: () => void;
+}) {
+  // undefined while asking the server.
+  const [rooms, setRooms] = useState<OpenedRoom[]>();
+  const [classes, setClasses] = useState<ClassChoice[]>();
   const [error, setError] = useState("");
-  const [closed, setClosed] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const newest = () => api<{ rooms: OpenedRoom[] }>(user, "/rooms").then((r) => r.rooms[0] ?? null);
+  const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState<OpenedRoom | null>(null);
   useEffect(() => {
-    newest().then(setRoom, (e) => {
-      setRoom(null);
-      setError(errorCode(e));
-    });
+    api<{ rooms: OpenedRoom[] }>(user, "/rooms").then(
+      (r) => setRooms(r.rooms),
+      (e) => {
+        setRooms([]);
+        setError(errorCode(e));
+      },
+    );
+  }, [user, version]);
+  useEffect(() => {
+    api<{ classes: ClassChoice[] }>(user, "/classes").then(
+      (r) => setClasses(r.classes.filter((c) => c.status === "active")),
+      () => setClasses([]),
+    );
   }, [user]);
-  const open = () => {
+  const close = (room: OpenedRoom) => {
     if (busy) return;
-    setBusy(true);
-    setError("");
-    setClosed(false);
-    api<OpenedRoom>(user, "/rooms", { method: "POST", body: JSON.stringify({ seats: 3, kind: "class" }) })
-      .then((r) => {
-        setRoom(r);
-        onChange();
-      }, (e) => setError(errorCode(e)))
-      .finally(() => setBusy(false));
-  };
-  const close = () => {
-    if (!room || busy) return;
-    setAsking(false);
+    setAsking(null);
     setBusy(true);
     setError("");
     api(user, `/rooms/${encodeURIComponent(room.id)}`, { method: "DELETE" })
-      .then(newest)
-      .then(
-        (next) => {
-          setRoom(next);
-          setClosed(true);
-          onChange();
-        },
-        (e) => setError(errorCode(e)),
-      )
+      .then(onChange, (e) => setError(errorCode(e)))
       .finally(() => setBusy(false));
   };
-  const [title, sub] = t.tools[1];
-  if (!room) {
-    return (
-      <button type="button" className="tool tool-on" onClick={open} disabled={busy || room === undefined}>
-        <strong>{title}</strong>
-        <span className="soft">{busy || room === undefined ? t.opening : closed ? t.roomClosed : sub}</span>
-        <ErrorLine t={t} code={error} />
-      </button>
-    );
-  }
-  // The host token stays in the hash, which the browser never sends to a server.
-  const screen = `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
   return (
-    <div className="tool">
-      <strong>{title}</strong>
-      <span>{t.roomPlay}</span>
-      <span className="room-code">{room.play_code}</span>
-      <span className="soft">
-        {t.roomWatch} <strong>{room.watch_code}</strong>
-      </span>
-      <span className="soft">{t.roomSeats}</span>
-      <div className="row">
-        <a className="btn small" href={screen} target="_blank" rel="noopener">
-          {t.openScreen}
-        </a>
-        <button type="button" className="btn small" onClick={open} disabled={busy}>
-          {t.newRoom}
-        </button>
-        <button type="button" className="btn small" onClick={() => setAsking(true)} disabled={busy}>
-          {t.closeRoom}
-        </button>
-      </div>
-      <ErrorLine t={t} code={error} />
+    <>
+      <section className="paper-sheet">
+        <h2 className="dialog-title">{t.raceTitle}</h2>
+        <p>{t.raceFor}</p>
+        <div className="row race-for">
+          {classes?.map((c) => (
+            <button key={c.id} type="button" className="btn blue" disabled={opening} onClick={() => onOpen(c.id)}>
+              {t.forClass(c.label)}
+            </button>
+          ))}
+          <button type="button" className="btn" disabled={opening || !classes} onClick={() => onOpen()}>
+            {t.forAnyone}
+          </button>
+        </div>
+        {classes?.length === 0 && <p className="soft">{t.noClasses}</p>}
+        <p className="soft">{opening ? t.opening : t.raceForNote}</p>
+        <ErrorLine t={t} code={openError} />
+      </section>
+      <section className="paper-sheet">
+        <h2 className="dialog-title">{t.openRooms}</h2>
+        <ErrorLine t={t} code={error} />
+        {rooms?.length === 0 && <p className="soft">{t.noOpenRooms}</p>}
+        <div className="tools">
+          {rooms?.map((room) => {
+            // The host token stays in the hash, which the browser never sends to a server.
+            const screen = `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
+            return (
+              <div key={room.id} className="tool">
+                <strong>{t.roomFor(room.class_label)}</strong>
+                <span>{room.class_label ? t.roomPlayClass(room.class_label) : t.roomPlay}</span>
+                <span className="room-code">{room.play_code}</span>
+                <span className="soft">
+                  {t.roomWatch} <strong>{room.watch_code}</strong>
+                </span>
+                <span className="soft">{t.roomSeats}</span>
+                <div className="row">
+                  <a className="btn small" href={screen} target="_blank" rel="noopener">
+                    {t.openScreen}
+                  </a>
+                  <button type="button" className="btn small" onClick={() => setAsking(room)} disabled={busy}>
+                    {t.closeRoom}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
       {asking && (
-        <div className="veil" role="dialog" aria-modal="true" aria-label={t.closeRoom} onClick={(e) => e.target === e.currentTarget && setAsking(false)}>
+        <div className="veil" role="dialog" aria-modal="true" aria-label={t.closeRoom} onClick={(e) => e.target === e.currentTarget && setAsking(null)}>
           <div className="paper-sheet narrow">
             <h2 className="dialog-title">
-              {t.closeRoom}: {room.play_code}
+              {t.closeRoom}: {asking.play_code}
             </h2>
             <p>{t.closeSure}</p>
             <div className="actions">
-              <button type="button" className="btn" onClick={() => setAsking(false)} autoFocus>
+              <button type="button" className="btn" onClick={() => setAsking(null)} autoFocus>
                 {t.keepOpen}
               </button>
-              <button type="button" className="btn suspended" onClick={close}>
+              <button type="button" className="btn suspended" onClick={() => close(asking)}>
                 {t.closeYes}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

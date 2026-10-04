@@ -94,7 +94,7 @@ const TEXT = {
       room_closed: "The teacher closed this room. The match is over.",
       other: "Reload the page, or try the code again in a moment.",
     } as Record<string, string>,
-    goneHost: "To race again, open a new room in the game: OPEN A CLASS ROOM. Every finished match is kept under ROOMS SO FAR.",
+    goneHost: "To race again, make a new room under RACE ROOMS on the teacher page, or NEW RACE ROOM in the game. Every finished match is kept under ROOMS SO FAR.",
     goneResults: "SEE ROOMS SO FAR",
     goneOther: "Watch another room",
     reload: "RELOAD",
@@ -171,7 +171,7 @@ const TEXT = {
       room_closed: "Guru menutup ruang ini. Pertandingan sudah selesai.",
       other: "Muat ulang halaman, atau coba kodenya lagi sebentar lagi.",
     } as Record<string, string>,
-    goneHost: "Untuk lomba lagi, buka ruang baru di game: BUKA RUANG KELAS. Setiap pertandingan yang selesai tersimpan di RUANG SEBELUMNYA.",
+    goneHost: "Untuk lomba lagi, buat ruang baru di RUANG LOMBA pada halaman guru, atau BUAT RUANG LOMBA di game. Setiap pertandingan yang selesai tersimpan di RUANG SEBELUMNYA.",
     goneResults: "LIHAT RUANG SEBELUMNYA",
     goneOther: "Tonton ruang lain",
     reload: "MUAT ULANG",
@@ -557,7 +557,7 @@ function RoomGone({ t, code, error, host }: { t: Text; code: string; error: stri
       {host && known && (
         <>
           <p>{t.goneHost}</p>
-          <a className="btn wide blue" href="/manage">
+          <a className="btn wide blue" href="/manage#rooms">
             {t.goneResults}
           </a>
         </>

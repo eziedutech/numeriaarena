@@ -54,6 +54,7 @@ const TEXT = {
     trial: "Until an admin approves you: one class with up to 5 seats.",
     newClass: "NEW CLASS",
     allClasses: "ALL CLASSES",
+    race: "NEW RACE ROOM FOR THIS CLASS",
     open: "OPEN",
     archived: "ARCHIVED",
     grade: (g: number) => `Grade ${g}`,
@@ -130,6 +131,7 @@ const TEXT = {
     trial: "Sampai admin menyetujui Anda: satu kelas dengan paling banyak 5 kursi.",
     newClass: "KELAS BARU",
     allClasses: "SEMUA KELAS",
+    race: "BUAT RUANG LOMBA UNTUK KELAS INI",
     open: "BUKA",
     archived: "DIARSIPKAN",
     grade: (g: number) => `Kelas ${g}`,
@@ -221,17 +223,8 @@ function thisSchoolYear(): string {
   return `${y}/${String((y + 1) % 100).padStart(2, "0")}`;
 }
 
-/** The MY CLASSES card in the tool grid, which opens the section below it. */
-export function ClassesTool({ title, sub, open, onOpen }: { title: string; sub: string; open: boolean; onOpen: () => void }) {
-  return (
-    <button type="button" className={open ? "tool tool-on on" : "tool tool-on"} aria-expanded={open} onClick={onOpen}>
-      <strong>{title}</strong>
-      <span className="soft">{sub}</span>
-    </button>
-  );
-}
-
-export function MyClasses({ lang, user, trial }: { lang: Lang; user: User; trial: boolean }) {
+/** MY CLASSES: the list, then one class's page; `onRace` opens a race room for a class. */
+export function MyClasses({ lang, user, trial, onRace }: { lang: Lang; user: User; trial: boolean; onRace: (classId: string) => void }) {
   const t = TEXT[lang];
   const [classes, setClasses] = useState<ClassRow[]>();
   const [error, setError] = useState("");
@@ -271,6 +264,7 @@ export function MyClasses({ lang, user, trial }: { lang: Lang; user: User; trial
           onPrinted={() => setCards((all) => ({ ...all, [opened.id]: [] }))}
           onBack={() => setOpenId(null)}
           onChange={() => void load()}
+          onRace={() => onRace(opened.id)}
         />
       ) : (
         <>
@@ -411,6 +405,7 @@ function ClassPage({
   onPrinted,
   onBack,
   onChange,
+  onRace,
 }: {
   t: Text;
   lang: Lang;
@@ -421,6 +416,7 @@ function ClassPage({
   onPrinted: () => void;
   onBack: () => void;
   onChange: () => void;
+  onRace: () => void;
 }) {
   const [seats, setSeats] = useState<Seat[]>();
   const [names, setNames] = useState<Record<number, string>>({});
@@ -534,9 +530,16 @@ function ClassPage({
             {row.school_year ? `, ${row.school_year}` : ""} · {t.seatsCount(row.seats)}
           </p>
         </div>
-        <button type="button" className="btn small" onClick={onBack}>
-          {t.allClasses}
-        </button>
+        <div className="row">
+          {active && (
+            <button type="button" className="btn small blue" onClick={onRace}>
+              {t.race}
+            </button>
+          )}
+          <button type="button" className="btn small" onClick={onBack}>
+            {t.allClasses}
+          </button>
+        </div>
       </div>
       {row.join_code && (
         <div className="class-join">

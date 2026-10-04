@@ -1222,7 +1222,7 @@ export class Home {
   }
 
   /**
-   * OPEN A CLASS ROOM: the teacher's room still open (found again after a
+   * NEW RACE ROOM: the teacher's room still open (found again after a
    * reload), or a new one of three seats; its codes, its class screen, and
    * a way to close it for good.
    */

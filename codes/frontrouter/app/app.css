@@ -411,6 +411,12 @@ button.tool {
   letter-spacing: 0.12em;
 }
 
+.race-for {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .tool .row {
   display: flex;
   gap: 10px;
