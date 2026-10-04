@@ -854,21 +854,58 @@ export class Home {
     close.addEventListener('click', () => veil.remove());
   }
 
-  /** Six boxes for a room's code; reads it back in capitals. */
+  /**
+   * Six boxes for a room's code; reads it back in capitals. Every letter is
+   * set in capitals as it is typed, a pasted code fills the boxes (a whole
+   * code from the first box), Backspace and Delete clear, and the arrows move.
+   */
   private codeBoxes(body: HTMLElement): () => string {
     const row = el('div', 'row', body);
     const boxes: HTMLInputElement[] = [];
+    const clean = (text: string) => text.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    const fill = (from: number, text: string) => {
+      const start = text.length >= 6 ? 0 : from;
+      for (let k = 0; k < text.length && start + k < 6; k += 1) boxes[start + k].value = text[k];
+      boxes[Math.min(5, start + text.length)].focus();
+    };
     for (let i = 0; i < 6; i += 1) {
       const box = el('input', 'box', row);
-      box.maxLength = 1;
       box.autocapitalize = 'characters';
+      box.autocomplete = 'off';
+      box.spellcheck = false;
       box.setAttribute('aria-label', `${i + 1}`);
       box.style.textTransform = 'uppercase';
+      box.addEventListener('focus', () => box.select());
+      box.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = clean(e.clipboardData?.getData('text') ?? '');
+        if (text) fill(i, text);
+      });
       box.addEventListener('input', () => {
-        // A pasted code fills the boxes from here on.
-        const text = box.value.replace(/[^a-z0-9]/gi, '').toUpperCase();
-        for (let k = 0; k < text.length && i + k < 6; k += 1) boxes[i + k].value = text[k];
-        if (text.length > 0) (boxes[Math.min(5, i + text.length)] ?? box).focus();
+        const text = clean(box.value);
+        box.value = '';
+        if (text) fill(i, text);
+      });
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace') {
+          e.preventDefault();
+          if (box.value) box.value = '';
+          else if (i > 0) {
+            boxes[i - 1].value = '';
+            boxes[i - 1].focus();
+          }
+        } else if (e.key === 'Delete') {
+          e.preventDefault();
+          // The letters after it close up, as in one text field.
+          for (let k = i; k < 5; k += 1) boxes[k].value = boxes[k + 1].value;
+          boxes[5].value = '';
+        } else if (e.key === 'ArrowLeft' && i > 0) {
+          e.preventDefault();
+          boxes[i - 1].focus();
+        } else if (e.key === 'ArrowRight' && i < 5) {
+          e.preventDefault();
+          boxes[i + 1].focus();
+        }
       });
       boxes.push(box);
     }
