@@ -154,11 +154,14 @@ export class Builder {
     this.colors.push(color);
   }
 
-  /** Everything added so far as one group of (at most) two meshes. */
-  build(name: string): Group {
+  /**
+   * Everything added so far as one group of (at most) two meshes. `shade`,
+   * when given, scales each vertex's colour by the light at its position.
+   */
+  build(name: string, shade?: Shade): Group {
     const group = new Group();
     group.name = name;
-    const paper = merge(this.paper, this.colors);
+    const paper = merge(this.paper, this.colors, shade);
     if (paper) group.add(named(new Mesh(paper, PAPER_MAT), `${name}-paper`));
     const sky = merge(this.sky);
     if (sky) group.add(named(new Mesh(sky, SKY_MAT), `${name}-sky`));
@@ -174,8 +177,11 @@ function named(mesh: Mesh, name: string): Mesh {
   return mesh;
 }
 
+/** Light baked into the vertex colours: a factor for the colour at x, y, z (1 leaves it be). */
+type Shade = (x: number, y: number, z: number) => number;
+
 /** One geometry from many, each coloured `colors[i]` when colours are given. */
-function merge(list: BufferGeometry[], colors?: number[]): BufferGeometry | undefined {
+function merge(list: BufferGeometry[], colors?: number[], shade?: Shade): BufferGeometry | undefined {
   if (list.length === 0) return undefined;
   let count = 0;
   for (const g of list) count += g.getAttribute('position').count;
@@ -189,9 +195,10 @@ function merge(list: BufferGeometry[], colors?: number[]): BufferGeometry | unde
     if (col && colors) {
       c.setHex(colors[i]);
       for (let k = at; k < at + p.length; k += 3) {
-        col[k] = c.r;
-        col[k + 1] = c.g;
-        col[k + 2] = c.b;
+        const f = shade ? shade(pos[k], pos[k + 1], pos[k + 2]) : 1;
+        col[k] = c.r * f;
+        col[k + 1] = c.g * f;
+        col[k + 2] = c.b * f;
       }
     }
     at += p.length;
@@ -204,15 +211,22 @@ function merge(list: BufferGeometry[], colors?: number[]): BufferGeometry | unde
   return merged;
 }
 
-/** White floor tiles over the grout, every other one a shade warmer. */
-function tiledFloor(b: Builder, x0: number, x1: number, z0: number, z1: number): void {
-  const tile = 0.4;
+/** Floor tiles over the grout, every other one a shade warmer. */
+function tiledFloor(
+  b: Builder,
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+  tile = 0.4,
+  colors: readonly [number, number] = [0xf8f6f1, 0xf1eee7],
+): void {
   for (let x = x0; x < x1 - 0.01; x += tile) {
     for (let z = z0; z < z1 - 0.01; z += tile) {
       const w = Math.min(tile, x1 - x) - 0.008;
       const d = Math.min(tile, z1 - z) - 0.008;
       const odd = (Math.round((x - x0) / tile) + Math.round((z - z0) / tile)) % 2;
-      b.box(odd ? 0xf1eee7 : 0xf8f6f1, w, 0.004, d, x + w / 2 + 0.004, 0, z + d / 2 + 0.004);
+      b.box(colors[odd], w, 0.004, d, x + w / 2 + 0.004, 0, z + d / 2 + 0.004);
     }
   }
 }
@@ -331,11 +345,140 @@ function books(b: Builder, x0: number, y: number, z: number, depth: number, coun
   }
 }
 
+/** A footprint on the classroom's floor that casts a soft shadow around it. */
+interface Footprint {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+}
+
+/** The classroom's paper colours: warm tiles, sage panelling, a warmer desk wood and dark steel. */
+const CLASS_TILES = [0xf6f1e7, 0xede6d8] as const;
+const CLASS_GROUT = 0xcdc4b3;
+const PANEL = 0xa9cfc0;
+const PANEL_STILE = 0x97c0b0;
+const RAIL = 0xfff1d6;
+const SKIRTING = DARK_WOOD;
+const PANEL_H = 0.75;
+/** A shade of the wall behind what hangs on it, offset down and right, so it stands off the wall. */
+const WALL_SHADE = 0xcab26f;
+const CLASS_WOOD = 0xd2a06a;
+const CLASS_WOOD_EDGE = 0xae7b4c;
+const STEEL = 0x50565f;
+const BOARD_WOOD = 0xa87a4f;
+const CURTAIN = [0xf4c7a1, 0xedb98f] as const;
+const LEAF = [0x5fae7a, 0x4e9a69] as const;
+const BUNTING = [0xf2716b, 0xf9c74f, 0x3fb6a0, 0x3469c4, 0xb198ea];
+
+/**
+ * Light baked into the classroom's vertex colours, so it costs nothing to
+ * draw: soft shadows on the floor around the furniture and along the walls,
+ * patches of sun on the floor under the windows, everything a little darker
+ * near the floor and the ceiling a little darker than its lights.
+ */
+function classroomLight(
+  prints: Footprint[],
+  sun: Footprint[],
+  room: { x0: number; x1: number; z0: number; z1: number; height: number },
+): (x: number, y: number, z: number) => number {
+  const outside = (r: Footprint, x: number, z: number) =>
+    Math.hypot(Math.max(0, Math.abs(x - r.x) - r.w / 2), Math.max(0, Math.abs(z - r.z) - r.d / 2));
+  return (x, y, z) => {
+    if (y > room.height - 0.02) return 0.97;
+    if (y > 0.01) return 0.86 + 0.14 * Math.min(1, y / 1.0);
+    let f = 1;
+    for (const r of prints) f *= 1 - 0.22 * Math.max(0, 1 - outside(r, x, z) / 0.3);
+    const wall = Math.min(x - room.x0, room.x1 - x, z - room.z0, room.z1 - z);
+    f *= 1 - 0.14 * Math.max(0, 1 - wall / 0.6);
+    for (const r of sun) f *= 1 + 0.09 * Math.max(0, 1 - outside(r, x, z) / 0.25);
+    return f;
+  };
+}
+
+/**
+ * A school desk with its top at `top`: a wooden top over a darker edge, a
+ * book tray under it, and a dark steel frame with rails low on the sides.
+ */
+function classDesk(b: Builder, prints: Footprint[], x: number, z: number, w: number, d: number, top: number): void {
+  b.box(CLASS_WOOD, w, 0.03, d, x, top - 0.015, z);
+  b.box(CLASS_WOOD_EDGE, w - 0.02, 0.012, d - 0.02, x, top - 0.036, z);
+  b.box(STEEL, w - 0.1, 0.012, d - 0.16, x, top - 0.14, z - 0.04);
+  b.box(STEEL, w - 0.1, 0.06, 0.012, x, top - 0.11, z - d / 2 + 0.12);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) b.block(STEEL, 0.03, top - 0.042, 0.03, x + sx * (w / 2 - 0.05), 0, z + sz * (d / 2 - 0.05));
+    b.box(STEEL, 0.02, 0.02, d - 0.1, x + sx * (w / 2 - 0.05), 0.12, z);
+  }
+  prints.push({ x, z, w: w + 0.04, d: d + 0.04 });
+}
+
+/** Wainscot along a wall from a to b (along X when `alongX`), at the wall's line `at`, `inward` into the room. */
+function panelling(b: Builder, alongX: boolean, a: number, c: number, at: number, inward: 1 | -1, skip?: [number, number]): void {
+  const len = c - a;
+  const mid = (a + c) / 2;
+  const put = (color: number, l: number, h: number, depth: number, along: number, y: number) => {
+    const off = at + inward * (depth / 2);
+    if (alongX) b.box(color, l, h, depth, along, y, off);
+    else b.box(color, depth, h, l, off, y, along);
+  };
+  put(PANEL, len, PANEL_H, 0.02, mid, PANEL_H / 2);
+  put(RAIL, len, 0.045, 0.035, mid, PANEL_H);
+  put(SKIRTING, len, 0.1, 0.028, mid, 0.05);
+  for (let s = a + 0.5; s < c - 0.3; s += 0.7) {
+    if (skip && s > skip[0] && s < skip[1]) continue;
+    put(PANEL_STILE, 0.03, PANEL_H - 0.2, 0.032, s, PANEL_H / 2 + 0.03);
+  }
+}
+
+/** A pot plant on the floor, leaves fanned out round it. */
+function plant(b: Builder, prints: Footprint[], x: number, z: number, h: number): void {
+  b.cylinder(0xd9825b, 0.16, 0.3, x, 0.15, z, 0, 10);
+  b.cylinder(0xc9714b, 0.18, 0.05, x, 0.31, z, 0, 10);
+  b.cylinder(0x6b4a33, 0.15, 0.01, x, 0.335, z, 0, 10);
+  for (let i = 0; i < 9; i += 1) {
+    const a = i * 2.4 + b.jitter(0.3);
+    const lh = h * (0.7 + Math.abs(b.jitter(0.3)));
+    b.box(LEAF[i % 2], 0.1, lh, 0.012, x + Math.sin(a) * 0.07, 0.33 + lh / 2, z + Math.cos(a) * 0.07, a, 0.35 + Math.abs(b.jitter(0.2)));
+  }
+  prints.push({ x, z, w: 0.34, d: 0.34 });
+}
+
+/** Paper flags on a string between x = a and x = c on the front wall, sagging in the middle. */
+function bunting(b: Builder, a: number, c: number, y: number, z: number, sag: number): void {
+  const n = Math.round((c - a) / 0.24);
+  const at = (t: number) => y - sag * 4 * t * (1 - t);
+  for (let i = 0; i < n; i += 1) {
+    const t0 = i / n;
+    const t1 = (i + 1) / n;
+    const xa = a + (c - a) * t0;
+    const xb = a + (c - a) * t1;
+    const ya = at(t0);
+    const yb = at(t1);
+    b.box(FRAME, Math.hypot(xb - xa, yb - ya), 0.006, 0.006, (xa + xb) / 2, (ya + yb) / 2, z, 0, 0, Math.atan2(yb - ya, xb - xa));
+    const tm = (t0 + t1) / 2;
+    b.cylinder(BUNTING[i % BUNTING.length], 0.075, 0.004, a + (c - a) * tm, at(tm) - 0.037, z + 0.004, Math.PI / 2, 3);
+  }
+}
+
+/** Curtains either side of a window on the left wall, folded in three, on a rod. */
+function curtains(b: Builder, wallX: number, z: number, w: number, top: number, bottom: number): void {
+  const h = top - bottom;
+  b.cylinder(SKIRTING, 0.015, w + 0.8, wallX + 0.12, top + 0.04, z, Math.PI / 2, 8);
+  for (const side of [-1, 1]) {
+    const cz = z + side * (w / 2 + 0.1);
+    for (let k = 0; k < 3; k += 1) {
+      b.box(CURTAIN[k % 2], 0.03, h, 0.11, wallX + 0.1 + (k % 2) * 0.025, bottom + h / 2, cz + (k - 1) * 0.09);
+    }
+  }
+}
+
 /**
  * A classroom about 7 x 8 m: the player at a desk in the second row, a
  * chalkboard ahead with a whiteboard either side, windows on the left, other
  * desks and chairs around. Everything stands square to the walls and
- * centred on the player, so nothing reads as crooked.
+ * centred on the player, so nothing reads as crooked. Paper still, with
+ * depth: panelled lower walls, boards that stand off the wall, curtains,
+ * plants and bunting, and soft light baked into the colours.
  */
 function classroom(deskTop: number): Group {
   const b = new Builder(7);
@@ -344,32 +487,42 @@ function classroom(deskTop: number): Group {
   const z0 = CLASS_FRONT_Z;
   const z1 = 4.4;
   const height = 3.0;
-  // The same tiled floor as the bedroom.
-  shell(b, x0, x1, z0, z1, height, GROUT);
-  tiledFloor(b, x0, x1, z0, z1);
-  // A soft green band on the lower walls.
-  const band = 0xb5d8cb;
-  b.box(band, x1 - x0, 0.9, 0.02, (x0 + x1) / 2, 0.45, z0 + 0.01);
-  b.box(band, x1 - x0, 0.9, 0.02, (x0 + x1) / 2, 0.45, z1 - 0.01);
-  b.box(band, 0.02, 0.9, z1 - z0, x1 - 0.01, 0.45, (z0 + z1) / 2);
-  b.box(band, 0.02, 0.9, z1 - z0, x0 + 0.01, 0.45, (z0 + z1) / 2);
-  // Chalkboard ahead, left blank: a wooden frame and a chalk ledge.
-  const board = 0x3f6b57;
-  b.box(DESK_WOOD, CLASS_BOARD.w + 0.12, CLASS_BOARD.h + 0.12, 0.04, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.02);
-  b.box(board, CLASS_BOARD.w, CLASS_BOARD.h, 0.03, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.045);
-  b.box(DESK_WOOD, 3.3, 0.04, 0.09, CLASS_BOARD.x, 0.93, z0 + 0.07);
+  const prints: Footprint[] = [];
+  shell(b, x0, x1, z0, z1, height, CLASS_GROUT);
+  tiledFloor(b, x0, x1, z0, z1, 0.3, CLASS_TILES);
+  // Panelling round the lower walls; the door's stretch keeps no stiles.
+  panelling(b, true, x0, x1, z0, 1);
+  panelling(b, true, x0, x1, z1, -1);
+  panelling(b, false, z0, z1, x0, 1);
+  panelling(b, false, z0, z1, x1, -1, [-3.0, -1.8]);
+  // Chalkboard ahead, left blank: a wooden frame and a chalk ledge, its shade on the wall.
+  b.box(WALL_SHADE, CLASS_BOARD.w + 0.14, CLASS_BOARD.h + 0.14, 0.004, CLASS_BOARD.x + 0.03, CLASS_BOARD.y - 0.04, z0 + 0.002);
+  b.box(BOARD_WOOD, CLASS_BOARD.w + 0.12, CLASS_BOARD.h + 0.12, 0.04, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.02);
+  b.box(0x3f6b57, CLASS_BOARD.w, CLASS_BOARD.h, 0.03, CLASS_BOARD.x, CLASS_BOARD.y, z0 + 0.045);
+  b.box(BOARD_WOOD, 3.3, 0.04, 0.09, CLASS_BOARD.x, 0.93, z0 + 0.07);
   b.box(FRAME, 0.08, 0.012, 0.012, -0.8, 0.957, z0 + 0.08, 0.3);
   b.box(0xf9c74f, 0.07, 0.012, 0.012, -0.65, 0.957, z0 + 0.08, -0.2);
-  // The whiteboards: a grey aluminium frame, a white face and a marker tray.
+  b.box(0x3a3f4b, 0.12, 0.03, 0.05, 0.9, 0.965, z0 + 0.08);
+  b.box(0xfdfdfb, 0.12, 0.012, 0.05, 0.9, 0.986, z0 + 0.08);
+  // The whiteboards: a grey aluminium frame, a white face and a marker tray with markers.
   for (const wb of CLASS_WHITEBOARDS) {
+    b.box(WALL_SHADE, wb.w + 0.08, wb.h + 0.08, 0.004, wb.x + 0.03, wb.y - 0.04, z0 + 0.002);
     b.box(0xc3c7cd, wb.w + 0.06, wb.h + 0.06, 0.03, wb.x, wb.y, z0 + 0.015);
     b.box(0xfdfdfb, wb.w, wb.h, 0.02, wb.x, wb.y, z0 + 0.035);
     b.box(0xc3c7cd, wb.w * 0.6, 0.025, 0.06, wb.x, wb.y - wb.h / 2 - 0.03, z0 + 0.05);
+    for (const [k, c] of [0x3469c4, 0xf2716b, 0x3a3f4b].entries()) {
+      b.cylinder(c, 0.009, 0.12, wb.x - 0.2 + k * 0.08, wb.y - wb.h / 2 - 0.008, z0 + 0.055, 0, 6, Math.PI / 2);
+    }
   }
+  // Paper bunting across the top of the front wall, either side of the clock.
+  bunting(b, x0 + 0.2, -0.3, 2.9, z0 + 0.04, 0.14);
+  bunting(b, 0.3, x1 - 0.2, 2.9, z0 + 0.04, 0.14);
   // A round clock without numbers over the board, and a board of paper shapes on the back wall.
   // (The classroom life adds its hands and the race's time on its face.)
+  b.cylinder(WALL_SHADE, CLASS_CLOCK.r + 0.02, 0.004, CLASS_CLOCK.x + 0.025, CLASS_CLOCK.y - 0.03, z0 + 0.002, Math.PI / 2, 20);
   b.cylinder(FRAME, CLASS_CLOCK.r, 0.04, CLASS_CLOCK.x, CLASS_CLOCK.y, z0 + 0.02, Math.PI / 2, 20);
   b.cylinder(0x3a3f4b, CLASS_CLOCK.r + 0.015, 0.035, CLASS_CLOCK.x, CLASS_CLOCK.y, z0 + 0.015, Math.PI / 2, 20);
+  b.box(WALL_SHADE, 1.12, 0.82, 0.004, 2.72, 1.56, z1 - 0.002);
   b.box(0xd9b98c, 1.1, 0.8, 0.03, 2.75, 1.6, z1 - 0.02);
   for (const [px, py, w, h, c, r] of [
     [2.5, 1.75, 0.24, 0.3, 0xf2716b, 0.05],
@@ -379,29 +532,43 @@ function classroom(deskTop: number): Group {
   ] as const) {
     b.box(c, w, h, 0.01, px, py, z1 - 0.04, 0, 0, r);
   }
-  // Windows along the left wall.
-  for (const z of [-2.0, 0.2, 2.4]) windowOnSideWall(b, x0, 1, z, 1.7, 1.5, 1.4);
+  // Windows along the left wall, with curtains; the sun falls in patches on the floor.
+  const sun: Footprint[] = [];
+  for (const z of [-2.0, 0.2, 2.4]) {
+    windowOnSideWall(b, x0, 1, z, 1.7, 1.5, 1.4);
+    curtains(b, x0, z, 1.5, 2.6, 0.85);
+    sun.push({ x: x0 + 0.85, z: z + 0.35, w: 0.9, d: 1.1 });
+  }
   // A door on the right wall near the front.
   b.block(0xb0835a, 0.05, 2.1, 0.95, x1 - 0.03, 0, -2.4);
   b.box(FRAME, 0.07, 2.18, 0.08, x1 - 0.03, 1.09, -2.92);
   b.box(FRAME, 0.07, 2.18, 0.08, x1 - 0.03, 1.09, -1.88);
+  b.box(FRAME, 0.07, 0.08, 1.12, x1 - 0.03, 2.16, -2.4);
   b.cylinder(METAL, 0.025, 0.06, x1 - 0.08, 1.0, -2.05, 0, 8);
-  // The teacher's desk, with a few papers and a mug on it.
-  desk(b, -0.9, -2.45, 1.4, 0.7, 0.76, 0, 0xb0835a);
+  // The teacher's desk: a modesty panel to the class, a drawer pedestal, a few papers and a mug.
+  const tx = -0.9;
+  const tz = -2.45;
+  b.box(BOARD_WOOD, 1.4, 0.035, 0.7, tx, 0.76 - 0.0175, tz);
+  b.box(CLASS_WOOD_EDGE, 1.36, 0.5, 0.025, tx, 0.47, tz + 0.32);
+  b.block(CLASS_WOOD_EDGE, 0.42, 0.72, 0.64, tx + 0.47, 0, tz);
+  for (const sx of [-1, 1]) b.block(STEEL, 0.035, 0.725, 0.035, tx - 0.65, 0, tz + sx * 0.3);
+  prints.push({ x: tx, z: tz, w: 1.44, d: 0.74 });
   b.box(FRAME, 0.3, 0.008, 0.22, -1.2, 0.765, -2.4, 0.2);
   b.box(0xf6e3c0, 0.3, 0.008, 0.22, -1.16, 0.773, -2.43, -0.1);
   b.cylinder(0xf2716b, 0.04, 0.09, -0.45, 0.805, -2.5);
   chair(b, -0.9, -2.95, Math.PI, 0x3469c4);
+  prints.push({ x: -0.9, z: -2.95, w: 0.42, d: 0.4 });
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
-  desk(b, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
+  classDesk(b, prints, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
   // Three rows of three desks, a little lower than the player's, the row
   // ahead lower still. Beside the player, a classmate at work at each desk;
   // their own chairs come with them.
   const side = Math.max(KID_DESK_TOP, deskTop - CLASS_DESK_DROP);
   const seats: Seat[] = [];
   for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
-    desk(b, x, -0.03, 1.0, 0.6, side);
+    classDesk(b, prints, x, -0.03, 1.0, 0.6, side);
     seats.push({ x, z: 0.4, ry: 0, role: 'class', top: side });
+    prints.push({ x, z: 0.42, w: 0.42, d: 0.4 });
   }
   // The rows ahead and behind, in straight lines, chairs pushed in. The race's
   // rivals sit at the desks ahead left and right. Nobody sits at the desk
@@ -412,10 +579,11 @@ function classroom(deskTop: number): Group {
     const top = z < 0 ? Math.max(KID_DESK_TOP - 0.06, deskTop - CLASS_FRONT_DESK_DROP) : side;
     for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
       const rival = z < 0 && x !== 0;
-      desk(b, x, z, x === 0 ? 1.15 : 1.0, 0.6, top);
+      classDesk(b, prints, x, z, x === 0 ? 1.15 : 1.0, 0.6, top);
       if (rival) seats.push({ x, z: z + 0.43, ry: 0, role: x < 0 ? 'left' : 'right', top });
       else if (z > 0 && x > 0) seats.push({ x, z: z + 0.43, ry: 0, role: 'class', top });
       else chair(b, x, z + 0.45, 0, chairColors[n % 4]);
+      prints.push({ x, z: z + 0.45, w: 0.42, d: 0.4 });
       // A book or a sheet left on the desks nobody races at (the rivals' stay clear for their robots).
       if (!rival && n % 3 === 0) b.box(chairColors[(n + 1) % 4], 0.22, 0.02, 0.3, x - 0.25, top + 0.01, z, 0.15);
       if (!rival && n % 4 === 1) b.box(FRAME, 0.21, 0.004, 0.29, x + 0.2, top + 0.002, z + 0.02, -0.1);
@@ -425,14 +593,23 @@ function classroom(deskTop: number): Group {
   // A school bag on the floor by the next desk.
   b.block(0xf2716b, 0.32, 0.36, 0.16, 2.0, 0, 0.95, 0.5);
   b.block(0xd9564f, 0.24, 0.14, 0.04, 2.0 + 0.07, 0.05, 0.95 + 0.1, 0.5);
-  // A low shelf along the back wall with books.
+  prints.push({ x: 2.0, z: 0.95, w: 0.3, d: 0.25 });
+  // A low shelf along the back wall with books, and a plant in each back corner.
   b.block(DESK_WOOD, 2.4, 0.9, 0.36, -1.6, 0, z1 - 0.2);
   b.box(0xc49f71, 2.36, 0.02, 0.34, -1.6, 0.46, z1 - 0.2);
   books(b, -2.7, 0.47, z1 - 0.2, 0.22, 14, [0x3469c4, 0xf2716b, 0x3fb6a0, 0xf9c74f, 0xb198ea]);
   books(b, -1.4, 0.9, z1 - 0.22, 0.2, 6, [0x3fb6a0, 0xb198ea, 0xf2716b]);
-  // Ceiling lights.
-  for (const x of [-1.5, 1.5]) for (const z of [-1.8, 0.4, 2.6]) b.box(0xfffdf6, 1.2, 0.05, 0.3, x, height - 0.03, z);
-  const group = b.build('room-classroom');
+  prints.push({ x: -1.6, z: z1 - 0.2, w: 2.4, d: 0.36 });
+  plant(b, prints, -3.15, z1 - 0.35, 0.55);
+  plant(b, prints, x1 - 0.35, z1 - 0.35, 0.65);
+  // Ceiling lights, each in a frame.
+  for (const x of [-1.5, 1.5]) {
+    for (const z of [-1.8, 0.4, 2.6]) {
+      b.box(0xd9d2c4, 1.28, 0.03, 0.38, x, height - 0.015, z);
+      b.box(0xfffdf6, 1.2, 0.05, 0.3, x, height - 0.03, z);
+    }
+  }
+  const group = b.build('room-classroom', classroomLight(prints, sun, { x0, x1, z0, z1, height }));
   group.userData.seats = seats;
   return group;
 }
