@@ -69,18 +69,28 @@ const ANIMALS: [&str; 8] = [
     "Crane", "Fox", "Frog", "Whale", "Owl", "Rabbit", "Turtle", "Swan",
 ];
 
+/// "Blue Crane 07" from a random number.
+pub(crate) fn pseudonym(n: u64) -> String {
+    format!(
+        "{} {} {:02}",
+        COLOURS[(n % 8) as usize],
+        ANIMALS[((n / 8) % 8) as usize],
+        1 + (n / 64) % 99
+    )
+}
+
 /// A random number from the OS-seeded hasher keys (no extra dependency).
-fn random_u64() -> u64 {
+pub(crate) fn random_u64() -> u64 {
     let mut h = std::collections::hash_map::RandomState::new().build_hasher();
     h.write_u64(0x006e_756d_6572_6961);
     h.finish()
 }
 
-fn random_hex() -> String {
+pub(crate) fn random_hex() -> String {
     format!("{:016x}{:016x}", random_u64(), random_u64())
 }
 
-fn random_code() -> String {
+pub(crate) fn random_code() -> String {
     let mut n = random_u64();
     (0..CODE_LEN)
         .map(|_| {
@@ -542,13 +552,7 @@ impl Room {
 
     fn pseudonym(&self) -> String {
         loop {
-            let n = random_u64();
-            let name = format!(
-                "{} {} {:02}",
-                COLOURS[(n % 8) as usize],
-                ANIMALS[((n / 8) % 8) as usize],
-                1 + (n / 64) % 99
-            );
+            let name = pseudonym(random_u64());
             if self.slots.iter().all(|s| s.name != name) {
                 break name;
             }

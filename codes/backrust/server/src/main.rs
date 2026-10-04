@@ -3,6 +3,7 @@
 
 mod admin;
 mod auth;
+mod classes;
 mod organizer;
 mod rooms;
 
@@ -28,6 +29,8 @@ pub struct AppState {
     pub verifier: auth::Verifier,
     pub config: Config,
     pub rooms: Arc<rooms::Rooms>,
+    /// Wrong picture passwords per class, to pause a class's sign-in.
+    pub classes: classes::Guard,
 }
 
 pub type State = Arc<AppState>;
@@ -58,6 +61,21 @@ pub fn router(state: State) -> Router {
         .route("/api/rooms/history", get(rooms::history))
         .route("/api/rooms/{id}", delete(rooms::close))
         .route("/api/ws", get(rooms::ws))
+        .route("/api/classes", get(classes::list).post(classes::create))
+        .route(
+            "/api/classes/{id}",
+            get(classes::detail).delete(classes::remove),
+        )
+        .route("/api/classes/{id}/seats", post(classes::add))
+        .route("/api/classes/{id}/seats/{n}", delete(classes::reset))
+        .route(
+            "/api/classes/{id}/seats/{n}/picture",
+            post(classes::picture),
+        )
+        .route("/api/classes/{id}/seats/{n}/unlock", post(classes::unlock))
+        .route("/api/student/sign-in", post(classes::student_sign_in))
+        .route("/api/student/me", get(classes::student_me))
+        .route("/api/student/sign-out", post(classes::student_sign_out))
         .with_state(state)
 }
 
@@ -120,6 +138,7 @@ async fn main() {
         verifier: auth::Verifier::new(required("FIREBASE_PROJECT_ID")),
         config,
         rooms,
+        classes: classes::Guard::default(),
     });
 
     let port: u16 = std::env::var("PORT")

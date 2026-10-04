@@ -18,6 +18,7 @@ pub const TERMS_VERSION: &str = "organizer-2026-10-02";
 
 const ORG_KINDS: [&str; 5] = ["school", "tutoring", "community", "event", "personal"];
 
+#[derive(Debug)]
 pub struct ApiError(pub StatusCode, pub &'static str);
 
 impl IntoResponse for ApiError {
@@ -94,7 +95,7 @@ pub(crate) struct User {
     pub(crate) admin: bool,
 }
 
-fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
+pub(crate) fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
     headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
