@@ -417,7 +417,164 @@ fn seated(seat_id: i64, pseudonym: &str, class_id: &str) -> Seated {
         seat_id,
         pseudonym: pseudonym.into(),
         class_id: class_id.into(),
+        group: 0,
     }
+}
+
+/// Seat `number` of class c1, in the group of its number.
+fn classmate(number: i16) -> Option<Seated> {
+    Some(Seated {
+        seat_id: number as i64,
+        pseudonym: format!("Seat {number:02}"),
+        class_id: "c1".into(),
+        group: crate::classes::race_group(number, None),
+    })
+}
+
+/// Class c1 with seats 01 to `seats`, in groups by number.
+fn class_of(seats: i16) -> RoomClass {
+    RoomClass {
+        id: "c1".into(),
+        label: "5B".into(),
+        grade: 5,
+        seats: (1..=seats)
+            .map(|n| (n, crate::classes::race_group(n, None)))
+            .collect(),
+    }
+}
+
+async fn turn_of(c: &mut Client) -> TurnView {
+    c.until(|m| match m {
+        ServerMsg::Lobby(l) => l.turn.clone(),
+        _ => None,
+    })
+    .await
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_class_races_one_group_of_six_at_a_time() {
+    let rooms = rooms();
+    let opened = rooms
+        .open_for(6, Some(7), RoomKind::Class, Some(class_of(8)))
+        .await
+        .unwrap();
+    let code = opened.play_code.clone();
+    // Group A (01 to 06) sits down first; seat 07 waits for group B.
+    assert_eq!(
+        join_with(&rooms, &code, None, None, classmate(7))
+            .await
+            .err(),
+        Some("not_your_turn")
+    );
+    let mut one = join_with(&rooms, &code, None, None, classmate(1))
+        .await
+        .unwrap();
+    let turn = turn_of(&mut one).await;
+    assert_eq!(
+        turn,
+        TurnView {
+            group: 0,
+            seats: vec![1, 2, 3, 4, 5, 6],
+            next: Some(1),
+            groups: vec![0, 1],
+        }
+    );
+    // Only the class screen calls a group, and only one with seats.
+    one.send(ClientMsg::Turn { group: 1 }).await;
+    one.until(|m| matches!(m, ServerMsg::Error { code: "not_host" }).then_some(()))
+        .await;
+    let mut screen = join(
+        &rooms,
+        &opened.watch_code,
+        None,
+        Some(opened.host_token.clone()),
+    )
+    .await
+    .unwrap();
+    screen.send(ClientMsg::Turn { group: 5 }).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::Error { code: "no_group" }).then_some(()))
+        .await;
+    // Called before the match, group B takes the desks and group A stands up.
+    screen.send(ClientMsg::Turn { group: 1 }).await;
+    one.until(|m| matches!(m, ServerMsg::Error { code: "turn_over" }).then_some(()))
+        .await;
+    let mut seven = join_with(&rooms, &code, None, None, classmate(7))
+        .await
+        .unwrap();
+    let turn = turn_of(&mut seven).await;
+    assert_eq!(
+        (turn.group, turn.seats, turn.next),
+        (1, vec![7, 8], Some(0))
+    );
+    assert_eq!(
+        join_with(&rooms, &code, None, None, classmate(2))
+            .await
+            .err(),
+        Some("not_your_turn")
+    );
+    // Group B races; during the match no group is called.
+    screen.send(ClientMsg::Start).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
+        .await;
+    screen.send(ClientMsg::Turn { group: 0 }).await;
+    screen
+        .until(|m| {
+            matches!(
+                m,
+                ServerMsg::Error {
+                    code: "match_started"
+                }
+            )
+            .then_some(())
+        })
+        .await;
+    let race = tokio::spawn(play_seat(seven));
+    screen
+        .until(|m| matches!(m, ServerMsg::Recap(_)).then_some(()))
+        .await;
+    race.await.unwrap();
+    // After the recap, group A comes back for the next match.
+    screen.send(ClientMsg::Turn { group: 0 }).await;
+    let turn = turn_of(&mut screen).await;
+    assert_eq!(turn.group, 0);
+    let mut two = join_with(&rooms, &code, None, None, classmate(2))
+        .await
+        .unwrap();
+    let name = two
+        .until(|m| match m {
+            ServerMsg::Welcome { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(name.as_deref(), Some("Seat 02"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn rooms_open_to_anyone_have_no_turns() {
+    let rooms = rooms();
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
+    let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    let turn = a
+        .until(|m| match m {
+            ServerMsg::Lobby(l) => Some(l.turn.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(turn, None);
+    let mut screen = join(
+        &rooms,
+        &opened.watch_code,
+        None,
+        Some(opened.host_token.clone()),
+    )
+    .await
+    .unwrap();
+    screen.send(ClientMsg::Turn { group: 0 }).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::Error { code: "no_class" }).then_some(()))
+        .await;
 }
 
 #[tokio::test(start_paused = true)]
@@ -427,6 +584,7 @@ async fn a_room_for_a_class_seats_only_that_class() {
         id: "c1".into(),
         label: "5B".into(),
         grade: 5,
+        seats: vec![(3, 0)],
     };
     let opened = rooms
         .open_for(3, Some(7), RoomKind::Class, Some(class.clone()))

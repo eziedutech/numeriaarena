@@ -19,6 +19,7 @@ export const EN = {
   /** The same, with the made-up name the class screen shows for this desk. */
   classWaitingAs: (name: string) => `You are ${name}. Waiting for your teacher...`,
   classClosed: 'The teacher closed the room.',
+  classTurnOver: "Your group's turn is over: the teacher called the next group.",
   classStarting: (s: number) => `The match starts in ${s}...`,
   classStartingAs: (name: string, s: number) => `You are ${name}. Starts in ${s}...`,
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
@@ -118,6 +119,7 @@ export const ID: Text = {
   classWaiting: 'Menunggu kelas dimulai...',
   classWaitingAs: (name: string) => `Kamu ${name}. Menunggu guru...`,
   classClosed: 'Guru menutup ruang ini.',
+  classTurnOver: 'Giliran kelompokmu selesai: guru memanggil kelompok berikutnya.',
   classStarting: (s: number) => `Pertandingan mulai dalam ${s}...`,
   classStartingAs: (name: string, s: number) => `Kamu ${name}. Mulai dalam ${s}...`,
   wave: (n: number, total: number) => `Gelombang ${n} dari ${total}`,

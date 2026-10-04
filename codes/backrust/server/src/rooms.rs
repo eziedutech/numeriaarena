@@ -6,7 +6,7 @@
 //! every wave and of the match, keyed by their event id, so writing again
 //! after a failure never counts an answer twice.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{BuildHasher, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -20,7 +20,7 @@ use foldlings_core::class_match::{
     ClassConfig, ClassError, ClassEvent, ClassMatch, Classmate, MAX_SEATS, SeatAnswerEvent,
 };
 use foldlings_core::fairness::FairnessParams;
-use foldlings_core::protocol::{ClientMsg, LobbyView, RoomKind, ServerMsg};
+use foldlings_core::protocol::{ClientMsg, LobbyView, RoomKind, ServerMsg, TurnView};
 use foldlings_core::race::Phase;
 use foldlings_core::session::SessionError;
 use foldlings_core::template::ItemTemplate;
@@ -31,6 +31,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::State;
+use crate::classes::GROUP_SIZE;
 use crate::organizer::{ApiError, signed_in};
 
 /// Codes are read aloud and typed on a headset: no I, L, O, 0 or 1.
@@ -171,6 +172,8 @@ pub struct RoomClass {
     pub id: String,
     pub label: String,
     pub grade: i16,
+    /// Each seat's number and race group (0 is A).
+    pub seats: Vec<(i16, u8)>,
 }
 
 /// A class seat signed in on a device that joins a room.
@@ -179,6 +182,8 @@ pub(crate) struct Seated {
     pub(crate) seat_id: i64,
     pub(crate) pseudonym: String,
     pub(crate) class_id: String,
+    /// The seat's race group, in a room for its class.
+    pub(crate) group: u8,
 }
 
 /// Every open room by its codes.
@@ -362,6 +367,7 @@ impl Rooms {
         );
         room.kind = kind;
         room.class = class;
+        room.turn = room.groups().keys().next().copied().unwrap_or(0);
         tokio::spawn(room.run(rx));
         Ok(opened)
     }
@@ -448,6 +454,8 @@ struct Room {
     shut: bool,
     /// The countdown is on: the match starts at this time.
     starts_at: Option<f64>,
+    /// In a room for a class: the race group whose seats sit down (0 is A).
+    turn: u8,
 }
 
 impl Room {
@@ -482,6 +490,7 @@ impl Room {
             demo: false,
             shut: false,
             starts_at: None,
+            turn: 0,
         }
     }
 
@@ -564,7 +573,71 @@ impl Room {
             kind: self.kind,
             ready: self.slots.iter().map(|s| s.ready).collect(),
             starts_at_ms: self.starts_at,
+            turn: self.turn_view(),
         })
+    }
+
+    /// The class's seat numbers by race group.
+    fn groups(&self) -> BTreeMap<u8, Vec<i16>> {
+        let mut groups: BTreeMap<u8, Vec<i16>> = BTreeMap::new();
+        for &(number, group) in self.class.iter().flat_map(|c| &c.seats) {
+            groups.entry(group).or_default().push(number);
+        }
+        groups
+    }
+
+    fn turn_view(&self) -> Option<TurnView> {
+        self.class.as_ref()?;
+        let mut groups = self.groups();
+        let keys: Vec<u8> = groups.keys().copied().collect();
+        let next = keys
+            .iter()
+            .copied()
+            .find(|&g| g > self.turn)
+            .or(keys.first().copied())
+            .filter(|&g| g != self.turn);
+        Some(TurnView {
+            group: self.turn,
+            seats: groups.remove(&self.turn).unwrap_or_default(),
+            next,
+            groups: keys,
+        })
+    }
+
+    /// The class's groups as the teacher left them on the class page.
+    async fn refresh_groups(&mut self) {
+        let (Some(db), Some(class)) = (&self.rooms.db, &mut self.class) else {
+            return;
+        };
+        match crate::classes::seat_groups(db, &class.id).await {
+            Ok(seats) => class.seats = seats,
+            Err(e) => tracing::warn!("room {}: groups: {e}", self.id),
+        }
+    }
+
+    /// The class screen calls group `group`: the last group's seats leave
+    /// (each told `turn_over`), and the next match seats only the new group.
+    fn call_group(&mut self, group: u8) {
+        self.turn = group;
+        self.game = None;
+        self.match_id = None;
+        self.done_at = None;
+        let seated: Vec<u64> = self
+            .conns
+            .iter()
+            .filter(|(_, c)| c.seat.is_some())
+            .map(|(&id, _)| id)
+            .collect();
+        for id in seated {
+            if let Some(c) = self.conns.get_mut(&id) {
+                c.seat = None;
+            }
+            self.send(id, ServerMsg::Error { code: "turn_over" });
+            self.drop_conn(id);
+        }
+        self.slots.clear();
+        let lobby = self.lobby();
+        self.broadcast(&lobby);
     }
 
     /// In an open room the countdown runs while every classmate here is
@@ -599,13 +672,15 @@ impl Room {
         }
     }
 
-    /// Why a newcomer may not sit in a room opened for a class: a guest, or
-    /// a seat of another class. None in a room open to anyone.
+    /// Why a newcomer may not sit in a room opened for a class: a guest, a
+    /// seat of another class, or of a group whose turn it is not. None in a
+    /// room open to anyone.
     fn class_gate(&self, student: Option<&Seated>) -> Option<&'static str> {
         let class = self.class.as_ref()?;
         match student {
             None => Some("class_only"),
             Some(s) if s.class_id != class.id => Some("wrong_class"),
+            Some(s) if s.group != self.turn => Some("not_your_turn"),
             Some(_) => None,
         }
     }
@@ -679,6 +754,9 @@ impl Room {
                 }
                 self.next_conn += 1;
                 let is_host = host.is_some() && host == self.host_token;
+                if is_host {
+                    self.refresh_groups().await;
+                }
                 self.conns.insert(
                     conn,
                     Conn {
@@ -774,6 +852,30 @@ impl Room {
                     self.starts_at = Some(now + COUNTDOWN_MS);
                     let lobby = self.lobby();
                     self.broadcast(&lobby);
+                }
+            }
+            ClientMsg::Turn { group } => {
+                if self.demo || !host {
+                    self.send(conn, error("not_host"));
+                } else if self.class.is_none() {
+                    self.send(conn, error("no_class"));
+                } else if self.game.as_ref().is_some_and(|m| m.phase() != Phase::Done) {
+                    self.send(conn, error("match_started"));
+                } else if self.starts_at.is_some() {
+                    self.send(conn, error("starting"));
+                } else {
+                    self.refresh_groups().await;
+                    // The last match is stored before its seats go.
+                    if self.commit_retry.is_some() {
+                        self.flush(true).await;
+                    }
+                    if self.commit_retry.is_some() {
+                        self.send(conn, error("saving"));
+                    } else if !self.groups().contains_key(&group) {
+                        self.send(conn, error("no_group"));
+                    } else {
+                        self.call_group(group);
+                    }
                 }
             }
             ClientMsg::Ready => {
@@ -939,8 +1041,8 @@ impl Room {
             .map(|s| json!({ "name": s.name, "bot": s.bot }))
             .collect();
         let stored = sqlx::query(
-            "INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats)
-             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
+            "INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats, race_group)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING",
         )
         .bind(id)
         .bind(&self.id)
@@ -948,6 +1050,7 @@ impl Room {
         .bind(&self.rooms.content.version)
         .bind(FairnessParams::default().version)
         .bind(Value::Array(seats))
+        .bind(self.class.as_ref().map(|_| self.turn as i16))
         .execute(db)
         .await;
         match stored {
@@ -1105,6 +1208,12 @@ pub async fn create(
     if body.seats == 0 || body.seats > MAX_SEATS {
         return Err(ApiError(StatusCode::BAD_REQUEST, "seats"));
     }
+    // A class's room always has a group's six desks.
+    let seats = if body.class_id.is_some() {
+        GROUP_SIZE as usize
+    } else {
+        body.seats
+    };
     let class = match (&body.class_id, &user) {
         (None, _) => None,
         (Some(_), None) => return Err(ApiError(StatusCode::UNAUTHORIZED, "signed_out")),
@@ -1121,13 +1230,14 @@ pub async fn create(
                 id: id.clone(),
                 label,
                 grade,
+                seats: crate::classes::seat_groups(&state.db, id).await?,
             })
         }
     };
     let label = class.as_ref().map(|c| c.label.clone());
     let opened = state
         .rooms
-        .open_for(body.seats, user.map(|u| u.id), body.kind, class)
+        .open_for(seats, user.map(|u| u.id), body.kind, class)
         .await?;
     tracing::info!("room {} opened", opened.id);
     Ok(Json(json!({
@@ -1135,7 +1245,7 @@ pub async fn create(
         "play_code": opened.play_code,
         "watch_code": opened.watch_code,
         "host_token": opened.host_token,
-        "seats": body.seats,
+        "seats": seats,
         "class_label": label,
     })))
 }
@@ -1196,6 +1306,7 @@ pub async fn history(
                     'started_at', m.started_at,
                     'ended_at', m.ended_at,
                     'seats', m.seats,
+                    'race_group', m.race_group,
                     'players', m.recap->'players'
                 ) ORDER BY m.started_at)
                 FROM matches m WHERE m.room_id = r.id
@@ -1293,6 +1404,7 @@ async fn connection(rooms: Arc<Rooms>, db: sqlx::PgPool, mut socket: WebSocket) 
                 seat_id: s.seat_id,
                 pseudonym: s.pseudonym,
                 class_id: s.class_id,
+                group: s.race_group,
             }),
             Err(e) => {
                 tracing::warn!("student lookup failed: {e}");

@@ -30,6 +30,9 @@ interface Seat {
   pseudonym: string;
   locked: boolean;
   last_seen_at: string | null;
+  /** The race group (0 is A): the teacher's choice, or by seat number. */
+  group: number;
+  group_chosen: boolean;
   /** Matches in rooms the teacher opened for this class: the official record. */
   official: { matches: number; stars: number };
   last_official: { at: string; place: number; points: number; stars: number } | null;
@@ -67,7 +70,11 @@ const TEXT = {
     make: "MAKE THE CLASS",
     cancel: "CANCEL",
     signInHow: "Students press I'M IN A CLASS in the game, enter this code, tap their seat and their three pictures.",
-    cols: ["Seat", "Name (this browser only)", "Pseudonym", "Class races", "Own play", "Last played", ""],
+    cols: ["Seat", "Name (this browser only)", "Pseudonym", "Group", "Class races", "Own play", "Last played", ""],
+    groupsNote:
+      "A race room has 6 desks, so the class races in groups, one group a match: seats 01 to 06 are group A, 07 to 12 group B, and so on. Pick another group for a seat here; the class screen calls the groups in turn.",
+    byNumber: "GROUPS BY SEAT NUMBER",
+    tooBig: (g: string, n: number) => `Group ${g} has ${n} seats, but a room has 6 desks: the last to come wait for another turn.`,
     official: (n: number, stars: number) => `${n} ${n === 1 ? "race" : "races"} · ${stars}★`,
     lastOfficial: (place: number, points: number) => `last: ${place}${place === 1 ? "st" : place === 2 ? "nd" : place === 3 ? "rd" : "th"}, ${points} pts`,
     own: (races: number, practices: number) => `${races} with robots · ${practices} ${practices === 1 ? "practice" : "practices"}`,
@@ -118,6 +125,7 @@ const TEXT = {
       class_not_found: "That class is gone.",
       archived: "This class is archived.",
       seat_not_found: "That seat is gone.",
+      group: "Pick a group from A to H.",
       names_file: "That file has no seat numbers in its first column.",
       names_store: "This browser cannot keep names (private window?).",
       offline: "The server cannot be reached right now.",
@@ -144,7 +152,11 @@ const TEXT = {
     make: "BUAT KELAS",
     cancel: "BATAL",
     signInHow: "Siswa menekan AKU DI KELAS di game, memasukkan kode ini, lalu menekan nomor kursi dan tiga gambarnya.",
-    cols: ["Kursi", "Nama (hanya di browser ini)", "Samaran", "Lomba kelas", "Main sendiri", "Terakhir main", ""],
+    cols: ["Kursi", "Nama (hanya di browser ini)", "Samaran", "Kelompok", "Lomba kelas", "Main sendiri", "Terakhir main", ""],
+    groupsNote:
+      "Ruang lomba punya 6 meja, jadi kelas berlomba per kelompok, satu kelompok satu pertandingan: kursi 01 sampai 06 kelompok A, 07 sampai 12 kelompok B, dan seterusnya. Pilih kelompok lain untuk sebuah kursi di sini; layar kelas memanggil kelompok bergiliran.",
+    byNumber: "KELOMPOK MENURUT NOMOR KURSI",
+    tooBig: (g: string, n: number) => `Kelompok ${g} punya ${n} kursi, padahal ruang punya 6 meja: yang datang terakhir menunggu giliran lain.`,
     official: (n: number, stars: number) => `${n} lomba · ${stars}★`,
     lastOfficial: (place: number, points: number) => `terakhir: ke-${place}, ${points} poin`,
     own: (races: number, practices: number) => `${races} lawan robot · ${practices} latihan`,
@@ -195,6 +207,7 @@ const TEXT = {
       class_not_found: "Kelas itu sudah tidak ada.",
       archived: "Kelas ini sudah diarsipkan.",
       seat_not_found: "Kursi itu sudah tidak ada.",
+      group: "Pilih kelompok A sampai H.",
       names_file: "Kolom pertama berkas itu tidak berisi nomor kursi.",
       names_store: "Browser ini tidak bisa menyimpan nama (jendela privat?).",
       offline: "Server belum bisa dihubungi.",
@@ -203,6 +216,11 @@ const TEXT = {
   },
 };
 type Text = (typeof TEXT)["en"];
+
+/** A room for a class has this many desks; a class races in groups A to H. */
+const DESKS = 6;
+const GROUPS = [0, 1, 2, 3, 4, 5, 6, 7];
+const letter = (g: number) => String.fromCharCode(65 + g);
 
 function ErrorLine({ t, code }: { t: Text; code: string }) {
   if (!code) return null;
@@ -507,6 +525,11 @@ function ClassPage({
   const day = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString(t.locale, { day: "numeric", month: "short" }) + ", " + new Date(iso).toLocaleTimeString(t.locale, { hour: "2-digit", minute: "2-digit" }) : t.never;
 
+  // Groups with more seats than a room has desks.
+  const sizes = new Map<number, number>();
+  for (const s of seats ?? []) sizes.set(s.group, (sizes.get(s.group) ?? 0) + 1);
+  const big = [...sizes].filter(([, n]) => n > DESKS).sort(([a], [b]) => a - b);
+
   const askText = !ask
     ? ""
     : ask.kind === "picture"
@@ -564,6 +587,12 @@ function ClassPage({
       <ErrorLine t={t} code={error} />
       {note && <p role="status">{note}</p>}
       <p className="soft">{t.recordsNote}</p>
+      <p className="soft">{t.groupsNote}</p>
+      {big.map(([g, n]) => (
+        <p key={g} className="err">
+          {t.tooBig(letter(g), n)}
+        </p>
+      ))}
       <table className="past-table seats">
         <thead>
           <tr>
@@ -588,6 +617,23 @@ function ClassPage({
                 />
               </td>
               <td>{s.pseudonym}</td>
+              <td>
+                <select
+                  className={s.group_chosen ? "field group chosen" : "field group"}
+                  aria-label={`${t.cols[3]} ${s.number}`}
+                  value={s.group}
+                  disabled={!active || busy}
+                  onChange={(e) =>
+                    act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group: Number(e.target.value) }) }))
+                  }
+                >
+                  {GROUPS.map((g) => (
+                    <option key={g} value={g}>
+                      {letter(g)}
+                    </option>
+                  ))}
+                </select>
+              </td>
               <td>
                 {t.official(s.official.matches, s.official.stars)}
                 {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
@@ -642,6 +688,11 @@ function ClassPage({
             <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "add" })}>
               {t.addSeats}
             </button>
+            {seats?.some((s) => s.group_chosen) && (
+              <button type="button" className="btn small" disabled={busy} onClick={() => act(api(user, `${base}/groups`, { method: "DELETE" }))}>
+                {t.byNumber}
+              </button>
+            )}
             <button type="button" className="btn small suspended" disabled={busy} onClick={() => setAsk({ kind: "archive" })}>
               {t.archive}
             </button>

@@ -52,6 +52,8 @@ export interface Lobby {
   ready: boolean[];
   /** The countdown is on: the match starts then, on the room's clock. */
   starts_at_ms: number | null;
+  /** In a room for a class: the group whose seats sit down (0 is A). */
+  turn: { group: number; seats: number[]; next: number | null; groups: number[] } | null;
 }
 
 interface ClassRecap {
@@ -72,7 +74,7 @@ type ServerMsg =
   | { type: 'error'; code: string };
 
 /** Errors that end the join; others are answers to one action. */
-const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class'];
+const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class', 'not_your_turn'];
 /** After a `wait` (between rounds, the last seconds of one), ask again this much later. */
 const ASK_AGAIN_MS = 800;
 /** A dropped connection is tried again this often, this many times. */
@@ -96,6 +98,8 @@ export class ClassRace {
   onChange?: () => void;
   /** Its teacher closed the room: the match is over for this seat. */
   shut = false;
+  /** The room is still open, but the class screen called another group to the desks. */
+  turnOver = false;
 
   private ws?: WebSocket;
   private token: string | null = null;
@@ -260,6 +264,7 @@ export class ClassRace {
           kind: msg.kind,
           ready: msg.ready,
           starts_at_ms: msg.starts_at_ms,
+          turn: msg.turn ?? null,
         };
         this.onChange?.();
         break;
@@ -291,8 +296,9 @@ export class ClassRace {
         this.recapMsg = msg;
         break;
       case 'error':
-        if (msg.code === 'room_closed') {
+        if (msg.code === 'room_closed' || msg.code === 'turn_over') {
           this.shut = true;
+          this.turnOver = msg.code === 'turn_over';
           this.closed = true;
           this.judging?.reject(new Error(msg.code));
           this.judging = undefined;

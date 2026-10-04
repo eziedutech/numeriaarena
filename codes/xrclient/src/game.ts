@@ -1657,11 +1657,12 @@ export class GameSystem extends createSystem({
     this.addChoiceButton('done', T.done, 0, 0x3469c4);
   }
 
-  /** The teacher closed the Class Match room: back to the menu, saying so. */
+  /** The teacher closed the Class Match room, or called another group: back to the menu, saying so. */
   private classClosed(): void {
-    console.info('[class] the room was closed');
+    const turnOver = this.race instanceof ClassRace && this.race.turnOver;
+    console.info(turnOver ? '[class] another group is called' : '[class] the room was closed');
     this.endRace();
-    this.score.set(T.classClosed);
+    this.score.set(turnOver ? T.classTurnOver : T.classClosed);
   }
 
   private endRace(): void {

@@ -311,6 +311,45 @@ async fn a_class_from_creation_to_archive() {
 }
 
 #[tokio::test]
+async fn seats_race_in_groups_of_six_unless_the_teacher_moves_one() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db, Some("approved")).await;
+    let a = allowance(&db, owner, false).await.unwrap();
+    let made = create_class(&db, owner, a, &new_class(14)).await.unwrap();
+    let id = made["class"]["id"].as_str().unwrap().to_owned();
+    let groups = |seats: Vec<(i16, u8)>| seats.into_iter().map(|(_, g)| g).collect::<Vec<_>>();
+    assert_eq!(
+        groups(seat_groups(&db, &id).await.unwrap()),
+        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2]
+    );
+    // Seat 13 moves to group B; the page shows the choice.
+    let moved = set_group(&db, owner, &id, 13, Some(1)).await.unwrap();
+    assert_eq!(
+        (moved["group"].as_u64(), moved["group_chosen"].as_bool()),
+        (Some(1), Some(true))
+    );
+    let page = class_detail(&db, owner, &id).await.unwrap();
+    assert_eq!(page["seats"][12]["group"], 1);
+    assert_eq!(page["seats"][12]["group_chosen"], true);
+    assert_eq!(page["seats"][13]["group"], 2);
+    assert_eq!(page["seats"][13]["group_chosen"], false);
+    assert_eq!(seat_groups(&db, &id).await.unwrap()[12], (13, 1));
+    assert_eq!(why(set_group(&db, owner, &id, 13, Some(8)).await), "group");
+    assert_eq!(
+        why(set_group(&db, owner, &id, 40, Some(1)).await),
+        "seat_not_found"
+    );
+    let stranger = teacher(&db, Some("approved")).await;
+    assert_ne!(why(set_group(&db, stranger, &id, 13, Some(0)).await), "ok");
+    // Back by number.
+    groups_by_number(&db, owner, &id).await.unwrap();
+    assert_eq!(seat_groups(&db, &id).await.unwrap()[12], (13, 2));
+}
+
+#[tokio::test]
 async fn pending_teachers_get_one_small_class_and_others_none() {
     let Some(db) = db().await else {
         eprintln!("TEST_DATABASE_URL not set: skipped");

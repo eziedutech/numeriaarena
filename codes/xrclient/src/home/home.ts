@@ -1037,7 +1037,9 @@ export class Home {
       }
       const l = link.lobby;
       const open = l?.kind === 'open';
-      seats.textContent = l ? t.lobbySeats(l.names.length, l.seats) : '';
+      seats.textContent = l
+        ? t.lobbySeats(l.names.length, l.seats) + (l.turn ? t.lobbyGroup(String.fromCharCode(65 + l.turn.group)) : '')
+        : '';
       names.replaceChildren(
         ...(l?.names ?? []).map((n, i) => {
           const s = document.createElement('span');
@@ -1048,7 +1050,9 @@ export class Home {
       );
       const readyNow = l ? l.ready.filter(Boolean).length : 0;
       state.textContent = link.shut
-        ? t.roomClosed
+        ? link.turnOver
+          ? t.turnOver
+          : t.roomClosed
         : open
           ? t.lobbyReadyWait(readyNow, l?.names.length ?? 0)
           : t.lobbyWait;

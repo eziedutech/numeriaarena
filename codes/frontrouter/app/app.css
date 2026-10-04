@@ -863,6 +863,34 @@ button.tool {
   font-weight: 700;
 }
 
+.field.group {
+  width: auto;
+  padding: 4px 8px;
+}
+
+.field.group.chosen {
+  background: #f4b98f;
+}
+
+.arena-turn {
+  margin: 14px 0;
+}
+
+.arena-turn-now {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--cobalt);
+  margin: 0;
+}
+
+.arena-turn-call {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
 .arena-code-field {
   font-size: 28px;
   letter-spacing: 0.2em;

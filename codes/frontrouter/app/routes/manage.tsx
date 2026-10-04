@@ -100,6 +100,7 @@ const TEXT = {
     historyMeta: (seats: number, matches: number) =>
       `${seats} seats · ${matches === 0 ? "no match yet" : `${matches} ${matches === 1 ? "match" : "matches"}`}`,
     historyMatch: (n: number) => `Match ${n}`,
+    historyGroup: (g: string) => ` · Group ${g}`,
     historyUntil: (end: string, n: number) => ` to ${end} (${n} min)`,
     historyUnfinished: "Stopped before the end",
     historyCols: ["Place", "Player", "Points", "Stars"],
@@ -204,6 +205,7 @@ const TEXT = {
     historyMeta: (seats: number, matches: number) =>
       `${seats} kursi · ${matches === 0 ? "belum ada pertandingan" : `${matches} pertandingan`}`,
     historyMatch: (n: number) => `Pertandingan ${n}`,
+    historyGroup: (g: string) => ` · Kelompok ${g}`,
     historyUntil: (end: string, n: number) => ` sampai ${end} (${n} menit)`,
     historyUnfinished: "Berhenti sebelum selesai",
     historyCols: ["Peringkat", "Pemain", "Poin", "Bintang"],
@@ -483,7 +485,7 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
     show("rooms");
     api<OpenedRoom>(user, "/rooms", {
       method: "POST",
-      body: JSON.stringify({ seats: 3, kind: "class", class_id: classId }),
+      body: JSON.stringify({ seats: 6, kind: "class", class_id: classId }),
     })
       .then(
         () => setRooms((n) => n + 1),
@@ -693,6 +695,8 @@ interface PastRoom {
     started_at: string;
     ended_at: string | null;
     seats: { name: string; bot: boolean }[];
+    /** The group that raced (0 is A), in a room for a class. */
+    race_group?: number | null;
     players: { name: string; bot: boolean; points: number; place: number; stars: number }[] | null;
   }[];
 }
@@ -738,7 +742,10 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
             return (
               <div key={m.started_at} className="past-match">
                 <p className="past-match-head">
-                  <strong>{t.historyMatch(n + 1)}</strong>
+                  <strong>
+                    {t.historyMatch(n + 1)}
+                    {m.race_group != null && t.historyGroup(String.fromCharCode(65 + m.race_group))}
+                  </strong>
                   <span className="soft">
                     {clock(m.started_at)}
                     {m.ended_at ? t.historyUntil(clock(m.ended_at), minutes) : ""}

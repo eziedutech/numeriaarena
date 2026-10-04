@@ -73,6 +73,8 @@ pub fn router(state: State) -> Router {
             post(classes::picture),
         )
         .route("/api/classes/{id}/seats/{n}/unlock", post(classes::unlock))
+        .route("/api/classes/{id}/seats/{n}/group", post(classes::group))
+        .route("/api/classes/{id}/groups", delete(classes::ungroup))
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))
         .route("/api/student/room", get(classes::student_room))

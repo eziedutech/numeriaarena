@@ -29,6 +29,12 @@ pub enum ClientMsg {
     /// Start the countdown to the match: only a class room's host (its
     /// teacher's class screen), so no classmate starts before the others.
     Start,
+    /// In a room for a class: the class screen calls a group of seats (0 is
+    /// group A) to the desks, before a match or after one ends. Only that
+    /// group's seats sit down in the next match.
+    Turn {
+        group: u8,
+    },
     /// In an open room: this seat is ready. The countdown runs while every
     /// classmate in the room is ready.
     Ready,
@@ -57,6 +63,21 @@ pub struct LobbyView {
     pub ready: Vec<bool>,
     /// The countdown is on: the match starts at this time, on the room's clock.
     pub starts_at_ms: Option<f64>,
+    /// In a room for a class: whose turn it is. None in other rooms.
+    pub turn: Option<TurnView>,
+}
+
+/// A class races in groups, one group a match (0 is group A).
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct TurnView {
+    /// The group whose seats sit down now.
+    pub group: u8,
+    /// Its seat numbers, as on the students' cards.
+    pub seats: Vec<i16>,
+    /// The group after it; None when the class is one group.
+    pub next: Option<u8>,
+    /// Every group that has seats, in order.
+    pub groups: Vec<u8>,
 }
 
 /// Who starts a room's match.

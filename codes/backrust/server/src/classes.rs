@@ -44,6 +44,18 @@ const SESSION_DAYS: i32 = 30;
 /// Wrong pictures in one class within `CLASS_WINDOW` that pause its sign-in.
 const CLASS_WRONG: usize = 30;
 const CLASS_WINDOW: Duration = Duration::from_secs(600);
+/// A room for a class has this many desks, so its seats race in groups of
+/// this many by number (01 to 06 group A), unless the teacher moves a seat.
+pub(crate) const GROUP_SIZE: i16 = 6;
+/// Groups A to H.
+pub(crate) const MAX_GROUPS: i16 = 8;
+
+/// The group seat `number` races in (0 is A): the teacher's choice, or by number.
+pub(crate) fn race_group(number: i16, chosen: Option<i16>) -> u8 {
+    chosen
+        .unwrap_or((number - 1) / GROUP_SIZE)
+        .clamp(0, MAX_GROUPS - 1) as u8
+}
 
 fn err(status: StatusCode, why: &'static str) -> ApiError {
     ApiError(status, why)
@@ -401,6 +413,8 @@ pub(crate) async fn class_detail(db: &PgPool, owner: i64, id: &str) -> Result<Va
             'pseudonym', pseudonym,
             'locked', teacher_lock OR COALESCE(locked_until > now(), false),
             'last_seen_at', last_seen_at,
+            'group', COALESCE(race_group, LEAST((number - 1) / $2, $3 - 1)),
+            'group_chosen', race_group IS NOT NULL,
             'official', (
                 SELECT json_build_object('matches', count(*), 'stars', COALESCE(sum(r.stars), 0))
                 FROM match_seat_results r WHERE r.class_seat_id = s.id AND r.official
@@ -425,6 +439,8 @@ pub(crate) async fn class_detail(db: &PgPool, owner: i64, id: &str) -> Result<Va
         ) FROM class_seats s WHERE class_id = $1 ORDER BY number",
     )
     .bind(id)
+    .bind(GROUP_SIZE)
+    .bind(MAX_GROUPS)
     .fetch_all(db)
     .await?;
     Ok(json!({ "class": class, "seats": seats }))
@@ -540,6 +556,74 @@ pub(crate) async fn change_seat(
     audit(&mut tx, owner, action, id, json!({ "seat": number })).await?;
     tx.commit().await?;
     Ok(seat_card(number, &name, &picture))
+}
+
+/// Puts seat `number` in race group `group` (0 is A), or back in the group of
+/// its number when None.
+pub(crate) async fn set_group(
+    db: &PgPool,
+    owner: i64,
+    id: &str,
+    number: i16,
+    group: Option<i16>,
+) -> Result<Value, ApiError> {
+    if group.is_some_and(|g| !(0..MAX_GROUPS).contains(&g)) {
+        return Err(err(StatusCode::UNPROCESSABLE_ENTITY, "group"));
+    }
+    let mut tx = db.begin().await?;
+    owned(&mut tx, owner, id).await?;
+    let done =
+        sqlx::query("UPDATE class_seats SET race_group = $3 WHERE class_id = $1 AND number = $2")
+            .bind(id)
+            .bind(number)
+            .bind(group)
+            .execute(&mut *tx)
+            .await?;
+    if done.rows_affected() == 0 {
+        return Err(err(StatusCode::NOT_FOUND, "seat_not_found"));
+    }
+    audit(
+        &mut tx,
+        owner,
+        "seat.group",
+        id,
+        json!({ "seat": number, "group": group }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(
+        json!({ "number": number, "group": race_group(number, group), "group_chosen": group.is_some() }),
+    )
+}
+
+/// Every seat back in the group of its number.
+pub(crate) async fn groups_by_number(db: &PgPool, owner: i64, id: &str) -> Result<Value, ApiError> {
+    let mut tx = db.begin().await?;
+    owned(&mut tx, owner, id).await?;
+    sqlx::query("UPDATE class_seats SET race_group = NULL WHERE class_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    audit(&mut tx, owner, "class.groups", id, json!({})).await?;
+    tx.commit().await?;
+    Ok(json!({ "by_number": true }))
+}
+
+/// Each seat's number and race group, for a room opened for the class.
+pub(crate) async fn seat_groups(
+    db: &PgPool,
+    class_id: &str,
+) -> Result<Vec<(i16, u8)>, sqlx::Error> {
+    let rows: Vec<(i16, Option<i16>)> = sqlx::query_as(
+        "SELECT number, race_group FROM class_seats WHERE class_id = $1 ORDER BY number",
+    )
+    .bind(class_id)
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(n, g)| (n, race_group(n, g)))
+        .collect())
 }
 
 /// Archives the class: its code stops working and every device signs out.
@@ -674,12 +758,17 @@ pub(crate) struct Student {
     pub(crate) pseudonym: String,
     pub(crate) class_label: String,
     pub(crate) grade: i16,
+    /// The group the seat races in, in a room for its class.
+    pub(crate) race_group: u8,
 }
+
+/// Seat id, class id, number, pseudonym, class label, grade, chosen group.
+type StudentRow = (i64, String, i16, String, String, i16, Option<i16>);
 
 /// The student a token belongs to, while it is fresh and the class active.
 pub(crate) async fn student(db: &PgPool, token: &str) -> Result<Option<Student>, sqlx::Error> {
-    let row: Option<(i64, String, i16, String, String, i16)> = sqlx::query_as(
-        "SELECT s.id, c.id, s.number, s.pseudonym, c.label, c.grade
+    let row: Option<StudentRow> = sqlx::query_as(
+        "SELECT s.id, c.id, s.number, s.pseudonym, c.label, c.grade, s.race_group
          FROM seat_sessions t
          JOIN class_seats s ON s.id = t.seat_id
          JOIN classes c ON c.id = s.class_id
@@ -689,13 +778,14 @@ pub(crate) async fn student(db: &PgPool, token: &str) -> Result<Option<Student>,
     .fetch_optional(db)
     .await?;
     Ok(row.map(
-        |(seat_id, class_id, number, pseudonym, class_label, grade)| Student {
+        |(seat_id, class_id, number, pseudonym, class_label, grade, chosen)| Student {
             seat_id,
             class_id,
             number,
             pseudonym,
             class_label,
             grade,
+            race_group: race_group(number, chosen),
         },
     ))
 }
@@ -799,6 +889,35 @@ pub async fn reset(
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
     seat_change(state, headers, seat, SeatChange::Reset).await
+}
+
+#[derive(Deserialize)]
+pub struct Group {
+    group: Option<i16>,
+}
+
+/// `POST /api/classes/{id}/seats/{n}/group`: the seat's race group (0 is A),
+/// or null for the group of its number.
+pub async fn group(
+    Extract(state): Extract<State>,
+    Path((id, number)): Path<(String, i16)>,
+    headers: HeaderMap,
+    Json(body): Json<Group>,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    Ok(Json(
+        set_group(&state.db, user.id, &id, number, body.group).await?,
+    ))
+}
+
+/// `DELETE /api/classes/{id}/groups`: every seat races in the group of its number.
+pub async fn ungroup(
+    Extract(state): Extract<State>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    Ok(Json(groups_by_number(&state.db, user.id, &id).await?))
 }
 
 /// `DELETE /api/classes/{id}`: archives the class.

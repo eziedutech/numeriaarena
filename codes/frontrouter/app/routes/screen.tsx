@@ -49,6 +49,15 @@ interface Lobby {
   kind: "class" | "open";
   ready: boolean[];
   starts_at_ms: number | null;
+  /** In a room for a class: the group whose seats sit down (0 is A). */
+  turn: Turn | null;
+}
+
+interface Turn {
+  group: number;
+  seats: number[];
+  next: number | null;
+  groups: number[];
 }
 
 interface Recap {
@@ -113,6 +122,13 @@ const TEXT = {
     waitingReady: (n: number, of: number) => `${n} of ${of} ready. It starts when everyone is ready.`,
     startsIn: (s: number) => `The match starts in ${s}`,
     start: "START THE MATCH",
+    turnNow: (g: string, seats: string) => `GROUP ${g}'S TURN, SEATS ${seats}`,
+    turnOnly: "Only these seats sit down; the rest of the class watches.",
+    turnNext: (g: string) => `Next: group ${g}.`,
+    turnDone: (g: string) => `Group ${g} has raced.`,
+    callNext: (g: string) => `NEXT: GROUP ${g}`,
+    callOther: "Or call:",
+    groupChip: (g: string) => `GROUP ${g}`,
     cheer: "CHEER",
     cheered: "The class cheers!",
     wave: (n: number, of: number) => `WAVE ${n} OF ${of}`,
@@ -155,6 +171,9 @@ const TEXT = {
       starting: "The countdown is already on.",
       match_started: "The match has already started.",
       cannot_start: "The match could not start. Try again.",
+      no_group: "That group has no seats.",
+      no_class: "This room is open to anyone, so it has no groups.",
+      saving: "The last results are still being saved. Try again in a moment.",
       code_length: "Write all 6 letters of the code.",
       other: "Something went wrong.",
     } as Record<string, string>,
@@ -196,6 +215,13 @@ const TEXT = {
     waitingReady: (n: number, of: number) => `${n} dari ${of} siap. Mulai saat semua siap.`,
     startsIn: (s: number) => `Pertandingan mulai dalam ${s}`,
     start: "MULAI PERTANDINGAN",
+    turnNow: (g: string, seats: string) => `GILIRAN KELOMPOK ${g}, KURSI ${seats}`,
+    turnOnly: "Hanya kursi ini yang duduk; teman sekelas lainnya menonton.",
+    turnNext: (g: string) => `Berikutnya: kelompok ${g}.`,
+    turnDone: (g: string) => `Kelompok ${g} sudah berlomba.`,
+    callNext: (g: string) => `BERIKUTNYA: KELOMPOK ${g}`,
+    callOther: "Atau panggil:",
+    groupChip: (g: string) => `KELOMPOK ${g}`,
     cheer: "SORAKI",
     cheered: "Kelas bersorak!",
     wave: (n: number, of: number) => `GELOMBANG ${n} DARI ${of}`,
@@ -238,6 +264,9 @@ const TEXT = {
       starting: "Hitung mundur sudah berjalan.",
       match_started: "Pertandingan sudah dimulai.",
       cannot_start: "Pertandingan tidak bisa dimulai. Coba lagi.",
+      no_group: "Kelompok itu tidak punya kursi.",
+      no_class: "Ruang ini terbuka untuk siapa saja, jadi tidak punya kelompok.",
+      saving: "Hasil terakhir masih disimpan. Coba lagi sebentar lagi.",
       code_length: "Tulis keenam huruf kodenya.",
       other: "Ada yang salah.",
     } as Record<string, string>,
@@ -520,9 +549,17 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
           play={play}
           startsIn={live.lobby?.starts_at_ms == null ? null : live.lobby.starts_at_ms - now()}
           onStart={() => send({ type: "start" })}
+          onCall={(group) => send({ type: "turn", group })}
         />
       ) : live.recap ? (
-        <RecapCard t={t} recap={live.recap} stored={live.stored} />
+        <>
+          <RecapCard t={t} recap={live.recap} stored={live.stored} />
+          {live.lobby?.turn && (
+            <section className="paper-sheet arena-lobby">
+              <TurnBar t={t} turn={live.lobby.turn} host={host} after onCall={(group) => send({ type: "turn", group })} />
+            </section>
+          )}
+        </>
       ) : (
         <section className="arena-board">
           <Header t={t} view={v} remaining={v.ends_at_ms === null ? null : v.ends_at_ms - now()} breakLeft={v.until_ms === undefined ? null : v.until_ms - now()} />
@@ -611,6 +648,7 @@ function LobbyCard({
   play,
   startsIn,
   onStart,
+  onCall,
 }: {
   t: Text;
   lobby?: Lobby;
@@ -618,6 +656,7 @@ function LobbyCard({
   play?: string;
   startsIn: number | null;
   onStart: () => void;
+  onCall: (group: number) => void;
 }) {
   const open = lobby?.kind === "open";
   return (
@@ -645,6 +684,7 @@ function LobbyCard({
           </div>
         </>
       )}
+      {lobby?.turn && <TurnBar t={t} turn={lobby.turn} host={startsIn === null ? host : undefined} onCall={onCall} />}
       {startsIn !== null ? (
         <p className="arena-countdown" aria-live="assertive">
           {t.startsIn(Math.max(0, Math.ceil(startsIn / 1000)))}
@@ -660,6 +700,58 @@ function LobbyCard({
         </button>
       )}
     </section>
+  );
+}
+
+/** Group 0 is A. */
+const letter = (g: number) => String.fromCharCode(65 + g);
+
+/** Seat numbers as on the cards, a run of them joined: 01-06, 13. */
+function seatRuns(seats: number[]): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  const runs: string[] = [];
+  for (let i = 0; i < seats.length; ) {
+    let j = i;
+    while (j + 1 < seats.length && seats[j + 1] === seats[j] + 1) j += 1;
+    runs.push(j > i ? `${two(seats[i])}-${two(seats[j])}` : two(seats[i]));
+    i = j + 1;
+  }
+  return runs.join(", ");
+}
+
+/**
+ * A class races six seats at a time. Before the match: whose turn it is, and the
+ * class screen may call another group. After it: the screen calls the next one.
+ */
+function TurnBar({ t, turn, host, after = false, onCall }: { t: Text; turn: Turn; host?: string; after?: boolean; onCall: (group: number) => void }) {
+  const others = turn.groups.filter((g) => (after ? g !== turn.next : g !== turn.group));
+  return (
+    <div className="arena-turn">
+      <p className="arena-turn-now">{t.turnNow(letter(turn.group), seatRuns(turn.seats))}</p>
+      <p className="soft">
+        {after ? t.turnDone(letter(turn.group)) : t.turnOnly}
+        {turn.next !== null && ` ${t.turnNext(letter(turn.next))}`}
+      </p>
+      {host && (
+        <div className="arena-turn-call">
+          {after && turn.next !== null && (
+            <button type="button" className="btn wide blue" onClick={() => onCall(turn.next!)}>
+              {t.callNext(letter(turn.next))}
+            </button>
+          )}
+          {others.length > 0 && (
+            <>
+              <span className="soft">{t.callOther}</span>
+              {others.map((g) => (
+                <button key={g} type="button" className="btn" onClick={() => onCall(g)}>
+                  {t.groupChip(letter(g))}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
