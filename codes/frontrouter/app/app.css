@@ -441,7 +441,7 @@ button.tool {
 /* One line per room: code, state, when, size; the matches unfold below it. */
 .past-head {
   display: grid;
-  grid-template-columns: 7.5em 7em 1fr auto 1em;
+  grid-template-columns: 7.5em 10em 1fr auto 1em;
   gap: 12px;
   align-items: center;
   padding: 12px 4px;
@@ -1112,4 +1112,152 @@ button.tool {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+}
+
+/* A code on a paper slip, with a button that copies it. */
+.copy-code {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  column-gap: 14px;
+  padding: 8px 10px 10px 14px;
+  background: var(--paper);
+  box-shadow: 2px 4px 8px rgba(70, 50, 25, 0.22);
+}
+
+.copy-label {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.copy-letters {
+  font-size: 24px;
+  letter-spacing: 0.12em;
+  user-select: all;
+}
+
+.copy-code.big .copy-letters {
+  font-size: 40px;
+  color: var(--cobalt);
+}
+
+.copy-code .btn.small {
+  box-shadow: 2px 3px 0 rgba(60, 40, 20, 0.18);
+}
+
+/* The Arena Screen keeps its codes at the top, where the class looks first. */
+.arena-codes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin: 18px 0;
+}
+
+.arena-codes .copy-letters {
+  font-size: 30px;
+}
+
+.arena-codes .copy-code.big .copy-letters {
+  font-size: 52px;
+}
+
+/* /manage as a folder of paper: tabs on top, sheets with a folded corner, rooms as tickets. */
+.folder {
+  width: 100%;
+  max-width: 760px;
+}
+
+.folder-tabs .tool-on {
+  border-top: 6px solid transparent;
+  box-shadow: 3px 4px 0 rgba(60, 40, 20, 0.18);
+  transition: transform 0.15s;
+}
+
+.folder-tabs .tool-on.on,
+.folder-tabs .tool-on.on:hover {
+  background: var(--paper);
+  border-top-color: var(--cobalt);
+  box-shadow: var(--shadow);
+  transform: translateY(-4px);
+}
+
+.manage .paper-sheet {
+  position: relative;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(241, 227, 196, 0.22));
+}
+
+.manage .paper-sheet::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(225deg, var(--sand) 50%, #ece0c4 50%);
+  box-shadow: -2px 2px 3px rgba(70, 50, 25, 0.16);
+}
+
+.manage .veil .paper-sheet::after {
+  display: none;
+}
+
+.paper-sheet h2.sheet-title {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 0 4px;
+  border-top: 0;
+  font-size: 21px;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 -9px 0 rgba(52, 105, 196, 0.16);
+}
+
+.tickets {
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.ticket {
+  background: #fff6e2;
+  box-shadow: var(--shadow);
+  padding-top: 22px;
+  transform: rotate(-0.6deg);
+}
+
+.ticket:nth-child(even) {
+  transform: rotate(0.6deg);
+}
+
+.ticket::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 86px;
+  height: 20px;
+  margin-left: -43px;
+  background: rgba(52, 105, 196, 0.22);
+  transform: rotate(-2deg);
+}
+
+.ticket .copy-code {
+  justify-self: start;
+  align-self: flex-start;
+  margin: 4px 0;
+}
+
+.ticket .row.ticket-foot {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 2px dashed rgba(58, 63, 75, 0.25);
+}
+
+.past-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

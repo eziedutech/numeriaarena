@@ -4,6 +4,7 @@ import type { User } from "firebase/auth";
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, sendEmailLink, signInConfigured, signInWith, signOut, watchUser } from "../auth";
 import { MyClasses } from "../classes";
+import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
 
 export function meta({}: Route.MetaArgs) {
@@ -80,7 +81,10 @@ const TEXT = {
     opening: "Making a room...",
     roomPlay: "Students press RACE MY CLASSMATES in the game and enter",
     roomPlayClass: (l: string) => `Students of ${l} press RACE MY CLASSMATES in the game and join with one button, or enter`,
-    roomWatch: "Watch code (for a screen or parents):",
+    roomCode: "Room code",
+    roomWatch: "Watch code, for a screen or parents",
+    copy: "COPY",
+    copied: "COPIED",
     roomSeats: "3 seats; robots fill the empty ones.",
     openScreen: "OPEN THE CLASS SCREEN",
     closeRoom: "CLOSE THE ROOM",
@@ -181,7 +185,10 @@ const TEXT = {
     opening: "Membuat ruang...",
     roomPlay: "Siswa menekan LOMBA DENGAN TEMAN di game lalu memasukkan",
     roomPlayClass: (l: string) => `Siswa ${l} menekan LOMBA DENGAN TEMAN di game lalu bergabung dengan satu tombol, atau memasukkan`,
-    roomWatch: "Kode tonton (untuk layar atau orang tua):",
+    roomCode: "Kode ruang",
+    roomWatch: "Kode tonton, untuk layar atau orang tua",
+    copy: "SALIN",
+    copied: "TERSALIN",
     roomSeats: "3 kursi; robot mengisi yang kosong.",
     openScreen: "BUKA LAYAR KELAS",
     closeRoom: "TUTUP RUANG",
@@ -318,7 +325,7 @@ export default function Manage() {
   const crumbs = [t.home, asAdmin ? t.organizers : t.account];
 
   return (
-    <main className="paper-page">
+    <main className="paper-page manage">
       <nav className="paper-nav" aria-label={lang === "id" ? "Navigasi" : "Navigation"}>
         <ol className="crumbs">
           {crumbs.map((c) => (
@@ -501,8 +508,8 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
       </section>
       {!me.organizer && <SignUp t={t} user={user} me={me} onDone={onChange} />}
       {working && (
-        <section className="paper-sheet">
-          <div className="tools" role="tablist">
+        <section className="folder">
+          <div className="tools folder-tabs" role="tablist">
             {(["classes", "rooms"] as Tab[]).map((k, i) => (
               <button
                 key={k}
@@ -607,7 +614,7 @@ function RaceRooms({
   return (
     <>
       <section className="paper-sheet">
-        <h2 className="dialog-title">{t.raceTitle}</h2>
+        <h2 className="sheet-title">{t.raceTitle}</h2>
         <p>{t.raceFor}</p>
         <div className="row race-for">
           {classes?.map((c) => (
@@ -624,23 +631,21 @@ function RaceRooms({
         <ErrorLine t={t} code={openError} />
       </section>
       <section className="paper-sheet">
-        <h2 className="dialog-title">{t.openRooms}</h2>
+        <h2 className="sheet-title">{t.openRooms}</h2>
         <ErrorLine t={t} code={error} />
         {rooms?.length === 0 && <p className="soft">{t.noOpenRooms}</p>}
-        <div className="tools">
+        <div className="tools tickets">
           {rooms?.map((room) => {
             // The host token stays in the hash, which the browser never sends to a server.
             const screen = `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
             return (
-              <div key={room.id} className="tool">
+              <div key={room.id} className="tool ticket">
                 <strong>{t.roomFor(room.class_label)}</strong>
                 <span>{room.class_label ? t.roomPlayClass(room.class_label) : t.roomPlay}</span>
-                <span className="room-code">{room.play_code}</span>
-                <span className="soft">
-                  {t.roomWatch} <strong>{room.watch_code}</strong>
-                </span>
+                <CopyCode big label={t.roomCode} code={room.play_code} copyText={t.copy} copiedText={t.copied} />
+                <CopyCode label={t.roomWatch} code={room.watch_code} copyText={t.copy} copiedText={t.copied} />
                 <span className="soft">{t.roomSeats}</span>
-                <div className="row">
+                <div className="row ticket-foot">
                   <a className="btn small" href={screen} target="_blank" rel="noopener">
                     {t.openScreen}
                   </a>
@@ -710,7 +715,7 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
   const matches = rooms?.reduce((n, r) => n + r.matches.length, 0) ?? 0;
   return (
     <section className="paper-sheet history">
-      <h2>{t.history}</h2>
+      <h2 className="sheet-title">{t.history}</h2>
       <ErrorLine t={t} code={error} />
       {rooms?.length === 0 && <p className="soft">{t.historyNone}</p>}
       {rooms && rooms.length > 0 && <p className="soft">{t.historySummary(rooms.length, matches)}</p>}
@@ -719,8 +724,10 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
         <details key={r.id} className="past-room" open={i === 0}>
           <summary className="past-head">
             <strong className="past-code">{r.play_code}</strong>
-            {r.class_label && <span className="past-state">{r.class_label}</span>}
-            <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
+            <span className="past-tags">
+              {r.class_label && <span className="past-state">{r.class_label}</span>}
+              <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
+            </span>
             <span className="past-when">
               {day(r.created_at)}, {clock(r.created_at)}
             </span>

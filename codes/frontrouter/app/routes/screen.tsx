@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Route } from "./+types/screen";
 import { avatarSvg, robotSvg } from "../avatar";
+import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
 
 export function meta({}: Route.MetaArgs) {
@@ -79,6 +80,9 @@ const TEXT = {
   en: {
     title: "ARENA SCREEN",
     codeLabel: "Watch code",
+    playLabel: "Room code",
+    copy: "COPY",
+    copied: "COPIED",
     watch: "WATCH",
     demo: "WATCH THE DEMO MATCH",
     connecting: "Connecting...",
@@ -156,6 +160,9 @@ const TEXT = {
   id: {
     title: "LAYAR ARENA",
     codeLabel: "Kode tonton",
+    playLabel: "Kode ruang",
+    copy: "SALIN",
+    copied: "TERSALIN",
     watch: "TONTON",
     demo: "TONTON PERTANDINGAN DEMO",
     connecting: "Menyambung...",
@@ -494,6 +501,10 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
   const cheering = Date.now() - live.cheerAt < 2500;
   return (
     <>
+      <div className="arena-codes">
+        {play && <CopyCode big label={t.playLabel} code={play} copyText={t.copy} copiedText={t.copied} />}
+        <CopyCode label={t.codeLabel} code={code} copyText={t.copy} copiedText={t.copied} />
+      </div>
       {live.status !== "on" && <p className="arena-banner">{live.status === "lost" ? t.lost : t.connecting}</p>}
       {!v ? (
         <LobbyCard
@@ -523,9 +534,6 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
         </section>
       )}
       <div className="arena-foot">
-        <span className="paper-chip">
-          {t.codeLabel}: <strong>{code}</strong>
-        </span>
         {!host && (
           <button type="button" className="btn" onClick={() => send({ type: "cheer" })}>
             {t.cheer}
