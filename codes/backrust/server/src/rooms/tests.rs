@@ -74,7 +74,7 @@ async fn join_with(
     code: &str,
     resume: Option<String>,
     host: Option<String>,
-    student: Option<(i64, String)>,
+    student: Option<Seated>,
 ) -> Result<Client, &'static str> {
     let entry = rooms.find(code).ok_or("room_not_found")?;
     let (out, inbox) = mpsc::channel(OUTBOX);
@@ -227,7 +227,10 @@ async fn an_adult_finds_the_rooms_they_opened() {
     rooms.open(3, Some(8), RoomKind::Class).await.unwrap();
     rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mine = rooms.hosted_by(7);
-    let codes: Vec<&str> = mine.iter().map(|(o, _, _)| o.play_code.as_str()).collect();
+    let codes: Vec<&str> = mine
+        .iter()
+        .map(|(o, _, _, _)| o.play_code.as_str())
+        .collect();
     assert_eq!(codes, [second.play_code.as_str(), first.play_code.as_str()]);
     assert_eq!(mine[0].0.host_token, second.host_token);
     assert_eq!(mine[0].1, 2);
@@ -386,13 +389,13 @@ async fn a_student_signed_in_to_a_seat_races_under_its_pseudonym() {
         ServerMsg::Welcome { seat, name, .. } => Some((*seat, name.clone())),
         _ => None,
     };
-    let fox = || Some((7, "Red Fox 03".to_string()));
+    let fox = || Some(seated(7, "Red Fox 03", "c1"));
     let mut a = join_with(&rooms, &opened.play_code, None, None, fox())
         .await
         .unwrap();
     assert_eq!(a.until(welcome).await, (Some(0), Some("Red Fox 03".into())));
     // A seat of another class with the same pseudonym gets a made-up one.
-    let other = Some((9, "Red Fox 03".to_string()));
+    let other = Some(seated(9, "Red Fox 03", "c2"));
     let mut b = join_with(&rooms, &opened.play_code, None, None, other)
         .await
         .unwrap();
@@ -407,6 +410,61 @@ async fn a_student_signed_in_to_a_seat_races_under_its_pseudonym() {
         again.until(welcome).await,
         (Some(0), Some("Red Fox 03".into()))
     );
+}
+
+fn seated(seat_id: i64, pseudonym: &str, class_id: &str) -> Seated {
+    Seated {
+        seat_id,
+        pseudonym: pseudonym.into(),
+        class_id: class_id.into(),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_room_for_a_class_seats_only_that_class() {
+    let rooms = rooms();
+    let class = RoomClass {
+        id: "c1".into(),
+        label: "5B".into(),
+        grade: 5,
+    };
+    let opened = rooms
+        .open_for(3, Some(7), RoomKind::Class, Some(class.clone()))
+        .await
+        .unwrap();
+    assert_eq!(rooms.class_room("c1"), Some(opened.play_code.clone()));
+    assert_eq!(rooms.class_room("c2"), None);
+    assert_eq!(rooms.hosted_by(7)[0].3, Some(class));
+    // A guest, and a seat of another class, are turned away.
+    let guest = join(&rooms, &opened.play_code, None, None).await;
+    assert_eq!(guest.err(), Some("class_only"));
+    let other = join_with(
+        &rooms,
+        &opened.play_code,
+        None,
+        None,
+        Some(seated(9, "Red Fox 03", "c2")),
+    )
+    .await;
+    assert_eq!(other.err(), Some("wrong_class"));
+    // The class's own seat sits down under its pseudonym; watchers still watch.
+    let mut a = join_with(
+        &rooms,
+        &opened.play_code,
+        None,
+        None,
+        Some(seated(3, "Blue Crane 07", "c1")),
+    )
+    .await
+    .unwrap();
+    let name = a
+        .until(|m| match m {
+            ServerMsg::Welcome { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(name.as_deref(), Some("Blue Crane 07"));
+    assert!(join(&rooms, &opened.watch_code, None, None).await.is_ok());
 }
 
 #[tokio::test(start_paused = true)]

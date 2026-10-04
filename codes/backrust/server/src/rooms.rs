@@ -161,7 +161,24 @@ struct Hosted {
     opened: Opened,
     seats: usize,
     kind: RoomKind,
+    class: Option<RoomClass>,
     at: Instant,
+}
+
+/// The teacher's class a room is opened for: only its seats sit down.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomClass {
+    pub id: String,
+    pub label: String,
+    pub grade: i16,
+}
+
+/// A class seat signed in on a device that joins a room.
+#[derive(Debug, Clone)]
+pub(crate) struct Seated {
+    pub(crate) seat_id: i64,
+    pub(crate) pseudonym: String,
+    pub(crate) class_id: String,
 }
 
 /// Every open room by its codes.
@@ -201,7 +218,7 @@ impl Rooms {
     }
 
     /// The rooms `user` opened that are still open, the newest first.
-    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize, RoomKind)> {
+    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize, RoomKind, Option<RoomClass>)> {
         let map = self.codes.lock().expect("codes");
         let mut mine: Vec<&Arc<Hosted>> = map
             .values()
@@ -210,8 +227,18 @@ impl Rooms {
             .collect();
         mine.sort_by_key(|h| std::cmp::Reverse(h.at));
         mine.iter()
-            .map(|h| (h.opened.clone(), h.seats, h.kind))
+            .map(|h| (h.opened.clone(), h.seats, h.kind, h.class.clone()))
             .collect()
+    }
+
+    /// The play code of the newest room still open for class `class_id`.
+    pub fn class_room(&self, class_id: &str) -> Option<String> {
+        let map = self.codes.lock().expect("codes");
+        map.values()
+            .filter_map(|e| e.hosted.as_ref())
+            .filter(|h| h.class.as_ref().is_some_and(|c| c.id == class_id))
+            .max_by_key(|h| h.at)
+            .map(|h| h.opened.play_code.clone())
     }
 
     /// Closes room `id` for the adult who opened it: its codes go at once, so
@@ -275,6 +302,17 @@ impl Rooms {
         created_by: Option<i64>,
         kind: RoomKind,
     ) -> Result<Opened, sqlx::Error> {
+        self.open_for(seats, created_by, kind, None).await
+    }
+
+    /// The same, for one class of the teacher: its seats only, at its grade.
+    pub async fn open_for(
+        self: &Arc<Self>,
+        seats: usize,
+        created_by: Option<i64>,
+        kind: RoomKind,
+        class: Option<RoomClass>,
+    ) -> Result<Opened, sqlx::Error> {
         let (tx, rx) = mpsc::channel(256);
         let (play_code, watch_code) = self.register(&tx);
         let opened = Opened {
@@ -285,7 +323,8 @@ impl Rooms {
         };
         if let Some(db) = &self.db {
             let stored = sqlx::query(
-                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by, kind) VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by, kind, class_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
             )
             .bind(&opened.id)
             .bind(&opened.play_code)
@@ -293,6 +332,7 @@ impl Rooms {
             .bind(seats as i16)
             .bind(created_by)
             .bind(kind.as_str())
+            .bind(class.as_ref().map(|c| c.id.clone()))
             .execute(db)
             .await;
             if let Err(e) = stored {
@@ -308,6 +348,7 @@ impl Rooms {
                 opened: opened.clone(),
                 seats,
                 kind,
+                class: class.clone(),
                 at: Instant::now(),
             }));
         }
@@ -320,6 +361,7 @@ impl Rooms {
             seats,
         );
         room.kind = kind;
+        room.class = class;
         tokio::spawn(room.run(rx));
         Ok(opened)
     }
@@ -346,8 +388,8 @@ enum Cmd {
         watch: bool,
         resume: Option<String>,
         host: Option<String>,
-        /// A class seat signed in on this device: its id and pseudonym.
-        student: Option<(i64, String)>,
+        /// A class seat signed in on this device.
+        student: Option<Seated>,
         out: mpsc::Sender<ServerMsg>,
         reply: oneshot::Sender<Result<u64, &'static str>>,
     },
@@ -386,6 +428,8 @@ struct Room {
     host_token: Option<String>,
     seats: usize,
     kind: RoomKind,
+    /// Opened for a class: only its seats sit down.
+    class: Option<RoomClass>,
     slots: Vec<Slot>,
     conns: HashMap<u64, Conn>,
     next_conn: u64,
@@ -423,6 +467,7 @@ impl Room {
             host_token,
             seats,
             kind: RoomKind::Class,
+            class: None,
             slots: Vec::new(),
             conns: HashMap::new(),
             next_conn: 1,
@@ -554,6 +599,17 @@ impl Room {
         }
     }
 
+    /// Why a newcomer may not sit in a room opened for a class: a guest, or
+    /// a seat of another class. None in a room open to anyone.
+    fn class_gate(&self, student: Option<&Seated>) -> Option<&'static str> {
+        let class = self.class.as_ref()?;
+        match student {
+            None => Some("class_only"),
+            Some(s) if s.class_id != class.id => Some("wrong_class"),
+            Some(_) => None,
+        }
+    }
+
     fn pseudonym(&self) -> String {
         loop {
             let name = pseudonym(random_u64());
@@ -583,7 +639,7 @@ impl Room {
                     .as_ref()
                     .and_then(|t| self.slots.iter().position(|s| &s.token == t))
                     .or_else(|| {
-                        let id = student.as_ref()?.0;
+                        let id = student.as_ref()?.seat_id;
                         self.slots.iter().position(|s| s.seat_id == Some(id))
                     })
                 {
@@ -591,6 +647,9 @@ impl Room {
                         self.drop_conn(old);
                     }
                     Some(s)
+                } else if let Some(code) = self.class_gate(student.as_ref()) {
+                    let _ = reply.send(Err(code));
+                    return;
                 } else if self.game.is_some() {
                     let _ = reply.send(Err("match_started"));
                     return;
@@ -601,10 +660,10 @@ impl Room {
                     // A signed-in student races under their seat's pseudonym,
                     // unless a seat from another class has it in this room.
                     let (seat_id, name) = match student {
-                        Some((id, name)) if self.slots.iter().all(|s| s.name != name) => {
-                            (Some(id), name)
+                        Some(s) if self.slots.iter().all(|o| o.name != s.pseudonym) => {
+                            (Some(s.seat_id), s.pseudonym)
                         }
-                        other => (other.map(|(id, _)| id), self.pseudonym()),
+                        other => (other.map(|s| s.seat_id), self.pseudonym()),
                     };
                     self.slots.push(Slot {
                         name,
@@ -789,7 +848,8 @@ impl Room {
             .map(|(i, s)| Classmate {
                 name: s.name.clone(),
                 player_id: format!("{}:{i}", self.id),
-                grade: None,
+                // A class's room plays at the class's grade.
+                grade: self.class.as_ref().and_then(|c| u8::try_from(c.grade).ok()),
             })
             .collect();
         let cfg = ClassConfig::new(
@@ -955,6 +1015,37 @@ impl Room {
                 tracing::error!("room {}: flush: {e}", self.id);
                 return;
             }
+            // Each class seat keeps its own result, for the teacher's class page.
+            let players = self
+                .game
+                .as_ref()
+                .map(|m| m.recap().players)
+                .unwrap_or_default();
+            // Official only in a room opened for a class, which seats no one else.
+            let official = self.class.is_some();
+            for (i, (slot, p)) in self.slots.iter().zip(players).enumerate() {
+                let Some(seat_id) = slot.seat_id else {
+                    continue;
+                };
+                let r = sqlx::query(
+                    "INSERT INTO match_seat_results (match_id, seat, class_seat_id, official, points, folded, place, stars)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (match_id, seat) DO NOTHING",
+                )
+                .bind(&id)
+                .bind(i as i16)
+                .bind(seat_id)
+                .bind(official)
+                .bind(p.points as i32)
+                .bind(p.folded as i32)
+                .bind(p.place as i16)
+                .bind(p.stars as i16)
+                .execute(&mut *tx)
+                .await;
+                if let Err(e) = r {
+                    tracing::error!("room {}: flush: {e}", self.id);
+                    return;
+                }
+            }
         }
         if let Err(e) = tx.commit().await {
             tracing::error!("room {}: flush: {e}", self.id);
@@ -990,6 +1081,9 @@ pub struct NewRoom {
     seats: usize,
     #[serde(default)]
     kind: RoomKind,
+    /// One of the teacher's classes: the room takes only its seats.
+    #[serde(default)]
+    class_id: Option<String>,
 }
 
 fn three() -> usize {
@@ -1011,9 +1105,29 @@ pub async fn create(
     if body.seats == 0 || body.seats > MAX_SEATS {
         return Err(ApiError(StatusCode::BAD_REQUEST, "seats"));
     }
+    let class = match (&body.class_id, &user) {
+        (None, _) => None,
+        (Some(_), None) => return Err(ApiError(StatusCode::UNAUTHORIZED, "signed_out")),
+        (Some(id), Some(u)) => {
+            let row: Option<(String, i16)> = sqlx::query_as(
+                "SELECT label, grade FROM classes WHERE id = $1 AND owner = $2 AND status = 'active'",
+            )
+            .bind(id)
+            .bind(u.id)
+            .fetch_optional(&state.db)
+            .await?;
+            let (label, grade) = row.ok_or(ApiError(StatusCode::NOT_FOUND, "class_not_found"))?;
+            Some(RoomClass {
+                id: id.clone(),
+                label,
+                grade,
+            })
+        }
+    };
+    let label = class.as_ref().map(|c| c.label.clone());
     let opened = state
         .rooms
-        .open(body.seats, user.map(|u| u.id), body.kind)
+        .open_for(body.seats, user.map(|u| u.id), body.kind, class)
         .await?;
     tracing::info!("room {} opened", opened.id);
     Ok(Json(json!({
@@ -1022,6 +1136,7 @@ pub async fn create(
         "watch_code": opened.watch_code,
         "host_token": opened.host_token,
         "seats": body.seats,
+        "class_label": label,
     })))
 }
 
@@ -1036,7 +1151,7 @@ pub async fn mine(
         .rooms
         .hosted_by(user.id)
         .into_iter()
-        .map(|(o, seats, kind)| {
+        .map(|(o, seats, kind, class)| {
             json!({
                 "id": o.id,
                 "play_code": o.play_code,
@@ -1044,6 +1159,7 @@ pub async fn mine(
                 "host_token": o.host_token,
                 "seats": seats,
                 "kind": kind,
+                "class_label": class.map(|c| c.label),
             })
         })
         .collect();
@@ -1065,7 +1181,7 @@ pub async fn history(
         .rooms
         .hosted_by(user.id)
         .into_iter()
-        .map(|(o, _, _)| o.id)
+        .map(|(o, _, _, _)| o.id)
         .collect();
     let rows: Vec<(Value,)> = sqlx::query_as(
         "SELECT json_build_object(
@@ -1074,6 +1190,7 @@ pub async fn history(
             'kind', r.kind,
             'seats', r.seats,
             'created_at', r.created_at,
+            'class_label', (SELECT c.label FROM classes c WHERE c.id = r.class_id),
             'matches', COALESCE((
                 SELECT json_agg(json_build_object(
                     'started_at', m.started_at,
@@ -1172,7 +1289,11 @@ async fn connection(rooms: Arc<Rooms>, db: sqlx::PgPool, mut socket: WebSocket) 
     // A token that has run out or was signed out races as a guest.
     let student = match student {
         Some(token) => match crate::classes::student(&db, &token).await {
-            Ok(s) => s.map(|s| (s.seat_id, s.pseudonym)),
+            Ok(s) => s.map(|s| Seated {
+                seat_id: s.seat_id,
+                pseudonym: s.pseudonym,
+                class_id: s.class_id,
+            }),
             Err(e) => {
                 tracing::warn!("student lookup failed: {e}");
                 None

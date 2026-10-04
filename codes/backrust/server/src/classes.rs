@@ -400,8 +400,29 @@ pub(crate) async fn class_detail(db: &PgPool, owner: i64, id: &str) -> Result<Va
             'number', number,
             'pseudonym', pseudonym,
             'locked', teacher_lock OR COALESCE(locked_until > now(), false),
-            'last_seen_at', last_seen_at
-        ) FROM class_seats WHERE class_id = $1 ORDER BY number",
+            'last_seen_at', last_seen_at,
+            'official', (
+                SELECT json_build_object('matches', count(*), 'stars', COALESCE(sum(r.stars), 0))
+                FROM match_seat_results r WHERE r.class_seat_id = s.id AND r.official
+            ),
+            'last_official', (
+                SELECT json_build_object('at', r.created_at, 'place', r.place, 'points', r.points, 'stars', r.stars)
+                FROM match_seat_results r WHERE r.class_seat_id = s.id AND r.official
+                ORDER BY r.created_at DESC LIMIT 1
+            ),
+            'other_rooms', (
+                SELECT json_build_object('matches', count(*), 'last_at', max(r.created_at))
+                FROM match_seat_results r WHERE r.class_seat_id = s.id AND NOT r.official
+            ),
+            'own', (
+                SELECT json_build_object(
+                    'races', count(*) FILTER (WHERE p.kind = 'race'),
+                    'practices', count(*) FILTER (WHERE p.kind = 'practice'),
+                    'days', count(DISTINCT p.played_at::date),
+                    'last_at', max(p.played_at)
+                ) FROM seat_plays p WHERE p.class_seat_id = s.id
+            )
+        ) FROM class_seats s WHERE class_id = $1 ORDER BY number",
     )
     .bind(id)
     .fetch_all(db)
@@ -483,6 +504,15 @@ pub(crate) async fn change_seat(
         .fetch_all(&mut *tx)
         .await?;
         name = fresh_name(&others);
+        // A new student starts with no results of the last one.
+        sqlx::query("DELETE FROM match_seat_results WHERE class_seat_id = $1")
+            .bind(seat)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM seat_plays WHERE class_seat_id = $1")
+            .bind(seat)
+            .execute(&mut *tx)
+            .await?;
     }
     let picture = new_picture();
     let salt = random_hex();
@@ -637,7 +667,6 @@ pub(crate) async fn sign_in(db: &PgPool, guard: &Guard, body: &SignIn) -> Result
 /// A signed-in student: their seat, and the class it belongs to.
 /// The seat and class ids are for joining a room opened for this class.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct Student {
     pub(crate) seat_id: i64,
     pub(crate) class_id: String,
@@ -804,6 +833,108 @@ pub async fn student_me(
         "class_label": s.class_label,
         "grade": s.grade,
     })))
+}
+
+/// `GET /api/student/room`: the room the student's teacher opened for their
+/// class, newest first, so the student joins without typing its code.
+pub async fn student_room(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let s = student(&state.db, bearer(&headers)?)
+        .await?
+        .ok_or(err(StatusCode::UNAUTHORIZED, "signed_out"))?;
+    let code = state.rooms.class_room(&s.class_id);
+    Ok(Json(
+        json!({ "play_code": code, "class_label": s.class_label }),
+    ))
+}
+
+/// A race against the robots or a practice the student played on their own,
+/// as the game reports it.
+#[derive(Deserialize)]
+pub struct Play {
+    client_id: String,
+    kind: String,
+    game: Option<String>,
+    points: i32,
+    folded: i32,
+    place: Option<i16>,
+    stars: Option<i16>,
+    right: Option<i16>,
+    total: Option<i16>,
+    duration_ms: i32,
+}
+
+/// Plays one seat may send in a minute; more are refused, not stored.
+const PLAYS_PER_MINUTE: i64 = 12;
+
+/// Keeps a play on its own apart from the matches in rooms: the game reports
+/// it and nothing checks it, so it tells how often a student plays, not how
+/// well. Sending the same `client_id` again stores it once.
+pub(crate) async fn record_play(db: &PgPool, seat_id: i64, play: &Play) -> Result<Value, ApiError> {
+    let race = play.kind == "race";
+    let fits = (1..=64).contains(&play.client_id.len())
+        && (race || play.kind == "practice")
+        && play.game.as_ref().is_none_or(|g| g.len() <= 32)
+        && (0..=100_000).contains(&play.points)
+        && (0..=1_000).contains(&play.folded)
+        && (0..=3_600_000).contains(&play.duration_ms)
+        && if race {
+            play.place.is_some_and(|p| (1..=6).contains(&p))
+                && play.stars.is_some_and(|s| (0..=3).contains(&s))
+        } else {
+            match (play.right, play.total) {
+                (Some(r), Some(t)) => (0..=t).contains(&r) && t <= 200,
+                _ => false,
+            }
+        };
+    if !fits {
+        return Err(err(StatusCode::UNPROCESSABLE_ENTITY, "play"));
+    }
+    let recent: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM seat_plays
+         WHERE class_seat_id = $1 AND played_at > now() - interval '1 minute'",
+    )
+    .bind(seat_id)
+    .fetch_one(db)
+    .await?;
+    if recent >= PLAYS_PER_MINUTE {
+        return Err(err(StatusCode::TOO_MANY_REQUESTS, "too_many_plays"));
+    }
+    sqlx::query(
+        "INSERT INTO seat_plays (class_seat_id, client_id, kind, game, points, folded, place, stars,
+             right_answers, total, duration_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (class_seat_id, client_id) DO NOTHING",
+    )
+    .bind(seat_id)
+    .bind(&play.client_id)
+    .bind(&play.kind)
+    .bind(&play.game)
+    .bind(play.points)
+    .bind(play.folded)
+    .bind(if race { play.place } else { None })
+    .bind(if race { play.stars } else { None })
+    .bind(if race { None } else { play.right })
+    .bind(if race { None } else { play.total })
+    .bind(play.duration_ms)
+    .execute(db)
+    .await?;
+    Ok(json!({ "stored": true }))
+}
+
+/// `POST /api/student/plays`: a play on the student's own, kept for the
+/// teacher apart from the class's matches.
+pub async fn student_play(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+    Json(play): Json<Play>,
+) -> Result<Json<Value>, ApiError> {
+    let s = student(&state.db, bearer(&headers)?)
+        .await?
+        .ok_or(err(StatusCode::UNAUTHORIZED, "signed_out"))?;
+    Ok(Json(record_play(&state.db, s.seat_id, &play).await?))
 }
 
 /// `POST /api/student/sign-out`: forgets this device's session.

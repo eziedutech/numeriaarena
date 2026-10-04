@@ -343,3 +343,101 @@ async fn pending_teachers_get_one_small_class_and_others_none() {
         Err(ApiError(_, "suspended"))
     ));
 }
+
+#[tokio::test]
+async fn a_seat_keeps_its_match_results_until_it_is_emptied() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db, Some("approved")).await;
+    let a = allowance(&db, owner, false).await.unwrap();
+    let made = create_class(&db, owner, a, &new_class(2)).await.unwrap();
+    let id = made["class"]["id"].as_str().unwrap().to_owned();
+    let seat: i64 =
+        sqlx::query_scalar("SELECT id FROM class_seats WHERE class_id = $1 AND number = 1")
+            .bind(&id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    let (room, game) = (random_hex(), random_hex());
+    sqlx::query("INSERT INTO rooms (id, play_code, watch_code, seats, created_by, class_id) VALUES ($1, 'AAAAAA', 'BBBBBB', 3, $2, $3)")
+        .bind(&room)
+        .bind(owner)
+        .bind(&id)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats) VALUES ($1, $2, 1, 'cp', 'fp', '[]')")
+        .bind(&game)
+        .bind(&room)
+        .execute(&db)
+        .await
+        .unwrap();
+    // An official match in the class's room, and one in a room for anyone.
+    let other = random_hex();
+    sqlx::query("INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats) VALUES ($1, $2, 1, 'cp', 'fp', '[]')")
+        .bind(&other)
+        .bind(&room)
+        .execute(&db)
+        .await
+        .unwrap();
+    for (m, official, points) in [(&game, true, 120), (&other, false, 40)] {
+        sqlx::query("INSERT INTO match_seat_results (match_id, seat, class_seat_id, official, points, folded, place, stars) VALUES ($1, 0, $2, $3, $4, 3, 1, 2)")
+            .bind(m)
+            .bind(seat)
+            .bind(official)
+            .bind(points)
+            .execute(&db)
+            .await
+            .unwrap();
+    }
+    // Plays on its own, one sent twice.
+    let race: Play = serde_json::from_value(json!({
+        "client_id": "r1", "kind": "race", "game": "make10", "points": 90, "folded": 4,
+        "place": 2, "stars": 1, "duration_ms": 90000
+    }))
+    .unwrap();
+    let practice: Play = serde_json::from_value(json!({
+        "client_id": "p1", "kind": "practice", "points": 50, "folded": 5,
+        "right": 5, "total": 6, "duration_ms": 60000
+    }))
+    .unwrap();
+    record_play(&db, seat, &race).await.unwrap();
+    record_play(&db, seat, &race).await.unwrap();
+    record_play(&db, seat, &practice).await.unwrap();
+    let bad: Play = serde_json::from_value(json!({
+        "client_id": "x", "kind": "race", "points": 9, "folded": 1, "place": 9, "stars": 1,
+        "duration_ms": 1
+    }))
+    .unwrap();
+    assert_eq!(record_play(&db, seat, &bad).await.unwrap_err().1, "play");
+
+    let detail = class_detail(&db, owner, &id).await.unwrap();
+    let s0 = &detail["seats"][0];
+    assert_eq!(s0["official"]["matches"], 1);
+    assert_eq!(s0["official"]["stars"], 2);
+    assert_eq!(s0["last_official"]["points"], 120);
+    assert_eq!(s0["other_rooms"]["matches"], 1);
+    assert_eq!(s0["own"]["races"], 1);
+    assert_eq!(s0["own"]["practices"], 1);
+    assert_eq!(s0["own"]["days"], 1);
+    assert_eq!(detail["seats"][1]["official"]["matches"], 0);
+    assert!(detail["seats"][1]["last_official"].is_null());
+    assert_eq!(detail["seats"][1]["own"]["races"], 0);
+    // A new picture keeps the records; emptying the seat for a new student does not.
+    change_seat(&db, owner, &id, 1, SeatChange::Picture)
+        .await
+        .unwrap();
+    assert_eq!(
+        class_detail(&db, owner, &id).await.unwrap()["seats"][0]["official"]["matches"],
+        1
+    );
+    change_seat(&db, owner, &id, 1, SeatChange::Reset)
+        .await
+        .unwrap();
+    let after = class_detail(&db, owner, &id).await.unwrap();
+    assert_eq!(after["seats"][0]["official"]["matches"], 0);
+    assert_eq!(after["seats"][0]["other_rooms"]["matches"], 0);
+    assert_eq!(after["seats"][0]["own"]["races"], 0);
+}
