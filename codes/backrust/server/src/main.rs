@@ -55,6 +55,7 @@ pub fn router(state: State) -> Router {
         .route("/api/admin/organizers", get(admin::list))
         .route("/api/admin/organizers/{id}", post(admin::decide))
         .route("/api/rooms", post(rooms::create).get(rooms::mine))
+        .route("/api/rooms/history", get(rooms::history))
         .route("/api/rooms/{id}", delete(rooms::close))
         .route("/api/ws", get(rooms::ws))
         .with_state(state)

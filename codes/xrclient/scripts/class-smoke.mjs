@@ -1,6 +1,6 @@
 // Plays a Class Match through the game's own ClassRace (src/game/class-race.ts)
 // against a running server, the way the desk does: two classmates (the third
-// seat a bot), seat 0 starts, both answer what they are offered, and each must
+// seat a bot), the host's screen starts it, both answer what they are offered, and each must
 // end with a recap that puts itself first and agrees with its verdicts. Seat 1
 // drops once and comes back with its token. A watcher counts the messages.
 // Needs a server started with OPEN_ROOMS=1.
@@ -47,8 +47,17 @@ for (const [code, want] of [
 const seats = [await ClassRace.join(room.play_code), await ClassRace.join(room.play_code)];
 await new Promise((r) => setTimeout(r, 300));
 console.log('seats', seats.map((s) => `${s.seat}:${s.name}`).join(', '), 'lobby', JSON.stringify(seats[0].lobby));
-seats[0].start();
+// Only the host starts a class room, after a countdown.
+const host = new WebSocket(`${base.replace(/^http/, 'ws')}/api/ws`);
+host.addEventListener('open', () => {
+  host.send(JSON.stringify({ type: 'hello', code: room.watch_code, host: room.host_token }));
+  setTimeout(() => host.send(JSON.stringify({ type: 'start' })), 200);
+});
+await new Promise((r) => setTimeout(r, 600));
+console.log('starts in', seats[0].startsIn(), 'ms');
+if (seats[0].startsIn() === null) throw new Error('no countdown after the host started');
 await Promise.all(seats.map((s) => s.whenStarted()));
+host.close();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function play(race, dropAt) {

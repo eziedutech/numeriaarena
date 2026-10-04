@@ -20,7 +20,7 @@ use foldlings_core::class_match::{
     ClassConfig, ClassError, ClassEvent, ClassMatch, Classmate, MAX_SEATS, SeatAnswerEvent,
 };
 use foldlings_core::fairness::FairnessParams;
-use foldlings_core::protocol::{ClientMsg, LobbyView, ServerMsg};
+use foldlings_core::protocol::{ClientMsg, LobbyView, RoomKind, ServerMsg};
 use foldlings_core::race::Phase;
 use foldlings_core::session::SessionError;
 use foldlings_core::template::ItemTemplate;
@@ -50,6 +50,10 @@ const DEMO_PAUSE_MS: f64 = 15_000.0;
 const RETRY_MS: f64 = 5_000.0;
 /// A watcher may cheer once in this long.
 const CHEER_MS: f64 = 10_000.0;
+/// From START (or everyone READY) to the first wave, so every desk is there.
+const COUNTDOWN_MS: f64 = 10_000.0;
+/// The rooms an adult sees in their history.
+const HISTORY: i64 = 30;
 /// Per connection: messages a second before they are dropped.
 const MAX_PER_SECOND: u32 = 10;
 /// The first message must be `hello`, within this long.
@@ -146,6 +150,7 @@ struct Hosted {
     by: i64,
     opened: Opened,
     seats: usize,
+    kind: RoomKind,
     at: Instant,
 }
 
@@ -186,7 +191,7 @@ impl Rooms {
     }
 
     /// The rooms `user` opened that are still open, the newest first.
-    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize)> {
+    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize, RoomKind)> {
         let map = self.codes.lock().expect("codes");
         let mut mine: Vec<&Arc<Hosted>> = map
             .values()
@@ -194,7 +199,9 @@ impl Rooms {
             .filter(|h| h.by == user)
             .collect();
         mine.sort_by_key(|h| std::cmp::Reverse(h.at));
-        mine.iter().map(|h| (h.opened.clone(), h.seats)).collect()
+        mine.iter()
+            .map(|h| (h.opened.clone(), h.seats, h.kind))
+            .collect()
     }
 
     /// Closes room `id` for the adult who opened it: its codes go at once, so
@@ -256,6 +263,7 @@ impl Rooms {
         self: &Arc<Self>,
         seats: usize,
         created_by: Option<i64>,
+        kind: RoomKind,
     ) -> Result<Opened, sqlx::Error> {
         let (tx, rx) = mpsc::channel(256);
         let (play_code, watch_code) = self.register(&tx);
@@ -267,13 +275,14 @@ impl Rooms {
         };
         if let Some(db) = &self.db {
             let stored = sqlx::query(
-                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by) VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by, kind) VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind(&opened.id)
             .bind(&opened.play_code)
             .bind(&opened.watch_code)
             .bind(seats as i16)
             .bind(created_by)
+            .bind(kind.as_str())
             .execute(db)
             .await;
             if let Err(e) = stored {
@@ -288,10 +297,11 @@ impl Rooms {
                 by,
                 opened: opened.clone(),
                 seats,
+                kind,
                 at: Instant::now(),
             }));
         }
-        let room = Room::new(
+        let mut room = Room::new(
             self.clone(),
             opened.id.clone(),
             Some(opened.play_code.clone()),
@@ -299,6 +309,7 @@ impl Rooms {
             Some(opened.host_token.clone()),
             seats,
         );
+        room.kind = kind;
         tokio::spawn(room.run(rx));
         Ok(opened)
     }
@@ -343,6 +354,7 @@ struct Slot {
     name: String,
     token: String,
     conn: Option<u64>,
+    ready: bool,
 }
 
 struct Conn {
@@ -359,6 +371,7 @@ struct Room {
     watch_code: String,
     host_token: Option<String>,
     seats: usize,
+    kind: RoomKind,
     slots: Vec<Slot>,
     conns: HashMap<u64, Conn>,
     next_conn: u64,
@@ -375,6 +388,8 @@ struct Room {
     demo: bool,
     /// Closed by its host; the room ends after this command.
     shut: bool,
+    /// The countdown is on: the match starts at this time.
+    starts_at: Option<f64>,
 }
 
 impl Room {
@@ -393,6 +408,7 @@ impl Room {
             watch_code,
             host_token,
             seats,
+            kind: RoomKind::Class,
             slots: Vec::new(),
             conns: HashMap::new(),
             next_conn: 1,
@@ -406,6 +422,7 @@ impl Room {
             idle_since: Some(0.0),
             demo: false,
             shut: false,
+            starts_at: None,
         }
     }
 
@@ -431,6 +448,11 @@ impl Room {
                 },
                 _ = every.tick() => {
                     let now = self.now();
+                    self.settle();
+                    if self.game.is_none() && self.starts_at.is_some_and(|t| now >= t) {
+                        self.starts_at = None;
+                        self.start_match(now).await;
+                    }
                     self.pump(now).await;
                     if self.commit_retry.is_some_and(|t| now >= t) {
                         self.flush(true).await;
@@ -480,7 +502,35 @@ impl Room {
             seats: self.seats,
             names: self.slots.iter().map(|s| s.name.clone()).collect(),
             watch_code: self.watch_code.clone(),
+            kind: self.kind,
+            ready: self.slots.iter().map(|s| s.ready).collect(),
+            starts_at_ms: self.starts_at,
         })
+    }
+
+    /// In an open room the countdown runs while every classmate here is
+    /// ready: one more coming in stops it until they are ready too.
+    fn settle(&mut self) {
+        if self.kind != RoomKind::Open || self.game.is_some() || self.demo {
+            return;
+        }
+        let mut here = self.slots.iter().filter(|s| s.conn.is_some()).peekable();
+        let all = here.peek().is_some() && here.all(|s| s.ready);
+        let changed = match (all, self.starts_at) {
+            (true, None) => {
+                self.starts_at = Some(self.now() + COUNTDOWN_MS);
+                true
+            }
+            (false, Some(_)) => {
+                self.starts_at = None;
+                true
+            }
+            _ => false,
+        };
+        if changed {
+            let lobby = self.lobby();
+            self.broadcast(&lobby);
+        }
     }
 
     fn state_msg(&self) -> ServerMsg {
@@ -538,6 +588,7 @@ impl Room {
                         name,
                         token: random_hex(),
                         conn: None,
+                        ready: false,
                     });
                     Some(self.slots.len() - 1)
                 };
@@ -576,6 +627,7 @@ impl Room {
                 } else {
                     let lobby = self.lobby();
                     self.broadcast(&lobby);
+                    self.settle();
                 }
             }
             Cmd::Leave { conn } => self.drop_conn(conn),
@@ -627,14 +679,35 @@ impl Room {
         match msg {
             ClientMsg::Hello { .. } => self.send(conn, error("already_joined")),
             ClientMsg::Start => {
-                if self.demo || !(host || seat == Some(0)) {
+                if self.demo || self.kind != RoomKind::Class || !host {
                     self.send(conn, error("not_host"));
                 } else if self.game.is_some() {
                     self.send(conn, error("match_started"));
+                } else if self.starts_at.is_some() {
+                    self.send(conn, error("starting"));
                 } else if self.slots.is_empty() {
                     self.send(conn, error("no_players"));
                 } else {
-                    self.start_match(now).await;
+                    // Classmates still coming in may sit down during the countdown.
+                    self.starts_at = Some(now + COUNTDOWN_MS);
+                    let lobby = self.lobby();
+                    self.broadcast(&lobby);
+                }
+            }
+            ClientMsg::Ready => {
+                if self.kind != RoomKind::Open {
+                    self.send(conn, error("not_open"));
+                } else if self.game.is_some() {
+                    self.send(conn, error("match_started"));
+                } else if let Some(s) = seat {
+                    if !self.slots[s].ready {
+                        self.slots[s].ready = true;
+                        let lobby = self.lobby();
+                        self.broadcast(&lobby);
+                        self.settle();
+                    }
+                } else {
+                    self.send(conn, error("no_seat"));
                 }
             }
             ClientMsg::Cheer => {
@@ -892,6 +965,8 @@ fn error_code(e: &ClassError) -> &'static str {
 pub struct NewRoom {
     #[serde(default = "three")]
     seats: usize,
+    #[serde(default)]
+    kind: RoomKind,
 }
 
 fn three() -> usize {
@@ -913,7 +988,10 @@ pub async fn create(
     if body.seats == 0 || body.seats > MAX_SEATS {
         return Err(ApiError(StatusCode::BAD_REQUEST, "seats"));
     }
-    let opened = state.rooms.open(body.seats, user.map(|u| u.id)).await?;
+    let opened = state
+        .rooms
+        .open(body.seats, user.map(|u| u.id), body.kind)
+        .await?;
     tracing::info!("room {} opened", opened.id);
     Ok(Json(json!({
         "id": opened.id,
@@ -935,14 +1013,71 @@ pub async fn mine(
         .rooms
         .hosted_by(user.id)
         .into_iter()
-        .map(|(o, seats)| {
+        .map(|(o, seats, kind)| {
             json!({
                 "id": o.id,
                 "play_code": o.play_code,
                 "watch_code": o.watch_code,
                 "host_token": o.host_token,
                 "seats": seats,
+                "kind": kind,
             })
+        })
+        .collect();
+    Ok(Json(json!({ "rooms": rooms })))
+}
+
+/// `GET /api/rooms/history`: the rooms the signed-in adult opened, the newest
+/// first (open or closed), each with its matches: when, and every seat's
+/// pseudonym, points, place and stars.
+pub async fn history(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    let Some(db) = &state.rooms.db else {
+        return Ok(Json(json!({ "rooms": [] })));
+    };
+    let open: Vec<String> = state
+        .rooms
+        .hosted_by(user.id)
+        .into_iter()
+        .map(|(o, _, _)| o.id)
+        .collect();
+    let rows: Vec<(Value,)> = sqlx::query_as(
+        "SELECT json_build_object(
+            'id', r.id,
+            'play_code', r.play_code,
+            'kind', r.kind,
+            'seats', r.seats,
+            'created_at', r.created_at,
+            'matches', COALESCE((
+                SELECT json_agg(json_build_object(
+                    'started_at', m.started_at,
+                    'ended_at', m.ended_at,
+                    'seats', m.seats,
+                    'players', m.recap->'players'
+                ) ORDER BY m.started_at)
+                FROM matches m WHERE m.room_id = r.id
+            ), '[]'::json)
+        )
+        FROM rooms r WHERE r.created_by = $1
+        ORDER BY r.created_at DESC LIMIT $2",
+    )
+    .bind(user.id)
+    .bind(HISTORY)
+    .fetch_all(db)
+    .await
+    .map_err(|e| {
+        tracing::error!("room history: {e}");
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "internal")
+    })?;
+    let rooms: Vec<Value> = rows
+        .into_iter()
+        .map(|(mut r,)| {
+            let id = r["id"].as_str().unwrap_or_default().to_owned();
+            r["open"] = Value::Bool(open.contains(&id));
+            r
         })
         .collect();
     Ok(Json(json!({ "rooms": rooms })))

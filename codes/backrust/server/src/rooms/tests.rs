@@ -44,6 +44,22 @@ impl Client {
     }
 }
 
+/// The teacher's class screen starts the room; returns once the countdown is over.
+async fn start(rooms: &Rooms, opened: &Opened) -> Client {
+    let mut host = join(
+        rooms,
+        &opened.watch_code,
+        None,
+        Some(opened.host_token.clone()),
+    )
+    .await
+    .unwrap();
+    host.send(ClientMsg::Start).await;
+    host.until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
+        .await;
+    host
+}
+
 async fn join(
     rooms: &Rooms,
     code: &str,
@@ -145,7 +161,7 @@ async fn play_seat(mut c: Client) -> (u32, foldlings_core::class_match::ClassRec
 #[tokio::test(start_paused = true)]
 async fn two_classmates_and_a_bot_race_to_the_recap() {
     let rooms = rooms();
-    let opened = rooms.open(3, None).await.unwrap();
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mut watcher = join(&rooms, &opened.watch_code, None, None).await.unwrap();
     let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
     let b = join(&rooms, &opened.play_code, None, None).await.unwrap();
@@ -165,7 +181,7 @@ async fn two_classmates_and_a_bot_race_to_the_recap() {
             _ => None,
         })
         .await;
-    a.send(ClientMsg::Start).await;
+    let _host = start(&rooms, &opened).await;
     // The watcher reads along (a watcher that stops reading is let go).
     let watch = async {
         let mut saw_bot = false;
@@ -194,13 +210,13 @@ async fn two_classmates_and_a_bot_race_to_the_recap() {
 #[tokio::test(start_paused = true)]
 async fn an_adult_finds_the_rooms_they_opened() {
     let rooms = rooms();
-    let first = rooms.open(3, Some(7)).await.unwrap();
+    let first = rooms.open(3, Some(7), RoomKind::Class).await.unwrap();
     tokio::time::advance(Duration::from_millis(10)).await;
-    let second = rooms.open(2, Some(7)).await.unwrap();
-    rooms.open(3, Some(8)).await.unwrap();
-    rooms.open(3, None).await.unwrap();
+    let second = rooms.open(2, Some(7), RoomKind::Class).await.unwrap();
+    rooms.open(3, Some(8), RoomKind::Class).await.unwrap();
+    rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mine = rooms.hosted_by(7);
-    let codes: Vec<&str> = mine.iter().map(|(o, _)| o.play_code.as_str()).collect();
+    let codes: Vec<&str> = mine.iter().map(|(o, _, _)| o.play_code.as_str()).collect();
     assert_eq!(codes, [second.play_code.as_str(), first.play_code.as_str()]);
     assert_eq!(mine[0].0.host_token, second.host_token);
     assert_eq!(mine[0].1, 2);
@@ -212,7 +228,7 @@ async fn an_adult_finds_the_rooms_they_opened() {
 #[tokio::test(start_paused = true)]
 async fn only_its_host_closes_a_room_and_it_cannot_be_joined_again() {
     let rooms = rooms();
-    let opened = rooms.open(3, Some(7)).await.unwrap();
+    let opened = rooms.open(3, Some(7), RoomKind::Class).await.unwrap();
     let mut seat = join(&rooms, &opened.play_code, None, None).await.unwrap();
     let mut screen = join(&rooms, &opened.watch_code, None, None).await.unwrap();
     assert!(!rooms.close(&opened.id, 8).await);
@@ -240,9 +256,51 @@ async fn only_its_host_closes_a_room_and_it_cannot_be_joined_again() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_open_room_starts_when_everyone_in_it_is_ready() {
+    let rooms = rooms();
+    let opened = rooms.open(3, None, RoomKind::Open).await.unwrap();
+    let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    let b = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    // Nobody starts an open room, not even its creator's screen.
+    let mut screen = join(
+        &rooms,
+        &opened.watch_code,
+        None,
+        Some(opened.host_token.clone()),
+    )
+    .await
+    .unwrap();
+    screen.send(ClientMsg::Start).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::Error { code: "not_host" }).then_some(()))
+        .await;
+    let lobby = |want: fn(&LobbyView) -> bool| {
+        move |m: &ServerMsg| match m {
+            ServerMsg::Lobby(l) if want(l) => Some(()),
+            _ => None,
+        }
+    };
+    a.send(ClientMsg::Ready).await;
+    a.until(lobby(|l| {
+        l.ready == [true, false] && l.starts_at_ms.is_none()
+    }))
+    .await;
+    b.send(ClientMsg::Ready).await;
+    a.until(lobby(|l| l.starts_at_ms.is_some())).await;
+    // One more coming in stops the countdown until they are ready too.
+    let c = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    a.until(lobby(|l| l.names.len() == 3 && l.starts_at_ms.is_none()))
+        .await;
+    c.send(ClientMsg::Ready).await;
+    a.until(lobby(|l| l.starts_at_ms.is_some())).await;
+    a.until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
+        .await;
+}
+
+#[tokio::test(start_paused = true)]
 async fn seats_fill_then_the_room_is_full() {
     let rooms = rooms();
-    let opened = rooms.open(2, None).await.unwrap();
+    let opened = rooms.open(2, None, RoomKind::Class).await.unwrap();
     let _a = join(&rooms, &opened.play_code, None, None).await.unwrap();
     let _b = join(&rooms, &opened.play_code, None, None).await.unwrap();
     assert_eq!(
@@ -256,13 +314,18 @@ async fn seats_fill_then_the_room_is_full() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn only_the_first_seat_or_the_host_starts() {
+async fn in_a_class_room_only_the_teacher_starts_after_a_countdown() {
     let rooms = rooms();
-    let opened = rooms.open(3, None).await.unwrap();
-    let _a = join(&rooms, &opened.play_code, None, None).await.unwrap();
-    let mut b = join(&rooms, &opened.play_code, None, None).await.unwrap();
-    b.send(ClientMsg::Start).await;
-    b.until(|m| matches!(m, ServerMsg::Error { code: "not_host" }).then_some(()))
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
+    let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    // Not the first seat, and not a screen without the host token.
+    a.send(ClientMsg::Start).await;
+    a.until(|m| matches!(m, ServerMsg::Error { code: "not_host" }).then_some(()))
+        .await;
+    let mut watcher = join(&rooms, &opened.watch_code, None, None).await.unwrap();
+    watcher.send(ClientMsg::Start).await;
+    watcher
+        .until(|m| matches!(m, ServerMsg::Error { code: "not_host" }).then_some(()))
         .await;
     let mut screen = join(
         &rooms,
@@ -273,9 +336,30 @@ async fn only_the_first_seat_or_the_host_starts() {
     .await
     .unwrap();
     screen.send(ClientMsg::Start).await;
-    screen
-        .until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
+    let at = a
+        .until(|m| match m {
+            ServerMsg::Lobby(l) => l.starts_at_ms,
+            _ => None,
+        })
         .await;
+    // During the countdown a late classmate still sits down, and sees it.
+    let mut late = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    let (names, seen) = late
+        .until(|m| match m {
+            ServerMsg::Lobby(l) => Some((l.names.len(), l.starts_at_ms)),
+            _ => None,
+        })
+        .await;
+    assert_eq!((names, seen), (2, Some(at)));
+    screen.send(ClientMsg::Start).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::Error { code: "starting" }).then_some(()))
+        .await;
+    let began = tokio::time::Instant::now();
+    late.until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
+        .await;
+    let waited = began.elapsed().as_millis();
+    assert!((9_000..=10_200).contains(&waited), "{waited}");
     // Once started, a new classmate cannot sit down.
     assert_eq!(
         join(&rooms, &opened.play_code, None, None).await.err(),
@@ -286,7 +370,7 @@ async fn only_the_first_seat_or_the_host_starts() {
 #[tokio::test(start_paused = true)]
 async fn a_dropped_seat_comes_back_with_its_token() {
     let rooms = rooms();
-    let opened = rooms.open(3, None).await.unwrap();
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
     let token = a
         .until(|m| match m {
@@ -294,7 +378,7 @@ async fn a_dropped_seat_comes_back_with_its_token() {
             _ => None,
         })
         .await;
-    a.send(ClientMsg::Start).await;
+    let _host = start(&rooms, &opened).await;
     a.until(|m| matches!(m, ServerMsg::View(_)).then_some(()))
         .await;
     a.tx.send(Cmd::Leave { conn: a.conn }).await.unwrap();
@@ -328,7 +412,7 @@ async fn a_dropped_seat_comes_back_with_its_token() {
 #[tokio::test(start_paused = true)]
 async fn watchers_cheer_at_most_every_ten_seconds() {
     let rooms = rooms();
-    let opened = rooms.open(3, None).await.unwrap();
+    let opened = rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mut w = join(&rooms, &opened.watch_code, None, None).await.unwrap();
     w.send(ClientMsg::Cheer).await;
     w.until(|m| matches!(m, ServerMsg::Cheer { .. }).then_some(()))

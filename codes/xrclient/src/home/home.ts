@@ -149,6 +149,9 @@ const CSS = `
 #home .tick .mark { flex: none; width: 26px; height: 26px; background: #f1e3c4; display: flex; align-items: center;
   justify-content: center; }
 #home .tick.on .mark { background: ${COLORS.teal}; }
+#home .names { display: flex; flex-wrap: wrap; gap: 8px; }
+#home .names span { background: #f1e3c4; padding: 7px 11px; font-weight: 700; font-size: 16px; }
+#home .names span.me { background: ${COLORS.sun}; }
 #home .err { color: #c62828; font-size: 15px; min-height: 20px; margin: 10px 0 0; }
 #home .skel { display: inline-block; width: 170px; height: 13px; background: rgba(58, 63, 75, 0.14);
   animation: home-skel 1.1s ease-in-out infinite alternate; }
@@ -772,7 +775,12 @@ export class Home {
     });
   }
 
-  /** Who is in the room so far, START for the first seat, and the way to the desk. */
+  /**
+   * Who is in the room so far, and how it starts: in a teacher's room only
+   * the teacher (from the class screen), in an open room once everyone has
+   * pressed I'M READY. When the countdown starts every classmate is taken to
+   * their desk, where it counts down to the first wave together.
+   */
   private lobby(link: ClassRace): void {
     const t = this.t;
     const { veil, body } = this.popup(t.lobbyTitle);
@@ -786,28 +794,48 @@ export class Home {
     });
     el('p', '', body).textContent = t.lobbyYou(link.name);
     const seats = el('p', '', body);
-    const names = el('p', '', body);
+    el('div', 'step', body).textContent = t.lobbyIn;
+    const names = el('div', 'names', body);
     const state = el('p', '', body);
-    const start = el('button', 'btn wide shadow', body);
-    start.style.background = COLORS.coral;
-    start.appendChild(paperText(t.lobbyStart, 17, PAPER));
-    start.setAttribute('aria-label', t.lobbyStart);
-    start.addEventListener('click', () => link.start());
+    const ready = el('button', 'btn wide shadow', body);
+    ready.style.background = COLORS.coral;
+    ready.appendChild(paperText(t.lobbyReady, 17, PAPER));
+    ready.setAttribute('aria-label', t.lobbyReady);
+    ready.addEventListener('click', () => link.ready());
+    const toDesk = () => {
+      link.onChange = undefined;
+      veil.remove();
+      this.onPlay('class', this.device === 'xr' ? 'xr' : 'computer');
+    };
     const desk = el('button', 'btn wide shadow', body);
     desk.style.background = COLORS.teal;
     desk.appendChild(paperText(t.toDesk, 17, PAPER));
     desk.setAttribute('aria-label', t.toDesk);
-    desk.addEventListener('click', () => {
-      link.onChange = undefined;
-      veil.remove();
-      this.onPlay('class', this.device === 'xr' ? 'xr' : 'computer');
-    });
+    desk.addEventListener('click', toDesk);
     const draw = () => {
+      if (!link.shut && (link.started || link.startsIn() !== null)) {
+        // Starting: everyone goes to their desk now, nobody is left in the lobby.
+        toDesk();
+        return;
+      }
       const l = link.lobby;
+      const open = l?.kind === 'open';
       seats.textContent = l ? t.lobbySeats(l.names.length, l.seats) : '';
-      names.textContent = l ? t.lobbyIn(l.names.join(', ')) : '';
-      state.textContent = link.shut ? t.roomClosed : link.started ? t.lobbyOn : t.lobbyWait;
-      start.style.display = link.seat === 0 && !link.started && !link.shut ? '' : 'none';
+      names.replaceChildren(
+        ...(l?.names ?? []).map((n, i) => {
+          const s = document.createElement('span');
+          if (i === link.seat) s.className = 'me';
+          s.textContent = open && l?.ready[i] ? `${n} \u2713` : n;
+          return s;
+        }),
+      );
+      const readyNow = l ? l.ready.filter(Boolean).length : 0;
+      state.textContent = link.shut
+        ? t.roomClosed
+        : open
+          ? t.lobbyReadyWait(readyNow, l?.names.length ?? 0)
+          : t.lobbyWait;
+      ready.style.display = open && !link.shut && link.seat !== null && !l?.ready[link.seat] ? '' : 'none';
       desk.style.display = link.shut ? 'none' : '';
     };
     link.onChange = draw;
@@ -894,16 +922,27 @@ export class Home {
       body.insertBefore(watch, actions);
       shown.push(watch);
       button(t.openScreen, COLORS.coral, PAPER, () => this.openScreen(room.watch_code, room.host_token, room.play_code));
-      button(t.closeRoom, '#f1e3c4', INK, () => {
-        if (busy || !window.confirm(t.closeSure)) return;
+      button(t.closeRoom, '#f1e3c4', INK, () => sure(room));
+      fresh();
+    };
+    // Asked here in the popup, not in a browser dialog (which a headset shows outside the game).
+    const sure = (room: OpenedRoom) => {
+      clear();
+      info.textContent = t.closeSure;
+      button(t.closeYes, COLORS.coral, PAPER, () => {
+        if (busy) return;
         busy = true;
         void closeRoom(room.id).then((r) => {
           busy = false;
-          if (r === true) list(false);
-          else fail(r);
+          if (r === true) {
+            list(false);
+          } else {
+            show(room);
+            fail(r);
+          }
         });
       });
-      fresh();
+      button(t.keepOpen, '#f1e3c4', INK, () => show(room));
     };
     const open = () => {
       if (busy) return;

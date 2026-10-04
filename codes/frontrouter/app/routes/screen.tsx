@@ -44,6 +44,9 @@ interface Lobby {
   seats: number;
   names: string[];
   watch_code: string;
+  kind: "class" | "open";
+  ready: boolean[];
+  starts_at_ms: number | null;
 }
 
 interface Recap {
@@ -82,7 +85,10 @@ const TEXT = {
     joinWith: "Join with code",
     joinHow: "In the game: RACE MY CLASSMATES, then this code.",
     seatsTaken: (n: number, of: number) => `${n} of ${of} seats taken. Robots fill the empty seats.`,
-    waiting: "Waiting for the match to start.",
+    waiting: "Waiting for the teacher to start the match.",
+    waitingHost: "When everyone is in, press START. Every desk counts down 10 seconds together.",
+    waitingReady: (n: number, of: number) => `${n} of ${of} ready. It starts when everyone is ready.`,
+    startsIn: (s: number) => `The match starts in ${s}`,
     start: "START THE MATCH",
     cheer: "CHEER",
     cheered: "The class cheers!",
@@ -122,6 +128,7 @@ const TEXT = {
       hello_first: "The screen could not join. Reload the page.",
       not_host: "Only the room's host can start it.",
       no_players: "Nobody has taken a seat yet.",
+      starting: "The countdown is already on.",
       match_started: "The match has already started.",
       cannot_start: "The match could not start. Try again.",
       code_length: "Write all 6 letters of the code.",
@@ -139,7 +146,10 @@ const TEXT = {
     joinWith: "Masuk dengan kode",
     joinHow: "Di game: LOMBA DENGAN TEMAN, lalu kode ini.",
     seatsTaken: (n: number, of: number) => `${n} dari ${of} kursi terisi. Robot mengisi kursi kosong.`,
-    waiting: "Menunggu pertandingan dimulai.",
+    waiting: "Menunggu guru memulai pertandingan.",
+    waitingHost: "Setelah semua masuk, tekan MULAI. Semua meja menghitung mundur 10 detik bersama.",
+    waitingReady: (n: number, of: number) => `${n} dari ${of} siap. Mulai saat semua siap.`,
+    startsIn: (s: number) => `Pertandingan mulai dalam ${s}`,
     start: "MULAI PERTANDINGAN",
     cheer: "SORAKI",
     cheered: "Kelas bersorak!",
@@ -179,6 +189,7 @@ const TEXT = {
       hello_first: "Layar tidak bisa masuk. Muat ulang halaman.",
       not_host: "Hanya tuan rumah ruang yang bisa memulai.",
       no_players: "Belum ada yang duduk.",
+      starting: "Hitung mundur sudah berjalan.",
       match_started: "Pertandingan sudah dimulai.",
       cannot_start: "Pertandingan tidak bisa dimulai. Coba lagi.",
       code_length: "Tulis keenam huruf kodenya.",
@@ -449,7 +460,14 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
     <>
       {live.status !== "on" && <p className="arena-banner">{live.status === "lost" ? t.lost : t.connecting}</p>}
       {!v ? (
-        <LobbyCard t={t} lobby={live.lobby} host={host} play={play} onStart={() => send({ type: "start" })} />
+        <LobbyCard
+          t={t}
+          lobby={live.lobby}
+          host={host}
+          play={play}
+          startsIn={live.lobby?.starts_at_ms == null ? null : live.lobby.starts_at_ms - now()}
+          onStart={() => send({ type: "start" })}
+        />
       ) : live.recap ? (
         <RecapCard t={t} recap={live.recap} stored={live.stored} />
       ) : (
@@ -479,7 +497,22 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
   );
 }
 
-function LobbyCard({ t, lobby, host, play, onStart }: { t: Text; lobby?: Lobby; host?: string; play?: string; onStart: () => void }) {
+function LobbyCard({
+  t,
+  lobby,
+  host,
+  play,
+  startsIn,
+  onStart,
+}: {
+  t: Text;
+  lobby?: Lobby;
+  host?: string;
+  play?: string;
+  startsIn: number | null;
+  onStart: () => void;
+}) {
+  const open = lobby?.kind === "open";
   return (
     <section className="paper-sheet arena-lobby">
       <h1>{t.title}</h1>
@@ -495,15 +528,25 @@ function LobbyCard({ t, lobby, host, play, onStart }: { t: Text; lobby?: Lobby; 
           <p>
             <strong>{t.seatsTaken(lobby.names.length, lobby.seats)}</strong>
           </p>
-          <ul className="arena-names">
-            {lobby.names.map((n) => (
-              <li key={n}>{n}</li>
+          <div className="arena-names">
+            {lobby.names.map((n, i) => (
+              <span key={n} className={open && lobby.ready[i] ? "ready" : undefined}>
+                {open && lobby.ready[i] ? `${n} \u2713` : n}
+              </span>
             ))}
-          </ul>
+          </div>
         </>
       )}
-      <p className="soft">{t.waiting}</p>
-      {host && (
+      {startsIn !== null ? (
+        <p className="arena-countdown" aria-live="assertive">
+          {t.startsIn(Math.max(0, Math.ceil(startsIn / 1000)))}
+        </p>
+      ) : (
+        <p className="soft">
+          {open ? t.waitingReady(lobby?.ready.filter(Boolean).length ?? 0, lobby?.names.length ?? 0) : host ? t.waitingHost : t.waiting}
+        </p>
+      )}
+      {host && !open && startsIn === null && (
         <button type="button" className="btn wide blue" disabled={!lobby || lobby.names.length === 0} onClick={onStart}>
           {t.start}
         </button>

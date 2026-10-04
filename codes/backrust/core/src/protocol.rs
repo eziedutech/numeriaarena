@@ -22,8 +22,12 @@ pub enum ClientMsg {
         #[serde(default)]
         host: Option<String>,
     },
-    /// Start the match: the room's first seat, or its host.
+    /// Start the countdown to the match: only a class room's host (its
+    /// teacher's class screen), so no classmate starts before the others.
     Start,
+    /// In an open room: this seat is ready. The countdown runs while every
+    /// classmate in the room is ready.
+    Ready,
     /// Ask for the next creature at one's desk.
     Next,
     AnswerBalloon {
@@ -44,6 +48,31 @@ pub struct LobbyView {
     pub seats: usize,
     pub names: Vec<String>,
     pub watch_code: String,
+    pub kind: RoomKind,
+    /// Each seat's READY, in seat order (open rooms only; all false otherwise).
+    pub ready: Vec<bool>,
+    /// The countdown is on: the match starts at this time, on the room's clock.
+    pub starts_at_ms: Option<f64>,
+}
+
+/// Who starts a room's match.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RoomKind {
+    /// A teacher's room: the teacher starts it from the class screen.
+    #[default]
+    Class,
+    /// Friends racing: it starts when everyone in it is ready.
+    Open,
+}
+
+impl RoomKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RoomKind::Class => "class",
+            RoomKind::Open => "open",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]

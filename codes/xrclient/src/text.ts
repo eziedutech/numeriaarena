@@ -17,6 +17,7 @@ export const EN = {
   /** At the desk before a Class Match is started. */
   classWaiting: 'Waiting for the class to start...',
   classClosed: 'The teacher closed the room.',
+  classStarting: (s: number) => `The match starts in ${s}...`,
   wave: (n: number, total: number) => `Wave ${n} of ${total}`,
   place: ordinal,
   /** A rival's line above its window, for example "4 SOLVED, 380 PTS". */
@@ -113,6 +114,7 @@ export const ID: Text = {
   you: 'KAMU',
   classWaiting: 'Menunggu kelas dimulai...',
   classClosed: 'Guru menutup ruang ini.',
+  classStarting: (s: number) => `Pertandingan mulai dalam ${s}...`,
   wave: (n: number, total: number) => `Gelombang ${n} dari ${total}`,
   place: ORDINAL_ID,
   rival: (solved: number, points: number) => `${solved} BENAR, ${points} POIN`,

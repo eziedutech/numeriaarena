@@ -45,6 +45,12 @@ export interface Lobby {
   seats: number;
   names: string[];
   watch_code: string;
+  /** `class`: the teacher starts it; `open`: it starts when everyone is ready. */
+  kind: 'class' | 'open';
+  /** Each seat's READY, in seat order (open rooms). */
+  ready: boolean[];
+  /** The countdown is on: the match starts then, on the room's clock. */
+  starts_at_ms: number | null;
 }
 
 interface ClassRecap {
@@ -152,8 +158,16 @@ export class ClassRace {
     this.offset += shift;
   }
 
-  start(): void {
-    this.send({ type: 'start' });
+  /** In an open room: this seat is ready to start. */
+  ready(): void {
+    this.send({ type: 'ready' });
+  }
+
+  /** Milliseconds until the match starts, while the countdown is on; else null. */
+  startsIn(): number | null {
+    const at = this.lobby?.starts_at_ms;
+    if (at == null || this.state) return null;
+    return Math.max(0, this.local(at) - this.clock());
   }
 
   private connect(joined?: () => void, failed?: (code: string) => void): void {
@@ -237,7 +251,14 @@ export class ClassRace {
         this.asked = false;
         break;
       case 'lobby':
-        this.lobby = { seats: msg.seats, names: msg.names, watch_code: msg.watch_code };
+        this.lobby = {
+          seats: msg.seats,
+          names: msg.names,
+          watch_code: msg.watch_code,
+          kind: msg.kind,
+          ready: msg.ready,
+          starts_at_ms: msg.starts_at_ms,
+        };
         this.onChange?.();
         break;
       case 'view': {

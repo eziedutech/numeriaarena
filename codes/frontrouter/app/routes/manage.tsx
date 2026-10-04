@@ -77,6 +77,17 @@ const TEXT = {
     closeRoom: "CLOSE THE ROOM",
     closeSure: "Close this room? Nobody can join it again, and a match on now stops.",
     roomClosed: "The room is closed.",
+    closeYes: "YES, CLOSE IT",
+    keepOpen: "KEEP IT OPEN",
+    history: "ROOMS SO FAR",
+    historyNone: "No rooms yet. The rooms you open show here, with each match's results.",
+    historyOpen: "OPEN",
+    historyClosed: "CLOSED",
+    historyNoMatch: "No match played.",
+    historyUnfinished: "Stopped before the end.",
+    historyPoints: (n: number) => `${n} points`,
+    robot: "robot",
+    locale: "en-GB",
     regTitle: "ABOUT YOU",
     regIntro: "One time only. Students never see your email.",
     yourName: "Your name (shown to your classes)",
@@ -154,6 +165,17 @@ const TEXT = {
     closeRoom: "TUTUP RUANG",
     closeSure: "Tutup ruang ini? Tidak ada yang bisa masuk lagi, dan pertandingan yang berjalan berhenti.",
     roomClosed: "Ruang sudah ditutup.",
+    closeYes: "YA, TUTUP",
+    keepOpen: "BIARKAN TERBUKA",
+    history: "RUANG SEBELUMNYA",
+    historyNone: "Belum ada ruang. Ruang yang kamu buka tampil di sini, dengan hasil tiap pertandingan.",
+    historyOpen: "TERBUKA",
+    historyClosed: "DITUTUP",
+    historyNoMatch: "Belum ada pertandingan.",
+    historyUnfinished: "Berhenti sebelum selesai.",
+    historyPoints: (n: number) => `${n} poin`,
+    robot: "robot",
+    locale: "id-ID",
     regTitle: "TENTANG ANDA",
     regIntro: "Hanya sekali. Siswa tidak pernah melihat email Anda.",
     yourName: "Nama Anda (tampil di kelas Anda)",
@@ -405,6 +427,8 @@ function AccountHead({ t, me }: { t: Text; me: Me }) {
 /** The signed-in adult: who, where, the approval status, the sign-up form if needed, and the class tools. */
 function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onChange: () => void }) {
   const org = me.organizer?.org;
+  // Bumped when a room opens or closes, so the history reads again.
+  const [rooms, setRooms] = useState(0);
   return (
     <>
       <section className="paper-sheet">
@@ -430,11 +454,12 @@ function Account({ t, user, me, onChange }: { t: Text; user: User; me: Me; onCha
               <strong>{t.tools[0][0]}</strong>
               <span className="soft">{t.tools[0][1]}</span>
             </div>
-            {me.organizer.status !== "suspended" && <OpenRoom t={t} user={user} />}
+            {me.organizer.status !== "suspended" && <OpenRoom t={t} user={user} onChange={() => setRooms((n) => n + 1)} />}
           </div>
           <p className="soft">{t.toolsSoon}</p>
         </section>
       )}
+      {me.organizer && <RoomHistory t={t} user={user} version={rooms} />}
     </>
   );
 }
@@ -451,12 +476,13 @@ interface OpenedRoom {
  * finds it again), or a new one of three seats; its codes, the class screen
  * that starts it, and CLOSE THE ROOM, after which its codes stop working.
  */
-function OpenRoom({ t, user }: { t: Text; user: User }) {
+function OpenRoom({ t, user, onChange }: { t: Text; user: User; onChange: () => void }) {
   // undefined while asking the server, null with no room open.
   const [room, setRoom] = useState<OpenedRoom | null>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
+  const [asking, setAsking] = useState(false);
   const newest = () => api<{ rooms: OpenedRoom[] }>(user, "/rooms").then((r) => r.rooms[0] ?? null);
   useEffect(() => {
     newest().then(setRoom, (e) => {
@@ -469,12 +495,16 @@ function OpenRoom({ t, user }: { t: Text; user: User }) {
     setBusy(true);
     setError("");
     setClosed(false);
-    api<OpenedRoom>(user, "/rooms", { method: "POST", body: JSON.stringify({ seats: 3 }) })
-      .then(setRoom, (e) => setError(errorCode(e)))
+    api<OpenedRoom>(user, "/rooms", { method: "POST", body: JSON.stringify({ seats: 3, kind: "class" }) })
+      .then((r) => {
+        setRoom(r);
+        onChange();
+      }, (e) => setError(errorCode(e)))
       .finally(() => setBusy(false));
   };
   const close = () => {
-    if (!room || busy || !window.confirm(t.closeSure)) return;
+    if (!room || busy) return;
+    setAsking(false);
     setBusy(true);
     setError("");
     api(user, `/rooms/${encodeURIComponent(room.id)}`, { method: "DELETE" })
@@ -483,6 +513,7 @@ function OpenRoom({ t, user }: { t: Text; user: User }) {
         (next) => {
           setRoom(next);
           setClosed(true);
+          onChange();
         },
         (e) => setError(errorCode(e)),
       )
@@ -516,12 +547,105 @@ function OpenRoom({ t, user }: { t: Text; user: User }) {
         <button type="button" className="btn small" onClick={open} disabled={busy}>
           {t.newRoom}
         </button>
-        <button type="button" className="btn small" onClick={close} disabled={busy}>
+        <button type="button" className="btn small" onClick={() => setAsking(true)} disabled={busy}>
           {t.closeRoom}
         </button>
       </div>
       <ErrorLine t={t} code={error} />
+      {asking && (
+        <div className="veil" role="dialog" aria-modal="true" aria-label={t.closeRoom} onClick={(e) => e.target === e.currentTarget && setAsking(false)}>
+          <div className="paper-sheet narrow">
+            <h2 className="dialog-title">
+              {t.closeRoom}: {room.play_code}
+            </h2>
+            <p>{t.closeSure}</p>
+            <div className="actions">
+              <button type="button" className="btn" onClick={() => setAsking(false)} autoFocus>
+                {t.keepOpen}
+              </button>
+              <button type="button" className="btn suspended" onClick={close}>
+                {t.closeYes}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+interface PastRoom {
+  id: string;
+  play_code: string;
+  kind: "class" | "open";
+  seats: number;
+  created_at: string;
+  open: boolean;
+  matches: {
+    started_at: string;
+    ended_at: string | null;
+    seats: { name: string; bot: boolean }[];
+    players: { name: string; bot: boolean; points: number; place: number; stars: number }[] | null;
+  }[];
+}
+
+/** ROOMS SO FAR: every room this adult opened, the newest first, with each match's results. */
+function RoomHistory({ t, user, version }: { t: Text; user: User; version: number }) {
+  const [rooms, setRooms] = useState<PastRoom[]>();
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api<{ rooms: PastRoom[] }>(user, "/rooms/history").then(
+      (r) => {
+        setRooms(r.rooms);
+        setError("");
+      },
+      (e) => setError(errorCode(e)),
+    );
+  }, [user, version]);
+  const when = (iso: string) => new Date(iso).toLocaleString(t.locale, { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <section className="paper-sheet">
+      <h2>{t.history}</h2>
+      <ErrorLine t={t} code={error} />
+      {rooms?.length === 0 && <p className="soft">{t.historyNone}</p>}
+      {rooms?.map((r) => (
+        <div key={r.id} className="past-room">
+          <div className="past-head">
+            <strong className="past-code">{r.play_code}</strong>
+            <span className="soft">{when(r.created_at)}</span>
+            <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
+          </div>
+          {r.matches.length === 0 && <p className="soft">{t.historyNoMatch}</p>}
+          {r.matches.map((m) => (
+            <div key={m.started_at} className="past-match">
+              <span className="soft">{when(m.started_at)}</span>
+              {m.players ? (
+                <div className="past-players">
+                  {[...m.players]
+                    .sort((a, b) => a.place - b.place)
+                    .map((p) => (
+                      <span key={p.name}>
+                        {p.place}. {p.name}
+                        {p.bot ? ` (${t.robot})` : ""}: {t.historyPoints(p.points)} {"\u2605".repeat(p.stars)}
+                      </span>
+                    ))}
+                </div>
+              ) : (
+                <div className="past-players">
+                  {m.seats.map((s) => (
+                    <span key={s.name}>
+                      {s.name}
+                      {s.bot ? ` (${t.robot})` : ""}
+                    </span>
+                  ))}
+                  <span className="soft">{t.historyUnfinished}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
   );
 }
 

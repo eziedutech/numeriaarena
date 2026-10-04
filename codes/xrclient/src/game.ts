@@ -1431,9 +1431,26 @@ export class GameSystem extends createSystem({
     this.race = link;
     link.setClock(() => this.now());
     if (!link.started) {
-      this.score.set(T.classWaiting);
       this.score.mesh.visible = true;
+      // The waiting line, then the countdown once the class is starting.
+      let shown = '';
+      let timer = 0;
+      const say = () => {
+        if (this.race !== link) {
+          window.clearInterval(timer);
+          return;
+        }
+        const left = link.startsIn();
+        const text = left === null ? T.classWaiting : T.classStarting(Math.ceil(left / 1000));
+        if (text !== shown) {
+          shown = text;
+          this.score.set(text);
+        }
+      };
+      say();
+      timer = window.setInterval(say, 200);
       await link.whenStarted();
+      window.clearInterval(timer);
       if (this.race !== link) return;
     }
     if (link.shut) {
