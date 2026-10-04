@@ -632,11 +632,25 @@ button.tool {
 
 .arena-row {
   display: grid;
-  grid-template-columns: 90px 1fr auto;
+  grid-template-columns: 90px 66px 1fr auto;
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
   font-size: 26px;
+}
+
+.arena-avatar {
+  display: inline-flex;
+  flex: none;
+  justify-self: start;
+  background: var(--paper);
+  padding: 3px;
+  box-shadow: 0 2px 5px rgba(58, 45, 20, 0.22);
+  transform: rotate(-3deg);
+}
+
+.arena-avatar svg {
+  display: block;
 }
 
 .arena-row:nth-child(odd) {
@@ -741,12 +755,15 @@ button.tool {
   font-weight: 700;
 }
 
-.arena-names span {
+.arena-names > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   background: #f1e3c4;
-  padding: 8px 14px;
+  padding: 6px 14px 6px 8px;
 }
 
-.arena-names span.ready {
+.arena-names > span.ready {
   background: #bfe3c9;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Route } from "./+types/screen";
+import { avatarSvg, robotSvg } from "../avatar";
 import { useLang, type Lang } from "../legal";
 
 export function meta({}: Route.MetaArgs) {
@@ -531,6 +532,7 @@ function LobbyCard({
           <div className="arena-names">
             {lobby.names.map((n, i) => (
               <span key={n} className={open && lobby.ready[i] ? "ready" : undefined}>
+                <Avatar name={n} size={34} />
                 {open && lobby.ready[i] ? `${n} \u2713` : n}
               </span>
             ))}
@@ -578,6 +580,11 @@ function Header({ t, view, remaining, breakLeft }: { t: Text; view: View; remain
   );
 }
 
+/** A seat's paper avatar, read from its pseudonym (the game draws the same); a robot for a bot. */
+function Avatar({ name, bot = false, size }: { name: string; bot?: boolean; size: number }) {
+  return <span className="arena-avatar" aria-hidden="true" dangerouslySetInnerHTML={{ __html: bot ? robotSvg(size) : avatarSvg(name, size) }} />;
+}
+
 function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; live: Live }) {
   const rows = view.seats.map((s, i) => ({ s, i })).sort((a, b) => a.s.place - b.s.place || a.i - b.i);
   return (
@@ -588,6 +595,7 @@ function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; l
         return (
           <li key={i} className={s.away ? "arena-row away" : "arena-row"}>
             <span className="arena-place">{t.place(s.place)}</span>
+            <Avatar name={s.name} bot={s.bot} size={60} />
             <span className="arena-name">
               <strong>{s.name}</strong>
               {s.bot && <span className="tag">{t.bot}</span>}
@@ -623,6 +631,7 @@ function RecapCard({ t, recap, stored }: { t: Text; recap: Recap; stored: boolea
         {rows.map((p) => (
           <li key={p.name} className="arena-row">
             <span className="arena-place">{t.place(p.place)}</span>
+            <Avatar name={p.name} bot={p.bot} size={60} />
             <span className="arena-name">
               <strong>{p.name}</strong>
               {p.bot && <span className="tag">{t.bot}</span>}
