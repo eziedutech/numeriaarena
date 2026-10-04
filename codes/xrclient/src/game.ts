@@ -315,6 +315,9 @@ const PROMPT_PULSE = 0.05;
 const PROMPT_PULSE_S = 1.1;
 /** Where the points are shown: the practice score, or the race scoreboard's middle row. */
 const SCORE_AT = new Vector3(0, 0.48, -0.15);
+/** The class countdown's seconds: tall paper numbers just over the score line. */
+const COUNTDOWN_TALL = 0.16;
+const COUNTDOWN_OVER = new Vector3(0, 0.14, 0);
 const BOARD_AT = new Vector3(0, 0.484, -0.15);
 /** A right answer's creature flies up to the points in this many seconds. */
 const TO_SCORE_S = 1.0;
@@ -939,7 +942,9 @@ export class GameSystem extends createSystem({
   private showTitle(): void {
     const menu = this.phase === 'menu';
     // The score shows during play even when the title never loaded (a game started from the home page).
-    this.score.mesh.visible = !this.homeWasShown && !menu && !this.race;
+    // A desk waiting for its class keeps the waiting line and the countdown.
+    const waiting = this.race instanceof ClassRace && !this.race.started;
+    this.score.mesh.visible = waiting || (!this.homeWasShown && !menu && !this.race);
     if (!this.title) return;
     this.title.visible = !this.homeWasShown && menu;
   }
@@ -1435,24 +1440,40 @@ export class GameSystem extends createSystem({
       // The waiting line, then the countdown once the class is starting.
       let shown = '';
       let timer = 0;
+      // The seconds left, big over the desk, so the class sees the teacher started.
+      const big = new Label('', { height: COUNTDOWN_TALL });
+      big.mesh.position.copy(SCORE_AT).add(COUNTDOWN_OVER);
+      big.mesh.visible = false;
+      this.deskEntity()?.object3D?.add(big.mesh);
+      this.labels.add(big.mesh);
+      const done = () => {
+        window.clearInterval(timer);
+        big.mesh.removeFromParent();
+        this.labels.delete(big.mesh);
+      };
       const say = () => {
         if (this.race !== link) {
-          window.clearInterval(timer);
+          done();
           return;
         }
         const left = link.startsIn();
         // The made-up name too: the class screen calls this desk by it.
         const me = link.name.toUpperCase() || T.you;
-        const text = left === null ? T.classWaitingAs(me) : T.classStartingAs(me, Math.ceil(left / 1000));
+        const s = left === null ? 0 : Math.max(1, Math.ceil(left / 1000));
+        const text = left === null ? T.classWaitingAs(me) : T.classStartingAs(me, s);
         if (text !== shown) {
           shown = text;
           this.score.set(text);
+          big.set(left === null ? '' : String(s));
+          big.mesh.visible = left !== null;
         }
+        // Each second lands with a small beat.
+        if (left !== null) big.pulse(1 + 0.25 * Math.max(0, (left % 1000) / 1000 - 0.6) / 0.4);
       };
       say();
-      timer = window.setInterval(say, 200);
+      timer = window.setInterval(say, 50);
       await link.whenStarted();
-      window.clearInterval(timer);
+      done();
       if (this.race !== link) return;
     }
     if (link.shut) {
