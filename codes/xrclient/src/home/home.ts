@@ -14,12 +14,6 @@ import {
   signOut,
   startTeacher,
   teacherState,
-  openRoom,
-  myRooms,
-  closeRoom,
-  myClasses,
-  roomHistory,
-  type OpenedRoom,
   type Me,
 } from './teacher.js';
 import { ClassRace } from '../game/class-race.js';
@@ -160,19 +154,6 @@ const CSS = `
 #home .tick .mark { flex: none; width: 26px; height: 26px; background: #f1e3c4; display: flex; align-items: center;
   justify-content: center; }
 #home .tick.on .mark { background: ${COLORS.teal}; }
-#home .past { max-height: 52vh; overflow-y: auto; margin: 8px 0; }
-#home .past-room { border-top: 2px solid rgba(58, 63, 75, 0.12); padding: 10px 2px; }
-#home .past-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
-#home .past-head b { font-size: 19px; letter-spacing: 0.1em; }
-#home .past-head .state { font-size: 12px; font-weight: 700; padding: 2px 7px; background: #e8dcc0; }
-#home .past-head .state.on { background: #bfe3c9; }
-#home .past-head .meta { margin-left: auto; color: #5d6270; }
-#home .past table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 6px; }
-#home .past caption { text-align: left; font-weight: 700; font-size: 13px; color: #5d6270; padding: 4px 0; }
-#home .past td { padding: 3px 6px; border-bottom: 1px solid rgba(58, 63, 75, 0.08); }
-#home .past td.num { text-align: right; font-variant-numeric: tabular-nums; }
-#home .past td.stars { color: #e2a21b; letter-spacing: 0.1em; width: 4em; }
-#home .past tr.bot td { color: #5d6270; }
 #home .names { display: flex; flex-wrap: wrap; gap: 8px; }
 #home .names span { background: #f1e3c4; padding: 7px 11px; font-weight: 700; font-size: 16px; }
 #home .names span.me { background: ${COLORS.sun}; }
@@ -450,9 +431,10 @@ export class Home {
     left.style.left = '40px';
     if (teacher.kind === 'in') {
       left.appendChild(paperText(t.teach, 30, INK));
-      this.card('left', 0, t.openRoom, 'room', COLORS.coral, () => this.openRoom());
-      this.card('left', 1, t.myClasses, 'classes', COLORS.teal, () => this.classes());
-      this.card('left', 2, t.history, 'history', COLORS.cobalt, () => this.history());
+      // The class tools live on the teacher page, which opens at the right tab.
+      this.card('left', 0, t.openRoom, 'room', COLORS.coral, () => window.location.assign('/manage#rooms'));
+      this.card('left', 1, t.myClasses, 'classes', COLORS.teal, () => window.location.assign('/manage#classes'));
+      this.card('left', 2, t.history, 'history', COLORS.cobalt, () => window.location.assign('/manage#rooms'));
       this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
     } else {
       left.appendChild(paperText(t.play, 30, INK));
@@ -1119,225 +1101,6 @@ export class Home {
       veil.remove();
       this.openScreen(c);
     });
-  }
-
-  /**
-   * MY CLASSES: the teacher's classes with their codes; making a class and
-   * printing its cards happen on the teacher page.
-   */
-  private classes(): void {
-    const t = this.t;
-    const { veil, body } = this.popup(t.myClasses[0]);
-    const info = el('p', '', body);
-    info.textContent = t.joining;
-    const fail = this.errorLine(body);
-    const link = el('a', '', el('p', '', body));
-    link.href = '/manage#classes';
-    link.textContent = t.classesLink;
-    link.style.color = COLORS.cobalt;
-    this.actions(body, veil);
-    void myClasses().then((classes) => {
-      if (typeof classes === 'string') {
-        info.textContent = '';
-        fail(classes);
-        return;
-      }
-      if (classes.length === 0) {
-        info.textContent = t.classesNone;
-        return;
-      }
-      info.textContent = t.classesHow;
-      const list = el('div', 'past', body);
-      body.insertBefore(list, link.parentElement);
-      for (const c of classes) {
-        const head = el('div', 'past-head', el('div', 'past-room', list));
-        el('b', '', head).textContent = c.label;
-        if (c.join_code) el('span', 'state on', head).textContent = c.join_code;
-        else el('span', 'state', head).textContent = t.classArchived;
-        el('span', 'meta', head).textContent = `${t.classMeta(c.grade, c.seats)}${c.school_year ? ` · ${c.school_year}` : ''}`;
-      }
-    });
-  }
-
-  /**
-   * ROOMS SO FAR: the teacher's newest rooms, each with its matches' results,
-   * the same list as on the teacher page.
-   */
-  private history(): void {
-    const t = this.t;
-    const { veil, body } = this.popup(t.history[0]);
-    const info = el('p', '', body);
-    info.textContent = t.joining;
-    const fail = this.errorLine(body);
-    this.actions(body, veil);
-    const actions = body.querySelector('.actions');
-    const when = (iso: string, date: boolean) =>
-      date
-        ? new Date(iso).toLocaleString(t.locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-        : new Date(iso).toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' });
-    void roomHistory().then((rooms) => {
-      if (typeof rooms === 'string') {
-        info.textContent = '';
-        fail(rooms);
-        return;
-      }
-      if (rooms.length === 0) {
-        info.textContent = t.historyNone;
-        return;
-      }
-      info.remove();
-      const list = el('div', 'past', body);
-      body.insertBefore(list, actions);
-      // The ten newest here; the teacher page keeps the rest.
-      for (const r of rooms.slice(0, 10)) {
-        const room = el('div', 'past-room', list);
-        const head = el('div', 'past-head', room);
-        el('b', '', head).textContent = r.play_code;
-        const state = el('span', r.open ? 'state on' : 'state', head);
-        state.textContent = r.open ? t.historyOpen : t.historyClosed;
-        el('span', '', head).textContent = when(r.created_at, true);
-        el('span', 'meta', head).textContent = t.historyMeta(r.seats, r.matches.length);
-        r.matches.forEach((m, n) => {
-          const table = el('table', '', room);
-          const range = m.ended_at ? `${when(m.started_at, false)} - ${when(m.ended_at, false)}` : `${when(m.started_at, false)}, ${t.historyUnfinished}`;
-          el('caption', '', table).textContent = `${t.historyMatch(n + 1)} · ${range}`;
-          const rows = m.players
-            ? [...m.players].sort((a, b) => a.place - b.place).map((p) => [String(p.place), p.name, p.bot, String(p.points), '★'.repeat(p.stars)] as const)
-            : m.seats.map((s, k) => [String(k + 1), s.name, s.bot, '', ''] as const);
-          for (const [place, name, bot, points, stars] of rows) {
-            const tr = el('tr', bot ? 'bot' : '', table);
-            el('td', 'num', tr).textContent = place;
-            el('td', '', tr).textContent = bot ? `${name} (${t.robot})` : name;
-            el('td', 'num', tr).textContent = points;
-            el('td', 'stars', tr).textContent = stars;
-          }
-        });
-      }
-      if (rooms.length > 10) {
-        const more = el('p', '', body);
-        more.textContent = t.historyAll;
-        body.insertBefore(more, actions);
-      }
-    });
-  }
-
-  /**
-   * NEW RACE ROOM: the teacher's room still open (found again after a
-   * reload), or a new one of three seats; its codes, its class screen, and
-   * a way to close it for good.
-   */
-  private openRoom(): void {
-    const t = this.t;
-    const { veil, body } = this.popup(t.openRoom[0]);
-    const info = el('p', '', body);
-    info.textContent = t.joining;
-    const fail = this.errorLine(body);
-    this.actions(body, veil);
-    const actions = body.querySelector('.actions');
-    let shown: HTMLElement[] = [];
-    let busy = false;
-    const button = (text: string, background: string, ink: string, onClick: () => void) => {
-      const b = el('button', 'btn wide shadow', body);
-      b.style.background = background;
-      b.appendChild(paperText(text, 17, ink));
-      b.setAttribute('aria-label', text);
-      b.addEventListener('click', onClick);
-      body.insertBefore(b, actions);
-      shown.push(b);
-    };
-    const clear = () => {
-      for (const e of shown) e.remove();
-      shown = [];
-      fail();
-    };
-    const fresh = () => button(t.newRoom, COLORS.teal, PAPER, () => open());
-    const show = (room: OpenedRoom) => {
-      clear();
-      info.textContent = t.roomOpened(room.play_code);
-      const watch = el('p', '', body);
-      watch.textContent = t.roomWatch(room.watch_code);
-      body.insertBefore(watch, actions);
-      shown.push(watch);
-      if (room.class_label) {
-        const only = el('p', '', body);
-        only.textContent = t.roomOnlyClass(room.class_label);
-        body.insertBefore(only, actions);
-        shown.push(only);
-      }
-      button(t.openScreen, COLORS.coral, PAPER, () => this.openScreen(room.watch_code, room.host_token, room.play_code));
-      button(t.closeRoom, '#f1e3c4', INK, () => sure(room));
-      fresh();
-    };
-    // Asked here in the popup, not in a browser dialog (which a headset shows outside the game).
-    const sure = (room: OpenedRoom) => {
-      clear();
-      info.textContent = t.closeSure;
-      button(t.closeYes, COLORS.coral, PAPER, () => {
-        if (busy) return;
-        busy = true;
-        void closeRoom(room.id).then((r) => {
-          busy = false;
-          if (r === true) {
-            list(false);
-          } else {
-            show(room);
-            fail(r);
-          }
-        });
-      });
-      button(t.keepOpen, '#f1e3c4', INK, () => show(room));
-    };
-    // With classes of their own, the teacher picks one (only its seats sit down) or anyone.
-    const open = () => {
-      if (busy) return;
-      busy = true;
-      clear();
-      info.textContent = t.joining;
-      void myClasses().then((classes) => {
-        busy = false;
-        const active = typeof classes === 'string' ? [] : classes.filter((c) => c.status === 'active');
-        if (active.length === 0) {
-          openFor();
-          return;
-        }
-        info.textContent = t.roomForWhich;
-        for (const c of active) button(t.roomForClass(c.label), COLORS.teal, PAPER, () => openFor(c.id));
-        button(t.roomForAnyone, '#f1e3c4', INK, () => openFor());
-      });
-    };
-    const openFor = (classId?: string) => {
-      if (busy) return;
-      busy = true;
-      clear();
-      info.textContent = t.joining;
-      void openRoom(3, classId).then((room) => {
-        busy = false;
-        if (typeof room === 'string') {
-          info.textContent = '';
-          fail(room);
-        } else {
-          show(room);
-        }
-      });
-    };
-    // The newest room still open; with none, a new one (on opening the card) or a note (after closing).
-    const list = (openIfNone: boolean) => {
-      void myRooms().then((rooms) => {
-        if (typeof rooms === 'string') {
-          info.textContent = '';
-          fail(rooms);
-        } else if (rooms[0]) {
-          show(rooms[0]);
-        } else if (openIfNone) {
-          open();
-        } else {
-          clear();
-          info.textContent = t.roomClosed;
-          fresh();
-        }
-      });
-    };
-    list(true);
   }
 
   private errorText(code: string): string {
