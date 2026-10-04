@@ -176,6 +176,8 @@ pub struct SoloSession {
     next_id: u32,
     total_points: u32,
     events: Vec<AnswerEvent>,
+    /// Written into each answer event: `solo_squad` unless a match says otherwise.
+    mode: &'static str,
 }
 
 fn adapter_key(game: GameType) -> &'static str {
@@ -233,6 +235,7 @@ impl SoloSession {
                 next_id: 1,
                 total_points: 0,
                 events: Vec::new(),
+                mode: "solo_squad",
             },
             rejected,
         ))
@@ -321,6 +324,11 @@ impl SoloSession {
         };
         let pick = choose(&cands, &at, &self.params, rng)?;
         Some((items.swap_remove(pick.index).1, pick.p_final))
+    }
+
+    /// The mode written into answer events from now on (Class Match uses `class_match`).
+    pub(crate) fn set_mode(&mut self, mode: &'static str) {
+        self.mode = mode;
     }
 
     /// Fails when no template can fill creatures for `game`.
@@ -695,7 +703,7 @@ impl SoloSession {
             event_id,
             at_ms: now_ms,
             player: self.cfg.player_id.clone(),
-            mode: "solo_squad",
+            mode: self.mode,
             game_type: open.offer.game,
             skill: open.item.skill.clone(),
             template_id: open.item.template_id.clone(),

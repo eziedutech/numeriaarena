@@ -18,8 +18,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --create-home --uid 1001 numeria
 ARG GIT_SHA=dev
-ENV GIT_SHA=${GIT_SHA} PORT=3321
+ENV GIT_SHA=${GIT_SHA} PORT=3321 CONTENT_DIR=/srv/content
 COPY --from=builder /build/target/release/numeria-server /usr/local/bin/numeria-server
+# The item bank Class Match plays, the same files the headset bundles.
+COPY codes/content/templates /srv/content/templates
+COPY codes/content/contoh /srv/content/contoh
 USER numeria
 EXPOSE 3321
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

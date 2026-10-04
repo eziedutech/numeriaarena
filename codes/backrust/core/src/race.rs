@@ -28,20 +28,20 @@ use crate::template::{I18n, ItemTemplate};
 /// Desk index of the player; the bots sit at 1 and 2.
 pub const PLAYER: usize = 0;
 /// A bot looks at a new creature this long before its answer clock starts.
-const BOT_READ_MS: f64 = 1200.0;
+pub(crate) const BOT_READ_MS: f64 = 1200.0;
 /// Walk-in and fold-home animations between two of a bot's creatures.
-const BOT_BETWEEN_MS: f64 = 2500.0;
+pub(crate) const BOT_BETWEEN_MS: f64 = 2500.0;
 /// Pause between rounds, for the round banner.
-const BREAK_MS: f64 = 4000.0;
+pub(crate) const BREAK_MS: f64 = 4000.0;
 /// Boss creatures are worth this many times their points.
-const BOSS_MULTIPLIER: u32 = 2;
+pub(crate) const BOSS_MULTIPLIER: u32 = 2;
 /// No new creature starts this close to the end of a round.
-const LAST_START_MS: f64 = 1500.0;
+pub(crate) const LAST_START_MS: f64 = 1500.0;
 /// Rivals' answer pace follows the player's, within these bounds (ms).
-const PACE_MIN_MS: f64 = 3000.0;
-const PACE_MAX_MS: f64 = 15000.0;
+pub(crate) const PACE_MIN_MS: f64 = 3000.0;
+pub(crate) const PACE_MAX_MS: f64 = 15000.0;
 /// Each round a rival's pace is the player's times a factor in this range.
-const PACE_SPREAD: (f64, f64) = (0.85, 1.15);
+pub(crate) const PACE_SPREAD: (f64, f64) = (0.85, 1.15);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WaveSpec {
@@ -64,7 +64,7 @@ pub struct RaceConfig {
     pub bot_names: [String; 2],
 }
 
-fn default_waves() -> Vec<WaveSpec> {
+pub(crate) fn default_waves() -> Vec<WaveSpec> {
     vec![
         WaveSpec {
             game: GameType::BalloonBurst,
@@ -80,10 +80,10 @@ fn default_waves() -> Vec<WaveSpec> {
         },
     ]
 }
-fn default_boss_game() -> GameType {
+pub(crate) fn default_boss_game() -> GameType {
     GameType::BalloonBurst
 }
-fn default_boss_seconds() -> f64 {
+pub(crate) fn default_boss_seconds() -> f64 {
     20.0
 }
 fn default_bot_names() -> [String; 2] {
@@ -230,19 +230,19 @@ pub struct Recap {
 }
 
 #[derive(Clone, Debug, Default)]
-struct Tally {
-    points: u32,
-    folded: u32,
-    first_tries: u32,
-    first_correct: u32,
-    streak: u32,
-    best_streak: u32,
-    challenge_tries: u32,
-    retries_won: u32,
+pub(crate) struct Tally {
+    pub(crate) points: u32,
+    pub(crate) folded: u32,
+    pub(crate) first_tries: u32,
+    pub(crate) first_correct: u32,
+    pub(crate) streak: u32,
+    pub(crate) best_streak: u32,
+    pub(crate) challenge_tries: u32,
+    pub(crate) retries_won: u32,
 }
 
 impl Tally {
-    fn answered(&mut self, attempt: u32, correct: bool, challenge: bool) {
+    pub(crate) fn answered(&mut self, attempt: u32, correct: bool, challenge: bool) {
         if attempt == 1 {
             self.first_tries += 1;
             if correct {
@@ -263,7 +263,7 @@ impl Tally {
         }
     }
 
-    fn accuracy(&self) -> f64 {
+    pub(crate) fn accuracy(&self) -> f64 {
         if self.first_tries == 0 {
             0.0
         } else {
@@ -272,7 +272,7 @@ impl Tally {
     }
 
     /// Personal stars: 3 from 80% right on the first try, 2 from 60%.
-    fn stars(&self) -> u8 {
+    pub(crate) fn stars(&self) -> u8 {
         match self.accuracy() {
             a if a >= 0.8 => 3,
             a if a >= 0.6 => 2,

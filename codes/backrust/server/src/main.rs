@@ -1,9 +1,10 @@
-//! Numeria Arena API. For now: health, and the adult side of sign-in
-//! (organizers and admins, docs/SKEMA-PENGGUNA.md). Rooms come later.
+//! Numeria Arena API: health, the adult side of sign-in (organizers and
+//! admins), and Class Match rooms with their WebSocket.
 
 mod admin;
 mod auth;
 mod organizer;
+mod rooms;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,12 +19,15 @@ pub struct Config {
     /// School email domains approved without waiting for an admin.
     pub auto_approve_domains: Vec<String>,
     pub git_sha: String,
+    /// `OPEN_ROOMS=1`: anyone may open a room, for local tests without sign-in.
+    pub open_rooms: bool,
 }
 
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub verifier: auth::Verifier,
     pub config: Config,
+    pub rooms: Arc<rooms::Rooms>,
 }
 
 pub type State = Arc<AppState>;
@@ -50,6 +54,8 @@ pub fn router(state: State) -> Router {
         .route("/api/organizer", post(organizer::register))
         .route("/api/admin/organizers", get(admin::list))
         .route("/api/admin/organizers/{id}", post(admin::decide))
+        .route("/api/rooms", post(rooms::create))
+        .route("/api/ws", get(rooms::ws))
         .with_state(state)
 }
 
@@ -94,11 +100,24 @@ async fn main() {
         admin_emails: env_list("ADMIN_EMAILS"),
         auto_approve_domains: env_list("AUTO_APPROVE_DOMAINS"),
         git_sha: std::env::var("GIT_SHA").unwrap_or_else(|_| "dev".into()),
+        open_rooms: std::env::var("OPEN_ROOMS").is_ok_and(|v| v == "1"),
     };
+    // The bank the headset bundles: ../content from codes/backrust, /srv/content in the image.
+    let content_dir = std::env::var("CONTENT_DIR").unwrap_or_else(|_| "../content".into());
+    let content = rooms::Content::load(std::path::Path::new(&content_dir))
+        .unwrap_or_else(|e| panic!("content: {e}"));
+    tracing::info!(
+        "content {} ({} templates)",
+        content.version,
+        content.templates.len()
+    );
+    let rooms = rooms::Rooms::new(content, Some(db.clone()));
+    rooms.open_demo();
     let state = Arc::new(AppState {
         db,
         verifier: auth::Verifier::new(required("FIREBASE_PROJECT_ID")),
         config,
+        rooms,
     });
 
     let port: u16 = std::env::var("PORT")
