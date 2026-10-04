@@ -56,6 +56,8 @@ pub enum ServerMsg {
         name: Option<String>,
         /// Kept by the client to come back after a dropped connection.
         token: Option<String>,
+        /// The room's clock now, which every `*_ms` time is on.
+        now_ms: f64,
     },
     Lobby(LobbyView),
     View(ClassView),

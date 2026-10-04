@@ -231,6 +231,46 @@ fn a_seat_away_gets_nothing_and_comes_back() {
 }
 
 #[test]
+fn a_stand_in_works_an_away_desk_for_nothing() {
+    // Seat 1 is away from 20 s to 150 s: a stand-in from 80 s until it is back.
+    let p = play(9, 2, 3, 0.8, 6000.0, Some((1, 20000.0, 150000.0)));
+    let sat = p
+        .events
+        .iter()
+        .find_map(|e| match e {
+            ClassEvent::StandIn { seat: 1, at_ms } => Some(*at_ms),
+            _ => None,
+        })
+        .expect("a stand-in");
+    assert!(sat >= 80000.0, "{sat}");
+    let between = |at: f64| at > sat && at < 150000.0;
+    // It works at the desk, and earns the seat nothing.
+    assert!(
+        p.events.iter().any(
+            |e| matches!(e, ClassEvent::SeatWorking { seat: 1, at_ms, .. } if between(*at_ms))
+        )
+    );
+    let answers: Vec<u32> = p
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            ClassEvent::SeatAnswer {
+                seat: 1,
+                at_ms,
+                points,
+                ..
+            } if between(*at_ms) => Some(*points),
+            _ => None,
+        })
+        .collect();
+    assert!(!answers.is_empty());
+    assert!(answers.iter().all(|p| *p == 0));
+    // The seat's points are the classmate's own, and so are its answer events.
+    assert_eq!(p.recap.players[1].points, p.verdict_points[1]);
+    assert!(p.answer_events.iter().filter(|(s, _)| *s == 1).count() > 0);
+}
+
+#[test]
 fn the_demo_room_is_bots_only() {
     let (mut m, _) =
         ClassMatch::new(all_templates(), config(3, 0, 3), FairnessParams::default()).unwrap();

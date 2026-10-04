@@ -9,7 +9,10 @@
 //!
 //! A seat whose connection drops is set away: its open creature is closed
 //! without an event (the answer is void) and it gets no creatures until it is
-//! back. A match of bots only (no classmates) is the public demo room.
+//! back. After `STAND_IN_MS` away a stand-in bot works at the desk so the room
+//! stays alive, but it earns the seat nothing and writes no answer events; it
+//! leaves the moment the classmate is back. A match of bots only (no
+//! classmates) is the public demo room.
 //! All timing uses the `now_ms` the server passes, and answer times are
 //! measured on that clock from when the creature was handed out.
 
@@ -30,6 +33,8 @@ use crate::template::{I18n, ItemTemplate};
 
 /// Most seats a class match holds.
 pub const MAX_SEATS: usize = 6;
+/// How long a seat is away before a stand-in bot works at its desk.
+pub const STAND_IN_MS: f64 = 60_000.0;
 
 /// A classmate taking a seat.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -147,6 +152,7 @@ pub enum ClassEvent {
         seat: usize,
         prompt: I18n,
     },
+    /// `points` is 0 for a stand-in, which earns the seat nothing.
     SeatAnswer {
         at_ms: f64,
         seat: usize,
@@ -178,6 +184,11 @@ pub enum ClassEvent {
         at_ms: f64,
         seat: usize,
     },
+    /// A stand-in bot sat down at an away seat's desk (it leaves at `seat_back`).
+    StandIn {
+        at_ms: f64,
+        seat: usize,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -185,6 +196,8 @@ pub struct SeatView {
     pub name: String,
     pub bot: bool,
     pub away: bool,
+    /// A stand-in bot works at this away seat's desk.
+    pub stand_in: bool,
     pub points: u32,
     pub folded: u32,
     /// 1 for the leader; ties share a place.
@@ -234,6 +247,10 @@ struct Human {
     /// Typical answer time, from the last round answered in.
     pace_ms: Option<f64>,
     away: bool,
+    /// When the seat went away, on the server's clock.
+    away_since: f64,
+    /// Works at the desk after `STAND_IN_MS` away; earns nothing.
+    stand_in: Option<Bot>,
 }
 
 struct Work {
@@ -328,6 +345,8 @@ impl ClassMatch {
                     times: Vec::new(),
                     pace_ms: None,
                     away: false,
+                    away_since: 0.0,
+                    stand_in: None,
                 })),
                 tally: Tally::default(),
             });
@@ -435,6 +454,15 @@ impl ClassMatch {
                 let spread = PACE_SPREAD.0 + (PACE_SPREAD.1 - PACE_SPREAD.0) * self.rng.unit();
                 b.pace_ms = pace * spread;
                 b.theta = bot_theta(&thetas, self.bank.params(), &mut self.rng);
+                b.work = None;
+                b.free_at = at + 900.0 + 700.0 * k;
+                k += 1.0;
+            }
+        }
+        for d in 0..self.seats.len() {
+            if let Brain::Human(h) = &mut self.seats[d].brain
+                && let Some(b) = &mut h.stand_in
+            {
                 b.work = None;
                 b.free_at = at + 900.0 + 700.0 * k;
                 k += 1.0;
@@ -585,6 +613,9 @@ impl ClassMatch {
             return Ok(());
         }
         h.away = away;
+        h.away_since = now;
+        // Back: the stand-in leaves, whatever it was working on goes with it.
+        h.stand_in = None;
         if away && let Some(cur) = h.current.take() {
             h.session.close(cur.offer_id);
         }
@@ -620,7 +651,11 @@ impl ClassMatch {
                     .iter()
                     .filter_map(|s| match &s.brain {
                         Brain::Bot(b) => Some(b.work.as_ref().map_or(b.free_at, |w| w.done_at)),
-                        Brain::Human(_) => None,
+                        Brain::Human(h) => match &h.stand_in {
+                            Some(b) => Some(b.work.as_ref().map_or(b.free_at, |w| w.done_at)),
+                            None if h.away => Some(h.away_since + STAND_IN_MS),
+                            None => None,
+                        },
                     })
                     .fold(self.ends_at, f64::min),
             ),
@@ -638,7 +673,8 @@ impl ClassMatch {
             Phase::Wave { .. } | Phase::Boss if at >= self.ends_at => self.time_up(at),
             Phase::Wave { .. } | Phase::Boss => {
                 for d in 0..self.seats.len() {
-                    if matches!(self.seats[d].brain, Brain::Bot(_)) {
+                    self.seat_stand_in(d, at);
+                    if self.has_bot(d) {
                         self.step_bot(d, at);
                     }
                 }
@@ -653,6 +689,9 @@ impl ClassMatch {
                 Brain::Human(h) => {
                     if let Some(cur) = h.current.take() {
                         h.session.close(cur.offer_id);
+                    }
+                    if let Some(b) = &mut h.stand_in {
+                        b.work = None;
                     }
                 }
                 Brain::Bot(b) => b.work = None,
@@ -696,11 +735,40 @@ impl ClassMatch {
         self.phase = Phase::Done;
     }
 
+    /// The seat's bot, or the stand-in at an away classmate's desk.
     fn bot(&mut self, d: usize) -> &mut Bot {
         match &mut self.seats[d].brain {
             Brain::Bot(b) => b,
-            Brain::Human(_) => unreachable!("only bots step"),
+            Brain::Human(h) => h.stand_in.as_mut().expect("only bots step"),
         }
+    }
+
+    fn has_bot(&self, d: usize) -> bool {
+        match &self.seats[d].brain {
+            Brain::Bot(_) => true,
+            Brain::Human(h) => h.stand_in.is_some(),
+        }
+    }
+
+    /// A seat away for `STAND_IN_MS` gets a stand-in at its level and pace.
+    fn seat_stand_in(&mut self, d: usize, at: f64) {
+        let expected = self.cfg.expected_answer_ms;
+        let Brain::Human(h) = &mut self.seats[d].brain else {
+            return;
+        };
+        if !h.away || h.stand_in.is_some() || at < h.away_since + STAND_IN_MS {
+            return;
+        }
+        h.stand_in = Some(Bot {
+            theta: Self::human_theta(h),
+            pace_ms: h
+                .pace_ms
+                .unwrap_or(expected)
+                .clamp(PACE_MIN_MS, PACE_MAX_MS),
+            work: None,
+            free_at: at,
+        });
+        self.events.push(ClassEvent::StandIn { at_ms: at, seat: d });
     }
 
     fn step_bot(&mut self, d: usize, at: f64) {
@@ -761,18 +829,27 @@ impl ClassMatch {
         let (outcome, retry_ms) = bot_answer(theta, w.b, game, choices, pace * 0.6, &mut self.rng);
         let correct = outcome == Outcome::Correct;
         let params = self.bank.params().clone();
+        let stand_in = matches!(self.seats[d].brain, Brain::Human(_));
         let tally = &mut self.seats[d].tally;
-        let pts = points(
-            w.p,
-            outcome,
-            w.attempt,
-            Some(w.answer_ms / expected),
-            tally.streak,
-            &params,
-        ) * if boss { BOSS_MULTIPLIER } else { 1 };
-        tally.points += pts;
-        tally.answered(w.attempt, correct, false);
-        let streak = tally.streak;
+        let pts = if stand_in {
+            0
+        } else {
+            points(
+                w.p,
+                outcome,
+                w.attempt,
+                Some(w.answer_ms / expected),
+                tally.streak,
+                &params,
+            ) * if boss { BOSS_MULTIPLIER } else { 1 }
+        };
+        let streak = if stand_in {
+            0
+        } else {
+            tally.points += pts;
+            tally.answered(w.attempt, correct, false);
+            tally.streak
+        };
         self.events.push(ClassEvent::SeatAnswer {
             at_ms: at,
             seat: d,
@@ -822,6 +899,7 @@ impl ClassMatch {
                 name: s.name.clone(),
                 bot: matches!(s.brain, Brain::Bot(_)),
                 away: matches!(&s.brain, Brain::Human(h) if h.away),
+                stand_in: matches!(&s.brain, Brain::Human(h) if h.stand_in.is_some()),
                 points: s.tally.points,
                 folded: s.tally.folded,
                 place: places[i],

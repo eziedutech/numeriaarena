@@ -497,6 +497,7 @@ impl Room {
                     seat,
                     name: seat.map(|s| self.slots[s].name.clone()),
                     token: seat.map(|s| self.slots[s].token.clone()),
+                    now_ms: now,
                 };
                 self.send(conn, welcome);
                 if self.game.is_some() {
