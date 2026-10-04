@@ -65,6 +65,9 @@ pub struct LobbyView {
     pub starts_at_ms: Option<f64>,
     /// In a room for a class: whose turn it is. None in other rooms.
     pub turn: Option<TurnView>,
+    /// In a duel still waiting for a rival: a robot takes the empty seat at
+    /// this time, on the room's clock.
+    pub rival_by_ms: Option<f64>,
 }
 
 /// A class races in groups, one group a match (0 is group A).
@@ -89,6 +92,8 @@ pub enum RoomKind {
     Class,
     /// Friends racing: it starts when everyone in it is ready.
     Open,
+    /// FIND A RIVAL: two signed-in students of one grade, or one and a robot.
+    Duel,
 }
 
 impl RoomKind {
@@ -96,6 +101,7 @@ impl RoomKind {
         match self {
             RoomKind::Class => "class",
             RoomKind::Open => "open",
+            RoomKind::Duel => "duel",
         }
     }
 }

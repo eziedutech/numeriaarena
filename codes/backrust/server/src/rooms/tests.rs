@@ -577,6 +577,125 @@ async fn rooms_open_to_anyone_have_no_turns() {
         .await;
 }
 
+/// The seats of the match once it starts: (name, bot).
+async fn match_seats(c: &mut Client) -> Vec<(String, bool)> {
+    c.until(|m| match m {
+        ServerMsg::View(v) => Some(v.seats.iter().map(|s| (s.name.clone(), s.bot)).collect()),
+        _ => None,
+    })
+    .await
+}
+
+#[tokio::test(start_paused = true)]
+async fn two_students_of_a_grade_find_each_other_as_rivals() {
+    let rooms = rooms();
+    let code = rooms.find_rival(4).await.unwrap();
+    // Another grade waits in a duel of its own.
+    assert_ne!(rooms.find_rival(5).await.unwrap(), code);
+    let mut a = join_with(
+        &rooms,
+        &code,
+        None,
+        None,
+        Some(seated(1, "Red Fox 03", "c1")),
+    )
+    .await
+    .unwrap();
+    let rival_by = a
+        .until(|m| match m {
+            ServerMsg::Lobby(l) => l.rival_by_ms,
+            _ => None,
+        })
+        .await;
+    assert!(rival_by >= DUEL_WAIT_MS, "{rival_by}");
+    // The second student of grade 4 is sent to the same duel, and it starts.
+    assert_eq!(rooms.find_rival(4).await.unwrap(), code);
+    let mut b = join_with(
+        &rooms,
+        &code,
+        None,
+        None,
+        Some(seated(2, "Teal Owl 11", "c2")),
+    )
+    .await
+    .unwrap();
+    // Once it counts down, the duel takes no one else.
+    a.until(|m| match m {
+        ServerMsg::Lobby(l) if l.starts_at_ms.is_some() => Some(()),
+        _ => None,
+    })
+    .await;
+    assert_ne!(rooms.find_rival(4).await.unwrap(), code);
+    let seats = match_seats(&mut b).await;
+    assert_eq!(
+        seats,
+        vec![("Red Fox 03".into(), false), ("Teal Owl 11".into(), false)]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_student_with_no_rival_races_a_robot() {
+    let rooms = rooms();
+    let code = rooms.find_rival(4).await.unwrap();
+    // A duel is for students signed in to a seat.
+    let guest = join(&rooms, &code, None, None).await;
+    assert_eq!(guest.err(), Some("students_only"));
+    let mut a = join_with(
+        &rooms,
+        &code,
+        None,
+        None,
+        Some(seated(1, "Red Fox 03", "c1")),
+    )
+    .await
+    .unwrap();
+    let seats = match_seats(&mut a).await;
+    assert_eq!(seats.len(), 2);
+    assert_eq!(seats[0], ("Red Fox 03".into(), false));
+    assert!(seats[1].1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_student_who_leaves_a_duel_gives_the_desk_up() {
+    let rooms = rooms();
+    let code = rooms.find_rival(4).await.unwrap();
+    let a = join_with(
+        &rooms,
+        &code,
+        None,
+        None,
+        Some(seated(1, "Red Fox 03", "c1")),
+    )
+    .await
+    .unwrap();
+    a.tx.send(Cmd::Leave { conn: a.conn }).await.unwrap();
+    // The next one finds the same duel with both desks free, and waits anew.
+    assert_eq!(rooms.find_rival(4).await.unwrap(), code);
+    let mut b = join_with(
+        &rooms,
+        &code,
+        None,
+        None,
+        Some(seated(2, "Teal Owl 11", "c2")),
+    )
+    .await
+    .unwrap();
+    let seat = b
+        .until(|m| match m {
+            ServerMsg::Welcome { seat, .. } => Some(*seat),
+            _ => None,
+        })
+        .await;
+    assert_eq!(seat, Some(0));
+    let names = b
+        .until(|m| match m {
+            ServerMsg::Lobby(l) if l.rival_by_ms.is_some() => Some(l.names.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(names, vec!["Teal Owl 11".to_string()]);
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_room_for_a_class_seats_only_that_class() {
     let rooms = rooms();

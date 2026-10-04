@@ -19,7 +19,7 @@ import {
 import { ClassRace } from '../game/class-race.js';
 import { avatarOf, avatarSvg } from './avatar.js';
 import { pictureSvg } from './pictures.js';
-import { checkStudent, studentRoom, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
+import { checkStudent, findRival, studentRoom, onStudent, studentSignIn, studentSignOut, studentState, type Student } from './student.js';
 import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
@@ -62,6 +62,7 @@ const ICONS: Record<string, string> = {
   room: '<rect width="54" height="54" fill="#fff8ec"/><rect x="7" y="9" width="40" height="26" fill="#f2716b"/><path d="M27 9h20v26H27z" fill="#c9554f"/><rect x="18" y="17" width="18" height="10" fill="#fff8ec"/><rect x="25" y="35" width="4" height="9" fill="#3a3f4b"/>',
   teacher: '<rect width="54" height="54" fill="#3469c4"/><path d="M9 14h17v28H9z" fill="#fff8ec"/><path d="M28 14h17v28H28z" fill="#f3e6c9"/><rect x="26" y="12" width="2" height="32" fill="#3a3f4b"/><rect x="13" y="20" width="9" height="2" fill="#3469c4"/><rect x="13" y="25" width="9" height="2" fill="#3469c4"/>',
   tips: '<rect width="54" height="54" fill="#3fb6a0"/><circle cx="27" cy="22" r="12" fill="#fff8ec"/><path d="M27 10a12 12 0 0 1 0 24z" fill="#f3e6c9"/><rect x="21" y="34" width="12" height="4" fill="#fff8ec"/><rect x="22" y="40" width="10" height="4" fill="#f3e6c9"/>',
+  rival: '<rect width="54" height="54" fill="#fff8ec"/><circle cx="14" cy="21" r="7" fill="#f2716b"/><path d="M4 46 7 31h14l3 15z" fill="#f2716b"/><circle cx="40" cy="21" r="7" fill="#3469c4"/><path d="M30 46 33 31h14l3 15z" fill="#3469c4"/><path d="M29 5 22 19h6l-3 11 9-15h-6l3-10z" fill="#e8b64c"/>',
   watch: '<rect width="54" height="54" fill="#b198ea"/><path d="M5 27q22-20 44 0q-22 20-44 0z" fill="#fff8ec"/><path d="M27 12q11 3 22 15q-11 12-22 15z" fill="#f3e6c9"/><circle cx="27" cy="27" r="7" fill="#3a3f4b"/>',
 };
 
@@ -479,6 +480,7 @@ export class Home {
       badge.style.background = COLORS.teal;
       badge.appendChild(paperText(t.inClass, 12, PAPER));
       card.setAttribute('aria-label', `${t.studentHi(student.pseudonym)}. ${sub}. ${t.inClass}`);
+      this.card('right', row++, t.rival, 'rival', COLORS.coral, () => this.findRival());
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
@@ -967,6 +969,51 @@ export class Home {
     }
   }
 
+  /** FIND A RIVAL: a duel for the student's grade, then its lobby. */
+  private findRival(): void {
+    const t = this.t;
+    if (ClassRace.pending) {
+      this.lobby(ClassRace.pending);
+      return;
+    }
+    const { veil, body } = this.popup(t.rival[0]);
+    const fail = this.errorLine(body);
+    const line = body.querySelector('.err');
+    if (line) line.textContent = t.rivalFinding;
+    this.actions(body, veil);
+    let tries = 0;
+    const go = (): void => {
+      if (!online()) {
+        fail('offline');
+        return;
+      }
+      void findRival().then((r) => {
+        if (!veil.isConnected) return;
+        if (typeof r === 'string') {
+          fail(r);
+          return;
+        }
+        ClassRace.join(r.play_code).then(
+          (link) => {
+            if (!veil.isConnected) {
+              link.free();
+              return;
+            }
+            ClassRace.pending = link;
+            veil.remove();
+            this.lobby(link);
+          },
+          (e: Error) => {
+            // The duel filled a moment ago: the next one waits for a rival.
+            if ((e.message === 'room_full' || e.message === 'match_started') && tries++ < 2) go();
+            else fail(e.message);
+          },
+        );
+      });
+    };
+    go();
+  }
+
   /**
    * Who is in the room so far, and how it starts: in a teacher's room only
    * the teacher (from the class screen), in an open room once everyone has
@@ -1037,6 +1084,10 @@ export class Home {
       }
       const l = link.lobby;
       const open = l?.kind === 'open';
+      const duel = l?.kind === 'duel';
+      // A duel's wait for a rival ticks down here.
+      if (duel && !link.shut && !timer) timer = window.setInterval(draw, 250);
+      const rival = link.rivalIn();
       seats.textContent = l
         ? t.lobbySeats(l.names.length, l.seats) + (l.turn ? t.lobbyGroup(String.fromCharCode(65 + l.turn.group)) : '')
         : '';
@@ -1055,7 +1106,11 @@ export class Home {
           : t.roomClosed
         : open
           ? t.lobbyReadyWait(readyNow, l?.names.length ?? 0)
-          : t.lobbyWait;
+          : duel
+            ? rival === null
+              ? t.rivalFinding
+              : t.lobbyRival(Math.ceil(rival / 1000))
+            : t.lobbyWait;
       ready.style.display = open && !link.shut && link.seat !== null && !l?.ready[link.seat] ? '' : 'none';
       early.style.display = link.shut ? 'none' : '';
       desk.style.display = link.shut ? 'none' : '';

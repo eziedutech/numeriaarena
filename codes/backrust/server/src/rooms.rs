@@ -53,6 +53,10 @@ const RETRY_MS: f64 = 5_000.0;
 const CHEER_MS: f64 = 10_000.0;
 /// From START (or everyone READY) to the first wave, so every desk is there.
 const COUNTDOWN_MS: f64 = 10_000.0;
+/// A duel waits this long for a rival before a robot takes the empty seat.
+const DUEL_WAIT_MS: f64 = 20_000.0;
+/// Two rivals are in: the duel starts this much later.
+const DUEL_COUNTDOWN_MS: f64 = 5_000.0;
 /// The rooms an adult sees in their history.
 const HISTORY: i64 = 30;
 /// Per connection: messages a second before they are dropped.
@@ -191,6 +195,10 @@ pub struct Rooms {
     content: Content,
     db: Option<sqlx::PgPool>,
     codes: Mutex<HashMap<String, Entry>>,
+    /// The play code of the duel waiting for a rival, by grade.
+    waiting: Mutex<HashMap<i16, String>>,
+    /// One student at a time is matched, so two never open two duels at once.
+    matching: tokio::sync::Mutex<()>,
 }
 
 /// What `open` hands the room's creator.
@@ -208,6 +216,8 @@ impl Rooms {
             content,
             db,
             codes: Mutex::new(HashMap::new()),
+            waiting: Mutex::new(HashMap::new()),
+            matching: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -318,6 +328,37 @@ impl Rooms {
         kind: RoomKind,
         class: Option<RoomClass>,
     ) -> Result<Opened, sqlx::Error> {
+        self.open_room(seats, created_by, kind, class, None).await
+    }
+
+    /// FIND A RIVAL for a student of `grade`: the play code of the duel that
+    /// waits for one at that grade, or of a new one.
+    pub async fn find_rival(self: &Arc<Self>, grade: i16) -> Result<String, sqlx::Error> {
+        let _one = self.matching.lock().await;
+        let waiting = self.waiting.lock().expect("waiting").get(&grade).cloned();
+        if let Some(code) = waiting
+            && self.find(&code).is_some()
+        {
+            return Ok(code);
+        }
+        let opened = self
+            .open_room(2, None, RoomKind::Duel, None, Some(grade))
+            .await?;
+        self.waiting
+            .lock()
+            .expect("waiting")
+            .insert(grade, opened.play_code.clone());
+        Ok(opened.play_code)
+    }
+
+    async fn open_room(
+        self: &Arc<Self>,
+        seats: usize,
+        created_by: Option<i64>,
+        kind: RoomKind,
+        class: Option<RoomClass>,
+        duel: Option<i16>,
+    ) -> Result<Opened, sqlx::Error> {
         let (tx, rx) = mpsc::channel(256);
         let (play_code, watch_code) = self.register(&tx);
         let opened = Opened {
@@ -367,6 +408,7 @@ impl Rooms {
         );
         room.kind = kind;
         room.class = class;
+        room.duel = duel;
         room.turn = room.groups().keys().next().copied().unwrap_or(0);
         tokio::spawn(room.run(rx));
         Ok(opened)
@@ -456,6 +498,10 @@ struct Room {
     starts_at: Option<f64>,
     /// In a room for a class: the race group whose seats sit down (0 is A).
     turn: u8,
+    /// A duel (FIND A RIVAL) at this grade.
+    duel: Option<i16>,
+    /// A duel's first student is in: a robot takes the empty seat at this time.
+    rival_by: Option<f64>,
 }
 
 impl Room {
@@ -491,6 +537,8 @@ impl Room {
             shut: false,
             starts_at: None,
             turn: 0,
+            duel: None,
+            rival_by: None,
         }
     }
 
@@ -535,6 +583,7 @@ impl Room {
                 }
             }
         }
+        self.unlist();
         let mut codes = vec![self.watch_code.as_str()];
         if let Some(p) = &self.play_code {
             codes.push(p);
@@ -574,7 +623,66 @@ impl Room {
             ready: self.slots.iter().map(|s| s.ready).collect(),
             starts_at_ms: self.starts_at,
             turn: self.turn_view(),
+            rival_by_ms: self.rival_by.filter(|_| self.starts_at.is_none()),
         })
+    }
+
+    /// A duel that starts takes no one else: FIND A RIVAL opens a new one.
+    fn unlist(&self) {
+        let (Some(grade), Some(code)) = (self.duel, &self.play_code) else {
+            return;
+        };
+        let mut waiting = self.rooms.waiting.lock().expect("waiting");
+        if waiting.get(&grade) == Some(code) {
+            waiting.remove(&grade);
+        }
+    }
+
+    /// A duel starts when its two rivals are in, or when the first one has
+    /// waited long enough: then a robot races them.
+    fn settle_duel(&mut self) {
+        if self.game.is_some() || self.starts_at.is_some() {
+            return;
+        }
+        let now = self.now();
+        let here = self.slots.iter().filter(|s| s.conn.is_some()).count();
+        let before = self.rival_by;
+        if here == 0 {
+            self.rival_by = None;
+        } else {
+            let by = *self.rival_by.get_or_insert(now + DUEL_WAIT_MS);
+            if here >= self.seats || now >= by {
+                self.starts_at = Some(now + DUEL_COUNTDOWN_MS);
+                self.unlist();
+            }
+        }
+        if before != self.rival_by || self.starts_at.is_some() {
+            let lobby = self.lobby();
+            self.broadcast(&lobby);
+        }
+    }
+
+    /// In a duel's lobby a student who leaves gives the seat up, so a rival
+    /// never races an empty desk.
+    fn leave_duel(&mut self, seat: usize) {
+        if self.duel.is_none()
+            || self.game.is_some()
+            || self.starts_at.is_some()
+            || self.slots[seat].conn.is_some()
+        {
+            return;
+        }
+        self.slots.remove(seat);
+        for c in self.conns.values_mut() {
+            if let Some(s) = c.seat
+                && s > seat
+            {
+                c.seat = Some(s - 1);
+            }
+        }
+        let lobby = self.lobby();
+        self.broadcast(&lobby);
+        self.settle();
     }
 
     /// The class's seat numbers by race group.
@@ -643,6 +751,10 @@ impl Room {
     /// In an open room the countdown runs while every classmate here is
     /// ready: one more coming in stops it until they are ready too.
     fn settle(&mut self) {
+        if self.duel.is_some() {
+            self.settle_duel();
+            return;
+        }
         if self.kind != RoomKind::Open || self.game.is_some() || self.demo {
             return;
         }
@@ -676,6 +788,9 @@ impl Room {
     /// seat of another class, or of a group whose turn it is not. None in a
     /// room open to anyone.
     fn class_gate(&self, student: Option<&Seated>) -> Option<&'static str> {
+        if self.duel.is_some() {
+            return student.is_none().then_some("students_only");
+        }
         let class = self.class.as_ref()?;
         match student {
             None => Some("class_only"),
@@ -790,7 +905,13 @@ impl Room {
                     self.settle();
                 }
             }
-            Cmd::Leave { conn } => self.drop_conn(conn),
+            Cmd::Leave { conn } => {
+                let seat = self.conns.get(&conn).and_then(|c| c.seat);
+                self.drop_conn(conn);
+                if let Some(s) = seat {
+                    self.leave_duel(s);
+                }
+            }
             Cmd::Close => {
                 // What was answered is kept; the match does not go on.
                 if self.game.is_some() && self.done_at.is_none() {
@@ -950,8 +1071,13 @@ impl Room {
             .map(|(i, s)| Classmate {
                 name: s.name.clone(),
                 player_id: format!("{}:{i}", self.id),
-                // A class's room plays at the class's grade.
-                grade: self.class.as_ref().and_then(|c| u8::try_from(c.grade).ok()),
+                // A class's room plays at the class's grade, a duel at its own.
+                grade: self
+                    .class
+                    .as_ref()
+                    .map(|c| c.grade)
+                    .or(self.duel)
+                    .and_then(|g| u8::try_from(g).ok()),
             })
             .collect();
         let cfg = ClassConfig::new(

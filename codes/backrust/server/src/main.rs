@@ -78,6 +78,7 @@ pub fn router(state: State) -> Router {
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))
         .route("/api/student/room", get(classes::student_room))
+        .route("/api/student/rival", post(classes::student_rival))
         .route("/api/student/plays", post(classes::student_play))
         .route("/api/student/sign-out", post(classes::student_sign_out))
         .with_state(state)

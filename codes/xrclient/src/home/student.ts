@@ -108,6 +108,20 @@ export async function studentRoom(): Promise<{ play_code: string | null; class_l
   }
 }
 
+/** FIND A RIVAL: the play code of a duel for the student's grade. */
+export async function findRival(): Promise<{ play_code: string } | string> {
+  const s = current;
+  if (!s) return 'signed_out';
+  try {
+    const res = await fetch(`${API}/student/rival`, { method: 'POST', headers: { Authorization: `Bearer ${s.token}` } });
+    if (res.status === 401 && current?.token === s.token) set(null);
+    if (!res.ok) return errorCode(res);
+    return (await res.json()) as { play_code: string };
+  } catch {
+    return 'offline';
+  }
+}
+
 /** A race against the robots or a practice played on the student's own. */
 export type OwnPlay =
   | { kind: 'race'; points: number; folded: number; place: number; stars: number; duration_ms: number }

@@ -46,14 +46,19 @@ export interface Lobby {
   seats: number;
   names: string[];
   watch_code: string;
-  /** `class`: the teacher starts it; `open`: it starts when everyone is ready. */
-  kind: 'class' | 'open';
+  /**
+   * `class`: the teacher starts it; `open`: it starts when everyone is ready;
+   * `duel`: FIND A RIVAL, it starts when the rival is in or a robot takes the desk.
+   */
+  kind: 'class' | 'open' | 'duel';
   /** Each seat's READY, in seat order (open rooms). */
   ready: boolean[];
   /** The countdown is on: the match starts then, on the room's clock. */
   starts_at_ms: number | null;
   /** In a room for a class: the group whose seats sit down (0 is A). */
   turn: { group: number; seats: number[]; next: number | null; groups: number[] } | null;
+  /** In a duel waiting for a rival: a robot takes the empty desk then, on the room's clock. */
+  rival_by_ms: number | null;
 }
 
 interface ClassRecap {
@@ -74,7 +79,7 @@ type ServerMsg =
   | { type: 'error'; code: string };
 
 /** Errors that end the join; others are answers to one action. */
-const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class', 'not_your_turn'];
+const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class', 'not_your_turn', 'students_only'];
 /** After a `wait` (between rounds, the last seconds of one), ask again this much later. */
 const ASK_AGAIN_MS = 800;
 /** A dropped connection is tried again this often, this many times. */
@@ -175,6 +180,13 @@ export class ClassRace {
     return Math.max(0, this.local(at) - this.clock());
   }
 
+  /** In a duel: milliseconds until a robot takes the empty desk; else null. */
+  rivalIn(): number | null {
+    const at = this.lobby?.rival_by_ms;
+    if (at == null || this.state) return null;
+    return Math.max(0, this.local(at) - this.clock());
+  }
+
   private connect(joined?: () => void, failed?: (code: string) => void): void {
     const ws = new WebSocket(wsUrl());
     this.ws = ws;
@@ -265,6 +277,7 @@ export class ClassRace {
           ready: msg.ready,
           starts_at_ms: msg.starts_at_ms,
           turn: msg.turn ?? null,
+          rival_by_ms: msg.rival_by_ms ?? null,
         };
         this.onChange?.();
         break;

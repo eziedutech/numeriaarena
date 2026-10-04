@@ -969,6 +969,20 @@ pub async fn student_room(
     ))
 }
 
+/// `POST /api/student/rival`: FIND A RIVAL. The play code of a room of two
+/// desks for students of the same grade; a robot takes the empty one when no
+/// rival comes in time. Its results count as a room for anyone.
+pub async fn student_rival(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let s = student(&state.db, bearer(&headers)?)
+        .await?
+        .ok_or(err(StatusCode::UNAUTHORIZED, "signed_out"))?;
+    let code = state.rooms.find_rival(s.grade).await?;
+    Ok(Json(json!({ "play_code": code, "grade": s.grade })))
+}
+
 /// A race against the robots or a practice the student played on their own,
 /// as the game reports it.
 #[derive(Deserialize)]

@@ -46,7 +46,7 @@ interface Lobby {
   seats: number;
   names: string[];
   watch_code: string;
-  kind: "class" | "open";
+  kind: "class" | "open" | "duel";
   ready: boolean[];
   starts_at_ms: number | null;
   /** In a room for a class: the group whose seats sit down (0 is A). */
