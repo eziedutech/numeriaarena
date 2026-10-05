@@ -89,6 +89,7 @@ const TEXT = {
     link: (n: number) => (n === 0 ? "First" : `Backup ${n}`),
     provider: "Provider",
     model: "Model id, exactly as the provider lists it",
+    notListed: "This id is not in the provider's list from TEST. Pick one above if the call fails.",
     maxTokens: "Max tokens",
     priceIn: "USD a million tokens in",
     priceOut: "USD a million tokens out",
@@ -167,6 +168,7 @@ const TEXT = {
     link: (n: number) => (n === 0 ? "Utama" : `Cadangan ${n}`),
     provider: "Penyedia",
     model: "ID model, persis seperti daftar penyedia",
+    notListed: "ID ini tidak ada di daftar penyedia dari UJI. Pilih salah satu di atas bila panggilannya gagal.",
     maxTokens: "Token maksimum",
     priceIn: "USD per sejuta token masuk",
     priceOut: "USD per sejuta token keluar",
@@ -249,6 +251,8 @@ export function AdminAi({ lang, user }: { lang: Lang; user: User }) {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Provider | "new" | null>(null);
   const [deleting, setDeleting] = useState<Provider | null>(null);
+  // Models each provider listed at its last TEST in this visit, to pick from in a task.
+  const [models, setModels] = useState<Record<string, string[]>>({});
 
   const load = () => {
     api<Overview>(user, "/admin/ai").then(setData, (e) => setError(errorCode(e)));
@@ -279,7 +283,13 @@ export function AdminAi({ lang, user }: { lang: Lang; user: User }) {
         <Err t={t} code={error} />
         {data.providers.length === 0 && <p>{t.none}</p>}
         {data.providers.map((p) => (
-          <ProviderRow key={p.code} t={t} user={user} p={p} onEdit={() => setEditing(p)} onDelete={() => setDeleting(p)} onTested={load} />
+          <ProviderRow key={p.code} t={t} user={user} p={p} onEdit={() => setEditing(p)} onDelete={() => setDeleting(p)}
+            models={models[p.code] ?? []}
+            onTested={(list) => {
+              setModels((all) => ({ ...all, [p.code]: list }));
+              load();
+            }}
+          />
         ))}
         <div className="actions">
           <button type="button" className="btn small" onClick={() => setEditing("new")} disabled={!data.master_key}>
@@ -291,7 +301,7 @@ export function AdminAi({ lang, user }: { lang: Lang; user: User }) {
       <section className="paper-sheet ai-admin">
         <h2>{t.tasks}</h2>
         {data.tasks.map((task) => (
-          <Chain key={task.code} t={t} user={user} task={task} providers={data.providers} onSaved={setData} />
+          <Chain key={task.code} t={t} user={user} task={task} providers={data.providers} models={models} onSaved={setData} />
         ))}
       </section>
 
@@ -399,9 +409,24 @@ function Budget({ t, user, budget, onSaved }: { t: T; user: User; budget: Overvi
   );
 }
 
-function ProviderRow({ t, user, p, onEdit, onDelete, onTested }: { t: T; user: User; p: Provider; onEdit: () => void; onDelete: () => void; onTested: () => void }) {
+function ProviderRow({
+  t,
+  user,
+  p,
+  models,
+  onEdit,
+  onDelete,
+  onTested,
+}: {
+  t: T;
+  user: User;
+  p: Provider;
+  models: string[];
+  onEdit: () => void;
+  onDelete: () => void;
+  onTested: (models: string[]) => void;
+}) {
   const [model, setModel] = useState("");
-  const [models, setModels] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const test = p.last_test;
@@ -452,10 +477,7 @@ function ProviderRow({ t, user, p, onEdit, onDelete, onTested }: { t: T; user: U
             setBusy(true);
             setError("");
             api<{ models?: string[] }>(user, `/admin/ai/providers/${p.code}/test`, { method: "POST", body: JSON.stringify({ model: model || null }) })
-              .then((r) => {
-                setModels(r.models ?? []);
-                onTested();
-              })
+              .then((r) => onTested(r.models ?? models))
               .catch((e) => setError(errorCode(e)))
               .finally(() => setBusy(false));
           }}
@@ -581,7 +603,21 @@ interface Draft {
   price_out: string;
 }
 
-function Chain({ t, user, task, providers, onSaved }: { t: T; user: User; task: Overview["tasks"][number]; providers: Provider[]; onSaved: (o: Overview) => void }) {
+function Chain({
+  t,
+  user,
+  task,
+  providers,
+  models,
+  onSaved,
+}: {
+  t: T;
+  user: User;
+  task: Overview["tasks"][number];
+  providers: Provider[];
+  models: Record<string, string[]>;
+  onSaved: (o: Overview) => void;
+}) {
   const allowed = providers.filter((p) => !task.student_data || p.student_data);
   const fromLinks = () =>
     task.chain.map((l) => ({ provider: l.provider, model: l.model, max_tokens: String(l.max_tokens), price_in: perMillion(l.price_in), price_out: perMillion(l.price_out) }));
@@ -612,6 +648,16 @@ function Chain({ t, user, task, providers, onSaved }: { t: T; user: User; task: 
             {t.model}
           </label>
           <input id={`ai-model-${task.code}-${i}`} className="field" value={d.model} onChange={(e) => change(i, { model: e.target.value })} />
+          {(models[d.provider] ?? []).length > 0 && (
+            <div className="ai-models" role="group" aria-label={t.model}>
+              {models[d.provider].map((m) => (
+                <button key={m} type="button" className={m === d.model ? "tab on" : "tab"} aria-pressed={m === d.model} onClick={() => change(i, { model: m })}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
+          {(models[d.provider] ?? []).length > 0 && d.model.trim() !== "" && !models[d.provider].includes(d.model.trim()) && <p className="soft">{t.notListed}</p>}
           <div className="ai-numbers">
             <label>
               <span className="field-label">{t.maxTokens}</span>
