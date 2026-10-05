@@ -17,7 +17,7 @@ const EN = {
   hint: {
     computer: 'Pick where you play first. This computer plays with the mouse; the headset opens the game on your real desk.',
     xr: 'The game opens on your real desk. Put the headset on and play with your hands.',
-    smartboard: 'Touch the big screen to play. The class helper mode for smartboards is coming soon.',
+    smartboard: 'Touch the big screen to play. RACE ON THE SMARTBOARD puts three players side by side.',
   },
   /** The hint on a headset, where the controller's ray and trigger pick on this page. */
   hintHeadset: {
@@ -41,7 +41,7 @@ const EN = {
   rival: ['FIND A RIVAL', 'A student of your grade, or a robot'],
   rivalFinding: 'Looking for a rival...',
   lobbyRival: (s: number) => `Looking for a rival in your grade. If nobody comes, a robot races you in ${s} s.`,
-  smartboard: ['PLAY ON THE SMARTBOARD', 'Help the headset players as a class'],
+  smartboard: ['RACE ON THE SMARTBOARD', 'Three players, one big screen'],
   studentFirst: 'Enter your student code first',
   student: ["I'M IN A CLASS", 'Class code, seat and pictures'],
   teacher: ['TEACHER SIGN IN', 'Classes, rooms and reports'],
@@ -174,7 +174,6 @@ const EN = {
     board:
       'Two boards: MY CLASS and GLOBAL. Each ranks HIGH STRIKE (the best race scores) and CITY BUILDER (the biggest Fold Towns), for this month or for all time. Players show only as made-up names, like BLUE CRANE 07.',
     town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
-    smartboard: 'On a smartboard the whole class helps the headset players. This mode is coming in a later update.',
     accessibility:
       'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
   },
@@ -203,7 +202,7 @@ const ID: typeof EN = {
   hint: {
     computer: 'Pilih dulu tempat bermain. Komputer ini dimainkan dengan mouse; headset membuka game di mejamu sendiri.',
     xr: 'Game terbuka di mejamu sendiri. Pakai headset dan bermain dengan tangan.',
-    smartboard: 'Sentuh layar besar untuk bermain. Mode pembantu kelas untuk smartboard segera hadir.',
+    smartboard: 'Sentuh layar besar untuk bermain. BALAPAN DI SMARTBOARD menjajarkan tiga pemain.',
   },
   hintHeadset: {
     xr: 'Arahkan controller, lalu tekan pelatuk untuk memilih. Game lalu terbuka di XR di mejamu sendiri.',
@@ -225,7 +224,7 @@ const ID: typeof EN = {
   rival: ['CARI LAWAN', 'Siswa satu tingkat, atau robot'],
   rivalFinding: 'Mencari lawan...',
   lobbyRival: (s: number) => `Mencari lawan satu tingkat. Kalau tidak ada yang datang, robot melawanmu dalam ${s} detik.`,
-  smartboard: ['MAIN DI SMARTBOARD', 'Bantu pemain headset bersama kelas'],
+  smartboard: ['BALAPAN DI SMARTBOARD', 'Tiga pemain, satu layar besar'],
   studentFirst: 'Masukkan kode siswa dulu',
   student: ['AKU DI KELAS', 'Kode kelas, kursi, dan gambar'],
   teacher: ['MASUK SEBAGAI GURU', 'Kelas, ruang main, dan laporan'],
@@ -357,7 +356,6 @@ const ID: typeof EN = {
     board:
       'Dua papan: KELASKU dan GLOBAL. Masing-masing memeringkat HIGH STRIKE (skor lomba terbaik) dan CITY BUILDER (Kota Lipat terbesar), untuk bulan ini atau sepanjang masa. Pemain hanya tampil dengan nama samaran, misalnya BLUE CRANE 07.',
     town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
-    smartboard: 'Di smartboard, seluruh kelas membantu pemain headset. Mode ini hadir di pembaruan berikutnya.',
     accessibility:
       'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',
   },

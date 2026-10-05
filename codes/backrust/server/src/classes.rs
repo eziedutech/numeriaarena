@@ -232,7 +232,7 @@ fn validate(c: &NewClass) -> Result<ValidClass, &'static str> {
     })
 }
 
-async fn audit(
+pub(crate) async fn audit(
     conn: &mut PgConnection,
     actor: i64,
     action: &str,
@@ -290,7 +290,7 @@ async fn add_seats(
 }
 
 /// The class, if this adult owns it, locked for the change that follows.
-async fn owned(conn: &mut PgConnection, owner: i64, id: &str) -> Result<(), ApiError> {
+pub(crate) async fn owned(conn: &mut PgConnection, owner: i64, id: &str) -> Result<(), ApiError> {
     let status: Option<String> =
         sqlx::query_scalar("SELECT status FROM classes WHERE id = $1 AND owner = $2 FOR UPDATE")
             .bind(id)
@@ -434,7 +434,11 @@ pub(crate) async fn class_detail(db: &PgPool, owner: i64, id: &str) -> Result<Va
                     'practices', count(*) FILTER (WHERE p.kind = 'practice'),
                     'days', count(DISTINCT p.played_at::date),
                     'last_at', max(p.played_at)
-                ) FROM seat_plays p WHERE p.class_seat_id = s.id
+                ) FROM seat_plays p WHERE p.class_seat_id = s.id AND p.kind <> 'board'
+            ),
+            'board', (
+                SELECT json_build_object('races', count(*), 'stars', COALESCE(sum(p.stars), 0))
+                FROM seat_plays p WHERE p.class_seat_id = s.id AND p.kind = 'board'
             )
         ) FROM class_seats s WHERE class_id = $1 ORDER BY number",
     )

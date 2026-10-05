@@ -56,6 +56,11 @@ const files = import.meta.glob('../../../content/{templates,contoh}/*.json', {
   eager: true,
 }) as Record<string, string>;
 
+/** Every bundled template as its JSON text, for games that build their own questions. */
+export function bundledTemplates(): string[] {
+  return Object.values(files);
+}
+
 export class Core {
   private constructor(private session: GameSession) {}
 

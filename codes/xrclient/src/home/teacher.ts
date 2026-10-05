@@ -84,6 +84,12 @@ async function call(user: User, path: string, init: RequestInit = {}): Promise<R
   });
 }
 
+/** A request to the server as the signed-in teacher, or null when no one is signed in. */
+export async function teacherCall(path: string, init: RequestInit = {}): Promise<Response | null> {
+  const user = auth?.currentUser;
+  return user ? call(user, path, init) : null;
+}
+
 async function errorCode(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { error?: string };

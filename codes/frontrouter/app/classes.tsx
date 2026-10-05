@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
+import { GAME } from "./game-link";
 import { ClassReport } from "./class-report";
 import { namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
@@ -31,8 +32,8 @@ interface ClassRow {
 type SortKey = "seat" | "name" | "recent" | "idle" | "active" | "stars" | "points" | "group";
 const SORTS: SortKey[] = ["seat", "name", "recent", "idle", "active", "stars", "points", "group"];
 
-/** Every play of a seat: class races, rooms for anyone, races with robots, practices. */
-const plays = (s: Seat) => s.official.matches + s.other_rooms.matches + s.own.races + s.own.practices;
+/** Every play of a seat: class races, smartboard races, rooms for anyone, races with robots, practices. */
+const plays = (s: Seat) => s.official.matches + (s.board?.races ?? 0) + s.other_rooms.matches + s.own.races + s.own.practices;
 const seen = (s: Seat) => (s.last_seen_at ? Date.parse(s.last_seen_at) : 0);
 
 /** Seats matching `query` (name from this browser or pseudonym), in the order picked; ties by seat number. */
@@ -69,6 +70,8 @@ interface Seat {
   other_rooms: { matches: number; last_at: string | null };
   /** Races against the robots and practices on the student's own, as the game reports them. */
   own: { races: number; practices: number; days: number; last_at: string | null };
+  /** Races on the classroom's smartboard the teacher saved, counted with the class races. */
+  board?: { races: number; stars: number };
 }
 
 /** A sign-in card, only in this page's memory. */
@@ -88,6 +91,15 @@ const TEXT = {
     eduHint: "Paper lessons to show on the smartboard or share with the class",
     allClasses: "ALL CLASSES",
     race: "NEW RACE ROOM FOR THIS CLASS",
+    board: "SMARTBOARD RACE",
+    boardTitle: "A race on the smartboard",
+    boardBody: "Three students race side by side on the classroom's big screen, each touching their own column. Pick who plays; the game opens with them.",
+    boardPlayer: (n: number) => `Player ${n}`,
+    boardNobody: "Pick a student",
+    boardRecord: "Save the results in this class's report (stay signed in in the game)",
+    boardDistinct: "Pick three different students.",
+    boardOpen: "OPEN THE RACE",
+    onBoard: (n: number) => `${n} on the smartboard`,
     open: "OPEN",
     archived: "ARCHIVED",
     grade: (g: number) => `Grade ${g}`,
@@ -111,7 +123,7 @@ const TEXT = {
     otherRooms: (n: number) => `${n} in rooms for anyone`,
     days: (n: number) => `on ${n} ${n === 1 ? "day" : "days"}`,
     recordsNote:
-      "Class races are the official record: rooms you open for this class. Own play counts races with robots, practices and rooms for anyone, kept apart; the game reports them, so they show how often a student plays, not a grade.",
+      "Class races are the official record: rooms you open for this class, and smartboard races you save. Own play counts races with robots, practices and rooms for anyone, kept apart; the game reports them, so they show how often a student plays, not a grade.",
     namePlaceholder: "Name",
     never: "not yet",
     locked: "LOCKED",
@@ -185,6 +197,15 @@ const TEXT = {
     eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
     allClasses: "SEMUA KELAS",
     race: "BUAT RUANG LOMBA UNTUK KELAS INI",
+    board: "BALAPAN SMARTBOARD",
+    boardTitle: "Balapan di smartboard",
+    boardBody: "Tiga siswa berlomba berdampingan di layar besar kelas, masing-masing menyentuh kolomnya sendiri. Pilih siapa yang main; game terbuka dengan mereka.",
+    boardPlayer: (n: number) => `Pemain ${n}`,
+    boardNobody: "Pilih siswa",
+    boardRecord: "Simpan hasilnya di laporan kelas ini (tetap masuk di game)",
+    boardDistinct: "Pilih tiga siswa yang berbeda.",
+    boardOpen: "BUKA BALAPAN",
+    onBoard: (n: number) => `${n} di smartboard`,
     open: "BUKA",
     archived: "DIARSIPKAN",
     grade: (g: number) => `Kelas ${g}`,
@@ -208,7 +229,7 @@ const TEXT = {
     otherRooms: (n: number) => `${n} di ruang umum`,
     days: (n: number) => `dalam ${n} hari`,
     recordsNote:
-      "Lomba kelas adalah catatan resmi: ruang yang Anda buka untuk kelas ini. Main sendiri menghitung lomba lawan robot, latihan, dan ruang umum, disimpan terpisah; game yang melaporkannya, jadi ini menunjukkan seberapa sering siswa bermain, bukan nilai.",
+      "Lomba kelas adalah catatan resmi: ruang yang Anda buka untuk kelas ini, dan balapan smartboard yang Anda simpan. Main sendiri menghitung lomba lawan robot, latihan, dan ruang umum, disimpan terpisah; game yang melaporkannya, jadi ini menunjukkan seberapa sering siswa bermain, bukan nilai.",
     namePlaceholder: "Nama",
     never: "belum",
     locked: "TERKUNCI",
@@ -501,6 +522,7 @@ function ClassPage({
   const [more, setMore] = useState("1");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("seat");
+  const [board, setBoard] = useState(false);
   const shown = seats ? arrange(seats, names, query, sortBy) : [];
   const file = useRef<HTMLInputElement>(null);
   const active = row.status === "active";
@@ -615,9 +637,14 @@ function ClassPage({
         </div>
         <div className="row">
           {active && (
-            <button type="button" className="btn small blue" onClick={onRace}>
-              {t.race}
-            </button>
+            <>
+              <button type="button" className="btn small blue" onClick={onRace}>
+                {t.race}
+              </button>
+              <button type="button" className="btn small blue" onClick={() => setBoard(true)} disabled={!seats?.length}>
+                {t.board}
+              </button>
+            </>
           )}
           <button type="button" className="btn small" onClick={onBack}>
             {t.allClasses}
@@ -702,6 +729,7 @@ function ClassPage({
                   <div key={line}>{line}</div>
                 ))}
                 {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
+                {(s.board?.races ?? 0) > 0 && <div className="soft">{t.onBoard(s.board!.races)}</div>}
               </td>
               <td className="seat-stats">
                 {t.own(s.own.races, s.own.practices).map((line) => (
@@ -787,8 +815,57 @@ function ClassPage({
           </div>
         </div>
       )}
+      {board && seats && <BoardPanel t={t} row={row} seats={seats} names={names} onClose={() => setBoard(false)} />}
       {cards.length > 0 && <PrintCards t={t} lang={lang} row={row} cards={cards} names={names} />}
     </>
+  );
+}
+
+/**
+ * Three seats for a race on the smartboard, opened in the game. The names go
+ * in the link's hash, which never reaches a server, because the game may run
+ * where this browser's names are not kept.
+ */
+function BoardPanel({ t, row, seats, names, onClose }: { t: Text; row: ClassRow; seats: Seat[]; names: Record<number, string>; onClose: () => void }) {
+  const [picked, setPicked] = useState(() => [0, 1, 2].map((i) => seats[i]?.number ?? 0));
+  const [record, setRecord] = useState(true);
+  const label = (n: number) => `${two(n)} ${names[n] || seats.find((s) => s.number === n)?.pseudonym || ""}`.trim();
+  const options = [{ value: 0, label: t.boardNobody }, ...seats.map((s) => ({ value: s.number, label: label(s.number) }))];
+  const ready = picked.every((n) => n > 0) && new Set(picked).size === 3;
+  const q = new URLSearchParams({ board: row.id, grade: String(row.grade) });
+  if (record) q.set("record", "1");
+  for (const n of picked) q.append("seat", `${n}:${names[n] || seats.find((s) => s.number === n)?.pseudonym || ""}`);
+  return (
+    <div className="veil" role="dialog" aria-modal="true" aria-label={t.boardTitle} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="paper-sheet narrow board-panel">
+        <h3 className="dialog-title">{t.boardTitle}</h3>
+        <p className="soft">{t.boardBody}</p>
+        {picked.map((n, i) => (
+          <div className="board-slot" key={i}>
+            <span>{t.boardPlayer(i + 1)}</span>
+            <Pick label={t.boardPlayer(i + 1)} value={n} options={options} onChange={(v) => setPicked((all) => all.map((x, j) => (j === i ? v : x)))} />
+          </div>
+        ))}
+        <label className="board-record">
+          <input type="checkbox" checked={record} onChange={(e) => setRecord(e.target.checked)} /> {t.boardRecord}
+        </label>
+        {!ready && <p className="err">{t.boardDistinct}</p>}
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose} autoFocus>
+            {t.cancel}
+          </button>
+          {ready ? (
+            <a className="btn blue" href={`${GAME}#${q}`} target="_blank" rel="noopener" onClick={onClose}>
+              {t.boardOpen}
+            </a>
+          ) : (
+            <button type="button" className="btn blue" disabled>
+              {t.boardOpen}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

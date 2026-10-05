@@ -230,3 +230,113 @@ async fn own_answers_and_class_races_are_reported_apart() {
     let report = class_report(&db, &c, owner, &id).await.unwrap();
     assert_eq!(report["rows"], json!([]));
 }
+
+/// An answer from a race on the smartboard.
+fn board_answer(c: &Content, id: &str, result: &str) -> Sent {
+    let mut s = answer(c, id, result, 1);
+    s.mode = "board".into();
+    s.event["mode"] = json!("board");
+    s
+}
+
+#[tokio::test]
+async fn a_race_on_the_smartboard_counts_with_the_class() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let c = content();
+    let t = &c.templates[0];
+    let owner = teacher(&db).await;
+    let a = allowance(&db, owner, false).await.unwrap();
+    let new: crate::classes::NewClass = serde_json::from_value(json!({
+        "label": "5C", "grade": 5, "school_year": "2026/27", "seats": 3
+    }))
+    .unwrap();
+    let made = create_class(&db, owner, a, &new).await.unwrap();
+    let id = made["class"]["id"].as_str().unwrap().to_owned();
+    let race = |players: Value| -> BoardRace {
+        serde_json::from_value(json!({
+            "client_id": "b1", "duration_ms": 60000, "total": 2, "players": players
+        }))
+        .unwrap()
+    };
+    let events = |e: Vec<Sent>| -> Value {
+        e.iter()
+            .map(|s| json!({ "event_id": s.event_id, "mode": s.mode, "event": s.event }))
+            .collect()
+    };
+    let saved = race(json!([
+        { "seat": 1, "right": 2, "place": 1,
+          "events": events(vec![board_answer(&c, "b1-1-1", "correct"), board_answer(&c, "b1-1-2", "correct")]) },
+        { "seat": 2, "right": 1, "place": 2,
+          "events": events(vec![board_answer(&c, "b1-2-1", "correct"), board_answer(&c, "b1-2-2", "wrong")]) },
+    ]));
+    let done = record_board(&db, &c, owner, &id, &saved).await.unwrap();
+    assert_eq!(done["players"][0]["answers"]["stored"], 2);
+    // Sent again (the network dropped the reply): kept once.
+    let again = record_board(&db, &c, owner, &id, &saved).await.unwrap();
+    assert_eq!(again["players"][1]["answers"]["stored"], 0);
+
+    let report = class_report(&db, &c, owner, &id).await.unwrap();
+    assert_eq!(
+        report["rows"],
+        json!([
+            { "seat": 1, "source": "class", "template_id": t.id, "skill": t.skill, "right": 2, "total": 2 },
+            { "seat": 2, "source": "class", "template_id": t.id, "skill": t.skill, "right": 1, "total": 2 },
+        ])
+    );
+    let detail = crate::classes::class_detail(&db, owner, &id).await.unwrap();
+    assert_eq!(
+        detail["seats"][0]["board"],
+        json!({ "races": 1, "stars": 3 })
+    );
+    assert_eq!(
+        detail["seats"][1]["board"],
+        json!({ "races": 1, "stars": 1 })
+    );
+    assert_eq!(detail["seats"][0]["own"]["days"], 0);
+
+    // The same seat twice, a seat the class lacks, another adult's class.
+    let twice = race(json!([
+        { "seat": 1, "right": 0, "place": 1, "events": [] },
+        { "seat": 1, "right": 0, "place": 2, "events": [] },
+    ]));
+    assert_eq!(
+        record_board(&db, &c, owner, &id, &twice)
+            .await
+            .unwrap_err()
+            .1,
+        "board"
+    );
+    let lacking = race(json!([{ "seat": 9, "right": 0, "place": 1, "events": [] }]));
+    assert_eq!(
+        record_board(&db, &c, owner, &id, &lacking)
+            .await
+            .unwrap_err()
+            .1,
+        "seat_not_found"
+    );
+    let stranger = teacher(&db).await;
+    assert_eq!(
+        record_board(&db, &c, stranger, &id, &saved)
+            .await
+            .unwrap_err()
+            .1,
+        "class_not_found"
+    );
+    // A student's own device cannot send answers as a smartboard race.
+    let seat: i64 =
+        sqlx::query_scalar("SELECT id FROM class_seats WHERE class_id = $1 AND number = 3")
+            .bind(&id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    let own = store_answers(&db, &c, seat, &[board_answer(&c, "x1", "correct")])
+        .await
+        .unwrap();
+    assert_eq!(
+        own["rejected"],
+        json!([{ "event_id": "x1", "reason": "mode" }])
+    );
+}

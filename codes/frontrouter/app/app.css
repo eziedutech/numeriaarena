@@ -1017,6 +1017,25 @@ button.tool {
   font-size: 18px;
 }
 
+.board-panel .board-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.board-panel .board-record {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.board-panel .actions a.btn {
+  text-decoration: none;
+}
+
 .class-title {
   display: flex;
   gap: 10px;

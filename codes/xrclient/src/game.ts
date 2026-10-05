@@ -80,6 +80,7 @@ import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork } from './offline.js';
+import { openBoard } from './board/board.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -396,6 +397,29 @@ type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'town' |
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
 
+/**
+ * A smartboard race opened from the class page of the site:
+ * `#board=<class>&grade=5&record=1&seat=3:Name&seat=7:Name&seat=12:Name`.
+ * The names stay in the address's fragment, which never reaches a server,
+ * and are cleared from it at once.
+ */
+function openBoardFromLink(): void {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const classId = q.get('board');
+  if (!classId) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  const seats = q
+    .getAll('seat')
+    .map((s) => {
+      const at = s.indexOf(':');
+      return { number: Number(at < 0 ? s : s.slice(0, at)), name: at < 0 ? '' : s.slice(at + 1).slice(0, 80) };
+    })
+    .filter((s) => Number.isInteger(s.number) && s.number > 0)
+    .slice(0, 3);
+  const grade = Number(q.get('grade'));
+  openBoard({ classId, seats, record: q.get('record') === '1', grade: [4, 5, 6].includes(grade) ? grade : undefined });
+}
+
 export class GameSystem extends createSystem({
   desks: { required: [DeskRoot] },
   creatures: { required: [Creature] },
@@ -609,6 +633,7 @@ export class GameSystem extends createSystem({
       () => this.goHome(),
       () => this.otherGame(),
     );
+    openBoardFromLink();
     // The project allows XR; whether this device can open a session is the browser's to say.
     const xr = (navigator as Navigator & { xr?: { isSessionSupported(mode: string): Promise<boolean> } }).xr;
     if (!xr) this.home.setXrAvailable(false);
