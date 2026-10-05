@@ -40,6 +40,8 @@ const GAP = 40;
 const ABOVE = 84 + 24 + 64 + 10 + FIELD_TOP;
 /** Three rounds of the three looks, so each player meets each look as often. */
 const COUNT = 9;
+/** Seconds each player gets to get ready before the first question. */
+const COUNT_IN = 5;
 /** The time limits the teacher picks from, in minutes; the race ends when it runs out. */
 const MINUTES = [2, 3, 5];
 /** After a right answer and after a wrong one, before the next question. */
@@ -87,9 +89,8 @@ const CSS = `
 #board .col .track div { height: 100%; transition: width 0.3s; }
 #board .col .track { flex: none; }
 ${LOOKS_CSS}
+#board .col .ready { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; font-size: 30px; font-weight: 700; }
 #board .col .done { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 26px; }
-#board .count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(58, 45, 20, 0.25); }
-#board .count div { background: ${PAPER}; padding: 30px 60px; }
 #board .podium { position: absolute; left: 160px; right: 160px; bottom: 150px; height: 560px; display: flex; align-items: flex-end; gap: 24px; }
 #board .step { flex: 1; display: flex; flex-direction: column; align-items: stretch; }
 #board .step .card { background: ${PAPER}; padding: 16px 18px; text-align: center; margin-bottom: 14px; }
@@ -488,6 +489,7 @@ class Board {
 
     const cols = el('div', 'cols', stage);
     let startAt = 0;
+    let countIn = COUNT_IN;
     // The clocks count down from the limit; at 0 the race ends for everyone.
     const limit = this.minutes * 60_000;
     const left = (used: number) => Math.max(0, limit - used);
@@ -540,6 +542,13 @@ class Board {
         done.appendChild(paperText(t.finished, 40, COLUMN[i]));
         el('div', '', done).textContent = `${t.right(c.right, COUNT)} · ${clock(c.done)}`;
         el('div', 'soft', done).textContent = t.waiting;
+        return;
+      }
+      if (!startAt) {
+        // Before the start each player gets their own count in, and no question to read early.
+        const ready = el('div', 'ready', c.view);
+        ready.appendChild(paperText(countIn > 0 ? String(countIn) : t.go, countIn > 0 ? 200 : 120, COLUMN[i]));
+        el('div', '', ready).textContent = t.ready;
         return;
       }
       const q = c.questions[c.at];
@@ -602,18 +611,13 @@ class Board {
       this.podium(columns, elapsed, COUNT);
     };
 
-    columns.forEach(draw);
-    // Three, two, one: all start on the same moment.
-    const count = el('div', 'count', stage);
-    const card = el('div', 'shadow', count);
-    let n = 3;
+    // Five seconds to get ready, counted in every column, then all start on the same moment.
     const step = () => {
-      card.replaceChildren(paperText(n > 0 ? String(n) : t.go, 120, n > 0 ? INK : COLUMN[0]));
-      if (n-- > 0) this.timers.push(window.setTimeout(step, 800));
+      columns.forEach(draw);
+      if (countIn-- > 0) this.timers.push(window.setTimeout(step, 1000));
       else
         this.timers.push(
           window.setTimeout(() => {
-            count.remove();
             startAt = performance.now();
             columns.forEach((c, i) => {
               c.busy = false;
