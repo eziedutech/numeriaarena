@@ -236,6 +236,8 @@ export class Home {
    * shows on the teacher card, not as a box to close each time.
    */
   private signInAsked = false;
+  /** Opened in a headset's own browser: XR or this window, and no smartboard. */
+  private onHeadset = /OculusBrowser|Quest/u.test(navigator.userAgent);
 
   constructor(
     private camera: PerspectiveCamera,
@@ -265,10 +267,11 @@ export class Home {
         this.render();
       }
     });
-    const saved = store.get('device') as Device | null;
-    // On a headset the game opens on the desk by default.
-    const onHeadset = /OculusBrowser|Quest/u.test(navigator.userAgent);
-    this.device = saved && (saved !== 'xr' || xrAvailable) ? saved : onHeadset && xrAvailable ? 'xr' : 'computer';
+    let saved = store.get('device') as Device | null;
+    // A headset has no smartboard to play on.
+    if (this.onHeadset && saved === 'smartboard') saved = null;
+    // On a headset the game opens in XR by default.
+    this.device = saved && (saved !== 'xr' || xrAvailable) ? saved : this.onHeadset && xrAvailable ? 'xr' : 'computer';
     this.render();
     window.addEventListener('resize', () => this.fit());
     // The OFFLINE chip comes and goes with the network.
@@ -381,14 +384,15 @@ export class Home {
     title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.webp`;
     title.alt = 'Numeria Arena';
 
-    // Where to play: one of three.
+    // Where to play: one of three, or on a headset XR or this window.
     const tabs = el('div', 'tabs shadow', this.stage);
     el('div', 'tab label', tabs).appendChild(paperText(t.playOn, 20, INK));
-    for (const d of ['computer', 'xr', 'smartboard'] as Device[]) {
+    for (const d of (this.onHeadset ? ['xr', 'computer'] : ['computer', 'xr', 'smartboard']) as Device[]) {
       const off = d === 'xr' && !this.xrAvailable;
+      const name = this.onHeadset && d === 'computer' ? t.window : t.device[d];
       const tab = el('button', `tab${this.device === d ? ' on' : ''}${off ? ' off' : ''}`, tabs);
-      tab.appendChild(paperText(t.device[d], 20, this.device === d ? PAPER : INK));
-      tab.setAttribute('aria-label', `${t.playOn} ${t.device[d]}`);
+      tab.appendChild(paperText(name, 20, this.device === d ? PAPER : INK));
+      tab.setAttribute('aria-label', `${t.playOn} ${name}`);
       tab.setAttribute('aria-pressed', String(this.device === d));
       // Without a headset the tab stays, and says where the game opens on one.
       if (off) {
@@ -416,7 +420,7 @@ export class Home {
     access.appendChild(paperText(t.accessibility, 17, INK));
     access.setAttribute('aria-label', t.accessibility);
     access.addEventListener('click', () => this.accessibility());
-    el('div', 'hint', this.stage).textContent = t.hint[this.device];
+    el('div', 'hint', this.stage).textContent = this.onHeadset && this.device !== 'smartboard' ? t.hintHeadset[this.device] : t.hint[this.device];
     if (!online()) {
       // No network: the games still play, and say where their results go. A row of its own,
       // under the hint, so the chips above keep their width.
@@ -443,13 +447,13 @@ export class Home {
       this.card('left', 0, t.openRoom, 'room', COLORS.coral, () => window.location.assign('/manage#rooms'));
       this.card('left', 1, t.myClasses, 'classes', COLORS.teal, () => window.location.assign('/manage#classes'));
       this.card('left', 2, t.history, 'history', COLORS.cobalt, () => window.location.assign('/manage#rooms'));
-      this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
+      if (!this.onHeadset) this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
     } else {
       left.appendChild(paperText(t.play, 30, INK));
       this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
       this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
       this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.joinRoom());
-      this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
+      if (!this.onHeadset) this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => this.message(t.smartboard[0], t.soonBody.smartboard), true);
     }
 
     // Right: who you are, and learning more.

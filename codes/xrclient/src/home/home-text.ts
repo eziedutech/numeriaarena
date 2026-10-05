@@ -6,7 +6,9 @@ export type Lang = 'en' | 'id';
 
 const EN = {
   playOn: 'PLAY ON',
-  device: { computer: 'THIS COMPUTER', xr: 'HEADSET (XR)', smartboard: 'SMARTBOARD' },
+  device: { computer: 'THIS COMPUTER', xr: 'META QUEST (XR)', smartboard: 'SMARTBOARD' },
+  /** On a headset, playing flat in the browser window instead of in XR. */
+  window: 'THIS WINDOW',
   language: 'LANGUAGE',
   accessibility: 'ACCESSIBILITY',
   bigNumbers: (on: boolean) => `BIG NUMBERS: ${on ? 'ON' : 'OFF'}`,
@@ -16,6 +18,11 @@ const EN = {
     computer: 'Pick where you play first. This computer plays with the mouse; the headset opens the game on your real desk.',
     xr: 'The game opens on your real desk. Put the headset on and play with your hands.',
     smartboard: 'Touch the big screen to play. The class helper mode for smartboards is coming soon.',
+  },
+  /** The hint on a headset, where the controller's ray and trigger pick on this page. */
+  hintHeadset: {
+    xr: 'Point the controller and pull the trigger to pick. The game then opens in XR on your real desk.',
+    computer: 'The game plays flat in this window. Point the controller and pull the trigger to pick.',
   },
   noXr: 'No headset found on this device',
   noXrBody:
@@ -186,7 +193,8 @@ const EN = {
 
 const ID: typeof EN = {
   playOn: 'MAIN DI',
-  device: { computer: 'KOMPUTER INI', xr: 'HEADSET (XR)', smartboard: 'SMARTBOARD' },
+  device: { computer: 'KOMPUTER INI', xr: 'META QUEST (XR)', smartboard: 'SMARTBOARD' },
+  window: 'JENDELA INI',
   language: 'BAHASA',
   accessibility: 'AKSESIBILITAS',
   bigNumbers: (on: boolean) => `ANGKA BESAR: ${on ? 'NYALA' : 'MATI'}`,
@@ -196,6 +204,10 @@ const ID: typeof EN = {
     computer: 'Pilih dulu tempat bermain. Komputer ini dimainkan dengan mouse; headset membuka game di mejamu sendiri.',
     xr: 'Game terbuka di mejamu sendiri. Pakai headset dan bermain dengan tangan.',
     smartboard: 'Sentuh layar besar untuk bermain. Mode pembantu kelas untuk smartboard segera hadir.',
+  },
+  hintHeadset: {
+    xr: 'Arahkan controller, lalu tekan pelatuk untuk memilih. Game lalu terbuka di XR di mejamu sendiri.',
+    computer: 'Game dimainkan datar di jendela ini. Arahkan controller, lalu tekan pelatuk untuk memilih.',
   },
   noXr: 'Headset tidak ditemukan di perangkat ini',
   noXrBody:
