@@ -311,6 +311,7 @@ const CLASS_JSON: &str = "json_build_object(
     'school_year', c.school_year,
     'join_code', CASE WHEN c.status = 'active' THEN c.join_code END,
     'status', c.status,
+    'on_global', c.on_global,
     'seats', (SELECT count(*) FROM class_seats s WHERE s.class_id = c.id),
     'created_at', c.created_at
 )";

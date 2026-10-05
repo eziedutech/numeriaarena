@@ -8,6 +8,7 @@ mod auth;
 mod classes;
 mod demo_teacher;
 mod insight;
+mod leaderboard;
 mod organizer;
 mod rooms;
 
@@ -96,6 +97,13 @@ pub fn router(state: State) -> Router {
         .route("/api/classes/{id}/report", get(answers::report))
         .route("/api/classes/{id}/board", post(answers::board))
         .route("/api/classes/{id}/insight", post(insight::insight))
+        .route("/api/classes/{id}/leaderboard", get(leaderboard::for_class))
+        .route(
+            "/api/classes/{id}/global",
+            post(leaderboard::global_setting),
+        )
+        .route("/api/leaderboard", get(leaderboard::global))
+        .route("/api/student/leaderboard", get(leaderboard::for_student))
         .route("/api/demo/teacher", post(demo_teacher::start))
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))
