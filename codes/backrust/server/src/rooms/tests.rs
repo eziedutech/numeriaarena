@@ -219,6 +219,50 @@ async fn two_classmates_and_a_bot_race_to_the_recap() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_room_races_the_games_and_level_it_was_set_up_with() {
+    let rooms = rooms();
+    let setup = RoomSetup {
+        games: vec![GameType::FactorySort, GameType::BalanceGate],
+        rounds: 3,
+        seconds: 45,
+        level: foldlings_core::setup::Level::Harder,
+    };
+    let opened = rooms
+        .open_for(3, Some(7), RoomKind::Class, None, setup.clone())
+        .await
+        .unwrap();
+    assert_eq!(rooms.hosted_by(7)[0].setup, setup);
+    let mut a = join(&rooms, &opened.play_code, None, None).await.unwrap();
+    let lobby = a
+        .until(|m| match m {
+            ServerMsg::Lobby(l) => Some(l.setup.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(lobby, setup);
+    let _host = start(&rooms, &opened).await;
+    let plan = a
+        .until(|m| match m {
+            ServerMsg::View(v) => Some(v.plan.clone()),
+            _ => None,
+        })
+        .await;
+    let games: Vec<(GameType, f64)> = plan
+        .iter()
+        .filter(|r| !r.boss)
+        .map(|r| (r.game, r.seconds))
+        .collect();
+    assert_eq!(
+        games,
+        [
+            (GameType::FactorySort, 45.0),
+            (GameType::BalanceGate, 45.0),
+            (GameType::FactorySort, 45.0)
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn an_adult_finds_the_rooms_they_opened() {
     let rooms = rooms();
     let first = rooms.open(3, Some(7), RoomKind::Class).await.unwrap();
@@ -227,13 +271,10 @@ async fn an_adult_finds_the_rooms_they_opened() {
     rooms.open(3, Some(8), RoomKind::Class).await.unwrap();
     rooms.open(3, None, RoomKind::Class).await.unwrap();
     let mine = rooms.hosted_by(7);
-    let codes: Vec<&str> = mine
-        .iter()
-        .map(|(o, _, _, _)| o.play_code.as_str())
-        .collect();
+    let codes: Vec<&str> = mine.iter().map(|h| h.opened.play_code.as_str()).collect();
     assert_eq!(codes, [second.play_code.as_str(), first.play_code.as_str()]);
-    assert_eq!(mine[0].0.host_token, second.host_token);
-    assert_eq!(mine[0].1, 2);
+    assert_eq!(mine[0].opened.host_token, second.host_token);
+    assert_eq!(mine[0].seats, 2);
     // A closed room is gone from the list.
     rooms.forget(&[&first.play_code, &first.watch_code]);
     assert_eq!(rooms.hosted_by(7).len(), 1);
@@ -455,7 +496,13 @@ async fn turn_of(c: &mut Client) -> TurnView {
 async fn a_class_races_one_group_of_six_at_a_time() {
     let rooms = rooms();
     let opened = rooms
-        .open_for(6, Some(7), RoomKind::Class, Some(class_of(8)))
+        .open_for(
+            6,
+            Some(7),
+            RoomKind::Class,
+            Some(class_of(8)),
+            RoomSetup::default(),
+        )
         .await
         .unwrap();
     let code = opened.play_code.clone();
@@ -706,12 +753,18 @@ async fn a_room_for_a_class_seats_only_that_class() {
         seats: vec![(3, 0)],
     };
     let opened = rooms
-        .open_for(3, Some(7), RoomKind::Class, Some(class.clone()))
+        .open_for(
+            3,
+            Some(7),
+            RoomKind::Class,
+            Some(class.clone()),
+            RoomSetup::default(),
+        )
         .await
         .unwrap();
     assert_eq!(rooms.class_room("c1"), Some(opened.play_code.clone()));
     assert_eq!(rooms.class_room("c2"), None);
-    assert_eq!(rooms.hosted_by(7)[0].3, Some(class));
+    assert_eq!(rooms.hosted_by(7)[0].class, Some(class));
     // A guest, and a seat of another class, are turned away.
     let guest = join(&rooms, &opened.play_code, None, None).await;
     assert_eq!(guest.err(), Some("class_only"));

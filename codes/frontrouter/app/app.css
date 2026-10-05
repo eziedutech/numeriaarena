@@ -437,6 +437,32 @@ button.tool {
   gap: 10px;
 }
 
+.race-setup {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 4px 0 18px;
+}
+
+.race-setup h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.race-setup .field-label {
+  margin-top: 6px;
+}
+
+.race-setup .soft {
+  margin: 0;
+}
+
+.tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .tool .row {
   display: flex;
   gap: 10px;

@@ -4,6 +4,7 @@ import type { Route } from "./+types/screen";
 import { avatarSvg, robotSvg } from "../avatar";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
+import { describe, type RoomSetup } from "../race-setup";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Arena Screen - Numeria Arena" }, { name: "robots", content: "noindex" }];
@@ -51,6 +52,8 @@ interface Lobby {
   starts_at_ms: number | null;
   /** In a room for a class: the group whose seats sit down (0 is A). */
   turn: Turn | null;
+  /** The games, rounds and level the room races with. */
+  setup?: RoomSetup;
 }
 
 interface Turn {
@@ -544,6 +547,7 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
       {!v ? (
         <LobbyCard
           t={t}
+          lang={lang}
           lobby={live.lobby}
           host={host}
           play={play}
@@ -643,6 +647,7 @@ function RoomGone({ t, code, error, host, ended }: { t: Text; code: string; erro
 
 function LobbyCard({
   t,
+  lang,
   lobby,
   host,
   play,
@@ -651,6 +656,7 @@ function LobbyCard({
   onCall,
 }: {
   t: Text;
+  lang: Lang;
   lobby?: Lobby;
   host?: string;
   play?: string;
@@ -674,6 +680,7 @@ function LobbyCard({
           <p>
             <strong>{t.seatsTaken(lobby.names.length, lobby.seats)}</strong>
           </p>
+          {lobby.setup && <p className="soft">{describe(lang, lobby.setup)}</p>}
           <div className="arena-names">
             {lobby.names.map((n, i) => (
               <span key={n} className={open && lobby.ready[i] ? "ready" : undefined}>

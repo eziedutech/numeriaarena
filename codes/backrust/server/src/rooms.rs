@@ -23,6 +23,7 @@ use foldlings_core::fairness::FairnessParams;
 use foldlings_core::protocol::{ClientMsg, LobbyView, RoomKind, ServerMsg, TurnView};
 use foldlings_core::race::Phase;
 use foldlings_core::session::SessionError;
+use foldlings_core::setup::RoomSetup;
 use foldlings_core::template::{I18n, ItemTemplate};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -187,6 +188,15 @@ struct Entry {
     hosted: Option<Arc<Hosted>>,
 }
 
+/// An open room as `GET /api/rooms` lists it.
+pub struct HostedRoom {
+    pub opened: Opened,
+    pub seats: usize,
+    pub kind: RoomKind,
+    pub class: Option<RoomClass>,
+    pub setup: RoomSetup,
+}
+
 /// A room as its creator sees it, kept while the room is open.
 struct Hosted {
     by: i64,
@@ -194,6 +204,7 @@ struct Hosted {
     seats: usize,
     kind: RoomKind,
     class: Option<RoomClass>,
+    setup: RoomSetup,
     at: Instant,
 }
 
@@ -264,7 +275,7 @@ impl Rooms {
     }
 
     /// The rooms `user` opened that are still open, the newest first.
-    pub fn hosted_by(&self, user: i64) -> Vec<(Opened, usize, RoomKind, Option<RoomClass>)> {
+    pub fn hosted_by(&self, user: i64) -> Vec<HostedRoom> {
         let map = self.codes.lock().expect("codes");
         let mut mine: Vec<&Arc<Hosted>> = map
             .values()
@@ -273,7 +284,13 @@ impl Rooms {
             .collect();
         mine.sort_by_key(|h| std::cmp::Reverse(h.at));
         mine.iter()
-            .map(|h| (h.opened.clone(), h.seats, h.kind, h.class.clone()))
+            .map(|h| HostedRoom {
+                opened: h.opened.clone(),
+                seats: h.seats,
+                kind: h.kind,
+                class: h.class.clone(),
+                setup: h.setup.clone(),
+            })
             .collect()
     }
 
@@ -348,7 +365,8 @@ impl Rooms {
         created_by: Option<i64>,
         kind: RoomKind,
     ) -> Result<Opened, sqlx::Error> {
-        self.open_for(seats, created_by, kind, None).await
+        self.open_for(seats, created_by, kind, None, RoomSetup::default())
+            .await
     }
 
     /// The same, for one class of the teacher: its seats only, at its grade.
@@ -358,8 +376,10 @@ impl Rooms {
         created_by: Option<i64>,
         kind: RoomKind,
         class: Option<RoomClass>,
+        setup: RoomSetup,
     ) -> Result<Opened, sqlx::Error> {
-        self.open_room(seats, created_by, kind, class, None).await
+        self.open_room(seats, created_by, kind, class, None, setup)
+            .await
     }
 
     /// FIND A RIVAL for a student of `grade`: the play code of the duel that
@@ -373,7 +393,14 @@ impl Rooms {
             return Ok(code);
         }
         let opened = self
-            .open_room(2, None, RoomKind::Duel, None, Some(grade))
+            .open_room(
+                2,
+                None,
+                RoomKind::Duel,
+                None,
+                Some(grade),
+                RoomSetup::default(),
+            )
             .await?;
         self.waiting
             .lock()
@@ -389,6 +416,7 @@ impl Rooms {
         kind: RoomKind,
         class: Option<RoomClass>,
         duel: Option<i16>,
+        setup: RoomSetup,
     ) -> Result<Opened, sqlx::Error> {
         let (tx, rx) = mpsc::channel(256);
         let (play_code, watch_code) = self.register(&tx);
@@ -400,8 +428,8 @@ impl Rooms {
         };
         if let Some(db) = &self.db {
             let stored = sqlx::query(
-                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by, kind, class_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "INSERT INTO rooms (id, play_code, watch_code, seats, created_by, kind, class_id, setup)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             )
             .bind(&opened.id)
             .bind(&opened.play_code)
@@ -410,6 +438,7 @@ impl Rooms {
             .bind(created_by)
             .bind(kind.as_str())
             .bind(class.as_ref().map(|c| c.id.clone()))
+            .bind(json!(setup))
             .execute(db)
             .await;
             if let Err(e) = stored {
@@ -426,6 +455,7 @@ impl Rooms {
                 seats,
                 kind,
                 class: class.clone(),
+                setup: setup.clone(),
                 at: Instant::now(),
             }));
         }
@@ -440,6 +470,7 @@ impl Rooms {
         room.kind = kind;
         room.class = class;
         room.duel = duel;
+        room.setup = setup;
         room.turn = room.groups().keys().next().copied().unwrap_or(0);
         tokio::spawn(room.run(rx));
         Ok(opened)
@@ -533,6 +564,7 @@ struct Room {
     duel: Option<i16>,
     /// A duel's first student is in: a robot takes the empty seat at this time.
     rival_by: Option<f64>,
+    setup: RoomSetup,
 }
 
 impl Room {
@@ -570,6 +602,7 @@ impl Room {
             turn: 0,
             duel: None,
             rival_by: None,
+            setup: RoomSetup::default(),
         }
     }
 
@@ -655,6 +688,7 @@ impl Room {
             starts_at_ms: self.starts_at,
             turn: self.turn_view(),
             rival_by_ms: self.rival_by.filter(|_| self.starts_at.is_none()),
+            setup: self.setup.clone(),
         })
     }
 
@@ -1128,16 +1162,17 @@ impl Room {
                     .and_then(|g| u8::try_from(g).ok()),
             })
             .collect();
-        let cfg = ClassConfig::new(
+        let mut cfg = ClassConfig::new(
             self.seed,
             classmates,
             self.seats.max(self.slots.len()),
             self.rooms.content.version.clone(),
         );
+        cfg.waves = self.setup.waves();
         let mut m = match ClassMatch::new(
             self.rooms.content.templates.clone(),
             cfg,
-            FairnessParams::default(),
+            self.setup.params(FairnessParams::default()),
         ) {
             Ok((m, _)) => m,
             Err(e) => {
@@ -1222,7 +1257,7 @@ impl Room {
         .bind(&self.id)
         .bind(self.seed as i64)
         .bind(&self.rooms.content.version)
-        .bind(FairnessParams::default().version)
+        .bind(self.setup.params(FairnessParams::default()).version)
         .bind(Value::Array(seats))
         .bind(self.class.as_ref().map(|_| self.turn as i16))
         .execute(db)
@@ -1361,6 +1396,9 @@ pub struct NewRoom {
     /// One of the teacher's classes: the room takes only its seats.
     #[serde(default)]
     class_id: Option<String>,
+    /// Games, rounds and level; the usual race when left out.
+    #[serde(default)]
+    setup: RoomSetup,
 }
 
 fn three() -> usize {
@@ -1381,6 +1419,9 @@ pub async fn create(
     };
     if body.seats == 0 || body.seats > MAX_SEATS {
         return Err(ApiError(StatusCode::BAD_REQUEST, "seats"));
+    }
+    if let Some(code) = body.setup.problem() {
+        return Err(ApiError(StatusCode::BAD_REQUEST, code));
     }
     // A class's room always has a group's six desks.
     let seats = if body.class_id.is_some() {
@@ -1411,7 +1452,13 @@ pub async fn create(
     let label = class.as_ref().map(|c| c.label.clone());
     let opened = state
         .rooms
-        .open_for(seats, user.map(|u| u.id), body.kind, class)
+        .open_for(
+            seats,
+            user.map(|u| u.id),
+            body.kind,
+            class,
+            body.setup.clone(),
+        )
         .await?;
     tracing::info!("room {} opened", opened.id);
     Ok(Json(json!({
@@ -1421,6 +1468,7 @@ pub async fn create(
         "host_token": opened.host_token,
         "seats": seats,
         "class_label": label,
+        "setup": body.setup,
     })))
 }
 
@@ -1435,15 +1483,16 @@ pub async fn mine(
         .rooms
         .hosted_by(user.id)
         .into_iter()
-        .map(|(o, seats, kind, class)| {
+        .map(|h| {
             json!({
-                "id": o.id,
-                "play_code": o.play_code,
-                "watch_code": o.watch_code,
-                "host_token": o.host_token,
-                "seats": seats,
-                "kind": kind,
-                "class_label": class.map(|c| c.label),
+                "id": h.opened.id,
+                "play_code": h.opened.play_code,
+                "watch_code": h.opened.watch_code,
+                "host_token": h.opened.host_token,
+                "seats": h.seats,
+                "kind": h.kind,
+                "class_label": h.class.map(|c| c.label),
+                "setup": h.setup,
             })
         })
         .collect();
@@ -1465,7 +1514,7 @@ pub async fn history(
         .rooms
         .hosted_by(user.id)
         .into_iter()
-        .map(|(o, _, _, _)| o.id)
+        .map(|h| h.opened.id)
         .collect();
     let rows: Vec<(Value,)> = sqlx::query_as(
         "SELECT json_build_object(
@@ -1475,6 +1524,7 @@ pub async fn history(
             'seats', r.seats,
             'created_at', r.created_at,
             'class_label', (SELECT c.label FROM classes c WHERE c.id = r.class_id),
+            'setup', r.setup,
             'matches', COALESCE((
                 SELECT json_agg(json_build_object(
                     'started_at', m.started_at,

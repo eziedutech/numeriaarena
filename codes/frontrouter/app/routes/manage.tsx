@@ -4,6 +4,7 @@ import type { User } from "firebase/auth";
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, isSample, sendEmailLink, signInConfigured, signInWith, signOut, startSample, watchUser } from "../auth";
 import { MyClasses } from "../classes";
+import { RaceSetup, USUAL, describe, readSetup, type RoomSetup } from "../race-setup";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
 
@@ -90,7 +91,7 @@ const TEXT = {
     roomWatch: "Watch code, for a screen or parents",
     copy: "COPY",
     copied: "COPIED",
-    roomSeats: "3 seats; robots fill the empty ones.",
+    roomSeats: "6 seats; robots fill the empty ones.",
     openScreen: "OPEN THE CLASS SCREEN",
     closeRoom: "CLOSE THE ROOM",
     closeSure: "Close this room? Nobody can join it again, and a match on now stops.",
@@ -136,6 +137,8 @@ const TEXT = {
     cancel: "CANCEL",
     errors: {
       reason: "Write a reason of 3 to 300 letters.",
+      setup_games: "Pick one to five games for the race.",
+      setup_time: "Pick fewer rounds or shorter ones: a race lasts at most 15 minutes.",
       unchanged: "That organiser already has this status.",
       not_admin: "This account is not an admin.",
       offline: "The server cannot be reached right now.",
@@ -202,7 +205,7 @@ const TEXT = {
     roomWatch: "Kode tonton, untuk layar atau orang tua",
     copy: "SALIN",
     copied: "TERSALIN",
-    roomSeats: "3 kursi; robot mengisi yang kosong.",
+    roomSeats: "6 kursi; robot mengisi yang kosong.",
     openScreen: "BUKA LAYAR KELAS",
     closeRoom: "TUTUP RUANG",
     closeSure: "Tutup ruang ini? Tidak ada yang bisa masuk lagi, dan pertandingan yang berjalan berhenti.",
@@ -248,6 +251,8 @@ const TEXT = {
     cancel: "BATAL",
     errors: {
       reason: "Tulis alasan 3 sampai 300 huruf.",
+      setup_games: "Pilih satu sampai lima game untuk lomba.",
+      setup_time: "Pilih babak lebih sedikit atau lebih singkat: lomba paling lama 15 menit.",
       unchanged: "Penyelenggara itu sudah berstatus ini.",
       not_admin: "Akun ini bukan admin.",
       offline: "Server belum bisa dihubungi.",
@@ -500,12 +505,14 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
   useEffect(() => setTab(window.location.hash === "#rooms" ? "rooms" : "classes"), []);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
+  const [setup, setSetup] = useState<RoomSetup>(USUAL);
+  useEffect(() => setSetup(readSetup()), []);
   const working = me.organizer && me.organizer.status !== "suspended";
   const show = (next: Tab) => {
     setTab(next);
     window.history.replaceState(null, "", `#${next}`);
   };
-  // A race room of three seats, for one class or for anyone; the RACE ROOMS tab then shows it.
+  // A race room of six seats with the chosen setup, for one class or for anyone; the RACE ROOMS tab then shows it.
   const openRoom = (classId?: string) => {
     if (opening) return;
     setOpening(true);
@@ -513,7 +520,7 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
     show("rooms");
     api<OpenedRoom>(user, "/rooms", {
       method: "POST",
-      body: JSON.stringify({ seats: 6, kind: "class", class_id: classId }),
+      body: JSON.stringify({ seats: 6, kind: "class", class_id: classId, setup }),
     })
       .then(
         () => setRooms((n) => n + 1),
@@ -566,7 +573,7 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
       )}
       {me.organizer && (!working || tab === "rooms") && (
         <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms">
-          {working && <RaceRooms t={t} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
+          {working && <RaceRooms t={t} lang={lang} setup={setup} onSetup={setSetup} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
           <RoomHistory t={t} user={user} version={rooms} />
         </div>
       )}
@@ -580,6 +587,7 @@ interface OpenedRoom {
   watch_code: string;
   host_token: string;
   class_label?: string | null;
+  setup?: RoomSetup | null;
 }
 
 interface ClassChoice {
@@ -589,7 +597,7 @@ interface ClassChoice {
 }
 
 /**
- * RACE ROOMS: open a room of three seats for one of this teacher's classes
+ * RACE ROOMS: choose how it is raced, then open a room of six seats for one of this teacher's classes
  * (only its signed-in seats, the official record) or for anyone with the
  * code; then every room still open, each with its codes, the class screen
  * that starts it, and CLOSE THE ROOM. Rooms live in the server's memory, so
@@ -597,6 +605,9 @@ interface ClassChoice {
  */
 function RaceRooms({
   t,
+  lang,
+  setup,
+  onSetup,
   user,
   version,
   opening,
@@ -605,6 +616,9 @@ function RaceRooms({
   onChange,
 }: {
   t: Text;
+  lang: Lang;
+  setup: RoomSetup;
+  onSetup: (s: RoomSetup) => void;
   user: User;
   version: number;
   opening: boolean;
@@ -646,6 +660,7 @@ function RaceRooms({
     <>
       <section className="paper-sheet">
         <h2 className="sheet-title">{t.raceTitle}</h2>
+        <RaceSetup lang={lang} setup={setup} onChange={onSetup} />
         <p>{t.raceFor}</p>
         <div className="row race-for">
           {classes?.map((c) => (
@@ -675,6 +690,7 @@ function RaceRooms({
                 <span>{room.class_label ? t.roomPlayClass(room.class_label) : t.roomPlay}</span>
                 <CopyCode big label={t.roomCode} code={room.play_code} copyText={t.copy} copiedText={t.copied} />
                 <CopyCode label={t.roomWatch} code={room.watch_code} copyText={t.copy} copiedText={t.copied} />
+                <span>{describe(lang, room.setup)}</span>
                 <span className="soft">{t.roomSeats}</span>
                 <div className="row ticket-foot">
                   <a className="btn small" href={screen} target="_blank" rel="noopener">

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::class_match::{ClassEvent, ClassRecap, ClassView};
 use crate::race::{RaceOffer, RaceVerdict};
+use crate::setup::RoomSetup;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -80,6 +81,8 @@ pub struct LobbyView {
     /// In a duel still waiting for a rival: a robot takes the empty seat at
     /// this time, on the room's clock.
     pub rival_by_ms: Option<f64>,
+    /// The games, rounds and level the room races with.
+    pub setup: RoomSetup,
 }
 
 /// A class races in groups, one group a match (0 is group A).

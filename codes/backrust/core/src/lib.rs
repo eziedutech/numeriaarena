@@ -11,6 +11,7 @@ pub mod race;
 pub mod rational;
 pub mod rng;
 pub mod session;
+pub mod setup;
 pub mod sim;
 pub mod template;
 pub mod validate;
