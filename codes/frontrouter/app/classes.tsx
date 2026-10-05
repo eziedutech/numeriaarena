@@ -26,6 +26,33 @@ interface ClassRow {
   created_at: string;
 }
 
+/** How the seat table can be ordered. */
+type SortKey = "seat" | "name" | "recent" | "idle" | "active" | "stars" | "points" | "group";
+const SORTS: SortKey[] = ["seat", "name", "recent", "idle", "active", "stars", "points", "group"];
+
+/** Every play of a seat: class races, rooms for anyone, races with robots, practices. */
+const plays = (s: Seat) => s.official.matches + s.other_rooms.matches + s.own.races + s.own.practices;
+const seen = (s: Seat) => (s.last_seen_at ? Date.parse(s.last_seen_at) : 0);
+
+/** Seats matching `query` (name from this browser or pseudonym), in the order picked; ties by seat number. */
+function arrange(seats: Seat[], names: Record<number, string>, query: string, by: SortKey): Seat[] {
+  const q = query.trim().toLowerCase();
+  const label = (s: Seat) => (names[s.number] || s.pseudonym).toLowerCase();
+  const found = q ? seats.filter((s) => `${names[s.number] ?? ""} ${s.pseudonym} ${two(s.number)}`.toLowerCase().includes(q)) : [...seats];
+  const key: Record<SortKey, (a: Seat, b: Seat) => number> = {
+    seat: () => 0,
+    name: (a, b) => label(a).localeCompare(label(b)),
+    recent: (a, b) => seen(b) - seen(a),
+    // Never played first: they need the nudge most.
+    idle: (a, b) => seen(a) - seen(b),
+    active: (a, b) => plays(b) - plays(a),
+    stars: (a, b) => b.official.stars - a.official.stars,
+    points: (a, b) => (b.last_official?.points ?? -1) - (a.last_official?.points ?? -1),
+    group: (a, b) => a.group - b.group,
+  };
+  return found.sort((a, b) => key[by](a, b) || a.number - b.number);
+}
+
 interface Seat {
   number: number;
   pseudonym: string;
@@ -89,6 +116,20 @@ const TEXT = {
     newPicture: "NEW PICTURE",
     unlock: "UNLOCK",
     empty: "EMPTY THE SEAT",
+    find: "Find a name or pseudonym",
+    sortBy: "Sort by",
+    sorts: {
+      seat: "Seat number",
+      name: "Name, A to Z",
+      recent: "Played most recently",
+      idle: "Not played for longest",
+      active: "Plays most (all play)",
+      stars: "Most stars in class races",
+      points: "Points in the last class race",
+      group: "Group",
+    } as Record<SortKey, string>,
+    shown: (n: number, all: number) => `${n} of ${all} seats`,
+    noMatch: "No seat matches.",
     addSeats: "ADD SEATS",
     howMany: "How many seats to add?",
     add: "ADD",
@@ -171,6 +212,20 @@ const TEXT = {
     newPicture: "GAMBAR BARU",
     unlock: "BUKA KUNCI",
     empty: "KOSONGKAN KURSI",
+    find: "Cari nama atau samaran",
+    sortBy: "Urutkan",
+    sorts: {
+      seat: "Nomor kursi",
+      name: "Nama, A sampai Z",
+      recent: "Paling baru bermain",
+      idle: "Paling lama tidak bermain",
+      active: "Paling sering bermain (semua)",
+      stars: "Bintang terbanyak di lomba kelas",
+      points: "Poin lomba kelas terakhir",
+      group: "Kelompok",
+    } as Record<SortKey, string>,
+    shown: (n: number, all: number) => `${n} dari ${all} kursi`,
+    noMatch: "Tidak ada kursi yang cocok.",
     addSeats: "TAMBAH KURSI",
     howMany: "Berapa kursi yang ditambah?",
     add: "TAMBAH",
@@ -444,6 +499,9 @@ function ClassPage({
   const [ask, setAsk] = useState<Ask | null>(null);
   const [busy, setBusy] = useState(false);
   const [more, setMore] = useState("1");
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("seat");
+  const shown = seats ? arrange(seats, names, query, sortBy) : [];
   const file = useRef<HTMLInputElement>(null);
   const active = row.status === "active";
   const base = `/classes/${encodeURIComponent(row.id)}`;
@@ -595,6 +653,22 @@ function ClassPage({
           {t.tooBig(letter(g), n)}
         </p>
       ))}
+      {seats && seats.length > 0 && (
+        <div className="seat-find">
+          <input className="field" type="search" placeholder={t.find} aria-label={t.find} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <label className="report-pick">
+            <span className="soft">{t.sortBy}</span>
+            <select className="field group" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}>
+              {SORTS.map((k) => (
+                <option key={k} value={k}>
+                  {t.sorts[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {query.trim() && <span className="soft">{shown.length > 0 ? t.shown(shown.length, seats.length) : t.noMatch}</span>}
+        </div>
+      )}
       <table className="past-table seats">
         <thead>
           <tr>
@@ -604,7 +678,7 @@ function ClassPage({
           </tr>
         </thead>
         <tbody>
-          {seats?.map((s) => (
+          {shown.map((s) => (
             <tr key={s.number}>
               <td className="seat-no">{two(s.number)}</td>
               <td>

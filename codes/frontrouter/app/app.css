@@ -1067,6 +1067,20 @@ button.tool {
   margin: 0;
 }
 
+/* Find and sort above the seat table. */
+.seat-find {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  margin: 12px 0 4px;
+}
+
+.seat-find input {
+  width: auto;
+  min-width: 16em;
+}
+
 .report-pick {
   display: flex;
   gap: 8px;
