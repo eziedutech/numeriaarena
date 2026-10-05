@@ -394,3 +394,20 @@ impl TownBook {
         serde_json::to_string(&self.town.view(self.earned, now_ms as i64)).unwrap_or_default()
     }
 }
+
+/// Skill stars and the landmarks they raise, from judged answers
+/// (`[{skill, game_type, p_final, result, assisted, at_ms}]`), as JSON.
+#[wasm_bindgen(js_name = skillStars)]
+pub fn skill_stars(answers_json: &str, grade: u8, now_ms: f64) -> Result<String, JsError> {
+    let answers: Vec<crate::stars::SkillAnswer> = serde_json::from_str(answers_json).map_err(js)?;
+    let grade = (grade > 0).then_some(grade);
+    let stars = crate::stars::skill_stars(
+        &answers,
+        grade,
+        now_ms as i64,
+        &crate::fairness::FairnessParams::default(),
+    );
+    let landmarks = crate::stars::landmarks(&stars);
+    serde_json::to_string(&serde_json::json!({ "stars": stars, "landmarks": landmarks }))
+        .map_err(js)
+}

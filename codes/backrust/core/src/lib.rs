@@ -13,6 +13,7 @@ pub mod rng;
 pub mod session;
 pub mod setup;
 pub mod sim;
+pub mod stars;
 pub mod template;
 pub mod town;
 pub mod validate;
