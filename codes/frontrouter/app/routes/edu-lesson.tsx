@@ -53,9 +53,10 @@ const TEXT = {
 /** Whether this browser can step into VR; in development, `?xr=emulate` brings a pretend headset. */
 async function canVr() {
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("xr") === "emulate") {
-    const { XRDevice, metaQuest3 } = await import("iwer");
+    const [{ XRDevice, metaQuest3 }, { DevUI }] = await Promise.all([import("iwer"), import("@iwer/devui")]);
     const device = new XRDevice(metaQuest3);
     device.installRuntime({ forceInstall: true });
+    device.installDevUI(DevUI);
     (window as unknown as { xrDevice: unknown }).xrDevice = device;
   }
   try {
@@ -75,6 +76,7 @@ export default function EduLesson() {
   const [vr, setVr] = useState<"no" | "yes" | "busy" | "in" | "failed">("no");
   const [full, setFull] = useState(false);
   const book = useRef<HTMLElement>(null);
+  const endVr = useRef<() => void>(null);
 
   useEffect(() => {
     setLesson(undefined);
@@ -113,14 +115,17 @@ export default function EduLesson() {
     setVr("busy");
     try {
       const { openVr } = await import("../edu/vr");
-      await openVr({
+      endVr.current = await openVr({
         lesson,
         lang,
         title: info.title[lang],
         step,
         words: { back: t.back, next: t.next, exit: t.exit, of: t.of },
         onStep: setStep,
-        onEnd: () => setVr("yes"),
+        onEnd: () => {
+          endVr.current = null;
+          setVr("yes");
+        },
       });
       setVr("in");
     } catch {
@@ -149,8 +154,8 @@ export default function EduLesson() {
     <main className="paper-page edu">
       <EduNav lang={lang} setLang={setLang} back={{ href: `/edu/?grade=${info.grade}`, label: t.all }}>
         {vr !== "no" && vr !== "failed" && (
-          <button type="button" className="paper-chip edu-vr" disabled={vr === "busy" || vr === "in" || !lesson} onClick={enterVr}>
-            {vr === "busy" ? t.vrBusy : t.vr}
+          <button type="button" className="paper-chip edu-vr" disabled={vr === "busy" || !lesson} onClick={vr === "in" ? () => endVr.current?.() : enterVr}>
+            {vr === "busy" ? t.vrBusy : vr === "in" ? t.exit : t.vr}
           </button>
         )}
       </EduNav>

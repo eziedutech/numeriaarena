@@ -11,6 +11,8 @@
 }
 
 .edu-vr {
+  position: relative;
+  z-index: 50;
   border: 0;
   font: inherit;
   font-weight: 700;

@@ -143,6 +143,7 @@ function ground(world: World) {
   }
 }
 
+/** Opens the session; resolves with a way to end it from the page. */
 export async function openVr(o: VrOptions) {
   const xr = navigator.xr;
   if (!xr) throw new Error("no webxr");
@@ -152,7 +153,9 @@ export async function openVr(o: VrOptions) {
   renderer.setPixelRatio(1);
   renderer.xr.enabled = true;
   renderer.xr.setReferenceSpaceType("local-floor");
-  renderer.domElement.style.display = "none";
+  // A headset shows only the session; an emulator in the browser shows this canvas over the page.
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  Object.assign(renderer.domElement.style, { position: "fixed", inset: "0", zIndex: "40" });
   document.body.appendChild(renderer.domElement);
   await renderer.xr.setSession(session as unknown as Parameters<typeof renderer.xr.setSession>[0]);
 
@@ -362,4 +365,5 @@ export async function openVr(o: VrOptions) {
     o.onStep(at);
     o.onEnd();
   });
+  return () => void session.end();
 }
