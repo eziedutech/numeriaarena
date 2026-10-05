@@ -61,11 +61,11 @@ export interface VrOptions {
 }
 
 /** Sheet pixels per sheet unit in VR; enough for the panel's size at arm's length. */
-const SHARP = 1.28;
-const PANEL_W = 1.6;
+const SHARP = 1.6;
+const PANEL_W = 2;
 const PANEL_H = (PANEL_W * H) / W;
 const EYE = 1.4;
-const AWAY = 1.6;
+const AWAY = 1.4;
 
 function paperCanvas(w: number, h: number) {
   const el = document.createElement("canvas");
@@ -169,9 +169,17 @@ export function menuScene(lang: Lang, words: VrWords, current: string, pick: (id
         const h = rowH - 6;
         const hover = g.over(bx, by, 470, h);
         g.card(bx, by - (hover ? 2 : 0), 470, h, x.id === current ? C.sun : hover ? "#f8efdc" : C.paper, hover ? 1.4 : 0.8);
+        // A long title folds onto a second line rather than shrinking past reading.
+        const lift = hover ? 2 : 0;
         let size = Math.min(22, h * 0.5);
-        while (size > 14 && g.width(x.title[lang], size, true) > 446) size -= 1;
-        g.text(x.title[lang], bx + 12, by + h / 2 - (hover ? 2 : 0), size, C.ink, "left", true);
+        while (size > 18 && g.width(x.title[lang], size, true) > 446) size -= 1;
+        if (g.width(x.title[lang], size, true) <= 446) g.text(x.title[lang], bx + 12, by + h / 2 - lift, size, C.ink, "left", true);
+        else {
+          size = Math.min(19, h * 0.36);
+          let lines = wrap(g, x.title[lang], 446, size);
+          while (size > 13 && (lines.length > 2 || lines.some((l) => g.width(l, size, true) > 446))) lines = wrap(g, x.title[lang], 446, --size);
+          lines.slice(0, 2).forEach((l, j) => g.text(l, bx + 12, by + h / 2 - lift + (j - 0.5) * size * 1.15, size, C.ink, "left", true));
+        }
         g.hits.push({ id: `t:${x.id}`, x: bx, y: by, w: 470, h });
       });
     },
