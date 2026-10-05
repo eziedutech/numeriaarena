@@ -172,13 +172,12 @@ const EN = {
     other: 'Something went wrong. Try again.',
   } as Record<string, string>,
   soonBody: {
-    town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
     accessibility:
       'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
   },
   pages: {
     'How to play':
-      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy.',
+      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
     'For parents':
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
@@ -353,13 +352,12 @@ const ID: typeof EN = {
     other: 'Ada yang salah. Coba lagi.',
   } as Record<string, string>,
   soonBody: {
-    town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
     accessibility:
       'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',
   },
   pages: {
     'How to play':
-      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira.',
+      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
     'For parents':
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:

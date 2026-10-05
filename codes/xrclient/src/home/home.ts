@@ -26,6 +26,7 @@ import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
 import { townSticker } from './town-sticker.js';
+import { openTown } from '../town/town-page.js';
 
 /**
  * The home page: a flat paper page over the browser view of the book. Where
@@ -114,7 +115,6 @@ const CSS = `
 #home .town svg { display: block; overflow: visible; }
 #home .townlabel { position: absolute; left: 70px; top: 196px; background: ${PAPER}; padding: 6px 12px 8px; }
 #home .town .sub { font-size: 13px; margin-top: 2px; }
-#home .town .soon { position: absolute; right: 10px; top: 60px; background: ${INK}; padding: 2px 6px; }
 #home .town.board { left: auto; right: 34px; }
 #home .town.board .townlabel { left: auto; right: 70px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
@@ -495,9 +495,8 @@ export class Home {
     const label = el('div', 'townlabel shadow', town);
     label.appendChild(paperText(t.town[0], 18, INK));
     el('div', 'sub', label).textContent = t.town[1];
-    el('span', 'soon', town).appendChild(paperText(t.soon, 12, PAPER));
-    town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}. ${t.soon}`);
-    town.addEventListener('click', () => this.message(t.town[0], t.soonBody.town));
+    town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}`);
+    town.addEventListener('click', () => openTown());
 
     // Its partner on the right: the leaderboards, a podium on a sticker.
     const board = el('button', 'town board', this.stage);

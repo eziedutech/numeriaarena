@@ -284,4 +284,30 @@ export class LocalStore {
   setSetting(key: string, value: unknown): Promise<void> {
     return this.backend.put('meta', value, `setting:${key}`);
   }
+
+  /** A Fold Town kept on this device, by its owner (a guest or a class seat). */
+  async town<T>(owner: string): Promise<T | undefined> {
+    try {
+      return await this.backend.get<T>('meta', `town:${owner}`);
+    } catch (error) {
+      console.warn(`[store] could not read the town: ${String(error)}`);
+      return undefined;
+    }
+  }
+
+  async setTown(owner: string, doc: unknown): Promise<void> {
+    try {
+      await this.backend.put('meta', doc, `town:${owner}`);
+    } catch (error) {
+      console.error(`[store] could not save the town, it stays in memory this session: ${String(error)}`);
+    }
+  }
+}
+
+let shared: Promise<LocalStore> | undefined;
+
+/** The one device store of the page, opened on first use. */
+export function sharedStore(): Promise<LocalStore> {
+  shared ??= LocalStore.open();
+  return shared;
 }

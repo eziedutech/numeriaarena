@@ -73,11 +73,12 @@ import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb, type Me
 import { RaceScene, type Stage } from './race-view.js';
 import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
-import { LocalStore } from './storage.js';
+import { LocalStore, sharedStore } from './storage.js';
 import { T, useLanguage } from './text.js';
 import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
+import { noteGuestPlay } from './town/town-model.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork } from './offline.js';
 import { openBoard } from './board/board.js';
@@ -615,7 +616,7 @@ export class GameSystem extends createSystem({
       }
     }
 
-    LocalStore.open().then((store) => {
+    sharedStore().then((store) => {
       this.store = store;
       for (const batch of this.unsaved.splice(0)) void store.record(batch.events, batch.mode, batch.seat);
       // A student's answers go to their seat: now, when they sign in, when the network is back.
@@ -1712,6 +1713,7 @@ export class GameSystem extends createSystem({
     const own = recap.players[0];
     if (own && this.race instanceof Race) {
       this.saveBest(own.points, own.stars);
+      noteGuestPlay(own.points);
       reportPlay({
         kind: 'race',
         points: own.points,
@@ -1757,6 +1759,7 @@ export class GameSystem extends createSystem({
     this.removeQuitCard();
     this.saveAnswers(true);
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
+    noteGuestPlay(points);
     reportPlay({
       kind: 'practice',
       game: this.kind,
