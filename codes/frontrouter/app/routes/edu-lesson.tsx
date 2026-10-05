@@ -26,6 +26,7 @@ const TEXT = {
     vr: "ENTER VR",
     vrBusy: "Opening VR...",
     vrFailed: "VR could not start on this device.",
+    vrNeed: "VR opens in the browser of a Meta Quest headset. Open this page there.",
     exit: "EXIT VR",
     pick: "Point at a lesson and pull the trigger to open it.",
     game: "PRACTISE IN THE GAME",
@@ -44,6 +45,7 @@ const TEXT = {
     vr: "MASUK VR",
     vrBusy: "Membuka VR...",
     vrFailed: "VR belum bisa dibuka di perangkat ini.",
+    vrNeed: "VR terbuka di browser headset Meta Quest. Buka halaman ini di sana.",
     exit: "KELUAR VR",
     pick: "Arahkan ke sebuah pelajaran, lalu tekan pelatuk untuk membukanya.",
     game: "LATIHAN DI GAME",
@@ -52,20 +54,29 @@ const TEXT = {
   },
 };
 
-/** Whether this browser can step into VR; in development, `?xr=emulate` brings a pretend headset. */
+async function hasVr() {
+  try {
+    return Boolean(await navigator.xr?.isSessionSupported("immersive-vr"));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether this browser can step into VR. In development a pretend headset
+ * stands in when there is no real one (or always, with `?xr=emulate`).
+ */
 async function canVr() {
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("xr") === "emulate") {
+  const forced = new URLSearchParams(window.location.search).get("xr") === "emulate";
+  if (!forced && (await hasVr())) return true;
+  if (import.meta.env.DEV) {
     const [{ XRDevice, metaQuest3 }, { DevUI }] = await Promise.all([import("iwer"), import("@iwer/devui")]);
     const device = new XRDevice(metaQuest3);
     device.installRuntime({ forceInstall: true });
     device.installDevUI(DevUI);
     (window as unknown as { xrDevice: unknown }).xrDevice = device;
   }
-  try {
-    return Boolean(await navigator.xr?.isSessionSupported("immersive-vr"));
-  } catch {
-    return false;
-  }
+  return hasVr();
 }
 
 export default function EduLesson() {
@@ -75,7 +86,7 @@ export default function EduLesson() {
   const info = topic(id);
   const [lesson, setLesson] = useState<Lesson>();
   const [step, setStep] = useState(0);
-  const [vr, setVr] = useState<"no" | "yes" | "busy" | "in" | "failed">("no");
+  const [vr, setVr] = useState<"no" | "need" | "yes" | "busy" | "in" | "failed">("no");
   const [full, setFull] = useState(false);
   const book = useRef<HTMLElement>(null);
   const endVr = useRef<() => void>(null);
@@ -114,6 +125,7 @@ export default function EduLesson() {
   });
 
   const enterVr = async () => {
+    if (vr === "no" || vr === "need") return setVr("need");
     if (!lesson || !info) return;
     setVr("busy");
     try {
@@ -157,11 +169,9 @@ export default function EduLesson() {
   return (
     <main className="paper-page edu">
       <EduNav lang={lang} setLang={setLang} back={{ href: `/edu/?grade=${info.grade}`, label: t.all }}>
-        {vr !== "no" && vr !== "failed" && (
-          <button type="button" className="paper-chip edu-vr" disabled={vr === "busy" || !lesson} onClick={vr === "in" ? () => endVr.current?.() : enterVr}>
-            {vr === "busy" ? t.vrBusy : vr === "in" ? t.exit : t.vr}
-          </button>
-        )}
+        <button type="button" className="paper-chip edu-vr" disabled={vr === "busy" || !lesson} onClick={vr === "in" ? () => endVr.current?.() : enterVr}>
+          {vr === "busy" ? t.vrBusy : vr === "in" ? t.exit : t.vr}
+        </button>
       </EduNav>
       <article className={full ? "edu-book full" : "edu-book"} ref={book}>
         <header className="edu-head">
@@ -169,9 +179,9 @@ export default function EduLesson() {
             {t.grade(info.grade)} · {AREAS[info.area][lang]}
           </p>
           <h1>{info.title[lang]}</h1>
-          {vr === "failed" && (
+          {(vr === "failed" || vr === "need") && (
             <p className="err" role="alert">
-              {t.vrFailed}
+              {vr === "failed" ? t.vrFailed : t.vrNeed}
             </p>
           )}
         </header>
