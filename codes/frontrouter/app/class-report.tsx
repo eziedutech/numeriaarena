@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
 import { ClassAi } from "./class-ai";
+import { ClassStudents } from "./class-students";
 import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
 import { Pick } from "./pick";
@@ -60,6 +61,7 @@ const TEXT = {
     wrongOf: (wrong: number, total: number) => `${wrong} wrong of ${total}`,
     refresh: "REFRESH",
     download: "DOWNLOAD THE REPORT (CSV)",
+    students: "PER STUDENT",
     errors: {
       class_not_found: "That class is gone.",
       offline: "The server cannot be reached right now.",
@@ -81,6 +83,7 @@ const TEXT = {
     wrongOf: (wrong: number, total: number) => `${wrong} salah dari ${total}`,
     refresh: "MUAT ULANG",
     download: "UNDUH LAPORAN (CSV)",
+    students: "PER SISWA",
     errors: {
       class_not_found: "Kelas itu sudah tidak ada.",
       offline: "Server belum bisa dihubungi.",
@@ -118,6 +121,7 @@ export function ClassReport({
   user,
   base,
   file,
+  heading,
   seats,
   names,
 }: {
@@ -127,6 +131,8 @@ export function ClassReport({
   base: string;
   /** The downloaded file's name, without `.csv`. */
   file: string;
+  /** The class's label and year, at the top of saved PDFs. */
+  heading: string;
   seats: { number: number; pseudonym: string }[];
   names: Record<number, string>;
 }) {
@@ -135,6 +141,7 @@ export function ClassReport({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
+  const [students, setStudents] = useState(false);
 
   const load = () => {
     setBusy(true);
@@ -212,7 +219,7 @@ export function ClassReport({
       {report && (
         <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} mistake={mistake} seatName={seatName} />
       )}
-      {report && <ClassAi lang={lang} user={user} base={base} seat={pick} seatName={seatName} />}
+      {report && <ClassAi lang={lang} user={user} base={base} seat={pick} seatName={seatName} heading={`${heading}, ${pick === 0 ? t.whole : t.seat(two(pick), names[pick] || seats.find((s) => s.number === pick)?.pseudonym || "")}`} />}
       {report && (
         <div className="report-sources">
           {(["class", "own"] as const).map((source) => {
@@ -291,7 +298,24 @@ export function ClassReport({
         <button type="button" className="btn small" disabled={!report || report.rows.length === 0} onClick={download}>
           {t.download}
         </button>
+        <button type="button" className="btn small" disabled={!report || report.rows.length === 0} onClick={() => setStudents(true)}>
+          {t.students}
+        </button>
       </div>
+      {students && report && (
+        <ClassStudents
+          lang={lang}
+          rows={report.rows}
+          mistakes={report.mistakes}
+          seats={seats.map((s) => s.number)}
+          seatName={seatName}
+          skillTitle={skillTitle}
+          mistakeTitle={(code) => mistake(code).title}
+          heading={heading}
+          file={file}
+          onClose={() => setStudents(false)}
+        />
+      )}
     </section>
   );
 }

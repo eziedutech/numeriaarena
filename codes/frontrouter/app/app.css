@@ -1646,3 +1646,72 @@ button.tool {
   width: 5em;
   text-align: center;
 }
+
+/* AI at work: the robot bobs while the steps change. */
+.ai-working {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.ai-robot {
+  display: inline-flex;
+  animation: ai-bob 1.2s ease-in-out infinite;
+}
+
+.ai-robot circle {
+  animation: ai-blink 0.8s steps(2, jump-none) infinite;
+}
+
+.ai-step {
+  font-weight: 600;
+}
+
+@keyframes ai-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+
+@keyframes ai-blink {
+  from {
+    fill: #f2716b;
+  }
+  to {
+    fill: #ffd166;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-robot,
+  .ai-robot circle {
+    animation: none;
+  }
+}
+
+/* PER STUDENT popup. */
+.students-sheet {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.students-scroll {
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.students-scroll .past-table {
+  max-width: none;
+  font-size: 14px;
+}
+
+.students td {
+  white-space: nowrap;
+}

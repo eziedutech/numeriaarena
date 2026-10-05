@@ -761,7 +761,7 @@ function ClassPage({
           </>
         )}
       </div>
-      {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} seats={seats} names={names} />}
+      {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />}
       {ask && (
         <div className="veil" role="dialog" aria-modal="true" aria-label={askText} onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
           <div className="paper-sheet narrow">

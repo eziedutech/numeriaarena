@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
+import { robotSvg } from "./avatar";
+import { esc, printPage } from "./export";
 import type { Lang } from "./legal";
 
 /**
@@ -29,7 +31,14 @@ const TEXT = {
   en: {
     title: "AI INSIGHTS",
     make: "MAKE AI INSIGHTS",
-    making: "Reading the numbers...",
+    steps: [
+      "Reading the class's numbers...",
+      "Asking the AI, with seat numbers only and no names...",
+      "Checking the answer against the numbers...",
+      "Still working: this can take up to a minute.",
+    ],
+    seconds: (n: number) => `${n} s`,
+    pdf: "SAVE AS PDF",
     about: "Made by AI from the numbers above, with seat numbers only and no names. Check it before you use it.",
     made: (at: string) => `made ${at} UTC`,
     strengths: "Going well",
@@ -49,7 +58,14 @@ const TEXT = {
   id: {
     title: "WAWASAN AI",
     make: "BUAT WAWASAN AI",
-    making: "Membaca angka...",
+    steps: [
+      "Membaca angka kelas...",
+      "Bertanya ke AI, hanya dengan nomor kursi tanpa nama...",
+      "Memeriksa jawaban dengan angkanya...",
+      "Masih bekerja: bisa sampai satu menit.",
+    ],
+    seconds: (n: number) => `${n} dtk`,
+    pdf: "SIMPAN KE PDF",
     about: "Dibuat AI dari angka di atas, hanya dengan nomor kursi tanpa nama. Periksa kembali sebelum dipakai.",
     made: (at: string) => `dibuat ${at} UTC`,
     strengths: "Sudah baik",
@@ -74,6 +90,7 @@ export function ClassAi({
   base,
   seat,
   seatName,
+  heading,
 }: {
   lang: Lang;
   user: User;
@@ -82,13 +99,22 @@ export function ClassAi({
   /** 0 for the whole class. */
   seat: number;
   seatName: (seat: number) => string;
+  /** The class and who is shown, at the top of the saved PDF. */
+  heading: string;
 }) {
   const t = TEXT[lang];
   // Per seat shown, so going back to one already made shows it again.
   const [made, setMade] = useState<Record<number, Made>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [waited, setWaited] = useState(0);
   useEffect(() => setError(""), [seat]);
+  useEffect(() => {
+    if (!busy) return;
+    setWaited(0);
+    const tick = setInterval(() => setWaited((n) => n + 1), 1000);
+    return () => clearInterval(tick);
+  }, [busy]);
   useEffect(() => setMade({}), [base]);
   const mine = made[seat];
 
@@ -104,15 +130,39 @@ export function ClassAi({
   // "seat 3" reads as the seat's number and the name this browser keeps for it.
   const named = (s: string) => s.replace(t.seat, (all, n: string) => `${all.split(" ")[0]} ${seatName(Number(n))}`);
   const side = mine?.insight[lang];
+  // A new step every few seconds, staying on the last.
+  const step = t.steps[Math.min(t.steps.length - 1, Math.floor(waited / 3))];
+  const lists = (["strengths", "gaps", "next"] as const).filter((k) => side && side[k].length > 0);
+
+  const pdf = () => {
+    if (!side || !mine) return;
+    const items = lists
+      .map((k) => `<h2>${esc(t[k])}</h2><ul>${side[k].map((s) => `<li>${esc(named(s))}</li>`).join("")}</ul>`)
+      .join("");
+    printPage(
+      `${t.title} ${heading}`,
+      `<h1>${esc(t.title)}: ${esc(heading)}</h1><p class="soft">${esc(t.about)} ${esc(t.made(mine.at))}</p><p>${esc(named(side.summary))}</p>${items}`,
+    );
+  };
 
   return (
     <div className="insight ai-insight">
       <h4>{t.title}</h4>
       {!side ? (
         <>
-          <button type="button" className="btn small" onClick={make} disabled={busy}>
-            {busy ? t.making : t.make}
-          </button>
+          {busy ? (
+            <div className="ai-working" role="status" aria-live="polite">
+              <span className="ai-robot" dangerouslySetInnerHTML={{ __html: robotSvg(44) }} />
+              <span>
+                <span className="ai-step">{step}</span>
+                <span className="soft"> {t.seconds(waited)}</span>
+              </span>
+            </div>
+          ) : (
+            <button type="button" className="btn small" onClick={make}>
+              {t.make}
+            </button>
+          )}
           {error && (
             <p className="err" role="alert">
               {t.errors[error] ?? t.errors.other}
@@ -125,18 +175,19 @@ export function ClassAi({
             {t.about} {t.made(mine.at)}
           </p>
           <p>{named(side.summary)}</p>
-          {(["strengths", "gaps", "next"] as const).map((k) =>
-            side[k].length === 0 ? null : (
-              <div key={k}>
-                <p className="insight-head">{t[k]}</p>
-                <ul className="report-missed">
-                  {side[k].map((s, i) => (
-                    <li key={i}>{named(s)}</li>
-                  ))}
-                </ul>
-              </div>
-            ),
-          )}
+          {lists.map((k) => (
+            <div key={k}>
+              <p className="insight-head">{t[k]}</p>
+              <ul className="report-missed">
+                {side[k].map((s, i) => (
+                  <li key={i}>{named(s)}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <button type="button" className="btn small" onClick={pdf}>
+            {t.pdf}
+          </button>
         </>
       )}
     </div>
