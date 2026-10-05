@@ -1757,6 +1757,7 @@ button.tool {
 }
 
 .town-cell {
+  position: relative;
   aspect-ratio: 1;
   border-radius: 4px;
   display: flex;
@@ -1812,4 +1813,64 @@ button.tool {
 .town-legend .town-cell {
   width: 18px;
   display: inline-block;
+}
+
+.town-icons {
+  display: flex;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.town-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.town-legend .town-icon,
+.town-legend .town-flag {
+  width: 16px;
+  height: 16px;
+  position: static;
+}
+
+.town-icon.home {
+  fill: #c8553d;
+}
+
+.town-icon.tree {
+  fill: #2f7d4a;
+}
+
+.town-icon.building {
+  fill: #5a6070;
+}
+
+.town-flag {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 13px;
+  height: 13px;
+  stroke: var(--ink);
+  stroke-width: 0.6;
+}
+
+.town-flag.place_value {
+  fill: #2a9d8f;
+}
+
+.town-flag.multiply_divide {
+  fill: #3c78d8;
+}
+
+.town-flag.fractions {
+  fill: #e8833a;
+}
+
+.town-flag.decimals {
+  fill: #8e6cc4;
+}
+
+.town-flag.measurement {
+  fill: #e0b62c;
 }

@@ -8,14 +8,16 @@ use axum::Json;
 use axum::extract::{Path, State as Extract};
 use axum::http::{HeaderMap, StatusCode};
 use foldlings_core::fairness::FairnessParams;
-use foldlings_core::stars::{SkillAnswer, landmarks, skill_stars};
+use foldlings_core::stars::{Landmark, SkillAnswer, landmarks, skill_stars};
 use foldlings_core::town::{
-    LandKind, MAP_COLS, MAP_ROWS, Play, PlaySource, Refusal, Town, TownEvent, earnings, next_cell,
-    on_map,
+    Group, LandKind, MAP_COLS, MAP_ROWS, Play, PlaySource, Refusal, Town, TownEvent, asset_by_id,
+    earnings, next_cell, on_map,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use crate::State;
 use crate::classes::student;
@@ -28,11 +30,14 @@ async fn cells(
     me: Option<i64>,
     teacher: bool,
 ) -> Result<Value, ApiError> {
-    let rows: Vec<Value> = sqlx::query_scalar(
-        "SELECT json_build_object('x', p.x, 'y', p.y, 'kind', p.kind, 'land', p.land_index,
+    let rows: Vec<(i64, i16, Value)> = sqlx::query_as(
+        "SELECT s.id, c.grade,
+                json_build_object('x', p.x, 'y', p.y, 'kind', p.kind, 'land', p.land_index,
                                   'name', s.pseudonym, 'me', s.id = $2,
                                   'seat', CASE WHEN $3 THEN s.number END)
-         FROM town_plots p JOIN class_seats s ON s.id = p.class_seat_id
+         FROM town_plots p
+         JOIN class_seats s ON s.id = p.class_seat_id
+         JOIN classes c ON c.id = p.class_id
          WHERE p.class_id = $1
          ORDER BY p.y, p.x",
     )
@@ -41,7 +46,51 @@ async fn cells(
     .bind(teacher)
     .fetch_all(db)
     .await?;
-    Ok(json!({ "cols": MAP_COLS, "rows": MAP_ROWS, "cells": rows }))
+    let mut conn = db.acquire().await?;
+    let now_ms = chrono_now_ms(&mut conn).await?;
+    let mut towns: HashMap<i64, (Town, Vec<Landmark>)> = HashMap::new();
+    let mut cells = Vec::with_capacity(rows.len());
+    for (seat, grade, mut cell) in rows {
+        if let Entry::Vacant(e) = towns.entry(seat) {
+            let earned = earnings(&plays(&mut conn, seat).await?).total;
+            let (town, _) = Town::replay(&stored(&mut conn, seat).await?, earned);
+            let stars = skill_stars(
+                &answers(&mut conn, seat).await?,
+                u8::try_from(grade).ok(),
+                now_ms,
+                &FairnessParams::default(),
+            );
+            e.insert((town, landmarks(&stars)));
+        }
+        let (town, raised) = &towns[&seat];
+        let land = cell["land"].as_u64().unwrap_or(0) as u16;
+        cell["town"] = on_the_land(town, raised, land);
+        cells.push(cell);
+    }
+    Ok(json!({ "cols": MAP_COLS, "rows": MAP_ROWS, "cells": cells }))
+}
+
+/// What stands on one land, for its cell's icons: homes, trees, bigger
+/// buildings, and the landmark of its plot once a skill raised it.
+fn on_the_land(town: &Town, raised: &[Landmark], land: u16) -> Value {
+    let (mut homes, mut trees, mut buildings) = (0, 0, 0);
+    for it in town.items.iter().filter(|i| i.land == land) {
+        let Some(a) = asset_by_id(&it.asset) else {
+            continue;
+        };
+        if a.id.starts_with("house_") {
+            homes += 1;
+        } else if a.id.starts_with("tree_") {
+            trees += 1;
+        } else if matches!(a.group, Group::Public | Group::Large) {
+            buildings += 1;
+        }
+    }
+    let landmark = raised
+        .get(usize::from(land))
+        .filter(|_| usize::from(land) < town.lands.len())
+        .map(|l| json!({ "mission": l.mission, "skill": l.skill }));
+    json!({ "homes": homes, "trees": trees, "buildings": buildings, "landmark": landmark })
 }
 
 /// `GET /api/student/town/map`: the student's class map.

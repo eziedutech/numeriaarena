@@ -393,3 +393,30 @@ async fn a_later_land_joins_the_class_map_beside_the_first() {
     // The first takes the kind it was opened as; the second goes below it.
     assert_eq!(cells, vec![(9, 0, "river".into()), (9, 1, "hills".into())]);
 }
+
+#[tokio::test]
+async fn a_cell_of_the_class_map_tells_what_stands_on_its_land() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db).await;
+    let (id, seats) = class(&db, owner, 1).await;
+    let seat = seats[0];
+    place_first(&db, &id, seat, &plot(2, 2, "beach"))
+        .await
+        .unwrap();
+    let batch = vec![
+        ev("town_land", "l0", json!({ "kind": "beach" })),
+        place("h", "house_hut", 0, 0, 0),
+        place("t", "tree_round", 0, 1, 0),
+        place("r", "road_straight", 0, 0, 1),
+    ];
+    let out = take(&db, &id, seat, 4, &batch).await.unwrap();
+    assert_eq!(refused(&out), vec![]);
+    let map = teacher_map(&db, owner, &id).await.unwrap();
+    assert_eq!(
+        map["cells"][0]["town"],
+        json!({ "homes": 1, "trees": 1, "buildings": 0, "landmark": null })
+    );
+}
