@@ -2,11 +2,13 @@ import { getLang } from '../settings.js';
 import { el, paperText } from '../home/paper.js';
 import { onTeacher, teacherCall, teacherState } from '../home/teacher.js';
 import { BOARD_TEXT, type BoardText } from './board-text.js';
-import { makeQuestions, seeded, shuffled, TOPICS, type Question, type Topic } from './questions.js';
+import { decorate, lookOf, LOOKS_CSS, target } from './looks.js';
+import { makeRace, seeded, shuffled, TOPICS, type Question, type Topic } from './questions.js';
 
 /**
  * The smartboard race: three players side by side on one big touch screen,
- * the same questions in the same order, a column each. Every touch counts
+ * a column each, the same kinds of question in the same order with numbers
+ * of their own, the answers moving as animals, balloons or orbs. Every touch counts
  * for the column it lands in, so all three can press at once. The results
  * show as a podium; they are kept in the class report only when the teacher
  * opened the race for their class and chose to save them.
@@ -31,7 +33,8 @@ const PAPER = '#fff8ec';
 const COLUMN = ['#3fb6a0', '#3469c4', '#f2716b'];
 const STAGE_W = 1600;
 const STAGE_H = 900;
-const COUNT = 10;
+/** Three rounds of the three looks, so each player meets each look as often. */
+const COUNT = 9;
 /** After a right answer and after a wrong one, before the next question. */
 const PAUSE_RIGHT = 450;
 const PAUSE_WRONG = 1300;
@@ -66,18 +69,13 @@ const CSS = `
 #board .bar .clock { margin-left: auto; background: ${PAPER}; padding: 10px 16px; font-size: 24px; font-weight: 700; min-width: 70px; text-align: center; }
 #board .cols { position: absolute; left: 24px; right: 24px; top: 84px; bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 #board .col { background: ${PAPER}; display: flex; flex-direction: column; min-width: 0; }
-#board .col .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; color: ${PAPER};
+#board .col .head { height: 56px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; color: ${PAPER};
   font-size: 26px; font-weight: 700; gap: 12px; }
 #board .col .head .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #board .col .track { height: 10px; background: #efe3c8; }
 #board .col .track div { height: 100%; transition: width 0.3s; }
-#board .col .ask { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; text-align: center; padding: 18px 22px;
-  font-size: 40px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
-#board .col .choices { display: flex; flex-direction: column; gap: 14px; padding: 0 22px 22px; }
-#board .col .choice { min-height: 118px; font-size: 46px; font-weight: 700; background: #f8efdc; touch-action: none; transition: transform 0.1s; }
-#board .col .choice:active { transform: scale(0.97); }
-#board .col .choice.yes { background: #3fb6a0; color: ${PAPER}; }
-#board .col .choice.no { background: #f2716b; color: ${PAPER}; }
+#board .col .track { flex: none; }
+${LOOKS_CSS}
 #board .col .done { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 26px; }
 #board .count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(58, 45, 20, 0.25); }
 #board .count div { background: ${PAPER}; padding: 30px 60px; }
@@ -99,8 +97,14 @@ interface Slot {
 
 interface Column {
   slot: Slot;
+  /** The column's own questions: the same kinds as its neighbours', other numbers. */
+  questions: Question[];
   /** For every question, the choices in this column's order (0 is the right one). */
   order: number[][];
+  /** For every question and choice, where on its way the answer starts moving. */
+  phase: number[][];
+  /** Picks the colours and clouds, the same again from the same seed. */
+  next: () => number;
   at: number;
   right: number;
   busy: boolean;
@@ -415,15 +419,15 @@ class Board {
 
   private async start(note: HTMLElement): Promise<void> {
     const seed = (Math.random() * 2 ** 32) >>> 0;
-    const questions = await makeQuestions(this.grade, this.topic, COUNT, seed);
-    if (questions.length < COUNT) {
+    const questions = await makeRace(this.grade, this.topic, COUNT, 3, seed);
+    if (questions[0].length < COUNT) {
       note.textContent = this.t.none;
       return;
     }
     this.race(questions, seed);
   }
 
-  private race(questions: Question[], seed: number): void {
+  private race(questions: Question[][], seed: number): void {
     const t = this.t;
     const stage = this.fresh();
     const bar = el('div', 'bar', stage);
@@ -452,7 +456,10 @@ class Board {
       const next = seeded(seed + 7919 * (i + 1));
       return {
         slot: { name: slot.name.trim() || t.player(i + 1), seat: slot.seat },
-        order: questions.map((q) => shuffled([...q.choices.keys()], next)),
+        questions: questions[i],
+        order: questions[i].map((q) => shuffled([...q.choices.keys()], next)),
+        phase: questions[i].map((q) => q.choices.map(() => next())),
+        next,
         at: 0,
         right: 0,
         busy: true,
@@ -480,12 +487,14 @@ class Board {
         el('div', 'soft', done).textContent = t.waiting;
         return;
       }
-      const q = questions[c.at];
-      el('div', 'ask', c.view).textContent = q.prompt[getLang()];
-      const box = el('div', 'choices', c.view);
-      c.order[c.at].forEach((k) => {
-        const b = el('button', 'choice shadow', box);
-        b.textContent = q.choices[k].text;
+      const q = c.questions[c.at];
+      const look = lookOf(c.at, i);
+      const scene = el('div', `scene ${look}`, c.view);
+      decorate(scene, look, c.next);
+      el('div', 'ask shadow', scene).textContent = q.prompt[getLang()];
+      const box = el('div', 'field', scene);
+      c.order[c.at].forEach((k, lane) => {
+        const b = target(box, look, lane, q.choices[k].text, c.phase[c.at][lane], c.next);
         b.dataset.k = String(k);
         // Each finger is its own pointer, so three players press at once.
         b.addEventListener('pointerdown', (e) => {
@@ -502,13 +511,16 @@ class Board {
     const press = (c: Column, i: number, k: number, box: HTMLElement) => {
       if (c.busy || c.done !== null) return;
       c.busy = true;
-      const q = questions[c.at];
+      const q = c.questions[c.at];
       const correct = k === 0;
       c.answers.push({ q, correct, time_ms: Math.round(performance.now() - c.shownAt), misconception: q.choices[k].misconception });
       if (correct) c.right++;
-      for (const b of box.querySelectorAll<HTMLElement>('.choice')) {
+      // Everything stops, so the player sees which one was right.
+      box.classList.add('still');
+      for (const b of box.querySelectorAll<HTMLElement>('.tgt')) {
         if (b.dataset.k === '0') b.classList.add('yes');
         else if (b.dataset.k === String(k)) b.classList.add('no');
+        if (b.dataset.k === String(k)) b.classList.add('hit');
       }
       this.timers.push(
         window.setTimeout(
@@ -529,7 +541,7 @@ class Board {
       if (over) return;
       over = true;
       const elapsed = performance.now() - startAt;
-      this.podium(columns, elapsed, questions.length);
+      this.podium(columns, elapsed, COUNT);
     };
 
     columns.forEach(draw);

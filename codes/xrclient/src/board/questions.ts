@@ -2,11 +2,11 @@ import init, { instantiateItem } from '../wasm/pkg/foldlings_core.js';
 import { bundledTemplates } from '../game/core.js';
 
 /**
- * The questions of a smartboard race: the same list, in the same order, for
- * every column. Each is a template from the bundled bank made concrete with
- * the race's seed, so the race works offline and plays the same again from
- * the same seed. A column sees the choices in its own order, so a player
- * cannot copy where a neighbour pressed.
+ * The questions of a smartboard race. Every column gets the same templates in
+ * the same order, so the race is fair, but each made concrete with numbers of
+ * its own, so a glance at the neighbour's column gives nothing away. The
+ * templates come from the bundled bank and the numbers from the race's seed,
+ * so the race works offline and plays the same again from the same seed.
  */
 
 export type Topic = 'mixed' | 'PV' | 'MD' | 'FR' | 'DC' | 'ME';
@@ -77,35 +77,55 @@ interface Made {
   distractors: { text: string; misconception: string }[];
 }
 
-/** `count` questions for a grade and topic from one seed. */
-export async function makeQuestions(grade: number, topic: Topic, count: number, seed: number): Promise<Question[]> {
+/** One template made concrete, or null when it gives no answer and two lures. */
+function make(t: Source, next: () => number): Question | null {
+  let item: Made;
+  try {
+    item = JSON.parse(instantiateItem(t.raw, Math.floor(next() * 2 ** 31))) as Made;
+  } catch {
+    return null;
+  }
+  const answer = item.answer?.text;
+  if (!answer) return null;
+  const seen = new Set([answer]);
+  const lures = shuffled(item.distractors, next).filter((d) => !seen.has(d.text) && seen.add(d.text));
+  if (lures.length < 2) return null;
+  return {
+    template_id: item.template_id,
+    skill: item.skill,
+    prompt: item.prompt,
+    choices: [{ text: answer }, ...lures.slice(0, 2).map((d) => ({ text: d.text, misconception: d.misconception }))],
+  };
+}
+
+/** `count` questions for each of `columns` columns, a list per column, from one seed. */
+export async function makeRace(grade: number, topic: Topic, count: number, columns: number, seed: number): Promise<Question[][]> {
   await init();
   const next = seeded(seed);
   const from = pool(grade, topic);
-  const out: Question[] = [];
+  const out: Question[][] = Array.from({ length: columns }, () => []);
   if (from.length === 0) return out;
   // Every template once before any comes back, in an order of the seed's.
   let deck: Source[] = [];
-  for (let tries = 0; out.length < count && tries < count * 6; tries++) {
+  for (let tries = 0; out[0].length < count && tries < count * 6; tries++) {
     if (deck.length === 0) deck = shuffled(from, next);
     const t = deck.pop()!;
-    let item: Made;
-    try {
-      item = JSON.parse(instantiateItem(t.raw, Math.floor(next() * 2 ** 31))) as Made;
-    } catch {
-      continue;
+    const row: Question[] = [];
+    const answers = new Set<string>();
+    for (let c = 0; c < columns; c++) {
+      // A few tries for an answer no other column has; a template with few numbers may repeat one.
+      let q: Question | null = null;
+      for (let again = 0; again < 4; again++) {
+        const made = make(t, next);
+        if (made) q = made;
+        if (made && !answers.has(made.choices[0].text)) break;
+      }
+      if (!q) break;
+      answers.add(q.choices[0].text);
+      row.push(q);
     }
-    const answer = item.answer?.text;
-    if (!answer) continue;
-    const seen = new Set([answer]);
-    const lures = shuffled(item.distractors, next).filter((d) => !seen.has(d.text) && seen.add(d.text));
-    if (lures.length < 2) continue;
-    out.push({
-      template_id: item.template_id,
-      skill: item.skill,
-      prompt: item.prompt,
-      choices: [{ text: answer }, ...lures.slice(0, 2).map((d) => ({ text: d.text, misconception: d.misconception }))],
-    });
+    if (row.length < columns) continue;
+    row.forEach((q, c) => out[c].push(q));
   }
   return out;
 }

@@ -5,7 +5,7 @@ import type { Topic } from './questions.js';
 export const BOARD_TEXT = {
   en: {
     title: 'RACE ON THE SMARTBOARD',
-    intro: 'Three players race through the same ten questions. Each one touches only their own column.',
+    intro: 'Three players race through nine questions of the same kind, each with numbers of their own. Each one touches only their own column, where the answers come as animals, balloons and glowing orbs, taking turns.',
     grade: 'GRADE',
     topic: 'TOPIC',
     topics: { mixed: 'Mixed', PV: 'Place value', MD: 'Multiply and divide', FR: 'Fractions', DC: 'Decimals', ME: 'Measurement' } as Record<Topic, string>,
@@ -38,7 +38,7 @@ export const BOARD_TEXT = {
   },
   id: {
     title: 'BALAPAN DI SMARTBOARD',
-    intro: 'Tiga pemain berlomba menjawab sepuluh soal yang sama. Tiap pemain hanya menyentuh kolomnya sendiri.',
+    intro: 'Tiga pemain berlomba menjawab sembilan soal sejenis, masing-masing dengan angkanya sendiri. Tiap pemain hanya menyentuh kolomnya sendiri. Jawabannya muncul bergantian sebagai binatang, balon dan orb bercahaya.',
     grade: 'KELAS',
     topic: 'TOPIK',
     topics: { mixed: 'Campuran', PV: 'Nilai tempat', MD: 'Kali dan bagi', FR: 'Pecahan', DC: 'Desimal', ME: 'Pengukuran' } as Record<Topic, string>,
