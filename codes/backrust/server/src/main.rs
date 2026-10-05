@@ -105,6 +105,10 @@ pub fn router(state: State) -> Router {
         )
         .route("/api/leaderboard", get(leaderboard::global))
         .route("/api/student/leaderboard", get(leaderboard::for_student))
+        .route(
+            "/api/student/town",
+            get(town::student_town).post(town::student_town_post),
+        )
         .route("/api/student/town/map", get(town::student_map))
         .route("/api/student/town/plot", post(town::student_plot))
         .route("/api/classes/{id}/town/map", get(town::class_map))

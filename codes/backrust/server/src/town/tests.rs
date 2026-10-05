@@ -155,3 +155,241 @@ async fn a_teacher_sees_only_their_own_class_map() {
     let map = teacher_map(&db, b, &class_b).await.unwrap();
     assert_eq!(map["cells"].as_array().unwrap().len(), 1);
 }
+
+/// A judged race of the seat today.
+async fn race(db: &PgPool, owner: i64, seat: i64, points: i32) {
+    let (room, game) = (random_hex(), random_hex());
+    sqlx::query("INSERT INTO rooms (id, play_code, watch_code, seats, created_by) VALUES ($1, 'AAAAAA', 'BBBBBB', 2, $2)")
+        .bind(&room)
+        .bind(owner)
+        .execute(db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats) VALUES ($1, $2, 1, 'cp', 'fp', '[]')")
+        .bind(&game)
+        .bind(&room)
+        .execute(db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO match_seat_results (match_id, seat, class_seat_id, official, points, folded, place, stars)
+         VALUES ($1, 0, $2, false, $3, 1, 1, 1)",
+    )
+    .bind(&game)
+    .bind(seat)
+    .bind(points)
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+async fn practice(db: &PgPool, seat: i64, points: i32) {
+    sqlx::query(
+        "INSERT INTO seat_plays (class_seat_id, client_id, kind, points, folded, right_answers, total, duration_ms)
+         VALUES ($1, $2, 'practice', $3, 0, 1, 1, 1000)",
+    )
+    .bind(seat)
+    .bind(random_hex())
+    .bind(points)
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+async fn right_answer(db: &PgPool, seat: i64, skill: &str) {
+    let id = random_hex();
+    let event = json!({
+        "event_id": id, "skill": skill, "game_type": "orb_forge", "p_final": 0.7,
+        "result": "correct", "assisted": false, "at_ms": 1.0
+    });
+    sqlx::query(
+        "INSERT INTO seat_answers (class_seat_id, event_id, mode, skill, template_id, correct, attempt, time_ms, event)
+         VALUES ($1, $2, 'practice', $3, 't', true, 1, 1000, $4)",
+    )
+    .bind(seat)
+    .bind(&id)
+    .bind(skill)
+    .bind(event)
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+fn ev(kind: &str, id: &str, more: Value) -> Value {
+    let mut v = json!({ "type": kind, "event_id": id, "at_ms": i64::MAX / 2 });
+    v.as_object_mut()
+        .unwrap()
+        .extend(more.as_object().unwrap().clone());
+    v
+}
+
+fn place(id: &str, asset: &str, land: u16, x: u8, y: u8) -> Value {
+    ev(
+        "town_place",
+        id,
+        json!({ "asset": asset, "land": land, "x": x, "y": y, "rot": 0 }),
+    )
+}
+
+fn refused(out: &Value) -> Vec<(String, String)> {
+    out["refused"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r[0].as_str().unwrap().to_owned(),
+                r[1].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+async fn city(db: &PgPool, id: &str, seat: i64) -> Value {
+    crate::leaderboard::board(
+        db,
+        Some(id),
+        crate::leaderboard::Period::Month,
+        Some(seat),
+        10,
+    )
+    .await
+    .unwrap()["city"]
+        .clone()
+}
+
+#[tokio::test]
+async fn the_server_keeps_a_town_and_refuses_what_its_folds_cannot_buy() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db).await;
+    let (id, seats) = class(&db, owner, 1).await;
+    let seat = seats[0];
+    // Only the welcome: 40 Folds.
+    let batch = vec![
+        ev("town_land", "l0", json!({ "kind": "beach" })),
+        place("h", "house_hut", 0, 0, 0),
+        place("r1", "road_straight", 0, 1, 0),
+        place("r2", "road_straight", 0, 2, 0),
+        place("r3", "road_straight", 0, 3, 0),
+        place("r4", "road_straight", 0, 4, 0),
+        place("r5", "road_straight", 0, 5, 0),
+        place("s", "road_straight", 0, 0, 6),
+        json!({ "type": "town_fly" }),
+    ];
+    let out = take(&db, &id, seat, 4, &batch).await.unwrap();
+    assert_eq!(
+        refused(&out),
+        vec![
+            ("r5".into(), "not_enough_folds".into()),
+            ("s".into(), "nature".into()),
+            ("".into(), "bad_event".into()),
+        ]
+    );
+    assert_eq!(out["accepted"].as_array().unwrap().len(), 6);
+    assert_eq!(out["town"]["balance"], 0);
+    assert_eq!(out["town"]["lands"], json!(["beach"]));
+    // A device clock far ahead is held to now.
+    let now = out["now_ms"].as_i64().unwrap();
+    assert!(out["town"]["items"][0]["placed_at_ms"].as_i64().unwrap() <= now);
+
+    // Sent again, the same events are taken once.
+    let again = take(&db, &id, seat, 4, &batch[..2]).await.unwrap();
+    assert_eq!(again["accepted"], json!(["l0", "h"]));
+    assert!(refused(&again).is_empty());
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM town_events WHERE class_seat_id = $1")
+        .bind(seat)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(n, 6);
+
+    // A judged race of 300 points earns 30 Folds and the play bonus.
+    race(&db, owner, seat, 300).await;
+    let out = take(&db, &id, seat, 4, &[place("r5", "road_straight", 0, 5, 0)])
+        .await
+        .unwrap();
+    assert!(refused(&out).is_empty());
+    assert_eq!(out["earnings"]["plays"], 40);
+
+    // Five roads stand at once; the hut takes two minutes, so it joins
+    // City Builder only with FINISH NOW.
+    assert_eq!(city(&db, &id, seat).await[0]["score"], 25);
+    take(
+        &db,
+        &id,
+        seat,
+        4,
+        &[ev("town_finish", "f", json!({ "place_id": "h" }))],
+    )
+    .await
+    .unwrap();
+    let board = city(&db, &id, seat).await;
+    assert_eq!(board[0]["score"], 45);
+    assert_eq!(board[0]["me"], true);
+}
+
+#[tokio::test]
+async fn device_plays_are_held_to_the_daily_limit_and_stars_raise_landmarks() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db).await;
+    let (id, seats) = class(&db, owner, 1).await;
+    let seat = seats[0];
+    practice(&db, seat, 50_000).await;
+    race(&db, owner, seat, 2_000).await;
+    for _ in 0..5 {
+        right_answer(&db, seat, "FR.EQUIV").await;
+    }
+    let out = take(&db, &id, seat, 4, &[]).await.unwrap();
+    // 100 from practice, 210 from the race.
+    assert_eq!(out["earnings"]["plays"], 310);
+    assert!(out["earnings"]["held_back"].as_u64().unwrap() > 0);
+    assert_eq!(out["landmarks"][0]["landmark"], "landmark_fraction_bridge");
+    assert_eq!(out["stars"][0]["stars"], 1);
+}
+
+#[tokio::test]
+async fn a_later_land_joins_the_class_map_beside_the_first() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db).await;
+    let (id, seats) = class(&db, owner, 1).await;
+    let seat = seats[0];
+    race(&db, owner, seat, 5_000).await;
+    place_first(&db, &id, seat, &plot(9, 0, "plain"))
+        .await
+        .unwrap();
+    let mut batch = vec![ev("town_land", "l0", json!({ "kind": "river" }))];
+    let free = (0..7u8)
+        .flat_map(|y| (0..10u8).map(move |x| (x, y)))
+        .filter(|&(x, y)| LandKind::River.tile(x, y) == foldlings_core::town::Tile::Free)
+        .take(42);
+    for (n, (x, y)) in free.enumerate() {
+        batch.push(place(&format!("r{n}"), "road_cross", 0, x, y));
+    }
+    batch.push(ev("town_land", "l1", json!({ "kind": "hills" })));
+    let out = take(&db, &id, seat, 4, &batch).await.unwrap();
+    assert!(refused(&out).is_empty(), "{:?}", refused(&out));
+    let map = teacher_map(&db, owner, &id).await.unwrap();
+    let cells: Vec<(i64, i64, String)> = map["cells"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["x"].as_i64().unwrap(),
+                c["y"].as_i64().unwrap(),
+                c["kind"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    // The first takes the kind it was opened as; the second goes below it.
+    assert_eq!(cells, vec![(9, 0, "river".into()), (9, 1, "hills".into())]);
+}

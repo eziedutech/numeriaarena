@@ -396,6 +396,17 @@ impl TownEvent {
             | TownEvent::TownFinish { at_ms, .. } => *at_ms,
         }
     }
+
+    /// The server keeps a device's clock within what it has seen.
+    pub fn set_at_ms(&mut self, at: i64) {
+        match self {
+            TownEvent::TownLand { at_ms, .. }
+            | TownEvent::TownPlace { at_ms, .. }
+            | TownEvent::TownMove { at_ms, .. }
+            | TownEvent::TownRemove { at_ms, .. }
+            | TownEvent::TownFinish { at_ms, .. } => *at_ms = at,
+        }
+    }
 }
 
 /// Why an event was refused.

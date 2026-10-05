@@ -7,6 +7,7 @@
 //!   what was expected, so a student who finds maths hard can top it too.
 //! - Most Days: the days a seat played in the period, any kind of play, at
 //!   most one a day, so it rewards coming back rather than playing long.
+//! - City Builder: the Folds in the finished buildings of a seat's Fold Town.
 //!
 //! The top ten show, and the asking seat's own row wherever it is; never the
 //! bottom of a list. Global shows only a pseudonym and the class's grade
@@ -93,6 +94,24 @@ fn days_sql() -> String {
     )
 }
 
+/// City Builder: the Folds in finished buildings of a seat's Fold Town that
+/// stand now (this month: finished this month); a tie goes to whoever
+/// finished first.
+fn city_sql() -> String {
+    format!(
+        "WITH {SCOPE},
+        built AS (
+            SELECT i.class_seat_id AS seat, sum(i.price)::bigint AS score, max(i.ready_at) AS at
+            FROM town_items i JOIN scope ON scope.id = i.class_seat_id, since
+            WHERE i.ready_at <= now() AND i.ready_at >= since.t
+            GROUP BY i.class_seat_id
+            HAVING sum(i.price) > 0
+        ),
+        ranked AS (SELECT seat, score, row_number() OVER (ORDER BY score DESC, at) AS place FROM built)
+        {ROWS}"
+    )
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Period {
     Month,
@@ -134,11 +153,13 @@ pub(crate) async fn board(
     };
     let strike = rows(strike_sql()).await?;
     let days = rows(days_sql()).await?;
+    let city = rows(city_sql()).await?;
     Ok(json!({
         "board": if class.is_some() { "class" } else { "global" },
         "period": period.name(),
         "strike": strike,
         "days": days,
+        "city": city,
     }))
 }
 

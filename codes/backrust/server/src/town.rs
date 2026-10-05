@@ -7,7 +7,12 @@
 use axum::Json;
 use axum::extract::{Path, State as Extract};
 use axum::http::{HeaderMap, StatusCode};
-use foldlings_core::town::{LandKind, MAP_COLS, MAP_ROWS, next_cell, on_map};
+use foldlings_core::fairness::FairnessParams;
+use foldlings_core::stars::{SkillAnswer, landmarks, skill_stars};
+use foldlings_core::town::{
+    LandKind, MAP_COLS, MAP_ROWS, Play, PlaySource, Refusal, Town, TownEvent, earnings, next_cell,
+    on_map,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgConnection, PgPool};
@@ -127,8 +132,6 @@ pub(crate) async fn place_first(
 /// A later land of a seat: the first free cell beside its own, or None when
 /// there is none (or no first land on the map). Called inside the
 /// transaction that opens the land; the class row stays locked till it ends.
-// Opening a land on the server comes with the town's own events.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn place_later(
     conn: &mut PgConnection,
     class_id: &str,
@@ -190,6 +193,241 @@ pub async fn student_plot(
     Ok(Json(
         place_first(&state.db, &s.class_id, s.seat_id, &plot).await?,
     ))
+}
+
+// ---------------------------------------------------------------- the town
+
+/// Events in one batch at most; a device sends the rest next time.
+const MAX_BATCH: usize = 200;
+
+/// Every play of a seat, for its Folds: the device reports practice and races
+/// with robots (held to the daily limit); the server judged the rest.
+async fn plays(conn: &mut PgConnection, seat: i64) -> Result<Vec<Play>, ApiError> {
+    let rows: Vec<(i32, i32, bool)> = sqlx::query_as(
+        "SELECT ((played_at AT TIME ZONE 'UTC')::date - DATE '1970-01-01'), GREATEST(points, 0), kind = 'board'
+         FROM seat_plays WHERE class_seat_id = $1
+         UNION ALL
+         SELECT ((created_at AT TIME ZONE 'UTC')::date - DATE '1970-01-01'), GREATEST(points, 0), true
+         FROM match_seat_results WHERE class_seat_id = $1",
+    )
+    .bind(seat)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(day, points, server)| Play {
+            day: day.max(0) as u32,
+            points: points as u32,
+            source: if server {
+                PlaySource::Server
+            } else {
+                PlaySource::Device
+            },
+        })
+        .collect())
+}
+
+/// Every judged answer of a seat, timed by when the server took it.
+async fn answers(conn: &mut PgConnection, seat: i64) -> Result<Vec<SkillAnswer>, ApiError> {
+    let rows: Vec<Value> = sqlx::query_scalar(
+        "SELECT (event || jsonb_build_object('at_ms', (extract(epoch FROM received_at) * 1000)::bigint))::json
+         FROM seat_answers WHERE class_seat_id = $1
+         UNION ALL
+         SELECT (a.event || jsonb_build_object('at_ms', (extract(epoch FROM a.created_at) * 1000)::bigint))::json
+         FROM match_answers a
+         JOIN match_seat_results r ON r.match_id = a.match_id AND r.seat = a.seat
+         WHERE r.class_seat_id = $1",
+    )
+    .bind(seat)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
+}
+
+/// What a batch did: the ids taken (or taken before) and the ids refused.
+#[derive(Default)]
+pub(crate) struct Taken {
+    accepted: Vec<String>,
+    refused: Vec<(String, &'static str)>,
+}
+
+/// Takes a batch of a seat's town events and answers with the town as it
+/// now stands: its Folds and stars worked out from what the server holds.
+pub(crate) async fn take(
+    db: &PgPool,
+    class_id: &str,
+    seat: i64,
+    grade: i16,
+    batch: &[Value],
+) -> Result<Value, ApiError> {
+    if batch.len() > MAX_BATCH {
+        return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "too_many_events"));
+    }
+    let mut tx = db.begin().await?;
+    sqlx::query("SELECT 1 FROM class_seats WHERE id = $1 FOR UPDATE")
+        .bind(seat)
+        .execute(&mut *tx)
+        .await?;
+    let now_ms = chrono_now_ms(&mut tx).await?;
+    let earnings = earnings(&plays(&mut tx, seat).await?);
+    let stored = stored(&mut tx, seat).await?;
+    let (mut town, _) = Town::replay(&stored, earnings.total);
+    let mut last_at = stored.iter().map(TownEvent::at_ms).max().unwrap_or(0);
+    let mut out = Taken::default();
+    for raw in batch {
+        let id = raw["event_id"].as_str().unwrap_or_default().to_string();
+        let Ok(mut ev) = serde_json::from_value::<TownEvent>(raw.clone()) else {
+            out.refused.push((id, "bad_event"));
+            continue;
+        };
+        if id.is_empty() || id.len() > 64 {
+            out.refused.push((id, "bad_event"));
+            continue;
+        }
+        // A device's clock may run ahead or behind; never past now, never
+        // before what was taken already.
+        last_at = ev.at_ms().clamp(last_at, now_ms.max(last_at));
+        ev.set_at_ms(last_at);
+        let lands_before = town.lands.len();
+        match town.apply(&ev, earnings.total) {
+            Ok(()) => {}
+            Err(Refusal::Duplicate) => {
+                out.accepted.push(id);
+                continue;
+            }
+            Err(r) => {
+                out.refused.push((id, r.code()));
+                continue;
+            }
+        }
+        sqlx::query("INSERT INTO town_events (class_seat_id, event_id, event) VALUES ($1, $2, $3)")
+            .bind(seat)
+            .bind(&id)
+            .bind(serde_json::to_value(&ev).unwrap_or_default())
+            .execute(&mut *tx)
+            .await?;
+        if let TownEvent::TownLand { kind, .. } = ev
+            && town.lands.len() > lands_before
+        {
+            let land = lands_before as i16;
+            let moved = sqlx::query(
+                "UPDATE town_plots SET kind = $3 WHERE class_seat_id = $1 AND land_index = $2",
+            )
+            .bind(seat)
+            .bind(land)
+            .bind(kind.code())
+            .execute(&mut *tx)
+            .await?;
+            if moved.rows_affected() == 0 && land > 0 {
+                place_later(&mut tx, class_id, seat, land, kind).await?;
+            }
+        }
+        out.accepted.push(id);
+    }
+    sqlx::query("DELETE FROM town_items WHERE class_seat_id = $1")
+        .bind(seat)
+        .execute(&mut *tx)
+        .await?;
+    for i in &town.items {
+        sqlx::query(
+            "INSERT INTO town_items (class_seat_id, place_id, asset, price, ready_at)
+             VALUES ($1, $2, $3, $4, to_timestamp($5::double precision / 1000))",
+        )
+        .bind(seat)
+        .bind(&i.id)
+        .bind(&i.asset)
+        .bind(i.price as i32)
+        .bind(i.ready_at_ms() as f64)
+        .execute(&mut *tx)
+        .await?;
+    }
+    let answers = answers(&mut tx, seat).await?;
+    tx.commit().await?;
+    let stars = skill_stars(
+        &answers,
+        u8::try_from(grade).ok(),
+        now_ms,
+        &FairnessParams::default(),
+    );
+    Ok(json!({
+        "accepted": out.accepted,
+        "refused": out.refused,
+        "town": town.view(earnings.total, now_ms),
+        "earnings": earnings,
+        "landmarks": landmarks(&stars),
+        "stars": stars,
+        "now_ms": now_ms,
+    }))
+}
+
+async fn chrono_now_ms(conn: &mut PgConnection) -> Result<i64, ApiError> {
+    Ok(
+        sqlx::query_scalar("SELECT (extract(epoch FROM now()) * 1000)::bigint")
+            .fetch_one(&mut *conn)
+            .await?,
+    )
+}
+
+/// The seat's events in the order the server took them.
+async fn stored(conn: &mut PgConnection, seat: i64) -> Result<Vec<TownEvent>, ApiError> {
+    let rows: Vec<Value> = sqlx::query_scalar(
+        "SELECT event::json FROM town_events WHERE class_seat_id = $1 ORDER BY seq",
+    )
+    .bind(seat)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
+}
+
+#[derive(Deserialize)]
+pub struct Batch {
+    #[serde(default)]
+    events: Vec<Value>,
+}
+
+/// `POST /api/student/town`: a batch of the student's town events; answers
+/// with the town, every event of it, its Folds and its stars.
+pub async fn student_town_post(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+    Json(batch): Json<Batch>,
+) -> Result<Json<Value>, ApiError> {
+    let s = student(&state.db, bearer(&headers)?)
+        .await?
+        .ok_or(ApiError(StatusCode::UNAUTHORIZED, "signed_out"))?;
+    let mut out = take(&state.db, &s.class_id, s.seat_id, s.grade, &batch.events).await?;
+    out["events"] = events_json(&state.db, s.seat_id).await?;
+    Ok(Json(out))
+}
+
+/// `GET /api/student/town`: the same with no new events, for a device that
+/// signs in or comes back.
+pub async fn student_town(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let s = student(&state.db, bearer(&headers)?)
+        .await?
+        .ok_or(ApiError(StatusCode::UNAUTHORIZED, "signed_out"))?;
+    let mut out = take(&state.db, &s.class_id, s.seat_id, s.grade, &[]).await?;
+    out["events"] = events_json(&state.db, s.seat_id).await?;
+    Ok(Json(out))
+}
+
+async fn events_json(db: &PgPool, seat: i64) -> Result<Value, ApiError> {
+    let rows: Vec<Value> = sqlx::query_scalar(
+        "SELECT event::json FROM town_events WHERE class_seat_id = $1 ORDER BY seq",
+    )
+    .bind(seat)
+    .fetch_all(db)
+    .await?;
+    Ok(Value::Array(rows))
 }
 
 #[cfg(test)]
