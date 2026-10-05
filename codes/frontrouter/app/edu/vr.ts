@@ -61,10 +61,12 @@ export interface VrOptions {
 }
 
 /** Sheet pixels per sheet unit in VR; enough for the panel's size at arm's length. */
-const SHARP = 1.6;
-const PANEL_W = 2;
+const SHARP = 2;
+const PANEL_W = 2.4;
 const PANEL_H = (PANEL_W * H) / W;
-const EYE = 1.4;
+const EYE = 1.55;
+/** The title and the guiding sentence stay narrower than the sheet, so they fit above and below it. */
+const TEXT_W = 1.6;
 const AWAY = 1.4;
 
 function paperCanvas(w: number, h: number) {
@@ -228,22 +230,22 @@ export async function openVr(o: VrOptions) {
   world.add(hinge);
 
   const heading = paperCanvas(1024, 96);
-  const head = panel(PANEL_W, (PANEL_W * 96) / 1024, heading.texture);
+  const head = panel(TEXT_W, (TEXT_W * 96) / 1024, heading.texture);
   head.group.position.set(0, EYE + PANEL_H / 2 + 0.14, -AWAY);
   world.add(head.group);
 
   const words = paperCanvas(1024, 160);
-  const say = panel(PANEL_W, (PANEL_W * 160) / 1024, words.texture);
-  say.group.position.set(0, EYE - PANEL_H / 2 - 0.2, -AWAY);
+  const say = panel(TEXT_W, (TEXT_W * 160) / 1024, words.texture);
+  say.group.position.set(0, EYE - PANEL_H / 2 - 0.17, -AWAY);
   world.add(say.group);
 
   const exitTex = paperCanvas(256, 80);
   const exit = panel(0.36, 0.1125, exitTex.texture);
-  exit.group.position.set(0.21, EYE - PANEL_H / 2 - 0.42, -AWAY + 0.05);
+  exit.group.position.set(0.21, EYE - PANEL_H / 2 - 0.37, -AWAY + 0.05);
   world.add(exit.group);
   const allTex = paperCanvas(256, 80);
   const all = panel(0.36, 0.1125, allTex.texture);
-  all.group.position.set(-0.21, EYE - PANEL_H / 2 - 0.42, -AWAY + 0.05);
+  all.group.position.set(-0.21, EYE - PANEL_H / 2 - 0.37, -AWAY + 0.05);
   world.add(all.group);
 
   // The steps before and after, folded at the sides.
