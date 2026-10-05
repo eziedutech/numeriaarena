@@ -4,6 +4,7 @@ import { bigText, getLang, onSettings, setBigText, setLang } from '../settings.j
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
 import { el, paperText } from './paper.js';
 import { openBoard } from '../board/board.js';
+import { openLeaders } from '../leaders/leaders.js';
 import {
   authErrorCode,
   finishEmailLink,
@@ -116,7 +117,6 @@ const CSS = `
 #home .town .soon { position: absolute; right: 10px; top: 60px; background: ${INK}; padding: 2px 6px; }
 #home .town.board { left: auto; right: 34px; }
 #home .town.board .townlabel { left: auto; right: 70px; }
-#home .town.board .soon { right: auto; left: 10px; }
 #home .note { position: absolute; font-size: 13px; background: ${PAPER}; padding: 3px 8px; pointer-events: none; }
 #home .footer { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; background: ${PAPER}; }
 #home .footer button { padding: 10px 14px; white-space: nowrap; font-family: inherit; font-weight: 700; font-size: 15px; color: ${INK}; background: none;
@@ -503,9 +503,8 @@ export class Home {
     const boardLabel = el('div', 'townlabel shadow', board);
     boardLabel.appendChild(paperText(t.board[0], 18, INK));
     el('div', 'sub', boardLabel).textContent = t.board[1];
-    el('span', 'soon', board).appendChild(paperText(t.soon, 12, PAPER));
-    board.setAttribute('aria-label', `${t.board[0]}. ${t.board[1]}. ${t.soon}`);
-    board.addEventListener('click', () => this.message(t.board[0], t.soonBody.board));
+    board.setAttribute('aria-label', `${t.board[0]}. ${t.board[1]}`);
+    board.addEventListener('click', () => openLeaders());
 
     const footer = el('div', 'footer shadow', this.stage);
     const keys = Object.keys(HOME_TEXT.en.pages) as (keyof HomeText['pages'])[];

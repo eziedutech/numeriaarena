@@ -171,8 +171,6 @@ const EN = {
     other: 'Something went wrong. Try again.',
   } as Record<string, string>,
   soonBody: {
-    board:
-      'Two boards: MY CLASS and GLOBAL. Each ranks HIGH STRIKE (the best race scores) and CITY BUILDER (the biggest Fold Towns), for this month or for all time. Players show only as made-up names, like BLUE CRANE 07.',
     town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
     accessibility:
       'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
@@ -353,8 +351,6 @@ const ID: typeof EN = {
     other: 'Ada yang salah. Coba lagi.',
   } as Record<string, string>,
   soonBody: {
-    board:
-      'Dua papan: KELASKU dan GLOBAL. Masing-masing memeringkat HIGH STRIKE (skor lomba terbaik) dan CITY BUILDER (Kota Lipat terbesar), untuk bulan ini atau sepanjang masa. Pemain hanya tampil dengan nama samaran, misalnya BLUE CRANE 07.',
     town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
     accessibility:
       'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',
