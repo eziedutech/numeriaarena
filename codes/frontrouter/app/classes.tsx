@@ -4,6 +4,7 @@ import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
 import { GAME } from "./game-link";
+import { ClassLeaders } from "./class-leaders";
 import { ClassReport } from "./class-report";
 import { namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
@@ -797,6 +798,7 @@ function ClassPage({
         )}
       </div>
       {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />}
+      {seats && <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} />}
       {ask && (
         <div className="veil" role="dialog" aria-modal="true" aria-label={askText} onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
           <div className="paper-sheet narrow">
