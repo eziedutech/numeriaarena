@@ -108,6 +108,33 @@ export async function studentRoom(): Promise<{ play_code: string | null; class_l
   }
 }
 
+/** Names the seat on this device, to tell its answers from a guest's or another seat's. */
+export function seatKey(s: Student): string {
+  return `${s.class_label}#${s.seat}#${s.pseudonym}`;
+}
+
+/** What the server did with a batch of answers. */
+export interface AnswersSent {
+  acked: string[];
+  rejected: { event_id: string; reason: string }[];
+}
+
+/** Sends answers from the outbox to the seat; a string says why they wait. */
+export async function sendAnswers(s: Student, rows: { event_id: string; mode: string; event: unknown }[]): Promise<AnswersSent | string> {
+  try {
+    const res = await fetch(`${API}/student/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.token}` },
+      body: JSON.stringify({ events: rows.map((r) => ({ event_id: r.event_id, mode: r.mode, event: r.event })) }),
+    });
+    if (res.status === 401 && current?.token === s.token) set(null);
+    if (!res.ok) return errorCode(res);
+    return (await res.json()) as AnswersSent;
+  } catch {
+    return 'offline';
+  }
+}
+
 /** FIND A RIVAL: the play code of a duel for the student's grade. */
 export async function findRival(): Promise<{ play_code: string } | string> {
   const s = current;

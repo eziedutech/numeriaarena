@@ -1035,6 +1035,73 @@ button.tool {
   margin-top: 8px;
 }
 
+/* A class's report: class races and own play side by side, apart. */
+.class-report {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+.report-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.report-head h3 {
+  margin: 0;
+}
+
+.report-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.report-source h4 {
+  margin: 8px 0;
+  letter-spacing: 0.04em;
+}
+
+.past-table.report td:first-child,
+.past-table.report th:first-child {
+  width: auto;
+}
+
+.past-table.report tr.weak td {
+  background: #fde8c4;
+}
+
+.past-state.weak-tag {
+  margin-left: 8px;
+  background: #f4b98f;
+}
+
+.report-missed-title {
+  margin: 12px 0 4px;
+  font-weight: 700;
+}
+
+.report-missed {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.report-missed li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 4px;
+}
+
 @media (max-width: 640px) {
   .class-row {
     grid-template-columns: 1fr auto;

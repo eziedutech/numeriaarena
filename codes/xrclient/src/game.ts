@@ -75,7 +75,9 @@ import { LocalStore } from './storage.js';
 import { T, useLanguage } from './text.js';
 import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
 import { townSticker } from './home/town-sticker.js';
-import { reportPlay } from './home/student.js';
+import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
+import { syncAnswers } from './answer-sync.js';
+import { onNetwork } from './offline.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -392,7 +394,7 @@ export class GameSystem extends createSystem({
   private core?: Core;
   /** Device storage; answers judged before it opens wait in `unsaved`. */
   private store?: LocalStore;
-  private unsaved: { events: unknown[]; mode: string }[] = [];
+  private unsaved: { events: unknown[]; mode: string; seat?: string }[] = [];
   private phase: Phase = 'loading';
   private quitLabel?: Label;
   private quitAskedAt = 0;
@@ -566,7 +568,13 @@ export class GameSystem extends createSystem({
 
     LocalStore.open().then((store) => {
       this.store = store;
-      for (const batch of this.unsaved.splice(0)) void store.record(batch.events, batch.mode);
+      for (const batch of this.unsaved.splice(0)) void store.record(batch.events, batch.mode, batch.seat);
+      // A student's answers go to their seat: now, when they sign in, when the network is back.
+      void syncAnswers(store);
+      this.cleanupFuncs.push(onStudent(() => void syncAnswers(store)));
+      onNetwork((up) => {
+        if (up) void syncAnswers(store);
+      });
     });
 
     this.home = new Home(
@@ -1636,7 +1644,7 @@ export class GameSystem extends createSystem({
     const recap = this.race.recap();
     console.info('[race] recap', JSON.stringify(recap));
     clearCheckpoint();
-    this.saveAnswers();
+    this.saveAnswers(true);
     this.phase = 'recap';
     this.clearPlay();
     this.removeQuitCard();
@@ -1688,7 +1696,7 @@ export class GameSystem extends createSystem({
   private showPracticeDone(points: number): void {
     this.phase = 'recap';
     this.removeQuitCard();
-    this.saveAnswers();
+    this.saveAnswers(true);
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
     reportPlay({
       kind: 'practice',
@@ -2260,12 +2268,17 @@ export class GameSystem extends createSystem({
   }
 
   /** Writes the answers just judged to the device before anything else happens. */
-  private saveAnswers(): void {
+  /** Keeps the answers judged so far; at the end of a play (`send`) they also go to the student's seat. */
+  private saveAnswers(send = false): void {
     const mode = this.race ? 'race' : 'practice';
     const events = this.race ? this.race.drainEvents() : (this.core?.drainEvents() ?? []);
-    if (events.length === 0) return;
-    if (this.store) void this.store.record(events, mode);
-    else this.unsaved.push({ events, mode });
+    const s = studentState();
+    const seat = s ? seatKey(s) : undefined;
+    const store = this.store;
+    if (events.length > 0 && !store) this.unsaved.push({ events, mode, seat });
+    if (!store) return;
+    const saved = events.length > 0 ? store.record(events, mode, seat) : Promise.resolve(0);
+    if (send && seat) void saved.then(() => syncAnswers(store));
   }
 
   private afterVerdict(v: Verdict | RaceVerdict): void {

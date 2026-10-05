@@ -2,6 +2,7 @@
 //! admins), and Class Match rooms with their WebSocket.
 
 mod admin;
+mod answers;
 mod auth;
 mod classes;
 mod organizer;
@@ -75,11 +76,13 @@ pub fn router(state: State) -> Router {
         .route("/api/classes/{id}/seats/{n}/unlock", post(classes::unlock))
         .route("/api/classes/{id}/seats/{n}/group", post(classes::group))
         .route("/api/classes/{id}/groups", delete(classes::ungroup))
+        .route("/api/classes/{id}/report", get(answers::report))
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))
         .route("/api/student/room", get(classes::student_room))
         .route("/api/student/rival", post(classes::student_rival))
         .route("/api/student/plays", post(classes::student_play))
+        .route("/api/student/events", post(answers::student_events))
         .route("/api/student/sign-out", post(classes::student_sign_out))
         .with_state(state)
 }

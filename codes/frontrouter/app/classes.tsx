@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
+import { ClassReport } from "./class-report";
 import { namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
 import { Picture, PICTURE_NAMES } from "./pictures";
@@ -495,12 +496,13 @@ function ClassPage({
       );
   };
 
+  const fileName = `numeria-${row.label.replace(/[^\p{L}\p{N}]+/gu, "-")}-${row.school_year.replace(/\D+/gu, "-")}`;
   const save = () => {
     if (!seats) return;
     const blob = new Blob([namesCsv(seats, names)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `numeria-${row.label.replace(/[^\p{L}\p{N}]+/gu, "-")}-${row.school_year.replace(/\D+/gu, "-")}.csv`;
+    a.download = `${fileName}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
@@ -705,6 +707,7 @@ function ClassPage({
           </>
         )}
       </div>
+      {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} seats={seats} names={names} />}
       {ask && (
         <div className="veil" role="dialog" aria-modal="true" aria-label={askText} onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
           <div className="paper-sheet narrow">

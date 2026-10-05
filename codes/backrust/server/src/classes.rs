@@ -529,6 +529,10 @@ pub(crate) async fn change_seat(
             .bind(seat)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM seat_answers WHERE class_seat_id = $1")
+            .bind(seat)
+            .execute(&mut *tx)
+            .await?;
     }
     let picture = new_picture();
     let salt = random_hex();

@@ -23,7 +23,7 @@ use foldlings_core::fairness::FairnessParams;
 use foldlings_core::protocol::{ClientMsg, LobbyView, RoomKind, ServerMsg, TurnView};
 use foldlings_core::race::Phase;
 use foldlings_core::session::SessionError;
-use foldlings_core::template::ItemTemplate;
+use foldlings_core::template::{I18n, ItemTemplate};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -111,6 +111,19 @@ pub(crate) fn random_code() -> String {
 pub struct Content {
     pub templates: Vec<ItemTemplate>,
     pub version: String,
+    /// Each skill's title by its code, for the teacher's report.
+    pub skills: HashMap<String, I18n>,
+}
+
+#[derive(Deserialize)]
+struct SkillFile {
+    skills: Vec<SkillTitle>,
+}
+
+#[derive(Deserialize)]
+struct SkillTitle {
+    code: String,
+    title: I18n,
 }
 
 impl Content {
@@ -148,7 +161,21 @@ impl Content {
                 .map(|b| format!("{b:02x}"))
                 .collect::<String>()
         );
-        Ok(Content { templates, version })
+        // The titles only label the report: without the file it shows the codes.
+        let skills = match std::fs::read_to_string(dir.join("skills.json")) {
+            Ok(text) => serde_json::from_str::<SkillFile>(&text)
+                .map_err(|e| format!("skills.json: {e}"))?
+                .skills
+                .into_iter()
+                .map(|s| (s.code, s.title))
+                .collect(),
+            Err(_) => HashMap::new(),
+        };
+        Ok(Content {
+            templates,
+            version,
+            skills,
+        })
     }
 }
 
@@ -219,6 +246,10 @@ impl Rooms {
             waiting: Mutex::new(HashMap::new()),
             matching: tokio::sync::Mutex::new(()),
         })
+    }
+
+    pub fn content(&self) -> &Content {
+        &self.content
     }
 
     fn find(&self, code: &str) -> Option<Entry> {

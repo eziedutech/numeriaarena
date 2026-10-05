@@ -23,6 +23,7 @@ COPY --from=builder /build/target/release/numeria-server /usr/local/bin/numeria-
 # The item bank Class Match plays, the same files the headset bundles.
 COPY codes/content/templates /srv/content/templates
 COPY codes/content/contoh /srv/content/contoh
+COPY codes/content/skills.json /srv/content/skills.json
 USER numeria
 EXPOSE 3321
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

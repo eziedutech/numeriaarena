@@ -1,9 +1,10 @@
 /**
  * Device storage (layer L1): a local guest profile, settings, and the outbox
  * of answer events. Every answer is written here as soon as it is judged,
- * before any animation, and stays until the server confirms it (from week 3,
- * through `pending` and `ack`). Nothing is ever dropped silently: events the
- * server refuses move to their own store with the reason.
+ * before any animation, and stays until the server confirms it. Answers
+ * given while signed in to a class seat carry that seat and are sent to it
+ * (`pendingFor`, then `ack`); a guest's stay here. Nothing is ever dropped
+ * silently: events the server refuses move to their own store with the reason.
  *
  * When IndexedDB is missing, blocked or failing, the game keeps running on an
  * in-memory copy and says so once in the console; play never stops for it.
@@ -26,6 +27,8 @@ export interface StoredEvent {
   profile_id: string;
   /** `practice` or `race`. */
   mode: string;
+  /** The class seat signed in when the answer was given; none for a guest. */
+  seat?: string;
   stored_at: number;
   event: unknown;
 }
@@ -105,6 +108,10 @@ class MemoryBackend {
   async first<T>(store: StoreName, limit: number): Promise<T[]> {
     return [...this.stores[store].values()].slice(0, limit) as T[];
   }
+
+  async all<T>(store: StoreName): Promise<T[]> {
+    return [...this.stores[store].values()] as T[];
+  }
 }
 
 class IdbBackend {
@@ -141,6 +148,10 @@ class IdbBackend {
 
   async first<T>(store: StoreName, limit: number): Promise<T[]> {
     return (await request(this.db.transaction(store).objectStore(store).getAll(undefined, limit))) as T[];
+  }
+
+  async all<T>(store: StoreName): Promise<T[]> {
+    return (await request(this.db.transaction(store).objectStore(store).getAll())) as T[];
   }
 }
 
@@ -199,13 +210,14 @@ export class LocalStore {
    * Writes judged answers to the outbox. Returns how many were stored; on a
    * failure the events stay in memory for this session and the error is logged.
    */
-  async record(events: unknown[], mode: string): Promise<number> {
+  async record(events: unknown[], mode: string, seat?: string): Promise<number> {
     if (events.length === 0) return 0;
     const now = Date.now();
     const rows: StoredEvent[] = events.map((event) => ({
       event_id: `${this.profile.id}-${(event as { event_id?: string }).event_id ?? randomId()}`,
       profile_id: this.profile.id,
       mode,
+      ...(seat ? { seat } : {}),
       stored_at: now,
       event,
     }));
@@ -237,6 +249,15 @@ export class LocalStore {
   /** Oldest waiting events first, for the next sync batch (at most 200 per request). */
   pending(limit = 200): Promise<StoredEvent[]> {
     return this.backend.first<StoredEvent>('outbox', limit);
+  }
+
+  /** Oldest waiting answers of one class seat, for the next batch sent to it. */
+  async pendingFor(seat: string, limit = 200): Promise<StoredEvent[]> {
+    const rows = await this.backend.all<StoredEvent>('outbox');
+    return rows
+      .filter((r) => r.seat === seat)
+      .sort((a, b) => a.stored_at - b.stored_at)
+      .slice(0, limit);
   }
 
   /** The server stored these: they leave the device. */
