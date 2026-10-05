@@ -3,6 +3,7 @@ import { el, paperText } from '../home/paper.js';
 import { onTeacher, teacherCall, teacherState } from '../home/teacher.js';
 import { BOARD_TEXT, type BoardText } from './board-text.js';
 import { decorate, FIELD_TOP, lookOf, LOOKS_CSS, target } from './looks.js';
+import { WALKER_H, WALKER_W, walkers } from './paper-art.js';
 import { makeRace, seeded, shuffled, topicsFor, type Question, type Topic } from './questions.js';
 
 /**
@@ -91,14 +92,38 @@ const CSS = `
 ${LOOKS_CSS}
 #board .col .ready { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; font-size: 30px; font-weight: 700; }
 #board .col .done { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 26px; }
-#board .podium { position: absolute; left: 160px; right: 160px; bottom: 150px; height: 560px; display: flex; align-items: flex-end; gap: 24px; }
-#board .step { flex: 1; display: flex; flex-direction: column; align-items: stretch; }
-#board .step .card { background: ${PAPER}; padding: 16px 18px; text-align: center; margin-bottom: 14px; }
-#board .step .card .who { font-size: 30px; font-weight: 700; overflow-wrap: anywhere; }
-#board .step .card .how { font-size: 21px; margin-top: 6px; }
-#board .step .block { display: flex; align-items: flex-start; justify-content: center; padding-top: 18px; }
-#board .after { position: absolute; left: 160px; right: 160px; bottom: 40px; display: flex; align-items: center; gap: 16px; }
-#board .after .status { font-size: 20px; margin-right: auto; background: ${PAPER}; padding: 10px 16px; }
+#board .rays { position: absolute; left: 50%; top: 52%; width: 1800px; height: 1800px; margin: -900px 0 0 -900px; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.34) 0 9deg, transparent 9deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%);
+  animation: board-turn 60s linear infinite; }
+#board .confetti { position: absolute; top: -30px; width: 14px; height: 20px; pointer-events: none; animation: board-fall linear infinite; }
+#board .podium { position: absolute; left: 160px; right: 160px; bottom: 140px; height: 640px; display: flex; align-items: flex-end; gap: 28px; }
+#board .step { flex: 1; display: flex; flex-direction: column; align-items: stretch; opacity: 0; animation: board-show 0.5s ease-out forwards; }
+#board .step .pet { align-self: center; position: relative; margin-bottom: -6px; }
+#board .step .pet img { display: block; width: ${WALKER_W}px; height: ${WALKER_H}px; }
+#board .step.first .pet img { animation: board-cheer 0.9s ease-in-out infinite; transform-origin: 50% 100%; }
+#board .step .star { position: absolute; left: 50%; top: -58px; margin-left: -30px; width: 60px; height: 60px; background: #f6c445;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: board-sun 1.4s ease-in-out infinite alternate; }
+#board .step .card { background: ${PAPER}; padding: 14px 18px 16px; text-align: center; margin-bottom: 14px; }
+#board .step .card .who { font-size: 32px; font-weight: 700; overflow-wrap: anywhere; }
+#board .step .card .how { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+#board .step .card .how span { font-size: 20px; padding: 4px 12px; background: #f1e3c4; }
+#board .step .card .how .big { font-size: 24px; font-weight: 700; color: ${PAPER}; }
+#board .step .block { position: relative; display: flex; align-items: flex-start; justify-content: center; padding-top: 22px; overflow: hidden;
+  transform-origin: 50% 100%; animation: board-grow 0.6s ease-out backwards; }
+#board .step .block::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 26px; background: rgba(255, 255, 255, 0.22); }
+#board .step .block::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 34%; background: rgba(0, 0, 0, 0.08); }
+#board .step .medal { position: relative; z-index: 1; width: 150px; height: 150px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.12); }
+@keyframes board-turn { to { transform: rotate(360deg); } }
+@keyframes board-fall { to { transform: translateY(1100px) rotate(720deg); } }
+@keyframes board-show { to { opacity: 1; } }
+@keyframes board-grow { from { transform: scaleY(0); } }
+@keyframes board-cheer { 0%, 100% { transform: none; } 30% { transform: translateY(-22px) rotate(-4deg); } 55% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { #board .rays, #board .confetti, #board .step .pet img, #board .step .star { animation: none !important; } }
+#board .after { position: absolute; left: 160px; right: 160px; bottom: 36px; display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+#board .after .status { font-size: 20px; flex-basis: 100%; text-align: center; background: ${PAPER}; padding: 10px 16px; }
 #board .after .status:empty { display: none; }
 `;
 
@@ -655,17 +680,47 @@ class Board {
       .map((c, i) => ({ c, i, time: c.done ?? elapsed }))
       .sort((a, b) => b.c.right - a.c.right || a.time - b.time)
       .map((r, n) => ({ ...r, place: n + 1 }));
+    // Paper confetti and slow rays behind the podium.
+    el('div', 'rays', stage);
+    const next = seeded(Math.floor(elapsed));
+    const paperColours = [...COLUMN, '#f6c445', '#9b6bd6'];
+    for (let n = 0; n < 34; n++) {
+      const bit = el('div', 'confetti', stage);
+      const time = 5 + next() * 5;
+      bit.style.left = `${next() * 100}%`;
+      bit.style.background = paperColours[n % paperColours.length];
+      bit.style.animationDuration = `${time}s`;
+      bit.style.animationDelay = `${-next() * time}s`;
+      bit.style.scale = String(0.6 + next() * 0.7);
+    }
     const podium = el('div', 'podium', stage);
     const heights = [330, 230, 160];
+    const medals = ['#f6c445', '#d9dde4', '#e0a36b'];
+    const pets = walkers();
+    // Third rises first, the winner last.
+    const delays = [1.1, 0.55, 0];
     for (const r of [ranked[1], ranked[0], ranked[2]]) {
-      const step = el('div', 'step', podium);
+      const step = el('div', `step${r.place === 1 ? ' first' : ''}`, podium);
+      step.style.animationDelay = `${delays[r.place - 1]}s`;
+      const pet = el('div', 'pet', step);
+      if (r.place === 1) el('div', 'star', pet);
+      const img = el('img', '', pet);
+      img.alt = '';
+      img.src = pets[r.i];
       const card = el('div', 'card shadow', step);
       el('div', 'who', card).textContent = r.c.slot.name;
-      el('div', 'how', card).textContent = r.c.done !== null ? `${t.right(r.c.right, total)} · ${clock(r.c.done)}` : `${t.right(r.c.right, total)} · ${t.unfinished(r.c.at, total)}`;
+      const how = el('div', 'how', card);
+      const right = el('span', 'big', how);
+      right.textContent = t.right(r.c.right, total);
+      right.style.background = COLUMN[r.i];
+      el('span', '', how).textContent = r.c.done !== null ? clock(r.c.done) : t.unfinished(r.c.at, total);
       const block = el('div', 'block shadow', step);
       block.style.height = `${heights[r.place - 1]}px`;
       block.style.background = COLUMN[r.i];
-      block.appendChild(paperText(String(r.place), 110, PAPER));
+      block.style.animationDelay = `${delays[r.place - 1]}s`;
+      const medal = el('div', 'medal', block);
+      medal.style.background = medals[r.place - 1];
+      medal.appendChild(paperText(String(r.place), 96, INK));
     }
 
     const after = el('div', 'after', stage);
