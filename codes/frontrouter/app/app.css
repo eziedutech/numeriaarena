@@ -166,6 +166,19 @@ body {
   max-width: 520px;
 }
 
+/* TRY THE TEACHER PAGE, below the sign-in. */
+.sample-try {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(58, 63, 75, 0.18);
+}
+
+.sample-here {
+  background: #fde8c4;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
 .btn {
   border: 0;
   cursor: pointer;

@@ -3,6 +3,8 @@
  * Authentication in the browser, and the Numeria server checks every token.
  * Firebase loads only when a page asks for it. The game has its own copy for
  * teachers (codes/xrclient/src/home/teacher.ts); the two are separate apps.
+ * TRY THE TEACHER PAGE needs no sign-in: the server makes a sample teacher
+ * for this visitor, and its token stands in for a Firebase one for a day.
  */
 import type { Auth, User } from "firebase/auth";
 
@@ -14,10 +16,33 @@ const CONFIG = {
   appId: env.VITE_FIREBASE_APP_ID as string | undefined,
 };
 const EMAIL_KEY = "numeria.signinEmail";
+const SAMPLE_KEY = "numeria.sampleTeacher";
 
 export const signInConfigured = Boolean(CONFIG.apiKey && CONFIG.projectId && CONFIG.appId);
 
 let auth: Auth | undefined;
+/** The page's listener, told when a sample starts or ends. */
+let current: ((user: User | null) => void) | undefined;
+
+interface Sample {
+  token: string;
+  until: number;
+}
+
+/** The sample teacher of this browser, while its day lasts. */
+function sample(): Sample | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAMPLE_KEY) ?? "null") as Sample | null;
+    return s && typeof s.token === "string" && s.until > Date.now() ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Stands in for a Firebase user: only its token is ever read. */
+const sampleUser = (token: string) => ({ uid: "sample", getIdToken: async () => token }) as unknown as User;
+
+export const isSample = () => sample() !== null;
 
 async function firebase(): Promise<{ auth: Auth; mod: typeof import("firebase/auth") }> {
   const [{ initializeApp }, mod] = await Promise.all([import("firebase/app"), import("firebase/auth")]);
@@ -27,6 +52,13 @@ async function firebase(): Promise<{ auth: Auth; mod: typeof import("firebase/au
 
 /** Calls `listener` with the signed-in user (or null) now and on every change; finishes an email link first. */
 export async function watchUser(listener: (user: User | null) => void): Promise<"ok" | "needs_email"> {
+  current = listener;
+  const s = sample();
+  if (s) listener(sampleUser(s.token));
+  if (!signInConfigured) {
+    if (!s) listener(null);
+    return "ok";
+  }
   const { auth, mod } = await firebase();
   let result: "ok" | "needs_email" = "ok";
   if (mod.isSignInWithEmailLink(auth, window.location.href)) {
@@ -39,7 +71,9 @@ export async function watchUser(listener: (user: User | null) => void): Promise<
     if (email) await finishEmailLink(email);
     else result = "needs_email";
   }
-  mod.onAuthStateChanged(auth, listener);
+  mod.onAuthStateChanged(auth, (u) => {
+    if (!sample()) listener(u);
+  });
   return result;
 }
 
@@ -74,7 +108,36 @@ export async function sendEmailLink(email: string): Promise<void> {
   }
 }
 
+/** Makes a sample teacher with a class that has already played, and signs in as it. */
+export async function startSample(): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch("/api/demo/teacher", { method: "POST" });
+  } catch {
+    throw new Error("offline");
+  }
+  if (!res.ok) throw new Error(await failure(res));
+  const { token, hours } = (await res.json()) as { token: string; hours: number };
+  try {
+    localStorage.setItem(SAMPLE_KEY, JSON.stringify({ token, until: Date.now() + hours * 3_600_000 }));
+  } catch {
+    // The sample lasts while this page is open.
+  }
+  current?.(sampleUser(token));
+}
+
 export async function signOut(): Promise<void> {
+  let had = false;
+  try {
+    had = localStorage.getItem(SAMPLE_KEY) !== null;
+    localStorage.removeItem(SAMPLE_KEY);
+  } catch {
+    // Nothing kept.
+  }
+  if (had || !signInConfigured) {
+    current?.(null);
+    return;
+  }
   const { auth, mod } = await firebase();
   await mod.signOut(auth);
 }
@@ -91,16 +154,17 @@ export async function api<T>(user: User, path: string, init: RequestInit = {}): 
   } catch {
     throw new Error("offline");
   }
-  if (!res.ok) {
-    let code = `http_${res.status}`;
-    try {
-      code = ((await res.json()) as { error?: string }).error ?? code;
-    } catch {
-      // Not JSON: keep the HTTP status.
-    }
-    throw new Error(code);
-  }
+  if (!res.ok) throw new Error(await failure(res));
   return (await res.json()) as T;
+}
+
+/** The API's error code, or the HTTP status when the body has none. */
+async function failure(res: Response): Promise<string> {
+  try {
+    return ((await res.json()) as { error?: string }).error ?? `http_${res.status}`;
+  } catch {
+    return `http_${res.status}`;
+  }
 }
 
 /** Firebase's own error code (auth/popup-closed-by-user and the like), or the API's. */

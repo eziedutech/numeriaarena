@@ -108,7 +108,15 @@ pub(crate) fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
 /// Checks the token and records the sign-in. Admin follows the environment's
 /// list on every sign-in, so removing an email there takes the role away.
 pub(crate) async fn signed_in(state: &State, headers: &HeaderMap) -> Result<User, ApiError> {
-    let adult = state.verifier.verify(bearer(headers)?).await?;
+    let token = bearer(headers)?;
+    // A sample teacher's token is checked here, never sent to Firebase.
+    let adult = if token.starts_with(crate::demo_teacher::PREFIX) {
+        crate::demo_teacher::adult(&state.db, token)
+            .await?
+            .ok_or(ApiError(StatusCode::UNAUTHORIZED, "invalid_token"))?
+    } else {
+        state.verifier.verify(token).await?
+    };
     let admin = adult.email_verified
         && state
             .config

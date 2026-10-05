@@ -113,7 +113,7 @@ fn picture_hash(salt: &str, picture: &Picture) -> String {
     hex(&h.finalize())
 }
 
-fn token_hash(token: &str) -> String {
+pub(crate) fn token_hash(token: &str) -> String {
     hex(&Sha256::digest(token.as_bytes()))
 }
 

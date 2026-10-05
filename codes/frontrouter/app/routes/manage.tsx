@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 import type { Route } from "./+types/manage";
-import { api, errorCode, finishEmailLink, sendEmailLink, signInConfigured, signInWith, signOut, watchUser } from "../auth";
+import { api, errorCode, finishEmailLink, isSample, sendEmailLink, signInConfigured, signInWith, signOut, startSample, watchUser } from "../auth";
 import { MyClasses } from "../classes";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
@@ -59,6 +59,11 @@ const TEXT = {
     confirmEmail: "This link was opened in another browser. Type the email it was sent to.",
     go: "GO",
     signOut: "SIGN OUT",
+    sampleOr: "Just looking?",
+    sample: "TRY THE TEACHER PAGE",
+    sampleNote: "A sample teacher just for you, with a class of 6 that has already raced and practised. No sign-in. It is gone after 24 hours.",
+    sampleMaking: "Making your sample class...",
+    sampleHere: "This is a sample teacher. Everything here is made up and gone after 24 hours. Sign out to start again or to sign in as yourself.",
     toGame: "TO THE GAME",
     status: { pending: "Waiting for approval", approved: "Approved", suspended: "Suspended" } as Record<Status, string>,
     pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
@@ -141,6 +146,8 @@ const TEXT = {
       terms_not_agreed: "Tick the statement to continue.",
       terms_changed: "The statement changed. Reload the page and try again.",
       already_registered: "This account is already signed up.",
+      busy: "Many samples were made in the last hour. Try again later.",
+      invalid_token: "Your session is over. Sign out and in again.",
       suspended: "This account is suspended.",
       email_required: "This account has no email. Use Google or an email link instead.",
       "auth/popup-closed-by-user": "The sign-in window was closed before it finished.",
@@ -164,6 +171,11 @@ const TEXT = {
     confirmEmail: "Tautan ini dibuka di browser lain. Ketik email tujuan tautan itu.",
     go: "MASUK",
     signOut: "KELUAR",
+    sampleOr: "Hanya ingin melihat?",
+    sample: "COBA HALAMAN GURU",
+    sampleNote: "Guru contoh khusus untuk Anda, dengan kelas 6 siswa yang sudah berlomba dan berlatih. Tanpa masuk akun. Hilang setelah 24 jam.",
+    sampleMaking: "Membuat kelas contoh Anda...",
+    sampleHere: "Ini guru contoh. Semua isinya buatan dan hilang setelah 24 jam. Keluar untuk mulai lagi atau masuk dengan akun Anda sendiri.",
     toGame: "KE GAME",
     status: { pending: "Menunggu persetujuan", approved: "Disetujui", suspended: "Ditangguhkan" } as Record<Status, string>,
     pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
@@ -246,6 +258,8 @@ const TEXT = {
       terms_not_agreed: "Centang pernyataan untuk melanjutkan.",
       terms_changed: "Pernyataan berubah. Muat ulang halaman lalu coba lagi.",
       already_registered: "Akun ini sudah terdaftar.",
+      busy: "Banyak contoh dibuat dalam satu jam terakhir. Coba lagi nanti.",
+      invalid_token: "Sesi Anda sudah habis. Keluar lalu masuk lagi.",
       suspended: "Akun ini ditangguhkan.",
       email_required: "Akun ini tidak punya email. Pakai Google atau tautan email.",
       "auth/popup-closed-by-user": "Jendela masuk ditutup sebelum selesai.",
@@ -306,10 +320,6 @@ export default function Manage() {
   };
 
   useEffect(() => {
-    if (!signInConfigured) {
-      setUser(null);
-      return;
-    }
     watchUser((u) => {
       setUser(u);
       setMe(null);
@@ -400,9 +410,18 @@ function SignIn({ t, needsEmail, startError }: { t: Text; needsEmail: boolean; s
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState(startError);
+  const [making, setMaking] = useState(false);
   const run = (p: Promise<unknown>, done?: string) => {
     setError("");
     p.then(() => done && setNote(done)).catch((e) => setError(errorCode(e)));
+  };
+  const trySample = () => {
+    if (making) return;
+    setMaking(true);
+    setError("");
+    startSample()
+      .catch((e) => setError(errorCode(e)))
+      .finally(() => setMaking(false));
   };
   return (
     <section className="paper-sheet narrow">
@@ -438,6 +457,15 @@ function SignIn({ t, needsEmail, startError }: { t: Text; needsEmail: boolean; s
       </button>
       {note && <p>{note}</p>}
       <ErrorLine t={t} code={error} />
+      {!needsEmail && (
+        <div className="sample-try">
+          <p className="field-label">{t.sampleOr}</p>
+          <button type="button" className="btn wide" disabled={making} onClick={trySample}>
+            {making ? t.sampleMaking : t.sample}
+          </button>
+          <p className="soft">{t.sampleNote}</p>
+        </div>
+      )}
     </section>
   );
 }
@@ -497,6 +525,7 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
     <>
       <section className="paper-sheet">
         <AccountHead t={t} me={me} />
+        {isSample() && <p className="sample-here">{t.sampleHere}</p>}
         {me.organizer && (
           <>
             <p>

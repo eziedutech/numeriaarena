@@ -79,7 +79,7 @@ pub async fn list(
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "status"));
     }
     let rows = sqlx::query_as::<_, OrganizerRow>(row_sql!(
-        "WHERE a.status = $1 ORDER BY a.updated_at DESC, u.id DESC LIMIT 200"
+        "WHERE a.status = $1 AND a.path <> 'demo' ORDER BY a.updated_at DESC, u.id DESC LIMIT 200"
     ))
     .bind(&q.status)
     .fetch_all(&state.db)
