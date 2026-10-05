@@ -1,4 +1,5 @@
 import { el } from '../home/paper.js';
+import { BALLOON_H, BALLOON_MIDDLE, BALLOON_W, balloons, WALKER_H, WALKER_W, walkers } from './paper-art.js';
 
 /**
  * The three looks of a smartboard question: animals walking across a meadow
@@ -7,7 +8,8 @@ import { el } from '../home/paper.js';
  * the columns (question 1 is animals, balloons and orbs from left to right,
  * question 2 balloons, orbs and animals, and so on), so in three rounds every
  * player meets every look as often. In every look the three answers stay in
- * view the whole time, each in a lane of its own, moving slowly.
+ * view the whole time, each in a lane of its own, moving slowly. The animals
+ * and balloons are the game's own paper ones (see paper-art).
  */
 
 export type Look = 'animal' | 'balloon' | 'orb';
@@ -63,13 +65,14 @@ export const LOOKS_CSS = `
 #board .tgt.animal .sign { background: #fff8ec; padding: 6px 16px; min-width: 96px; box-sizing: border-box; text-align: center;
   box-shadow: 3px 5px 8px rgba(70, 50, 25, 0.3); position: relative; z-index: 1; }
 #board .tgt.animal .sign::after { content: ''; position: absolute; left: 50%; bottom: -16px; width: 6px; height: 16px; margin-left: -3px; background: #9a6b3c; }
-#board .tgt.animal svg { display: block; width: 160px; height: 110px; margin-top: 4px; animation: board-flip ${WALK * 2}s step-end infinite; }
-#board .tgt .leg { transform-box: fill-box; transform-origin: 50% 0; animation: board-step 0.5s ease-in-out infinite alternate; }
-#board .tgt .leg.b { animation-delay: -0.5s; }
+#board .tgt.animal .body { margin-top: 2px; transform-origin: 50% 100%; animation: board-waddle 0.5s ease-in-out infinite alternate; }
+#board .tgt.animal img { display: block; width: ${WALKER_W}px; height: ${WALKER_H}px; animation: board-flip ${WALK * 2}s step-end infinite; }
 
 #board .tgt.balloon { top: 8px; animation: board-rise ${RISE}s ease-in-out infinite alternate; }
-#board .tgt.balloon svg { display: block; width: 140px; height: 210px; transform-origin: 50% 100%; animation: board-wobble 2.4s ease-in-out infinite alternate; }
-#board .tgt.balloon .txt { position: absolute; left: 0; right: 0; top: 52px; text-align: center; color: #fff; text-shadow: 0 2px 4px rgba(40, 30, 20, 0.45); }
+#board .tgt.balloon .sway { position: relative; transform-origin: 50% 100%; animation: board-wobble 2.4s ease-in-out infinite alternate; }
+#board .tgt.balloon img { display: block; width: ${BALLOON_W}px; height: ${BALLOON_H}px; }
+#board .tgt.balloon .txt { position: absolute; left: 0; right: 0; top: ${BALLOON_MIDDLE}px; transform: translateY(-50%); text-align: center; color: #fff;
+  text-shadow: 0 2px 4px rgba(40, 30, 20, 0.55); }
 
 #board .tgt.orb { animation: board-orbit ${ORBIT}s linear infinite; }
 #board .tgt.orb .face { width: 140px; height: 140px; border-radius: 50%; justify-content: center; }
@@ -77,7 +80,7 @@ export const LOOKS_CSS = `
 #board .tgt.orb .ball { position: absolute; inset: 0; border-radius: 50%; }
 #board .tgt.orb .txt { position: relative; color: #fff; text-shadow: 0 2px 5px rgba(20, 10, 50, 0.7); }
 
-#board .field.still .tgt, #board .field.still .tgt svg, #board .field.still .leg, #board .field.still .glow { animation-play-state: paused; }
+#board .field.still .tgt, #board .field.still .tgt img, #board .field.still .sway, #board .field.still .body, #board .field.still .glow { animation-play-state: paused; }
 #board .tgt.yes .face { filter: drop-shadow(0 0 10px #ffe066) drop-shadow(0 0 4px #ffd23a); animation: board-hop 0.45s ease-out; }
 #board .tgt.balloon.yes.hit .face, #board .tgt.orb.yes.hit .face { animation: board-pop 0.42s ease-out forwards; }
 #board .field.skip .tgt .face { filter: grayscale(0.8) opacity(0.4); }
@@ -85,7 +88,7 @@ export const LOOKS_CSS = `
 
 @keyframes board-walk { to { transform: translateX(calc(var(--fw) - 190px)); } }
 @keyframes board-flip { 0% { transform: none; } 50% { transform: scaleX(-1); } 100% { transform: scaleX(-1); } }
-@keyframes board-step { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+@keyframes board-waddle { from { transform: rotate(-3deg); } to { transform: translateY(-5px) rotate(3deg); } }
 @keyframes board-rise { from { transform: translateY(calc(var(--fh) - 226px)); } to { transform: translateY(0); } }
 @keyframes board-wobble { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
 @keyframes board-orbit { from { transform: rotate(0deg) translateX(46px) rotate(0deg); } to { transform: rotate(360deg) translateX(46px) rotate(-360deg); } }
@@ -98,37 +101,10 @@ export const LOOKS_CSS = `
 @keyframes board-shake { 20%, 60% { transform: translateX(-9px); } 40%, 80% { transform: translateX(9px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  #board .tgt, #board .tgt svg, #board .leg, #board .glow, #board .cloud, #board .stars, #board .sun { animation: none !important; }
+  #board .tgt, #board .tgt img, #board .sway, #board .body, #board .glow, #board .cloud, #board .stars, #board .sun { animation: none !important; }
 }
 `;
 
-const ANIMALS = [
-  // An elephant.
-  `<path d="M24 52 Q12 60 14 74" stroke="#6f7a8f" stroke-width="5" fill="none" stroke-linecap="round"/>
-   <rect class="leg a" x="36" y="74" width="15" height="32" rx="6" fill="#7d879c"/><rect class="leg b" x="54" y="74" width="15" height="32" rx="6" fill="#7d879c"/>
-   <rect class="leg b" x="86" y="74" width="15" height="32" rx="6" fill="#7d879c"/><rect class="leg a" x="104" y="74" width="15" height="32" rx="6" fill="#7d879c"/>
-   <ellipse cx="74" cy="58" rx="50" ry="32" fill="#9aa4b8"/>
-   <circle cx="124" cy="46" r="24" fill="#9aa4b8"/><ellipse cx="110" cy="46" rx="13" ry="19" fill="#7d879c"/>
-   <path d="M142 52 Q154 72 146 94" stroke="#9aa4b8" stroke-width="11" fill="none" stroke-linecap="round"/>
-   <circle cx="131" cy="39" r="3.5" fill="#3a3f4b"/>`,
-  // A pig.
-  `<path d="M28 54 q-12 -6 -7 -15 q7 -4 7 4" stroke="#e48aa0" stroke-width="4" fill="none" stroke-linecap="round"/>
-   <rect class="leg a" x="40" y="76" width="13" height="26" rx="5" fill="#e48aa0"/><rect class="leg b" x="56" y="76" width="13" height="26" rx="5" fill="#e48aa0"/>
-   <rect class="leg b" x="88" y="76" width="13" height="26" rx="5" fill="#e48aa0"/><rect class="leg a" x="104" y="76" width="13" height="26" rx="5" fill="#e48aa0"/>
-   <ellipse cx="76" cy="62" rx="48" ry="30" fill="#f6adc0"/>
-   <path d="M110 38 L116 18 L128 34 Z" fill="#e48aa0"/><circle cx="124" cy="54" r="23" fill="#f6adc0"/>
-   <ellipse cx="144" cy="58" rx="10" ry="9" fill="#e48aa0"/><circle cx="141" cy="57" r="2" fill="#a8546b"/><circle cx="147" cy="57" r="2" fill="#a8546b"/>
-   <circle cx="128" cy="46" r="3.5" fill="#3a3f4b"/>`,
-  // A sheep.
-  `<rect class="leg a" x="44" y="74" width="9" height="30" rx="4" fill="#4a4b5a"/><rect class="leg b" x="58" y="74" width="9" height="30" rx="4" fill="#4a4b5a"/>
-   <rect class="leg b" x="88" y="74" width="9" height="30" rx="4" fill="#4a4b5a"/><rect class="leg a" x="102" y="74" width="9" height="30" rx="4" fill="#4a4b5a"/>
-   <g fill="#fbf6ec"><circle cx="50" cy="58" r="21"/><circle cx="74" cy="46" r="23"/><circle cx="98" cy="56" r="21"/><circle cx="76" cy="70" r="22"/>
-   <circle cx="52" cy="72" r="16"/><circle cx="100" cy="72" r="16"/></g>
-   <ellipse cx="126" cy="52" rx="16" ry="21" fill="#4a4b5a"/><ellipse cx="112" cy="42" rx="9" ry="4.5" fill="#4a4b5a"/>
-   <circle cx="131" cy="46" r="3" fill="#fff"/>`,
-];
-
-const BALLOONS = ['#f2716b', '#3469c4', '#3fb6a0', '#f0a92e', '#9b6bd6'];
 const ORBS = [
   ['#ffd36b', '#e0802c'],
   ['#7fe3ff', '#2a76d6'],
@@ -185,23 +161,22 @@ export function target(field: HTMLElement, look: Look, lane: number, text: strin
     const txt = el('span', 'txt', sign);
     txt.textContent = text;
     txt.style.fontSize = `${fontFor(text, 38)}px`;
-    face.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 160 110" aria-hidden="true">${ANIMALS[lane]}</svg>`);
-    (face.lastElementChild as SVGElement).style.animationDelay = delay;
+    const body = el('div', 'body', face);
+    body.style.animationDelay = `${-next() * 0.5}s`;
+    const img = el('img', '', body);
+    img.alt = '';
+    img.src = walkers()[lane];
+    img.style.animationDelay = delay;
   } else if (look === 'balloon') {
     b.style.left = `calc(var(--fw) / 3 * ${lane} + (var(--fw) / 3 - 140px) / 2)`;
     b.style.animationDelay = `${-phase * RISE * 2}s`;
-    const color = BALLOONS[Math.floor(next() * BALLOONS.length)];
-    face.insertAdjacentHTML(
-      'beforeend',
-      `<svg viewBox="0 0 140 210" aria-hidden="true">
-        <path d="M70 158 q-12 18 0 26 q12 8 0 26" stroke="#7a6f5c" stroke-width="2.5" fill="none"/>
-        <path d="M63 150 L77 150 L70 160 Z" fill="${color}"/>
-        <ellipse cx="70" cy="78" rx="62" ry="74" fill="${color}"/>
-        <ellipse cx="46" cy="48" rx="12" ry="22" fill="#fff" opacity="0.35" transform="rotate(20 46 48)"/>
-      </svg>`,
-    );
-    (face.lastElementChild as SVGElement).style.animationDelay = `${-next() * 2.4}s`;
-    const txt = el('span', 'txt', face);
+    const pictures = balloons();
+    const sway = el('div', 'sway', face);
+    sway.style.animationDelay = `${-next() * 2.4}s`;
+    const img = el('img', '', sway);
+    img.alt = '';
+    img.src = pictures[Math.floor(next() * pictures.length)];
+    const txt = el('span', 'txt', sway);
     txt.textContent = text;
     txt.style.fontSize = `${fontFor(text, 40)}px`;
   } else {
