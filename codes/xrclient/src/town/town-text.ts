@@ -99,6 +99,13 @@ const EN = {
     landmark_decimal_market: 'Decimal Market',
     landmark_clock_tower: 'Clock Tower',
   } as Record<string, string>,
+  finishNow: 'FINISH NOW',
+  finishNote: 'Answer one question about this building and it is finished at once. A wrong answer costs nothing: the frame keeps building.',
+  nextIn: (t: string) => `NEXT QUESTION IN ${t}`,
+  right: (name: string) => `Right! ${name} is finished.`,
+  wrong: 'Not quite. The frame keeps building, and another question comes in 30 seconds.',
+  maths: 'THE MATHS OF IT',
+  grade: 'GRADE',
   canvas: 'Your town. Use the arrow keys to move between tiles.',
 };
 
@@ -198,6 +205,13 @@ const ID: typeof EN = {
     landmark_decimal_market: 'Pasar Desimal',
     landmark_clock_tower: 'Menara Jam',
   },
+  finishNow: 'SELESAIKAN SEKARANG',
+  finishNote: 'Jawab satu soal tentang bangunan ini dan bangunan langsung jadi. Salah tidak apa-apa: kerangkanya tetap dibangun.',
+  nextIn: (t: string) => `SOAL BERIKUTNYA ${t}`,
+  right: (name: string) => `Benar! ${name} sudah jadi.`,
+  wrong: 'Belum tepat. Kerangkanya tetap dibangun, dan soal baru datang 30 detik lagi.',
+  maths: 'MATEMATIKANYA',
+  grade: 'KELAS',
   canvas: 'Kotamu. Pakai tombol panah untuk berpindah antarpetak.',
 };
 

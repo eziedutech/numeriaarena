@@ -15,6 +15,7 @@ import { assetOf, footprint, LAND_KINDS, townRulesNow, type LandKind, type Place
 import { classMap, takeCell, TownModel, type ClassMap } from './town-model.js';
 import { buildPage, foldUp, Ghost, type PageScene } from './town-scene.js';
 import { shelfPictures } from './town-thumbs.js';
+import { factsOf, finishQuestion, GRADES, type Grade, type Shape } from './town-facts.js';
 import { TOWN_TEXT, waitText, type TownText } from './town-text.js';
 
 /**
@@ -81,10 +82,49 @@ const CSS = `
 #town .cell.taken { cursor: default; color: ${INK}; }
 #town .cell.me { outline: 3px solid ${INK}; }
 #town .sheet .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+#town .card ul { font-size: 15px; gap: 4px; padding-left: 18px; }
+#town .card .grades { display: flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 700; }
+#town .card .grades button { min-width: 40px; min-height: 40px; background: #f1e3c4; font-weight: 700; }
+#town .card .grades button.on { background: ${INK}; color: ${PAPER}; }
+#town .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+#town .choices button { min-height: 64px; font-size: 26px; font-weight: 700; background: #f8efdc; }
+#town .choices button.yes { background: ${TEAL}; color: #fff; }
+#town .choices button.no { background: ${ORANGE}; color: #fff; }
+#town .choices button:disabled { cursor: default; }
+#town .sheet p.ask { font-size: 22px; font-weight: 700; }
 #town ul { margin: 0; padding-left: 22px; font-size: 17px; display: flex; flex-direction: column; gap: 6px; }
 `;
 
 let open: TownPage | null = null;
+
+const GRADE_KEY = 'numeria.town.grade';
+const TRIES_KEY = 'numeria.town.tries';
+const RETRY_MS = 30_000;
+
+/** FINISH NOW tries by building, kept on the device so a reload does not skip the wait. */
+const tries = {
+  all(): Record<string, { attempt: number; next_at: number }> {
+    try {
+      return JSON.parse(localStorage.getItem(TRIES_KEY) ?? '{}') as Record<string, { attempt: number; next_at: number }>;
+    } catch {
+      return {};
+    }
+  },
+  get(id: string): { attempt: number; next_at: number } | undefined {
+    return this.all()[id];
+  },
+  set(id: string, v: { attempt: number; next_at: number }): void {
+    const all = this.all();
+    all[id] = v;
+    // Only the newest few are worth keeping.
+    const kept = Object.entries(all).slice(-50);
+    try {
+      localStorage.setItem(TRIES_KEY, JSON.stringify(Object.fromEntries(kept)));
+    } catch {
+      // Without storage no wait can be kept; the next question comes at once.
+    }
+  },
+};
 
 /** Opens the town over the page; one at a time. */
 export function openTown(): void {
@@ -327,17 +367,109 @@ class TownPage {
 
   private closedText(code: string, last: number): string {
     if (code !== 'land_not_full') return this.reason(code);
-    const r = townRulesNow();
-    const kind = this.model!.view().lands[last];
-    const layout = r.lands.find((l) => l.kind === kind)?.layout ?? [];
+    const { free, used } = this.pageTiles(last);
+    return this.t.landClosed(used, Math.ceil((free * townRulesNow().full_tenths) / 10));
+  }
+
+  /** Tiles of page `land` that can be built on, and those built. */
+  private pageTiles(land: number): { free: number; used: number } {
+    const kind = this.model!.view().lands[land];
+    const layout = townRulesNow().lands.find((l) => l.kind === kind)?.layout ?? [];
     const free = layout.join('').split('').filter((c) => c === '.').length;
     let used = 0;
     for (const it of this.model!.view().items) {
-      if (it.land !== last) continue;
+      if (it.land !== land) continue;
       const a = assetOf(it.asset);
       if (a) used += a.w * a.h;
     }
-    return this.t.landClosed(used, Math.ceil((free * r.full_tenths) / 10));
+    return { free, used };
+  }
+
+  // ------------------------------------------------------------ maths
+
+  /** A seat's grade from its class; a guest picks one, grade 5 at first. */
+  private grade(): Grade {
+    const seat = this.model?.seat;
+    let g = seat?.grade;
+    if (!seat) {
+      try {
+        g = Number(localStorage.getItem(GRADE_KEY) ?? localStorage.getItem('numeria.board.grade'));
+      } catch {
+        g = undefined;
+      }
+    }
+    return (GRADES as readonly number[]).includes(g ?? 0) ? (g as Grade) : 5;
+  }
+
+  private gradePicker(): void {
+    const row = el('div', 'grades', this.card);
+    el('span', '', row).textContent = this.t.grade;
+    const now = this.grade();
+    for (const g of GRADES) {
+      const b = el('button', g === now ? 'on' : '', row);
+      b.textContent = String(g);
+      b.setAttribute('aria-pressed', String(g === now));
+      b.setAttribute('aria-label', `${this.t.grade} ${g}`);
+      b.addEventListener('click', () => {
+        try {
+          localStorage.setItem(GRADE_KEY, String(g));
+        } catch {
+          // Without storage the grade stays as it was.
+        }
+        this.redraw();
+      });
+    }
+  }
+
+  private shapeOf(it: Placed): Shape {
+    const a = assetOf(it.asset)!;
+    const [w, h] = footprint(a, it.rot);
+    return { w, h, windows: a.windows, floors: a.floors };
+  }
+
+  private finishLabel(b: HTMLButtonElement, id: string): void {
+    const wait = (tries.get(id)?.next_at ?? 0) - Date.now();
+    b.disabled = wait > 0;
+    b.textContent = wait > 0 ? this.t.nextIn(waitText(wait, this.lang)) : this.t.finishNow;
+  }
+
+  /** FINISH NOW: one question about the building; right finishes it at once. */
+  private askFinish(it: Placed): void {
+    const t = this.t;
+    const tried = tries.get(it.id) ?? { attempt: 0, next_at: 0 };
+    if (tried.next_at > Date.now()) return;
+    const q = finishQuestion(this.shapeOf(it), this.grade(), tried.attempt, this.lang);
+    const sheet = this.openCover(`${t.finishNow}: ${this.name(it.asset).toUpperCase()}`);
+    el('p', '', sheet).textContent = t.finishNote;
+    const ask = el('p', 'ask', sheet);
+    ask.textContent = q.prompt;
+    const choices = el('div', 'choices', sheet);
+    const after = el('p', '', sheet);
+    after.setAttribute('aria-live', 'polite');
+    const row = el('div', 'row', sheet);
+    const back = el('button', 'btn', row);
+    back.textContent = t.back;
+    back.addEventListener('click', () => this.closeCover());
+    q.choices.forEach((c, i) => {
+      const b = el('button', '', choices);
+      b.textContent = c;
+      b.addEventListener('click', async () => {
+        for (const other of choices.querySelectorAll('button')) other.disabled = true;
+        tries.set(it.id, { attempt: tried.attempt + 1, next_at: i === q.right ? 0 : Date.now() + RETRY_MS });
+        if (i !== q.right) {
+          b.classList.add('no');
+          after.textContent = `${t.wrong} ${q.hint}`;
+          back.textContent = t.ok;
+          back.focus();
+          return;
+        }
+        b.classList.add('yes');
+        const reason = await this.model!.act({ type: 'town_finish', place_id: it.id });
+        this.closeCover();
+        this.say(reason ? this.reason(reason) : t.right(this.name(it.asset)));
+      });
+    });
+    (choices.firstElementChild as HTMLElement | null)?.focus();
   }
 
   private drawShelf(balance: number, buildings: number): void {
@@ -382,6 +514,19 @@ class TownPage {
     el('h3', '', this.card).textContent = this.name(it.asset);
     const status = el('p', 'status', this.card);
     status.textContent = it.ready ? t.status.ready : t.status.building(waitText(it.ready_at_ms - this.model!.now(), this.lang));
+    if (!it.ready) {
+      const finish = el('button', 'btn go finish', this.card);
+      this.finishLabel(finish, it.id);
+      finish.addEventListener('click', () => this.askFinish(it));
+    } else {
+      const a = assetOf(it.asset);
+      if (a && a.group !== 'road' && a.group !== 'nature') {
+        el('b', '', this.card).textContent = t.maths;
+        const facts = el('ul', '', this.card);
+        for (const f of factsOf(this.shapeOf(it), this.pageTiles(it.land), this.grade(), this.lang)) el('li', '', facts).textContent = f;
+        if (!this.model!.seat) this.gradePicker();
+      }
+    }
     const row = el('div', 'row', this.card);
     const move = el('button', 'btn', row);
     move.textContent = t.move;
@@ -422,6 +567,8 @@ class TownPage {
     const it = v.items.find((i) => i.id === this.selected);
     const status = this.card.querySelector('.status');
     if (it && !it.ready && status) status.textContent = this.t.status.building(waitText(it.ready_at_ms - model.now(), this.lang));
+    const finish = this.card.querySelector<HTMLButtonElement>('.finish');
+    if (it && finish) this.finishLabel(finish, it.id);
   }
 
   // ------------------------------------------------------------ input
