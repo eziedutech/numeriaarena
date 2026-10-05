@@ -211,7 +211,9 @@ export class Home {
    */
   private signInAsked = false;
   /** Opened in a headset's own browser: XR or this window, and no smartboard. */
-  private onHeadset = /OculusBrowser|Quest/u.test(navigator.userAgent);
+  // The XR emulator in development puts a Quest's user agent on navigator
+  // itself; a real browser keeps it on the prototype.
+  private onHeadset = !Object.getOwnPropertyDescriptor(navigator, 'userAgent') && /OculusBrowser|Quest/u.test(navigator.userAgent);
 
   constructor(
     private camera: PerspectiveCamera,
