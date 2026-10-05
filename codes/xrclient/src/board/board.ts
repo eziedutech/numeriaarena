@@ -461,7 +461,10 @@ class Board {
       const box = el('input', '', label);
       box.type = 'checkbox';
       box.checked = this.record;
-      box.addEventListener('change', () => (this.record = box.checked));
+      box.addEventListener('change', () => {
+        this.record = box.checked;
+        check();
+      });
       el('span', '', label).textContent = t.record;
     }
     const note = el('p', 'note', sheet);
@@ -474,7 +477,9 @@ class Board {
       const seats = this.slots.map((s) => s.seat);
       const ok = !this.classId || (seats.every((n) => n !== null) && new Set(seats).size === 3);
       go.disabled = !ok;
-      note.textContent = ok || seats.every((n) => n === null) ? '' : t.distinct;
+      // Saving needs the teacher signed in; better told now than after the race.
+      const out = this.classId && this.record && ['out', 'error'].includes(teacherState().kind);
+      note.textContent = ok || seats.every((n) => n === null) ? (out ? t.signIn : '') : t.distinct;
     };
     check();
   }
@@ -632,7 +637,10 @@ class Board {
     const finish = () => {
       if (over) return;
       over = true;
-      const elapsed = Math.min(performance.now() - startAt, limit);
+      // All done, the race took as long as its last player; else it ran to the limit or was ended.
+      const elapsed = columns.every((x) => x.done !== null)
+        ? Math.max(...columns.map((x) => x.done!))
+        : Math.min(performance.now() - startAt, limit);
       this.podium(columns, elapsed, COUNT);
     };
 
@@ -777,18 +785,19 @@ class Board {
       status.textContent = t.saving;
       try {
         const res = await teacherCall(`/classes/${encodeURIComponent(classId)}/board`, { method: 'POST', body });
-        if (!res) {
-          status.textContent = t.signIn;
+        if (res && !res.ok) throw new Error(String(res.status));
+        if (res) {
+          status.textContent = t.saved;
           return;
         }
-        if (!res.ok) throw new Error(String(res.status));
-        status.textContent = t.saved;
+        // Not signed in: the teacher may sign in in another tab and try again.
+        status.textContent = t.signIn;
       } catch {
         status.textContent = t.failed;
-        const again = this.button(after, t.retry, null, () => void send());
-        again.classList.add('retry');
-        after.insertBefore(again, status.nextSibling);
       }
+      const again = this.button(after, t.retry, null, () => void send());
+      again.classList.add('retry');
+      after.insertBefore(again, status.nextSibling);
     };
     await send();
   }
