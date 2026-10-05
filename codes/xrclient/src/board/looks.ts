@@ -1,19 +1,19 @@
 import { el } from '../home/paper.js';
-import { BALLOON_H, BALLOON_MIDDLE, BALLOON_W, balloons, WALKER_H, WALKER_W, walkers } from './paper-art.js';
+import { BALLOON_H, BALLOON_MIDDLE, BALLOON_W, balloons, CRYSTAL_SIZE, crystals, WALKER_H, WALKER_W, walkers } from './paper-art.js';
 
 /**
  * The three looks of a smartboard question: animals walking across a meadow
  * with the answers on signs, balloons rising through a sky with drifting
- * clouds, and glowing orbs circling in a night of stars. The looks cross over
- * the columns (question 1 is animals, balloons and orbs from left to right,
- * question 2 balloons, orbs and animals, and so on), so in three rounds every
+ * clouds, and paper crystals circling in a night of stars. The looks cross over
+ * the columns (question 1 is animals, balloons and crystals from left to right,
+ * question 2 balloons, crystals and animals, and so on), so in three rounds every
  * player meets every look as often. In every look the three answers stay in
  * view the whole time, each in a lane of its own, moving slowly. The animals
- * and balloons are the game's own paper ones (see paper-art).
+ * balloons and crystals are the game's own paper ones (see paper-art).
  */
 
-export type Look = 'animal' | 'balloon' | 'orb';
-export const LOOKS: readonly Look[] = ['animal', 'balloon', 'orb'];
+export type Look = 'animal' | 'balloon' | 'crystal';
+export const LOOKS: readonly Look[] = ['animal', 'balloon', 'crystal'];
 
 /** The look of question `n` in column `column`. */
 export const lookOf = (n: number, column: number): Look => LOOKS[(n + column) % LOOKS.length];
@@ -50,7 +50,7 @@ export const LOOKS_CSS = `
 #board .cloud::before { width: 54px; height: 54px; left: 20px; top: -26px; }
 #board .cloud::after { width: 40px; height: 40px; left: 62px; top: -16px; }
 
-#board .scene.orb { background: radial-gradient(ellipse at 30% 15%, #5a4aa8, #231f52 60%, #15132f); }
+#board .scene.crystal { background: radial-gradient(ellipse at 30% 15%, #5a4aa8, #231f52 60%, #15132f); }
 #board .stars { position: absolute; inset: 0; background-size: 170px 170px; animation: board-twinkle 3s ease-in-out infinite alternate; }
 #board .stars.a { background-image: radial-gradient(2px 2px at 20px 30px, #fff, transparent), radial-gradient(2px 2px at 120px 90px, #fff, transparent),
   radial-gradient(1.5px 1.5px at 70px 140px, #fff, transparent); }
@@ -74,15 +74,17 @@ export const LOOKS_CSS = `
 #board .tgt.balloon .txt { position: absolute; left: 0; right: 0; top: ${BALLOON_MIDDLE}px; transform: translateY(-50%); text-align: center; color: #fff;
   text-shadow: 0 2px 4px rgba(40, 30, 20, 0.55); }
 
-#board .tgt.orb { animation: board-orbit ${ORBIT}s linear infinite; }
-#board .tgt.orb .face { width: 140px; height: 140px; border-radius: 50%; justify-content: center; }
-#board .tgt.orb .glow { position: absolute; inset: -18px; border-radius: 50%; animation: board-glow 1.8s ease-in-out infinite alternate; }
-#board .tgt.orb .ball { position: absolute; inset: 0; border-radius: 50%; }
-#board .tgt.orb .txt { position: relative; color: #fff; text-shadow: 0 2px 5px rgba(20, 10, 50, 0.7); }
+#board .tgt.crystal { animation: board-orbit ${ORBIT}s linear infinite; }
+#board .tgt.crystal .face { width: ${CRYSTAL_SIZE}px; height: ${CRYSTAL_SIZE}px; }
+#board .tgt.crystal .glow { position: absolute; inset: -10px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 240, 200, 0.5) 30%, transparent 68%);
+  animation: board-glow 1.8s ease-in-out infinite alternate; }
+#board .tgt.crystal img { position: relative; display: block; width: ${CRYSTAL_SIZE}px; height: ${CRYSTAL_SIZE}px; }
+#board .tgt.crystal .tag { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); background: #fff8ec; padding: 4px 14px; min-width: 80px;
+  box-sizing: border-box; text-align: center; box-shadow: 3px 5px 8px rgba(10, 5, 30, 0.45); }
 
 #board .field.still .tgt, #board .field.still .tgt img, #board .field.still .sway, #board .field.still .body, #board .field.still .glow { animation-play-state: paused; }
 #board .tgt.yes .face { filter: drop-shadow(0 0 10px #ffe066) drop-shadow(0 0 4px #ffd23a); animation: board-hop 0.45s ease-out; }
-#board .tgt.balloon.yes.hit .face, #board .tgt.orb.yes.hit .face { animation: board-pop 0.42s ease-out forwards; }
+#board .tgt.balloon.yes.hit .face, #board .tgt.crystal.yes.hit .face { animation: board-pop 0.42s ease-out forwards; }
 #board .field.skip .tgt .face { filter: grayscale(0.8) opacity(0.4); }
 #board .tgt.no .face { filter: grayscale(0.85) opacity(0.65); animation: board-shake 0.4s ease-in-out; }
 
@@ -105,15 +107,8 @@ export const LOOKS_CSS = `
 }
 `;
 
-const ORBS = [
-  ['#ffd36b', '#e0802c'],
-  ['#7fe3ff', '#2a76d6'],
-  ['#ff9be0', '#b0389a'],
-  ['#9dffb0', '#2ea36b'],
-];
-
-/** Lanes that never cross: rows for animals, columns for balloons, three corners for orbs. */
-const ORB_AT: [number, number][] = [
+/** Lanes that never cross: rows for animals, columns for balloons, three corners for crystals. */
+const CRYSTAL_AT: [number, number][] = [
   [0.27, 0.2],
   [0.73, 0.5],
   [0.27, 0.8],
@@ -180,19 +175,20 @@ export function target(field: HTMLElement, look: Look, lane: number, text: strin
     txt.textContent = text;
     txt.style.fontSize = `${fontFor(text, 40)}px`;
   } else {
-    const [x, y] = ORB_AT[lane];
-    b.style.left = `calc(var(--fw) * ${x} - 70px)`;
-    b.style.top = `calc(var(--fh) * ${y} - 70px)`;
+    const [x, y] = CRYSTAL_AT[lane];
+    b.style.left = `calc(var(--fw) * ${x} - ${CRYSTAL_SIZE / 2}px)`;
+    b.style.top = `calc(var(--fh) * ${y} - ${CRYSTAL_SIZE / 2}px)`;
     b.style.animationDelay = `${-phase * ORBIT}s`;
-    const [light, deep] = ORBS[Math.floor(next() * ORBS.length)];
     const glow = el('div', 'glow', face);
-    glow.style.background = `radial-gradient(circle, ${light}aa 40%, transparent 70%)`;
     glow.style.animationDelay = `${-next() * 1.8}s`;
-    const ball = el('div', 'ball', face);
-    ball.style.background = `radial-gradient(circle at 34% 30%, #fff 0, ${light} 28%, ${deep} 100%)`;
-    const txt = el('span', 'txt', face);
+    const pictures = crystals();
+    const img = el('img', '', face);
+    img.alt = '';
+    img.src = pictures[Math.floor(next() * pictures.length)];
+    const tag = el('div', 'tag', face);
+    const txt = el('span', 'txt', tag);
     txt.textContent = text;
-    txt.style.fontSize = `${fontFor(text, 40)}px`;
+    txt.style.fontSize = `${fontFor(text, 36)}px`;
   }
   return b;
 }

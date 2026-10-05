@@ -8,7 +8,7 @@ import { makeRace, seeded, shuffled, topicsFor, type Question, type Topic } from
 /**
  * The smartboard race: three players side by side on one big touch screen,
  * a column each, the same kinds of question in the same order with numbers
- * of their own, the answers moving as animals, balloons or orbs. Every touch counts
+ * of their own, the answers moving as animals, balloons or crystals. Every touch counts
  * for the column it lands in, so all three can press at once. The results
  * show as a podium; they are kept in the class report only when the teacher
  * opened the race for their class and chose to save them.
@@ -40,6 +40,8 @@ const GAP = 40;
 const ABOVE = 84 + 24 + 64 + 10 + FIELD_TOP;
 /** Three rounds of the three looks, so each player meets each look as often. */
 const COUNT = 9;
+/** The time limits the teacher picks from, in minutes; the race ends when it runs out. */
+const MINUTES = [2, 3, 5];
 /** After a right answer and after a wrong one, before the next question. */
 const PAUSE_RIGHT = 450;
 const PAUSE_WRONG = 800;
@@ -78,6 +80,7 @@ const CSS = `
 #board .col .head { height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 8px 18px; color: ${PAPER};
   font-size: 26px; font-weight: 700; gap: 12px; }
 #board .col .head .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+#board .col .head .time.low { background: #c9554f; }
 #board .col .head .time { flex: none; padding: 4px 10px; background: rgba(255, 255, 255, 0.24); font-variant-numeric: tabular-nums; min-width: 66px; text-align: center; }
 #board .col .head .pass { min-height: 48px; padding: 0 18px; background: ${PAPER}; color: ${INK}; font-size: 20px; font-weight: 700; }
 #board .col .track { height: 10px; background: #efe3c8; }
@@ -196,6 +199,7 @@ class Board {
   private t: BoardText;
   private grade: number;
   private topic: Topic;
+  private minutes: number;
   private slots: Slot[];
   private classId: string | null;
   private record: boolean;
@@ -212,6 +216,8 @@ class Board {
     this.t = BOARD_TEXT[getLang()];
     this.grade = o.grade ?? (Number(store.get('grade')) || 5);
     this.topic = (store.get('topic') as Topic | null) ?? 'mixed';
+    const m = Number(store.get('minutes'));
+    this.minutes = MINUTES.includes(m) ? m : 3;
     this.classId = o.classId ?? null;
     this.record = Boolean(o.record && o.classId);
     this.roster = o.seats ?? [];
@@ -349,6 +355,19 @@ class Board {
       });
     }
 
+    const times = el('div', 'row', sheet);
+    el('div', 'label', times).appendChild(paperText(t.time, 22, INK));
+    for (const m of MINUTES) {
+      const b = el('button', `opt${this.minutes === m ? ' on' : ''}`, times);
+      b.textContent = t.minutes(m);
+      b.setAttribute('aria-pressed', String(this.minutes === m));
+      b.addEventListener('click', () => {
+        this.minutes = m;
+        store.set('minutes', String(m));
+        this.setup();
+      });
+    }
+
     const players = el('div', 'row', sheet);
     el('div', 'label', players).appendChild(paperText(t.players, 22, INK));
     // A signed-in teacher may take the students from one of their classes.
@@ -450,7 +469,7 @@ class Board {
     const t = this.t;
     const stage = this.fresh();
     const bar = el('div', 'bar', stage);
-    el('div', 'what shadow', bar).textContent = `${t.grade} ${this.grade} · ${t.topics[this.topic]}`;
+    el('div', 'what shadow', bar).textContent = `${t.grade} ${this.grade} · ${t.topics[this.topic]} · ${t.minutes(this.minutes)}`;
     const end = this.button(bar, t.end, null, () => {
       // Two presses, so a bump on the board does not end it.
       if (end.dataset.sure) return finish();
@@ -469,6 +488,9 @@ class Board {
 
     const cols = el('div', 'cols', stage);
     let startAt = 0;
+    // The clocks count down from the limit; at 0 the race ends for everyone.
+    const limit = this.minutes * 60_000;
+    const left = (used: number) => Math.max(0, limit - used);
     const columns: Column[] = this.slots.map((slot, i) => {
       const next = seeded(seed + 7919 * (i + 1));
       return {
@@ -493,7 +515,7 @@ class Board {
       head.style.background = COLUMN[i];
       el('span', 'who', head).textContent = c.slot.name;
       c.clock = el('span', 'time', head);
-      c.clock.textContent = clock(c.done ?? (startAt ? performance.now() - startAt : 0));
+      c.clock.textContent = clock(left(c.done ?? (startAt ? performance.now() - startAt : 0)));
       el('span', '', head).textContent = `${Math.min(c.at + 1, COUNT)} / ${COUNT}`;
       let box: HTMLElement | null = null;
       if (c.done === null) {
@@ -576,7 +598,7 @@ class Board {
     const finish = () => {
       if (over) return;
       over = true;
-      const elapsed = performance.now() - startAt;
+      const elapsed = Math.min(performance.now() - startAt, limit);
       this.podium(columns, elapsed, COUNT);
     };
 
@@ -598,8 +620,14 @@ class Board {
               draw(c, i);
             });
             const tick = () => {
-              const now = clock(performance.now() - startAt);
-              for (const c of columns) if (c.done === null && c.clock) c.clock.textContent = now;
+              const rest = left(performance.now() - startAt);
+              const now = clock(rest + 999);
+              for (const c of columns)
+                if (c.done === null && c.clock) {
+                  c.clock.textContent = now;
+                  c.clock.classList.toggle('low', rest <= 10_000);
+                }
+              if (rest <= 0) return finish();
               this.ticking = requestAnimationFrame(tick);
             };
             tick();

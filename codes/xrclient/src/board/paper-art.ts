@@ -10,11 +10,12 @@ import {
   WebGLRenderer,
 } from '@iwsdk/core';
 import type { Species } from '../assets.js';
-import { makeBalloon } from '../art/models.js';
+import { makeBalloon, makeCrystal } from '../art/models.js';
 import { makeOrigami } from '../art/origami.js';
+import { ACCENTS } from '../art/palette.js';
 
 /**
- * The game's own paper animals and paper balloons as still pictures for the
+ * The game's own paper animals, balloons and crystals as still pictures for the
  * smartboard, so the board looks like the rest of the game. Each is drawn
  * once, the first time it is needed, by a small renderer that is let go right
  * after; on the board only the pictures move, so it costs no more than any
@@ -34,6 +35,9 @@ export const BALLOON_W = 140;
 export const BALLOON_H = 210;
 /** Where the middle of a balloon's body is, down from the picture's top. */
 export const BALLOON_MIDDLE = 77;
+export const CRYSTAL_SIZE = 150;
+/** The crystals in the colours and the shapes of the game's own. */
+const CRYSTAL_PAPER = Object.values(ACCENTS);
 
 const pictures = new Map<string, string>();
 
@@ -121,4 +125,28 @@ export function balloons(): string[] {
     shots.forEach((p, i) => pictures.set(`balloon-${i}`, p));
   }
   return BALLOON_PAPER.map((_, i) => pictures.get(`balloon-${i}`) ?? '');
+}
+
+/** The crystals' pictures, a colour and a shape each, standing in the middle. */
+export function crystals(): string[] {
+  if (!pictures.has('crystal-0')) {
+    const models = CRYSTAL_PAPER.map((c, i) => {
+      const g = new Group();
+      g.add(makeCrystal(c, i));
+      return g;
+    });
+    const shots = draw(
+      models,
+      (o) => {
+        const box = new Box3().setFromObject(o);
+        const size = box.getSize(new Vector3());
+        const half = Math.max(size.x, size.y) * 0.56;
+        return camera(box.getCenter(new Vector3()), half, half);
+      },
+      CRYSTAL_SIZE,
+      CRYSTAL_SIZE,
+    );
+    shots.forEach((p, i) => pictures.set(`crystal-${i}`, p));
+  }
+  return CRYSTAL_PAPER.map((_, i) => pictures.get(`crystal-${i}`) ?? '');
 }

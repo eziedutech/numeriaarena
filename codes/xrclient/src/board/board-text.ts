@@ -5,9 +5,11 @@ import type { Topic } from './questions.js';
 export const BOARD_TEXT = {
   en: {
     title: 'RACE ON THE SMARTBOARD',
-    intro: 'Three players race through nine questions of the same kind, each with numbers of their own. Each one touches only their own column, where the answers come as animals, balloons and glowing orbs, taking turns.',
+    intro: 'Three players race through nine questions of the same kind, each with numbers of their own. Each one touches only their own column, where the answers come as paper animals, balloons and crystals, taking turns.',
     grade: 'GRADE',
     topic: 'TOPIC',
+    time: 'TIME',
+    minutes: (m: number) => `${m} min`,
     topics: { mixed: 'Mixed', PV: 'Place value', MD: 'Multiply and divide', FR: 'Fractions', DC: 'Decimals', ME: 'Measurement' } as Record<Topic, string>,
     players: 'PLAYERS',
     player: (n: number) => `Player ${n}`,
@@ -39,9 +41,11 @@ export const BOARD_TEXT = {
   },
   id: {
     title: 'BALAPAN DI SMARTBOARD',
-    intro: 'Tiga pemain berlomba menjawab sembilan soal sejenis, masing-masing dengan angkanya sendiri. Tiap pemain hanya menyentuh kolomnya sendiri. Jawabannya muncul bergantian sebagai binatang, balon dan orb bercahaya.',
+    intro: 'Tiga pemain berlomba menjawab sembilan soal sejenis, masing-masing dengan angkanya sendiri. Tiap pemain hanya menyentuh kolomnya sendiri. Jawabannya muncul bergantian sebagai binatang, balon dan kristal kertas.',
     grade: 'KELAS',
     topic: 'TOPIK',
+    time: 'WAKTU',
+    minutes: (m: number) => `${m} menit`,
     topics: { mixed: 'Campuran', PV: 'Nilai tempat', MD: 'Kali dan bagi', FR: 'Pecahan', DC: 'Desimal', ME: 'Pengukuran' } as Record<Topic, string>,
     players: 'PEMAIN',
     player: (n: number) => `Pemain ${n}`,
