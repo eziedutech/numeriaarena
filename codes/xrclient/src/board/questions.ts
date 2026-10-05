@@ -48,6 +48,11 @@ function pool(grade: number, topic: Topic): Source[] {
   return own.length >= 4 || grade <= 4 ? own : [...own, ...of(grade - 1).filter((t) => !own.includes(t))];
 }
 
+/** The topics with questions of the grade's own, Mixed first. */
+export function topicsFor(grade: number): Topic[] {
+  return TOPICS.filter((k) => k === 'mixed' || bank().some((t) => t.grades.includes(grade) && t.skill.startsWith(`${k}.`)));
+}
+
 /** A small seeded generator (mulberry32). */
 export function seeded(seed: number): () => number {
   let a = seed >>> 0;

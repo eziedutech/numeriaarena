@@ -2,8 +2,8 @@ import { getLang } from '../settings.js';
 import { el, paperText } from '../home/paper.js';
 import { onTeacher, teacherCall, teacherState } from '../home/teacher.js';
 import { BOARD_TEXT, type BoardText } from './board-text.js';
-import { decorate, lookOf, LOOKS_CSS, target } from './looks.js';
-import { makeRace, seeded, shuffled, TOPICS, type Question, type Topic } from './questions.js';
+import { decorate, FIELD_TOP, lookOf, LOOKS_CSS, target } from './looks.js';
+import { makeRace, seeded, shuffled, topicsFor, type Question, type Topic } from './questions.js';
 
 /**
  * The smartboard race: three players side by side on one big touch screen,
@@ -31,23 +31,30 @@ export interface BoardOpen {
 const INK = '#3a3f4b';
 const PAPER = '#fff8ec';
 const COLUMN = ['#3fb6a0', '#3469c4', '#f2716b'];
-const STAGE_W = 1600;
+/** The stage is at least this big; it grows to fill the whole screen. */
+const STAGE_W = 1440;
 const STAGE_H = 900;
+/** Around and between the columns, and the column's parts above its field. */
+const SIDE = 32;
+const GAP = 40;
+const ABOVE = 84 + 24 + 64 + 10 + FIELD_TOP;
 /** Three rounds of the three looks, so each player meets each look as often. */
 const COUNT = 9;
 /** After a right answer and after a wrong one, before the next question. */
 const PAUSE_RIGHT = 450;
 const PAUSE_WRONG = 1300;
+/** After a pass, long enough to see the right answer. */
+const PAUSE_PASS = 500;
 
 const CSS = `
 #board { position: fixed; inset: 0; z-index: 30; background: #f6e7c1; overflow: hidden; touch-action: none;
   font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif; color: ${INK}; user-select: none; }
-#board .stage { position: absolute; left: 0; top: 0; width: ${STAGE_W}px; height: ${STAGE_H}px; transform-origin: 0 0; }
+#board .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 #board .shadow { box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); }
 #board button { border: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 #board button:disabled { opacity: 0.45; cursor: default; }
-#board .sheet { position: absolute; left: 200px; top: 40px; width: 1200px; height: 820px; box-sizing: border-box;
-  background: ${PAPER}; padding: 34px 48px; display: flex; flex-direction: column; gap: 18px; }
+#board .sheet { position: absolute; inset: 0; box-sizing: border-box;
+  background: ${PAPER}; padding: 40px 80px; display: flex; flex-direction: column; gap: 18px; }
 #board .intro { font-size: 21px; margin: 0; }
 #board .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 #board .label { width: 130px; flex: none; }
@@ -64,14 +71,15 @@ const CSS = `
 #board .soft { color: #7a6f5c; }
 #board .actions { margin-top: auto; display: flex; justify-content: flex-end; gap: 16px; }
 #board .btn { padding: 14px 26px; min-height: 64px; background: #f1e3c4; }
-#board .bar { position: absolute; left: 24px; right: 24px; top: 14px; height: 56px; display: flex; align-items: center; gap: 18px; }
+#board .bar { position: absolute; left: ${SIDE}px; right: ${SIDE}px; top: 14px; height: 56px; display: flex; align-items: center; gap: 18px; }
 #board .bar .what { background: ${PAPER}; padding: 10px 16px; font-size: 20px; font-weight: 700; }
-#board .bar .clock { margin-left: auto; background: ${PAPER}; padding: 10px 16px; font-size: 24px; font-weight: 700; min-width: 70px; text-align: center; }
-#board .cols { position: absolute; left: 24px; right: 24px; top: 84px; bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+#board .cols { position: absolute; left: ${SIDE}px; right: ${SIDE}px; top: 84px; bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: ${GAP}px; }
 #board .col { background: ${PAPER}; display: flex; flex-direction: column; min-width: 0; }
-#board .col .head { height: 56px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; color: ${PAPER};
+#board .col .head { height: 64px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 8px 18px; color: ${PAPER};
   font-size: 26px; font-weight: 700; gap: 12px; }
-#board .col .head .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#board .col .head .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+#board .col .head .time { flex: none; padding: 4px 10px; background: rgba(255, 255, 255, 0.24); font-variant-numeric: tabular-nums; min-width: 66px; text-align: center; }
+#board .col .head .pass { min-height: 48px; padding: 0 18px; background: ${PAPER}; color: ${INK}; font-size: 20px; font-weight: 700; }
 #board .col .track { height: 10px; background: #efe3c8; }
 #board .col .track div { height: 100%; transition: width 0.3s; }
 #board .col .track { flex: none; }
@@ -113,6 +121,8 @@ interface Column {
   done: number | null;
   answers: { q: Question; correct: boolean; time_ms: number; misconception?: string }[];
   view: HTMLElement;
+  /** The column's own clock in its head, so no player has to look away to see the time. */
+  clock?: HTMLElement;
 }
 
 interface ClassRow {
@@ -202,7 +212,6 @@ class Board {
     this.t = BOARD_TEXT[getLang()];
     this.grade = o.grade ?? (Number(store.get('grade')) || 5);
     this.topic = (store.get('topic') as Topic | null) ?? 'mixed';
-    if (!TOPICS.includes(this.topic)) this.topic = 'mixed';
     this.classId = o.classId ?? null;
     this.record = Boolean(o.record && o.classId);
     this.roster = o.seats ?? [];
@@ -243,8 +252,16 @@ class Board {
   }
 
   private fit(): void {
+    // The stage fills the screen; only a screen narrower than the least stage gets more height instead.
     const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
-    this.stage.style.transform = `translate(${(window.innerWidth - STAGE_W * s) / 2}px, ${(window.innerHeight - STAGE_H * s) / 2}px) scale(${s})`;
+    const w = window.innerWidth / s;
+    const h = window.innerHeight / s;
+    this.stage.style.width = `${w}px`;
+    this.stage.style.height = `${h}px`;
+    this.stage.style.transform = `scale(${s})`;
+    // The size of a column's field, for the lanes and the ways the answers move.
+    this.stage.style.setProperty('--fw', `${(w - 2 * SIDE - 2 * GAP) / 3}px`);
+    this.stage.style.setProperty('--fh', `${h - ABOVE}px`);
   }
 
   private close(): void {
@@ -296,6 +313,8 @@ class Board {
 
   private setup(): void {
     const t = this.t;
+    // A topic with no questions of the grade's own is not offered for it.
+    if (!topicsFor(this.grade).includes(this.topic)) this.topic = 'mixed';
     const stage = this.fresh();
     const sheet = el('div', 'sheet shadow', stage);
     sheet.setAttribute('role', 'dialog');
@@ -319,7 +338,7 @@ class Board {
 
     const topics = el('div', 'row', sheet);
     el('div', 'label', topics).appendChild(paperText(t.topic, 22, INK));
-    for (const k of TOPICS) {
+    for (const k of topicsFor(this.grade)) {
       const b = el('button', `opt${this.topic === k ? ' on' : ''}`, topics);
       b.textContent = t.topics[k];
       b.setAttribute('aria-pressed', String(this.topic === k));
@@ -447,8 +466,6 @@ class Board {
       );
     });
     end.style.minHeight = '52px';
-    const time = el('div', 'clock shadow', bar);
-    time.textContent = '0:00';
 
     const cols = el('div', 'cols', stage);
     let startAt = 0;
@@ -475,7 +492,23 @@ class Board {
       const head = el('div', 'head', c.view);
       head.style.background = COLUMN[i];
       el('span', 'who', head).textContent = c.slot.name;
+      c.clock = el('span', 'time', head);
+      c.clock.textContent = clock(c.done ?? (startAt ? performance.now() - startAt : 0));
       el('span', '', head).textContent = `${Math.min(c.at + 1, COUNT)} / ${COUNT}`;
+      let box: HTMLElement | null = null;
+      if (c.done === null) {
+        // A question the player cannot do need not hold them up; it counts as not right
+        // and its answer stays hidden, so a pass never gives one away.
+        const pass = el('button', 'pass shadow', head);
+        pass.textContent = t.pass;
+        pass.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (box) press(c, i, -1, box);
+        });
+        pass.addEventListener('click', (e) => {
+          if (e.detail === 0 && box) press(c, i, -1, box);
+        });
+      }
       const track = el('div', 'track', c.view);
       const fill = el('div', '', track);
       fill.style.width = `${(c.at / COUNT) * 100}%`;
@@ -492,17 +525,18 @@ class Board {
       const scene = el('div', `scene ${look}`, c.view);
       decorate(scene, look, c.next);
       el('div', 'ask shadow', scene).textContent = q.prompt[getLang()];
-      const box = el('div', 'field', scene);
+      const field = el('div', 'field', scene);
+      box = field;
       c.order[c.at].forEach((k, lane) => {
-        const b = target(box, look, lane, q.choices[k].text, c.phase[c.at][lane], c.next);
+        const b = target(field, look, lane, q.choices[k].text, c.phase[c.at][lane], c.next);
         b.dataset.k = String(k);
         // Each finger is its own pointer, so three players press at once.
         b.addEventListener('pointerdown', (e) => {
           e.preventDefault();
-          press(c, i, k, box);
+          press(c, i, k, field);
         });
         b.addEventListener('click', (e) => {
-          if (e.detail === 0) press(c, i, k, box);
+          if (e.detail === 0) press(c, i, k, field);
         });
       });
       c.shownAt = performance.now();
@@ -513,15 +547,18 @@ class Board {
       c.busy = true;
       const q = c.questions[c.at];
       const correct = k === 0;
-      c.answers.push({ q, correct, time_ms: Math.round(performance.now() - c.shownAt), misconception: q.choices[k].misconception });
+      // A pass (k is -1) is kept as a wrong answer without a misconception.
+      c.answers.push({ q, correct, time_ms: Math.round(performance.now() - c.shownAt), misconception: q.choices[k]?.misconception });
       if (correct) c.right++;
-      // Everything stops, so the player sees which one was right.
+      // Everything stops, so the player sees which one was right; a pass only dims them.
       box.classList.add('still');
-      for (const b of box.querySelectorAll<HTMLElement>('.tgt')) {
-        if (b.dataset.k === '0') b.classList.add('yes');
-        else if (b.dataset.k === String(k)) b.classList.add('no');
-        if (b.dataset.k === String(k)) b.classList.add('hit');
-      }
+      if (k < 0) box.classList.add('skip');
+      else
+        for (const b of box.querySelectorAll<HTMLElement>('.tgt')) {
+          if (b.dataset.k === '0') b.classList.add('yes');
+          else if (b.dataset.k === String(k)) b.classList.add('no');
+          if (b.dataset.k === String(k)) b.classList.add('hit');
+        }
       this.timers.push(
         window.setTimeout(
           () => {
@@ -531,7 +568,7 @@ class Board {
             draw(c, i);
             if (columns.every((x) => x.done !== null)) this.timers.push(window.setTimeout(finish, 900));
           },
-          correct ? PAUSE_RIGHT : PAUSE_WRONG,
+          correct ? PAUSE_RIGHT : k < 0 ? PAUSE_PASS : PAUSE_WRONG,
         ),
       );
     };
@@ -562,7 +599,8 @@ class Board {
               draw(c, i);
             });
             const tick = () => {
-              time.textContent = clock(performance.now() - startAt);
+              const now = clock(performance.now() - startAt);
+              for (const c of columns) if (c.done === null && c.clock) c.clock.textContent = now;
               this.ticking = requestAnimationFrame(tick);
             };
             tick();

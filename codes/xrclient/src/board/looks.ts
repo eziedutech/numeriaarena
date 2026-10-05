@@ -16,10 +16,11 @@ export const LOOKS: readonly Look[] = ['animal', 'balloon', 'orb'];
 /** The look of question `n` in column `column`. */
 export const lookOf = (n: number, column: number): Look => LOOKS[(n + column) % LOOKS.length];
 
-/** The scene's size inside a column, in stage pixels. */
-const W = 504;
-const FIELD_TOP = 150;
-const FIELD_H = 576;
+/**
+ * The field under the question, where the answers move. Its size follows the
+ * screen; the board sets it as --fw and --fh.
+ */
+export const FIELD_TOP = 150;
 
 const WALK = 4.6;
 const RISE = 5.2;
@@ -30,7 +31,7 @@ export const LOOKS_CSS = `
 #board .scene .ask { position: absolute; left: 16px; right: 16px; top: 14px; height: 118px; box-sizing: border-box; padding: 10px 16px;
   display: flex; align-items: center; justify-content: center; text-align: center; background: #fff8ec; z-index: 2;
   font-size: 36px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
-#board .scene .field { position: absolute; left: 0; right: 0; top: ${FIELD_TOP}px; height: ${FIELD_H}px; z-index: 1; }
+#board .scene .field { position: absolute; left: 0; right: 0; top: ${FIELD_TOP}px; bottom: 0; z-index: 1; }
 #board .deco, #board .deco * { pointer-events: none; }
 #board .deco { position: absolute; inset: 0; }
 
@@ -79,16 +80,17 @@ export const LOOKS_CSS = `
 #board .field.still .tgt, #board .field.still .tgt svg, #board .field.still .leg, #board .field.still .glow { animation-play-state: paused; }
 #board .tgt.yes .face { filter: drop-shadow(0 0 10px #ffe066) drop-shadow(0 0 4px #ffd23a); animation: board-hop 0.45s ease-out; }
 #board .tgt.balloon.yes.hit .face, #board .tgt.orb.yes.hit .face { animation: board-pop 0.42s ease-out forwards; }
+#board .field.skip .tgt .face { filter: grayscale(0.8) opacity(0.4); }
 #board .tgt.no .face { filter: grayscale(0.85) opacity(0.65); animation: board-shake 0.4s ease-in-out; }
 
-@keyframes board-walk { to { transform: translateX(${W - 170 - 20}px); } }
+@keyframes board-walk { to { transform: translateX(calc(var(--fw) - 190px)); } }
 @keyframes board-flip { 0% { transform: none; } 50% { transform: scaleX(-1); } 100% { transform: scaleX(-1); } }
 @keyframes board-step { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
-@keyframes board-rise { from { transform: translateY(${FIELD_H - 210 - 16}px); } to { transform: translateY(0); } }
+@keyframes board-rise { from { transform: translateY(calc(var(--fh) - 226px)); } to { transform: translateY(0); } }
 @keyframes board-wobble { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
 @keyframes board-orbit { from { transform: rotate(0deg) translateX(46px) rotate(0deg); } to { transform: rotate(360deg) translateX(46px) rotate(-360deg); } }
 @keyframes board-glow { from { opacity: 0.35; transform: scale(0.92); } to { opacity: 0.8; transform: scale(1.04); } }
-@keyframes board-drift { from { transform: translateX(-180px); } to { transform: translateX(${W + 60}px); } }
+@keyframes board-drift { from { transform: translateX(-180px); } to { transform: translateX(calc(var(--fw) + 60px)); } }
 @keyframes board-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
 @keyframes board-sun { to { transform: scale(1.06); } }
 @keyframes board-hop { 40% { transform: translateY(-26px); } }
@@ -136,9 +138,9 @@ const ORBS = [
 
 /** Lanes that never cross: rows for animals, columns for balloons, three corners for orbs. */
 const ORB_AT: [number, number][] = [
-  [130, 125],
-  [374, 288],
-  [130, 451],
+  [0.27, 0.2],
+  [0.73, 0.5],
+  [0.27, 0.8],
 ];
 
 const fontFor = (text: string, big: number) => (text.length > 7 ? big - 12 : text.length > 5 ? big - 6 : big);
@@ -150,13 +152,13 @@ export function decorate(scene: HTMLElement, look: Look, next: () => number): vo
     el('div', 'sun', deco);
     for (let lane = 0; lane < 3; lane++) {
       const path = el('div', 'path', deco);
-      path.style.top = `${FIELD_TOP + lane * 192 + 158}px`;
+      path.style.top = `calc(${FIELD_TOP}px + var(--fh) / 3 * ${lane + 1} - 34px)`;
     }
   } else if (look === 'balloon') {
     for (let n = 0; n < 4; n++) {
       const cloud = el('div', 'cloud', deco);
       const time = 26 + next() * 16;
-      cloud.style.top = `${40 + n * 170 + next() * 60}px`;
+      cloud.style.top = `calc(var(--fh) / 4 * ${n} + ${40 + next() * 60}px)`;
       cloud.style.animationDuration = `${time}s`;
       cloud.style.animationDelay = `${-next() * time}s`;
       cloud.style.scale = String(0.7 + next() * 0.6);
@@ -176,7 +178,7 @@ export function target(field: HTMLElement, look: Look, lane: number, text: strin
   b.setAttribute('aria-label', text);
   const face = el('div', 'face', b);
   if (look === 'animal') {
-    b.style.top = `${lane * 192 + 6}px`;
+    b.style.top = `calc(var(--fh) / 3 * ${lane} + 6px)`;
     const delay = `${-phase * WALK * 2}s`;
     b.style.animationDelay = delay;
     const sign = el('div', 'sign', face);
@@ -186,7 +188,7 @@ export function target(field: HTMLElement, look: Look, lane: number, text: strin
     face.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 160 110" aria-hidden="true">${ANIMALS[lane]}</svg>`);
     (face.lastElementChild as SVGElement).style.animationDelay = delay;
   } else if (look === 'balloon') {
-    b.style.left = `${lane * 168 + 14}px`;
+    b.style.left = `calc(var(--fw) / 3 * ${lane} + (var(--fw) / 3 - 140px) / 2)`;
     b.style.animationDelay = `${-phase * RISE * 2}s`;
     const color = BALLOONS[Math.floor(next() * BALLOONS.length)];
     face.insertAdjacentHTML(
@@ -204,8 +206,8 @@ export function target(field: HTMLElement, look: Look, lane: number, text: strin
     txt.style.fontSize = `${fontFor(text, 40)}px`;
   } else {
     const [x, y] = ORB_AT[lane];
-    b.style.left = `${x - 70}px`;
-    b.style.top = `${y - 70}px`;
+    b.style.left = `calc(var(--fw) * ${x} - 70px)`;
+    b.style.top = `calc(var(--fh) * ${y} - 70px)`;
     b.style.animationDelay = `${-phase * ORBIT}s`;
     const [light, deep] = ORBS[Math.floor(next() * ORBS.length)];
     const glow = el('div', 'glow', face);
