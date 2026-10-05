@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 
 import { AREAS, loadLesson, ready, topic } from "../edu/catalog";
 import type { Lesson } from "../edu/ink";
@@ -27,6 +27,7 @@ const TEXT = {
     vrBusy: "Opening VR...",
     vrFailed: "VR could not start on this device.",
     exit: "EXIT VR",
+    pick: "Point at a lesson and pull the trigger to open it.",
     game: "PRACTISE IN THE GAME",
     missing: "This lesson is not made yet.",
     loading: "Unfolding the lesson...",
@@ -44,6 +45,7 @@ const TEXT = {
     vrBusy: "Membuka VR...",
     vrFailed: "VR belum bisa dibuka di perangkat ini.",
     exit: "KELUAR VR",
+    pick: "Arahkan ke sebuah pelajaran, lalu tekan pelatuk untuk membukanya.",
     game: "LATIHAN DI GAME",
     missing: "Pelajaran ini belum dibuat.",
     loading: "Membuka lipatan pelajaran...",
@@ -77,6 +79,7 @@ export default function EduLesson() {
   const [full, setFull] = useState(false);
   const book = useRef<HTMLElement>(null);
   const endVr = useRef<() => void>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setLesson(undefined);
@@ -118,10 +121,11 @@ export default function EduLesson() {
       endVr.current = await openVr({
         lesson,
         lang,
-        title: info.title[lang],
+        topic: info.id,
         step,
-        words: { back: t.back, next: t.next, exit: t.exit, of: t.of },
+        words: { back: t.back, next: t.next, exit: t.exit, of: t.of, all: t.all, grade: t.grade, pick: t.pick },
         onStep: setStep,
+        onLesson: (to) => navigate(`/edu/${to}${window.location.search}`),
         onEnd: () => {
           endVr.current = null;
           setVr("yes");

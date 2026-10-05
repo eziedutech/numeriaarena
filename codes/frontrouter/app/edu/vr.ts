@@ -24,6 +24,7 @@ import {
 } from "three";
 
 import type { Lang } from "../legal";
+import { loadLesson, ready, TOPICS, topic } from "./catalog";
 import { C, H, Ink, type Lesson, type Pt, type Scene, W, ease } from "./ink";
 import { wrap } from "./parts";
 
@@ -33,7 +34,8 @@ import { wrap } from "./parts";
  * (point at one and pull the trigger to go there), the guiding sentence
  * hangs under it, and paper digits drift in the warm air around. The sheet
  * is the same scene as on the page, drawn into a texture, and the
- * controller's ray (or a pinching hand) is its pointer.
+ * controller's ray (or a pinching hand) is its pointer. The lessons button
+ * turns the sheet into the list of every lesson, so another opens in place.
  */
 
 export interface VrWords {
@@ -41,15 +43,20 @@ export interface VrWords {
   next: string;
   exit: string;
   of: (i: number, n: number) => string;
+  all: string;
+  grade: (g: number) => string;
+  pick: string;
 }
 
 export interface VrOptions {
   lesson: Lesson;
   lang: Lang;
-  title: string;
+  topic: string;
   step: number;
   words: VrWords;
   onStep: (i: number) => void;
+  /** Another lesson was opened from the list; the page follows it. */
+  onLesson: (id: string) => void;
   onEnd: () => void;
 }
 
@@ -143,6 +150,34 @@ function ground(world: World) {
   }
 }
 
+/** Every made lesson of a grade on one sheet, with the grades as tabs. */
+export function menuScene(lang: Lang, words: VrWords, current: string, pick: (id: string) => void): Scene {
+  let grade: number = topic(current)?.grade ?? 4;
+  return {
+    press(id) {
+      if (id[0] === "g") grade = Number(id.slice(1));
+      else pick(id.slice(2));
+    },
+    draw(g) {
+      [4, 5, 6].forEach((n, i) => g.button(`g${n}`, words.grade(n).toUpperCase(), 230 + i * 190, 20, 170, 52, n === grade ? C.cobalt : C.soft));
+      const list = TOPICS.filter((x) => x.grade === grade && ready(x.id));
+      const rows = Math.ceil(list.length / 2);
+      const rowH = Math.min(60, 520 / rows);
+      list.forEach((x, i) => {
+        const bx = 24 + Math.floor(i / rows) * 482;
+        const by = 92 + (i % rows) * rowH;
+        const h = rowH - 6;
+        const hover = g.over(bx, by, 470, h);
+        g.card(bx, by - (hover ? 2 : 0), 470, h, x.id === current ? C.sun : hover ? "#f8efdc" : C.paper, hover ? 1.4 : 0.8);
+        let size = Math.min(22, h * 0.5);
+        while (size > 14 && g.width(x.title[lang], size, true) > 446) size -= 1;
+        g.text(x.title[lang], bx + 12, by + h / 2 - (hover ? 2 : 0), size, C.ink, "left", true);
+        g.hits.push({ id: `t:${x.id}`, x: bx, y: by, w: 470, h });
+      });
+    },
+  };
+}
+
 /** Opens the session; resolves with a way to end it from the page. */
 export async function openVr(o: VrOptions) {
   const xr = navigator.xr;
@@ -166,7 +201,10 @@ export async function openVr(o: VrOptions) {
   ground(world);
   const drift = digits(world);
 
-  const steps = o.lesson.steps;
+  let steps = o.lesson.steps;
+  let title = topic(o.topic)?.title[o.lang] ?? "";
+  let current = o.topic;
+  let menu: Scene | null = null;
   let at = Math.max(0, Math.min(steps.length - 1, o.step));
   let scene: Scene = steps[at].scene(o.lang);
   let opened = 0;
@@ -181,8 +219,8 @@ export async function openVr(o: VrOptions) {
   hinge.add(sheet.group);
   world.add(hinge);
 
-  const title = paperCanvas(1024, 96);
-  const head = panel(PANEL_W, (PANEL_W * 96) / 1024, title.texture);
+  const heading = paperCanvas(1024, 96);
+  const head = panel(PANEL_W, (PANEL_W * 96) / 1024, heading.texture);
   head.group.position.set(0, EYE + PANEL_H / 2 + 0.14, -AWAY);
   world.add(head.group);
 
@@ -193,8 +231,12 @@ export async function openVr(o: VrOptions) {
 
   const exitTex = paperCanvas(256, 80);
   const exit = panel(0.36, 0.1125, exitTex.texture);
-  exit.group.position.set(0, EYE - PANEL_H / 2 - 0.42, -AWAY + 0.05);
+  exit.group.position.set(0.21, EYE - PANEL_H / 2 - 0.42, -AWAY + 0.05);
   world.add(exit.group);
+  const allTex = paperCanvas(256, 80);
+  const all = panel(0.36, 0.1125, allTex.texture);
+  all.group.position.set(-0.21, EYE - PANEL_H / 2 - 0.42, -AWAY + 0.05);
+  world.add(all.group);
 
   // The steps before and after, folded at the sides.
   const side = (dir: -1 | 1) => {
@@ -229,19 +271,22 @@ export async function openVr(o: VrOptions) {
   };
 
   const paintText = () => {
-    const t = title.g;
+    const t = heading.g;
     t.c.setTransform(1, 0, 0, 1, 0, 0);
     t.c.fillStyle = C.paper;
     t.c.fillRect(0, 0, 1024, 96);
-    t.text(o.title, 24, 48, 40, C.ink, "left", true);
-    t.text(o.words.of(at + 1, steps.length), 1000, 48, 34, C.soft, "right", true);
-    title.texture.needsUpdate = true;
+    const name = menu ? o.words.all : title;
+    let size = 40;
+    while (size > 22 && t.width(name, size, true) > 820) size -= 2;
+    t.text(name, 24, 48, size, C.ink, "left", true);
+    if (!menu) t.text(o.words.of(at + 1, steps.length), 1000, 48, 34, C.soft, "right", true);
+    heading.texture.needsUpdate = true;
 
     const w = words.g;
     w.c.setTransform(1, 0, 0, 1, 0, 0);
     w.c.fillStyle = C.paper;
     w.c.fillRect(0, 0, 1024, 160);
-    const lines = wrap(w, steps[at].say[o.lang], 980, 34).slice(0, 3);
+    const lines = wrap(w, menu ? o.words.pick : steps[at].say[o.lang], 980, 34).slice(0, 3);
     lines.forEach((s, i) => w.text(s, 512, 80 + (i - (lines.length - 1) / 2) * 44, 34, C.ink, "center"));
     words.texture.needsUpdate = true;
 
@@ -251,9 +296,20 @@ export async function openVr(o: VrOptions) {
     e.c.fillRect(0, 0, 256, 80);
     e.text(o.words.exit, 128, 42, 34, C.paper, "center", true);
     exitTex.texture.needsUpdate = true;
+
+    const a = allTex.g;
+    const word = menu ? o.words.back : o.words.all;
+    a.c.setTransform(1, 0, 0, 1, 0, 0);
+    a.c.fillStyle = menu ? C.soft : C.cobalt;
+    a.c.fillRect(0, 0, 256, 80);
+    let ws = 34;
+    while (ws > 18 && a.width(word, ws, true) > 236) ws -= 2;
+    a.text(word, 128, 42, ws, C.paper, "center", true);
+    allTex.texture.needsUpdate = true;
   };
 
   const show = (i: number) => {
+    menu = null;
     at = Math.max(0, Math.min(steps.length - 1, i));
     scene = steps[at].scene(o.lang);
     opened = clock;
@@ -264,11 +320,28 @@ export async function openVr(o: VrOptions) {
   };
   show(at);
 
+  // The list in place of the sheet; picking a lesson loads it and opens its first step.
+  const openMenu = () => {
+    menu = menuScene(o.lang, o.words, current, (id) => {
+      void loadLesson(id).then((l) => {
+        steps = l.steps;
+        title = topic(id)?.title[o.lang] ?? "";
+        current = id;
+        o.onLesson(id);
+        show(0);
+      });
+    });
+    opened = clock;
+    prev.pivot.visible = false;
+    next.pivot.visible = false;
+    paintText();
+  };
+
   // Pointing: each hand's ray, a line to where it lands, and what it holds.
   const ray = new Raycaster();
   const flat = new Plane();
   const hands: { space: XRTargetRaySpace; beam: Line; held: boolean }[] = [];
-  const targets = () => [sheet.face, exit.face, ...[prev, next].filter((s) => s.pivot.visible).map((s) => s.p.face)];
+  const targets = () => [sheet.face, exit.face, all.face, ...[prev, next].filter((s) => s.pivot.visible).map((s) => s.p.face)];
 
   const aim = (space: Object3D) => {
     space.updateMatrixWorld();
@@ -297,16 +370,18 @@ export async function openVr(o: VrOptions) {
       if (hit.object === prev.p.face) return show(at - 1);
       if (hit.object === next.p.face) return show(at + 1);
       if (hit.object === exit.face) return void session.end();
+      if (hit.object === all.face) return menu ? show(at) : openMenu();
       const p = onSheet(hit.point);
       main.g.pointer = p;
       const id = main.g.hit(p);
-      if (id) scene.press?.(id);
-      else if (scene.down?.(p)) hand.held = true;
+      const now = menu ?? scene;
+      if (id) now.press?.(id);
+      else if (now.down?.(p)) hand.held = true;
     });
     space.addEventListener("selectend", () => {
       if (!hand.held) return;
       hand.held = false;
-      scene.up?.();
+      (menu ?? scene).up?.();
     });
   }
 
@@ -331,7 +406,7 @@ export async function openVr(o: VrOptions) {
         ray.set(origin, dir);
         if (ray.ray.intersectPlane(flat, point)) {
           pointer = onSheet(point);
-          scene.move?.(pointer);
+          (menu ?? scene).move?.(pointer);
           hand.beam.scale.z = origin.distanceTo(point);
         }
         continue;
@@ -341,11 +416,12 @@ export async function openVr(o: VrOptions) {
       if (hit?.object === sheet.face) pointer = onSheet(hit.point);
       for (const s of [prev, next]) s.p.group.scale.setScalar(hit?.object === s.p.face ? 1.06 : 1);
       exit.group.scale.setScalar(hit?.object === exit.face ? 1.08 : 1);
+      all.group.scale.setScalar(hit?.object === all.face ? 1.08 : 1);
     }
     main.g.pointer = pointer;
 
     main.g.begin(SHARP);
-    scene.draw(main.g, clock - opened);
+    (menu ?? scene).draw(main.g, clock - opened);
     main.texture.needsUpdate = true;
     renderer.render(world, camera);
   });
