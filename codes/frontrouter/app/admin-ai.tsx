@@ -431,13 +431,16 @@ function ProviderRow({ t, user, p, onEdit, onDelete, onTested }: { t: T; user: U
         <label className="field-label" htmlFor={`ai-test-${p.code}`}>
           {t.testModel}
         </label>
-        <input id={`ai-test-${p.code}`} className="field" value={model} list={`ai-models-${p.code}`} onChange={(e) => setModel(e.target.value)} />
-        <datalist id={`ai-models-${p.code}`}>
-          {models.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
-        {models.length > 0 && <span className="soft ai-models">{models.join(", ")}</span>}
+        <input id={`ai-test-${p.code}`} className="field" value={model} onChange={(e) => setModel(e.target.value)} />
+        {models.length > 0 && (
+          <div className="ai-models" role="group" aria-label={t.testModel}>
+            {models.map((m) => (
+              <button key={m} type="button" className={m === model ? "tab on" : "tab"} aria-pressed={m === model} onClick={() => setModel(m)}>
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
         <Err t={t} code={error} />
       </div>
       <div className="org-actions">
@@ -608,7 +611,7 @@ function Chain({ t, user, task, providers, onSaved }: { t: T; user: User; task: 
           <label className="field-label" htmlFor={`ai-model-${task.code}-${i}`}>
             {t.model}
           </label>
-          <input id={`ai-model-${task.code}-${i}`} className="field" value={d.model} list={`ai-models-${d.provider}`} onChange={(e) => change(i, { model: e.target.value })} />
+          <input id={`ai-model-${task.code}-${i}`} className="field" value={d.model} onChange={(e) => change(i, { model: e.target.value })} />
           <div className="ai-numbers">
             <label>
               <span className="field-label">{t.maxTokens}</span>

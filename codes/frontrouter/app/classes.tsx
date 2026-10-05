@@ -6,6 +6,7 @@ import { api, errorCode } from "./auth";
 import { ClassReport } from "./class-report";
 import { namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
+import { NumberField, Pick } from "./pick";
 import { Picture, PICTURE_NAMES } from "./pictures";
 
 /**
@@ -444,15 +445,7 @@ function NewClass({
         <label className="field-label" htmlFor="class-seats">
           {t.seatsLabel}
         </label>
-        <input
-          id="class-seats"
-          className="field short"
-          type="number"
-          min={1}
-          max={max}
-          value={seats}
-          onChange={(e) => setSeats(e.target.value)}
-        />
+        <NumberField id="class-seats" label={t.seatsLabel} min={1} max={max} value={seats} onChange={setSeats} />
         <ErrorLine t={t} code={error} />
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
@@ -655,16 +648,10 @@ function ClassPage({
       ))}
       {seats && seats.length > 0 && (
         <div className="seat-find">
-          <input className="field" type="search" placeholder={t.find} aria-label={t.find} value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="field" type="text" enterKeyHint="search" placeholder={t.find} aria-label={t.find} value={query} onChange={(e) => setQuery(e.target.value)} />
           <label className="report-pick">
             <span className="soft">{t.sortBy}</span>
-            <select className="field group" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}>
-              {SORTS.map((k) => (
-                <option key={k} value={k}>
-                  {t.sorts[k]}
-                </option>
-              ))}
-            </select>
+            <Pick className="group" label={t.sortBy} value={sortBy} onChange={setSortBy} options={SORTS.map((k) => ({ value: k, label: t.sorts[k] }))} />
           </label>
           {query.trim() && <span className="soft">{shown.length > 0 ? t.shown(shown.length, seats.length) : t.noMatch}</span>}
         </div>
@@ -694,21 +681,14 @@ function ClassPage({
               </td>
               <td>{s.pseudonym}</td>
               <td>
-                <select
-                  className={s.group_chosen ? "field group chosen" : "field group"}
-                  aria-label={`${t.cols[3]} ${s.number}`}
+                <Pick
+                  className={s.group_chosen ? "group chosen" : "group"}
+                  label={`${t.cols[3]} ${s.number}`}
                   value={s.group}
                   disabled={!active || busy}
-                  onChange={(e) =>
-                    act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group: Number(e.target.value) }) }))
-                  }
-                >
-                  {GROUPS.map((g) => (
-                    <option key={g} value={g}>
-                      {letter(g)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(group) => act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group }) }))}
+                  options={GROUPS.map((g) => ({ value: g, label: letter(g) }))}
+                />
               </td>
               <td className="seat-stats">
                 {t.official(s.official.matches, s.official.stars).map((line) => (
@@ -787,7 +767,7 @@ function ClassPage({
           <div className="paper-sheet narrow">
             <p>{askText}</p>
             {ask.kind === "add" && (
-              <input className="field short" type="number" min={1} max={40} value={more} onChange={(e) => setMore(e.target.value)} autoFocus />
+              <NumberField label={askText} min={1} max={40} value={more} onChange={setMore} autoFocus />
             )}
             <div className="actions">
               <button type="button" className="btn" onClick={() => setAsk(null)} autoFocus={ask.kind !== "add"}>

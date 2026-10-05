@@ -1524,8 +1524,16 @@ button.tool {
 }
 
 .ai-models {
-  font-size: 13px;
-  word-break: break-word;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.ai-models .tab {
+  font-size: 12px;
+  text-transform: none;
+  word-break: break-all;
 }
 
 .ai-calls {
@@ -1543,4 +1551,98 @@ button.tool {
 
 .ai-insight .btn {
   margin-top: 6px;
+}
+
+/* Pick: the paper look's list in place of a <select>. */
+.pick {
+  position: relative;
+  display: inline-block;
+}
+
+.pick-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: #f1e3c4;
+  color: inherit;
+  padding: 8px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick.group .pick-button {
+  min-height: 0;
+  padding: 4px 8px;
+}
+
+.pick.chosen .pick-button {
+  background: #f4b98f;
+}
+
+.pick-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.pick-button span:first-child {
+  flex: 1;
+}
+
+.pick-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid currentColor;
+}
+
+.pick-button[aria-expanded="true"] .pick-arrow {
+  transform: rotate(180deg);
+}
+
+.pick-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--paper);
+  box-shadow: 0 6px 18px rgba(58, 63, 75, 0.25);
+  border-radius: 8px;
+}
+
+.pick-list li {
+  padding: 7px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pick-list li.hover {
+  background: rgba(58, 63, 75, 0.08);
+}
+
+.pick-list li.on {
+  font-weight: 700;
+}
+
+/* NumberField: a whole number with − and + in place of the browser's spinner. */
+.number-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.number-field .field.short {
+  width: 5em;
+  text-align: center;
 }

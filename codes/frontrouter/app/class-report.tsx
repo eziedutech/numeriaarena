@@ -5,6 +5,7 @@ import { api, errorCode } from "./auth";
 import { ClassAi } from "./class-ai";
 import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
+import { Pick } from "./pick";
 
 /**
  * REPORT on a class's page: first tries by skill and by question, for the
@@ -193,14 +194,13 @@ export function ClassReport({
         <h3>{t.title}</h3>
         <label className="report-pick">
           <span className="soft">{t.pick}</span>
-          <select className="field group" value={pick} onChange={(e) => setPick(Number(e.target.value))}>
-            <option value={0}>{t.whole}</option>
-            {seats.map((s) => (
-              <option key={s.number} value={s.number}>
-                {t.seat(two(s.number), names[s.number] || s.pseudonym)}
-              </option>
-            ))}
-          </select>
+          <Pick
+            className="group"
+            label={t.pick}
+            value={pick}
+            onChange={setPick}
+            options={[{ value: 0, label: t.whole }, ...seats.map((s) => ({ value: s.number, label: t.seat(two(s.number), names[s.number] || s.pseudonym) }))]}
+          />
         </label>
       </div>
       <p className="soft">{t.note}</p>
