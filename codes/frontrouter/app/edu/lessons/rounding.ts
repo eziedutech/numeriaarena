@@ -103,7 +103,7 @@ function roll(lang: Lang): Scene {
       } else if (!rolling) {
         g.text(lang === "id" ? "geser bolanya, lalu lepaskan" : "drag the ball, then let go", W / 2, 85, 30, C.soft, "center", true);
       }
-      g.text(lang === "id" ? "5 tepat di puncak: bola turun ke depan" : "5 sits right on top: it rolls forward", W / 2, 180, 22, C.soft, "center");
+      g.text(lang === "id" ? "5 tepat di puncak: bola turun ke depan" : "5 sits right on top: it rolls forward", W / 2, 142, 22, C.soft, "center");
       g.button("down", "−10", 40, 555, 100, 52, C.teal, lo > 0);
       g.button("up", "+10", W - 140, 555, 100, 52, C.teal, lo < 90);
     },

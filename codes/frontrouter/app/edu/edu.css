@@ -101,24 +101,40 @@ a.edu-topic:focus-visible {
   color: var(--ink-soft);
 }
 
+/* A lesson fits one screen: the sheet's width follows the height left over. */
+.paper-page.edu:has(.edu-book) {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  gap: 12px;
+}
+
 .edu-book {
   width: 100%;
   box-sizing: border-box;
   background: var(--paper);
   box-shadow: var(--shadow);
-  padding: 22px 26px 26px;
+  padding: 14px 22px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
-.edu-head p {
+.edu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.edu-head p,
+.edu-book > .err {
   margin: 0;
 }
 
 .edu-head h1 {
-  margin: 2px 0 0;
-  font-size: 28px;
+  margin: 0;
+  font-size: 24px;
   letter-spacing: 0.02em;
   line-height: 1.2;
 }
@@ -157,7 +173,8 @@ a.edu-topic:focus-visible {
 
 .edu-canvas {
   display: block;
-  width: 100%;
+  width: min(100%, max(480px, calc((100dvh - 330px) * 1.6)));
+  margin-inline: auto;
   aspect-ratio: 1000 / 625;
   touch-action: none;
   box-shadow: var(--shadow);
@@ -178,9 +195,9 @@ a.edu-topic:focus-visible {
 
 .edu-say {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.45;
-  min-height: 2.9em;
+  font-size: 19px;
+  line-height: 1.4;
+  min-height: 2.8em;
 }
 
 .edu-controls {
@@ -221,6 +238,7 @@ a.edu-topic:focus-visible {
 }
 
 .edu-book.full .edu-canvas {
+  margin-inline: 0;
   width: auto;
   height: 100%;
   max-width: 100%;

@@ -175,22 +175,13 @@ export default function EduLesson() {
       </EduNav>
       <article className={full ? "edu-book full" : "edu-book"} ref={book}>
         <header className="edu-head">
-          <p className="soft">
-            {t.grade(info.grade)} · {AREAS[info.area][lang]}
-          </p>
-          <h1>{info.title[lang]}</h1>
-          {(vr === "failed" || vr === "need") && (
-            <p className="err" role="alert">
-              {vr === "failed" ? t.vrFailed : t.vrNeed}
+          <div>
+            <p className="soft">
+              {t.grade(info.grade)} · {AREAS[info.area][lang]}
             </p>
-          )}
-        </header>
-        {!ready(id) ? (
-          <p className="edu-say">{t.missing}</p>
-        ) : !lesson || !scene ? (
-          <p className="edu-say soft">{t.loading}</p>
-        ) : (
-          <>
+            <h1>{info.title[lang]}</h1>
+          </div>
+          {lesson && (
             <ol className="edu-steps">
               {steps.map((_, i) => (
                 <li key={i}>
@@ -200,6 +191,19 @@ export default function EduLesson() {
                 </li>
               ))}
             </ol>
+          )}
+        </header>
+        {(vr === "failed" || vr === "need") && (
+          <p className="err" role="alert">
+            {vr === "failed" ? t.vrFailed : t.vrNeed}
+          </p>
+        )}
+        {!ready(id) ? (
+          <p className="edu-say">{t.missing}</p>
+        ) : !lesson || !scene ? (
+          <p className="edu-say soft">{t.loading}</p>
+        ) : (
+          <>
             <div className="edu-fold" key={`${step}-${lang}`}>
               <Sheet scene={scene} label={say} />
             </div>
