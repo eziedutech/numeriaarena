@@ -97,15 +97,16 @@ const CSS = `
 #town .choices button.no { background: ${ORANGE}; color: #fff; }
 #town .choices button:disabled { cursor: default; }
 #town .sheet p.ask { font-size: 22px; font-weight: 700; }
+#town .shelf p.sample { margin: 0; padding: 8px 12px; font-size: 17px; max-width: 760px; }
 #town ul { margin: 0; padding-left: 22px; font-size: 17px; display: flex; flex-direction: column; gap: 6px; }
 `;
 
 let open: TownPage | null = null;
 
-/** Opens the town over the page; one at a time. */
-export function openTown(): void {
+/** Opens the town over the page, or the sample town to look at; one at a time. */
+export function openTown(sample = false): void {
   if (open) return;
-  open = new TownPage();
+  open = new TownPage(sample);
 }
 
 type Mode = { kind: 'idle' } | { kind: 'place'; asset: string; rot: number } | { kind: 'move'; id: string; asset: string; rot: number };
@@ -146,7 +147,7 @@ class TownPage {
 
   private onKey = (e: KeyboardEvent) => this.key(e);
 
-  constructor() {
+  constructor(private sample: boolean) {
     if (!document.getElementById('town-css')) {
       const style = el('style');
       style.id = 'town-css';
@@ -157,11 +158,11 @@ class TownPage {
     this.root.id = 'town';
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'true');
-    this.root.setAttribute('aria-label', this.t.title);
+    this.root.setAttribute('aria-label', sample ? this.t.sampleTitle : this.t.title);
     const wait = el('p', 'note', this.root);
     wait.textContent = this.t.loading;
     window.addEventListener('keydown', this.onKey);
-    TownModel.open()
+    (sample ? TownModel.sample() : TownModel.open())
       .then((model) => this.start(model))
       .catch((error) => {
         console.warn(`[town] not opened: ${String(error)}`);
@@ -188,7 +189,7 @@ class TownPage {
     this.toast = el('div', 'toast', this.stage);
     this.toast.setAttribute('aria-live', 'polite');
     this.shelf = el('div', 'shelf', this.root);
-    el('div', 'keys', this.root).textContent = this.t.keys;
+    el('div', 'keys', this.root).textContent = this.sample ? this.t.sampleKeys : this.t.keys;
 
     try {
       this.renderer = new WebGLRenderer({ canvas: this.canvas, antialias: true });
@@ -226,6 +227,13 @@ class TownPage {
       void this.loadMap();
     }
     if (model.doc.refused.length) this.showRefused();
+  }
+
+  /** Leaves this town for the other one: the sample, or the player's own. */
+  private swap(): void {
+    const sample = !this.sample;
+    this.close();
+    openTown(sample);
   }
 
   private close(): void {
@@ -304,21 +312,22 @@ class TownPage {
   private drawBar(balance: number, lands: LandKind[], closed: string | null): void {
     const t = this.t;
     this.bar.innerHTML = '';
-    this.bar.appendChild(paperText(t.title, 26, INK));
+    this.bar.appendChild(paperText(this.sample ? t.sampleTitle : t.title, 26, INK));
+    if (this.sample) {
+      lands.forEach((_, i) => this.landTab(i));
+      el('span', 'grow', this.bar);
+      const mine = el('button', 'tab', this.bar);
+      mine.textContent = t.buildMine;
+      mine.addEventListener('click', () => this.swap());
+      const close = el('button', 'tab', this.bar);
+      close.textContent = t.close;
+      close.addEventListener('click', () => this.close());
+      return;
+    }
     const folds = el('span', 'folds', this.bar);
     folds.textContent = t.folds(balance);
     folds.setAttribute('aria-live', 'polite');
-    lands.forEach((_, i) => {
-      const b = el('button', `tab${i === this.land ? ' on' : ''}`, this.bar);
-      b.textContent = t.land(i + 1);
-      b.setAttribute('aria-pressed', String(i === this.land));
-      b.addEventListener('click', () => {
-        this.land = i;
-        this.selected = '';
-        this.mode = { kind: 'idle' };
-        this.redraw();
-      });
-    });
+    lands.forEach((_, i) => this.landTab(i));
     const add = el('button', 'tab', this.bar);
     add.textContent = `+ ${t.newLand}`;
     if (closed && lands.length) {
@@ -335,12 +344,27 @@ class TownPage {
       place.addEventListener('click', () => void this.pickCell(lands[0]));
     }
     el('span', 'grow', this.bar);
+    const sample = el('button', 'tab', this.bar);
+    sample.textContent = t.sampleOpen;
+    sample.addEventListener('click', () => this.swap());
     const how = el('button', 'tab', this.bar);
     how.textContent = t.how;
     how.addEventListener('click', () => this.showHow());
     const close = el('button', 'tab', this.bar);
     close.textContent = t.close;
     close.addEventListener('click', () => this.close());
+  }
+
+  private landTab(i: number): void {
+    const b = el('button', `tab${i === this.land ? ' on' : ''}`, this.bar);
+    b.textContent = this.t.land(i + 1);
+    b.setAttribute('aria-pressed', String(i === this.land));
+    b.addEventListener('click', () => {
+      this.land = i;
+      this.selected = '';
+      this.mode = { kind: 'idle' };
+      this.redraw();
+    });
   }
 
   private closedText(code: string, last: number): string {
@@ -424,6 +448,10 @@ class TownPage {
   private drawShelf(balance: number, buildings: number): void {
     const t = this.t;
     this.shelf.innerHTML = '';
+    if (this.sample) {
+      el('p', 'sample', this.shelf).textContent = t.sampleNote;
+      return;
+    }
     const label = el('div', 'label', this.shelf);
     label.textContent = t.shop;
     const r = townRulesNow();
@@ -463,7 +491,7 @@ class TownPage {
     if (lm) {
       el('h3', '', this.card).textContent = this.name(lm.landmark);
       const facts = el('ul', '', this.card);
-      for (const f of [t.landmarkBy(skillTitle(lm.skill, this.lang)), t.landmarkStars(lm.tier), t.landmarkFixed]) el('li', '', facts).textContent = f;
+      for (const f of [(this.sample ? t.sampleBy : t.landmarkBy)(skillTitle(lm.skill, this.lang)), t.landmarkStars(lm.tier), t.landmarkFixed]) el('li', '', facts).textContent = f;
       return;
     }
     if (!it) return;
@@ -482,6 +510,7 @@ class TownPage {
         if (!this.model!.seat) this.gradePicker();
       }
     }
+    if (this.sample) return;
     const row = el('div', 'row', this.card);
     const move = el('button', 'btn', row);
     move.textContent = t.move;
@@ -602,7 +631,7 @@ class TownPage {
     const obj = this.page?.root.getObjectByName('landmark');
     if (!lm || !obj || !unmarked('grown', this.model!.owner, [lm]).length) return;
     this.folding.push({ obj: obj.children[0] as Group, start: 0, ms: 1600 });
-    this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, this.lang)));
+    if (!this.sample) this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, this.lang)));
     console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
   }
 
@@ -736,11 +765,15 @@ class TownPage {
       el('span', '', b).textContent = t.kinds[kind][1];
       b.addEventListener('click', () => void this.openLand(kind, first));
     }
+    const row = el('div', 'row', sheet);
     if (!first) {
-      const row = el('div', 'row', sheet);
       const back = el('button', 'btn', row);
       back.textContent = t.back;
       back.addEventListener('click', () => this.closeCover());
+    } else {
+      const sample = el('button', 'btn', row);
+      sample.textContent = t.sampleOpen;
+      sample.addEventListener('click', () => this.swap());
     }
     (kinds.firstElementChild as HTMLElement | null)?.focus();
   }

@@ -3,6 +3,7 @@ import { online } from '../offline.js';
 import { seatKey, studentState, type Student } from '../home/student.js';
 import { Book, earningsOf, loadTownCore, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
 import { guestLandmarks } from './town-landmarks.js';
+import { sampleTown } from './town-sample.js';
 
 /**
  * One player's MY FOLD TOWN on this device. A guest's lives only here, its
@@ -70,6 +71,12 @@ export class TownModel {
   private listeners = new Set<Change>();
   /** Why the last sync could not reach the server, if it could not. */
   syncNote = '';
+  /** The sample town's Folds; set only for the sample, which is never changed or saved. */
+  private fixed?: Earnings;
+
+  get lookOnly(): boolean {
+    return !!this.fixed;
+  }
 
   private constructor(
     private store: LocalStore,
@@ -91,6 +98,17 @@ export class TownModel {
     return model;
   }
 
+  /** The sample town, built afresh each time it opens. */
+  static async sample(): Promise<TownModel> {
+    const r = await loadTownCore();
+    const store = await sharedStore();
+    const s = sampleTown();
+    const model = new TownModel(store, 'sample', null, { events: s.events, pending: [], refused: [], landmarks: s.landmarks, skew_ms: 0 });
+    model.fixed = { plays: s.earned - r.welcome, streak: 0, welcome: r.welcome, held_back: 0, total: s.earned };
+    model.rebuild();
+    return model;
+  }
+
   onChange(f: Change): () => void {
     this.listeners.add(f);
     return () => this.listeners.delete(f);
@@ -106,6 +124,7 @@ export class TownModel {
   }
 
   earnings(): Earnings {
+    if (this.fixed) return this.fixed;
     if (this.seat) return this.doc.earnings ?? earningsOf([]);
     return earningsOf(readPlays());
   }
@@ -125,6 +144,7 @@ export class TownModel {
 
   /** Tries a change; "" when it is made (and saved), else why not. */
   async act(change: DistributiveOmit<TownEvent, 'event_id' | 'at_ms'>): Promise<string> {
+    if (this.fixed) return 'look_only';
     const ev = { ...change, event_id: newId(this.store), at_ms: this.now() } as TownEvent;
     const reason = this.book!.apply(ev);
     if (reason) return reason;
@@ -143,6 +163,7 @@ export class TownModel {
   }
 
   private save(): Promise<void> {
+    if (this.fixed) return Promise.resolve();
     return this.store.setTown(this.owner, this.doc);
   }
 
