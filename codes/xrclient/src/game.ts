@@ -79,6 +79,9 @@ import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setR
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
 import { noteGuestPlay } from './town/town-model.js';
+import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
+import { openTown } from './town/town-page.js';
+import { TOWN_TEXT } from './town/town-text.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork } from './offline.js';
 import { openBoard } from './board/board.js';
@@ -371,7 +374,7 @@ interface Tween {
   done?: () => void;
 }
 
-type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap';
+type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap' | 'town';
 /** An animal waiting in the line behind the book. */
 interface LineAnimal {
   species: Species;
@@ -393,7 +396,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'town' | 'again' | 'games' | 'done' | 'quit';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -515,6 +518,8 @@ export class GameSystem extends createSystem({
   private creatureScale = 1;
   private prompt?: Label;
   private labels = new Set<Mesh>();
+  /** MY FOLD TOWN on the desk, while it is open. */
+  private town?: TownDesk;
   private tweens: Tween[] = [];
   private head = new Vector3();
   private a = new Vector3();
@@ -689,7 +694,9 @@ export class GameSystem extends createSystem({
       }),
       this.queries.pressedCrystals.subscribe('qualify', (e) => this.clickCrystal(e)),
       // Entering or leaving XR switches mouse play for what is already on the desk.
-      this.world.visibilityState.subscribe(() => {
+      this.world.visibilityState.subscribe((state) => {
+        // The headset town has no page on a computer screen: back to the home page.
+        if (this.phase === 'town' && state === VisibilityState.NonImmersive) this.closeTown();
         this.pauseWhileAway();
         for (const e of [...this.queries.crystals.entities, ...this.queries.balloons.entities]) {
           if (e.hasComponent(Balloon) && !e.hasComponent(PokeInteractable)) continue;
@@ -719,6 +726,11 @@ export class GameSystem extends createSystem({
       this.pressQuit(e);
       return;
     }
+    if (this.phase === 'town') {
+      const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
+      if (isTownChoice(pressed)) this.town?.press(pressed);
+      return;
+    }
     if (this.phase === 'recap') {
       if (!this.choiceReady(e)) {
         console.info(`[menu] ${e.object3D?.name} not taken: too soon, or the finger did not come in from outside`);
@@ -735,6 +747,18 @@ export class GameSystem extends createSystem({
       }
       if (pressed === 'games' && !this.race) {
         this.otherGame();
+        return;
+      }
+      if (pressed === 'build') {
+        if (this.race) this.endRace();
+        else {
+          this.clearPracticeCards();
+          this.clear(this.queries.buttons);
+          this.clearPlay();
+          this.score.set(T.title);
+          this.backToMenu();
+        }
+        this.openTown();
         return;
       }
       this.endRace();
@@ -767,12 +791,11 @@ export class GameSystem extends createSystem({
       return;
     }
     if (pressed === 'town') {
-      console.info('[menu] fold town (soon)');
-      this.pop(T.townSoon, QUESTION_INK, undefined, TOWN_AT.clone().add(new Vector3(0, 0.16, 0.02)), 0.026);
+      this.openTown();
       return;
     }
-    // PRACTICE AGAIN and Done belong to results; a late touch from them does nothing here.
-    if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit') return;
+    // PRACTICE AGAIN and Done belong to results, the town's cards to the town; a late touch from them does nothing here.
+    if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit' || pressed === 'build' || isTownChoice(pressed)) return;
     this.hideHint(true);
     const choice: MenuChoice = pressed;
     const envelope = this.envelopes.get(e);
@@ -1723,7 +1746,10 @@ export class GameSystem extends createSystem({
         duration_ms: performance.now() - this.playStartedAt,
       });
     }
-    this.addChoiceButton('done', T.done, 0, 0x3469c4);
+    this.addChoiceRow([
+      ['build', T.build, 0xe0a33c],
+      ['done', T.done, 0x3469c4],
+    ]);
   }
 
   /** The teacher closed the Class Match room, or called another group: back to the menu, saying so. */
@@ -1786,6 +1812,7 @@ export class GameSystem extends createSystem({
     this.addChoiceRow([
       ['again', T.again, 0x3fb6a0],
       ['games', T.otherGame, 0xe8b64c],
+      ['build', T.build, 0xe0a33c],
       ['done', T.done, 0x3469c4],
     ]);
   }
@@ -1796,6 +1823,66 @@ export class GameSystem extends createSystem({
       this.labels.delete(c);
     }
     this.practiceCards = [];
+  }
+
+  /** MY FOLD TOWN: its page over the home page on a computer, its desk in the headset. */
+  private openTown(): void {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      openTown();
+      return;
+    }
+    console.info('[town] opening on the desk');
+    this.clearMenu();
+    this.phase = 'town';
+    this.showTitle();
+    this.score.mesh.visible = false;
+    TownDesk.open(this.townHost())
+      .then((town) => {
+        if (this.phase !== 'town' || this.town) town.dispose();
+        else this.town = town;
+      })
+      .catch((error) => {
+        console.warn(`[town] could not open: ${String(error)}`);
+        this.closeTown(TOWN_TEXT[getLang()].failed);
+      });
+  }
+
+  /** Back from the town to the menu; `note` is said over the town sticker. */
+  private closeTown(note?: string): void {
+    this.town?.dispose();
+    this.town = undefined;
+    this.clear(this.queries.buttons);
+    this.score.set(T.title);
+    this.backToMenu();
+    if (note && this.phase === 'menu' && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
+      this.pop(note, QUESTION_INK, undefined, TOWN_AT.clone().add(new Vector3(0, 0.16, 0.02)), 0.022);
+    }
+  }
+
+  private townHost(): TownHost {
+    return {
+      add: (obj, ray) => {
+        const e = this.add(obj);
+        if (ray) e.addComponent(RayInteractable);
+        return e;
+      },
+      remove: (e) => this.remove(e),
+      billboard: (mesh) => this.labels.add(mesh),
+      button: (choice, title, x, z, color) => {
+        const b = this.addButton(choice, title, x, color, 1, 0.018);
+        b.position.z = z;
+        for (const e of this.queries.buttons.entities) if (e.object3D === b) return e;
+        throw new Error(`no entity for ${b.name}`);
+      },
+      ray: (side) => this.player.raySpaces[side],
+      aimed: (side) => this.input.xr.multiPointers[side].getPointer('ray').getIntersection()?.object,
+      select: (side) => {
+        const state = (this.input.xr as unknown as { handSelectFrameState?: Record<string, { start: boolean; end: boolean }> }).handSelectFrameState;
+        return { start: !!state?.[side]?.start, end: !!state?.[side]?.end };
+      },
+      emulated: emulatedHands,
+      closed: (note) => this.closeTown(note),
+    };
   }
 
   /** After a game: the home page outside the headset, the envelopes in it. */
@@ -2927,7 +3014,7 @@ export class GameSystem extends createSystem({
 
   private next(): void {
     // A creature's (or its bird's) way out that ends after a quit or the results: nothing comes next.
-    if (this.phase === 'menu' || this.phase === 'recap') return;
+    if (this.phase === 'menu' || this.phase === 'recap' || this.phase === 'town') return;
     this.clearPrompt();
     this.offer = undefined;
     if (this.race) {
@@ -3044,8 +3131,10 @@ export class GameSystem extends createSystem({
       this.prompt.pulse(1 + PROMPT_PULSE * k);
     }
 
+    if (this.phase === 'town') this.town?.update(delta);
     this.clickAimedBalloon();
-    this.emulatorPinch();
+    // In the town a pinch belongs to the piece it takes, not to a card the other hand's ray is on.
+    if (this.phase !== 'town') this.emulatorPinch();
     this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();

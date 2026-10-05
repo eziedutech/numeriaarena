@@ -790,6 +790,9 @@ class TownPage {
     if (typeof got === 'string') return;
     this.map = got;
     this.redraw();
+    // A first land opened in the headset still needs its square on the class map.
+    const first = this.model?.view().lands[0];
+    if (first && !got.cells.some((c) => c.me) && !this.cover) void this.pickCell(first);
   }
 
   /** The class map, to pick the cell of the seat's first land. */

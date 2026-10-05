@@ -107,6 +107,16 @@ const EN = {
   maths: 'THE MATHS OF IT',
   grade: 'GRADE',
   canvas: 'Your town. Use the arrow keys to move between tiles.',
+  xr: {
+    hint: 'Point at a piece and pinch. Move it over the page and let go. Let go off the book to remove one.',
+    done: 'DONE',
+    carry: (name: string) => `${name}: let go over a tile.`,
+    dropRemove: (n: number) => `Let go here to remove it (+${n} Folds back).`,
+    dropBack: 'Let go here to put it back on the shelf.',
+    timeUp: 'Building time is over for now. Your town is saved.',
+    mapLater: 'Pick your place on the class map on the computer.',
+    pickLandXr: 'PICK YOUR LAND: point at one and pinch',
+  },
 };
 
 const ID: typeof EN = {
@@ -213,6 +223,16 @@ const ID: typeof EN = {
   maths: 'MATEMATIKANYA',
   grade: 'KELAS',
   canvas: 'Kotamu. Pakai tombol panah untuk berpindah antarpetak.',
+  xr: {
+    hint: 'Tunjuk satu potongan lalu cubit. Bawa ke atas halaman dan lepaskan. Lepaskan di luar buku untuk menghapus.',
+    done: 'SELESAI',
+    carry: (name: string) => `${name}: lepaskan di atas petak.`,
+    dropRemove: (n: number) => `Lepaskan di sini untuk menghapusnya (+${n} Folds kembali).`,
+    dropBack: 'Lepaskan di sini untuk mengembalikannya ke rak.',
+    timeUp: 'Waktu membangun sudah habis untuk sekarang. Kotamu sudah tersimpan.',
+    mapLater: 'Pilih tempatmu di peta kelas lewat komputer.',
+    pickLandXr: 'PILIH LAHANMU: tunjuk satu lalu cubit',
+  },
 };
 
 export const TOWN_TEXT: Record<Lang, typeof EN> = { en: EN, id: ID };
