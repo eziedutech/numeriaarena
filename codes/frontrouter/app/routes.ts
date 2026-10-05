@@ -7,4 +7,6 @@ export default [
   route("data-deletion", "routes/data-deletion.tsx"),
   route("manage", "routes/manage.tsx"),
   route("screen", "routes/screen.tsx"),
+  route("edu", "routes/edu.tsx"),
+  route("edu/:id", "routes/edu-lesson.tsx"),
 ] satisfies RouteConfig;

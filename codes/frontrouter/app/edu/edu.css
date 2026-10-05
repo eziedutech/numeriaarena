@@ -1,0 +1,245 @@
+.edu .edu-nav,
+.edu .edu-index,
+.edu .edu-book {
+  max-width: 1080px;
+}
+
+.edu-nav-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edu-vr {
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.edu-vr:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.edu-index h1 {
+  margin-bottom: 4px;
+}
+
+.edu-grades {
+  margin: 18px 0 4px;
+}
+
+.edu-grades .tab {
+  font-size: 18px;
+  padding: 10px 18px;
+}
+
+.paper-sheet .edu-topics {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.paper-sheet .edu-topics li {
+  margin: 0;
+}
+
+.edu-topic {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: #f8efdc;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.paper-sheet a.edu-topic {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.edu-topic:hover,
+a.edu-topic:focus-visible {
+  transform: translateY(-2px);
+}
+
+.edu-topic.soon {
+  background: #f1e3c4;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.edu-open {
+  flex: none;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.edu-topic.soon .edu-open {
+  background: none;
+  color: var(--ink-soft);
+}
+
+.edu-book {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 22px 26px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.edu-head p {
+  margin: 0;
+}
+
+.edu-head h1 {
+  margin: 2px 0 0;
+  font-size: 28px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.edu-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.edu-steps button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-width: 44px;
+  min-height: 44px;
+  background: #f1e3c4;
+  color: var(--ink);
+}
+
+.edu-steps button.seen {
+  background: #d8e3f6;
+}
+
+.edu-steps button.on {
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.edu-fold {
+  perspective: 1400px;
+}
+
+.edu-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1000 / 625;
+  touch-action: none;
+  box-shadow: var(--shadow);
+  transform-origin: left center;
+  animation: edu-unfold 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes edu-unfold {
+  from {
+    transform: rotateY(-70deg);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.edu-say {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.45;
+  min-height: 2.9em;
+}
+
+.edu-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.edu-controls .btn {
+  min-height: 48px;
+  min-width: 120px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.edu-controls .edu-full {
+  margin-left: auto;
+}
+
+.edu-book.full {
+  max-width: none;
+  height: 100vh;
+  padding: 14px 22px;
+  gap: 10px;
+  justify-content: center;
+}
+
+.edu-book.full .edu-fold {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.edu-book.full .edu-canvas {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+}
+
+.edu-book.full .edu-say {
+  font-size: 26px;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edu-canvas {
+    animation: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .edu-book {
+    padding: 14px;
+  }
+  .edu-say {
+    font-size: 17px;
+  }
+}
