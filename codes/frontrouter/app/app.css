@@ -1486,3 +1486,53 @@ button.tool {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.ai-admin h3 {
+  margin: 18px 0 6px;
+}
+
+.ai-bar {
+  height: 10px;
+  max-width: 420px;
+  border-radius: 5px;
+  background: rgba(58, 63, 75, 0.1);
+  overflow: hidden;
+}
+
+.ai-bar span {
+  display: block;
+  height: 100%;
+  background: var(--cobalt);
+}
+
+.ai-bar.warn span {
+  background: #d8743b;
+}
+
+.ai-link {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(58, 63, 75, 0.04);
+}
+
+.ai-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ai-models {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.ai-calls {
+  overflow-x: auto;
+}
+
+.ai-calls .past-table {
+  max-width: none;
+  font-size: 13px;
+}

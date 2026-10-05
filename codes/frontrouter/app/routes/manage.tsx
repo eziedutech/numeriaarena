@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, isSample, sendEmailLink, signInConfigured, signInWith, signOut, startSample, watchUser } from "../auth";
+import { AdminAi } from "../admin-ai";
 import { MyClasses } from "../classes";
 import { RaceSetup, USUAL, describe, readSetup, type RoomSetup } from "../race-setup";
 import { CopyCode } from "../copy-code";
@@ -318,6 +319,7 @@ export default function Manage() {
   };
   useEffect(() => setMode(readMode()), []);
   const asAdmin = mode === "admin" && Boolean(me?.admin);
+  const [adminView, setAdminView] = useState<"organizers" | "ai">("organizers");
 
   const loadMe = (u: User) => {
     setError("");
@@ -388,7 +390,14 @@ export default function Manage() {
               <section className="paper-sheet">
                 <AccountHead t={t} me={me} />
               </section>
-              <Organizers t={t} user={user} />
+              <div className="tabs" role="tablist" aria-label={t.modes.admin}>
+                {(["organizers", "ai"] as const).map((v) => (
+                  <button key={v} type="button" role="tab" aria-selected={v === adminView} className={v === adminView ? "tab on" : "tab"} onClick={() => setAdminView(v)}>
+                    {v === "ai" ? "AI" : t.organizers.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              {adminView === "ai" ? <AdminAi lang={lang} user={user} /> : <Organizers t={t} user={user} />}
             </>
           ) : (
             <Account t={t} lang={lang} user={user} me={me} onChange={() => loadMe(user)} />

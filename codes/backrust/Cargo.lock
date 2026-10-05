@@ -1475,6 +1475,7 @@ dependencies = [
  "foldlings-core",
  "jsonwebtoken",
  "reqwest",
+ "ring",
  "rustls",
  "serde",
  "serde_json",

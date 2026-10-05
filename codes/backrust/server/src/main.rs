@@ -2,6 +2,7 @@
 //! admins), and Class Match rooms with their WebSocket.
 
 mod admin;
+mod ai;
 mod answers;
 mod auth;
 mod classes;
@@ -13,7 +14,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use sqlx::postgres::PgPoolOptions;
 
 pub struct Config {
@@ -33,6 +34,7 @@ pub struct AppState {
     pub rooms: Arc<rooms::Rooms>,
     /// Wrong picture passwords per class, to pause a class's sign-in.
     pub classes: classes::Guard,
+    pub ai: ai::Gateway,
 }
 
 pub type State = Arc<AppState>;
@@ -59,6 +61,19 @@ pub fn router(state: State) -> Router {
         .route("/api/organizer", post(organizer::register))
         .route("/api/admin/organizers", get(admin::list))
         .route("/api/admin/organizers/{id}", post(admin::decide))
+        .route("/api/admin/ai", get(ai::admin::overview))
+        .route("/api/admin/ai/providers", post(ai::admin::save_provider))
+        .route(
+            "/api/admin/ai/providers/{code}",
+            delete(ai::admin::delete_provider),
+        )
+        .route(
+            "/api/admin/ai/providers/{code}/test",
+            post(ai::admin::test_provider),
+        )
+        .route("/api/admin/ai/tasks/{task}", put(ai::admin::save_chain))
+        .route("/api/admin/ai/budget", put(ai::admin::save_budget))
+        .route("/api/admin/ai/calls", get(ai::admin::calls))
         .route("/api/rooms", post(rooms::create).get(rooms::mine))
         .route("/api/rooms/history", get(rooms::history))
         .route("/api/rooms/{id}", delete(rooms::close))
@@ -149,6 +164,8 @@ async fn main() {
         config,
         rooms,
         classes: classes::Guard::default(),
+        // Keys of AI providers are sealed with this; without it AI stays off.
+        ai: ai::Gateway::new(std::env::var("AI_MASTER_KEY").ok().as_deref()),
     });
 
     let port: u16 = std::env::var("PORT")
