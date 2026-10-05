@@ -24,6 +24,7 @@ COPY --from=builder /build/target/release/numeria-server /usr/local/bin/numeria-
 COPY codes/content/templates /srv/content/templates
 COPY codes/content/contoh /srv/content/contoh
 COPY codes/content/skills.json /srv/content/skills.json
+COPY codes/content/misconceptions.json /srv/content/misconceptions.json
 USER numeria
 EXPOSE 3321
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

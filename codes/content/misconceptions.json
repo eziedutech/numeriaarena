@@ -1,0 +1,1942 @@
+{
+  "version": "misconceptions-2026-10-05",
+  "note": "Pola salah yang ditunjukkan pengecoh di templates: kode yang sama dengan field misconception, judul pendek dan satu kalimat untuk guru. Dibuat dengan bantuan AI dari ekspresi pengecoh, perlu ditinjau manusia. Tambah kode baru, jangan ubah arti kode lama.",
+  "misconceptions": [
+    {
+      "code": "add_denominators",
+      "title": {
+        "en": "Added the denominators",
+        "id": "Menjumlahkan penyebut"
+      },
+      "note": {
+        "en": "Adds the denominators as well as the numerators.",
+        "id": "Menjumlahkan penyebut sama seperti pembilang."
+      }
+    },
+    {
+      "code": "add_instead_of_multiply",
+      "title": {
+        "en": "Added instead of multiplying",
+        "id": "Menjumlah, bukan mengalikan"
+      },
+      "note": {
+        "en": "Adds the two numbers when the sign asks to multiply.",
+        "id": "Menjumlahkan kedua bilangan padahal tandanya meminta perkalian."
+      }
+    },
+    {
+      "code": "added",
+      "title": {
+        "en": "Added the numbers",
+        "id": "Menjumlahkan kedua bilangan"
+      },
+      "note": {
+        "en": "Adds the two numbers instead of finding a common multiple.",
+        "id": "Menjumlahkan kedua bilangan, bukan mencari kelipatan persekutuan."
+      }
+    },
+    {
+      "code": "added_a_zero",
+      "title": {
+        "en": "Added a zero to a decimal",
+        "id": "Menambah nol pada desimal"
+      },
+      "note": {
+        "en": "Writes a zero at the end, which leaves a decimal the same.",
+        "id": "Menulis nol di ujung, padahal desimalnya tidak berubah."
+      }
+    },
+    {
+      "code": "added_across",
+      "title": {
+        "en": "Added across",
+        "id": "Menjumlahkan lurus"
+      },
+      "note": {
+        "en": "Adds the numerators and the denominators when the question asks to multiply.",
+        "id": "Menjumlahkan pembilang dan penyebut padahal soalnya perkalian."
+      }
+    },
+    {
+      "code": "added_all",
+      "title": {
+        "en": "Added every number",
+        "id": "Menjumlahkan semua bilangan"
+      },
+      "note": {
+        "en": "Adds all the numbers and ignores the multiplication sign.",
+        "id": "Menjumlahkan semua bilangan dan mengabaikan tanda kali."
+      }
+    },
+    {
+      "code": "added_denominators",
+      "title": {
+        "en": "Added the denominators",
+        "id": "Menjumlahkan penyebut"
+      },
+      "note": {
+        "en": "Adds top and bottom alike, so 1/2 + 1/4 becomes 2/6.",
+        "id": "Menjumlahkan pembilang dan penyebut sekaligus, jadi 1/2 + 1/4 menjadi 2/6."
+      }
+    },
+    {
+      "code": "added_factor",
+      "title": {
+        "en": "Added the factor",
+        "id": "Menambahkan faktornya"
+      },
+      "note": {
+        "en": "Adds the scale factor to the denominator instead of multiplying.",
+        "id": "Menambahkan faktor pengali ke penyebut, bukan mengalikan."
+      }
+    },
+    {
+      "code": "added_instead",
+      "title": {
+        "en": "Added instead of subtracting",
+        "id": "Menjumlah, bukan mengurangi"
+      },
+      "note": {
+        "en": "Puts the whole and the fraction together instead of taking the fraction away.",
+        "id": "Menggabungkan bilangan utuh dan pecahan, bukan mengurangkan pecahannya."
+      }
+    },
+    {
+      "code": "added_one",
+      "title": {
+        "en": "Added one",
+        "id": "Menambah satu"
+      },
+      "note": {
+        "en": "Counts on by one instead of by the number.",
+        "id": "Menghitung maju satu, bukan sebesar bilangannya."
+      }
+    },
+    {
+      "code": "added_one_part",
+      "title": {
+        "en": "Added one part",
+        "id": "Menambah satu bagian"
+      },
+      "note": {
+        "en": "Adds one more part instead of finding the whole.",
+        "id": "Menambah satu bagian lagi, bukan mencari keseluruhan."
+      }
+    },
+    {
+      "code": "added_remainder",
+      "title": {
+        "en": "Added the remainder",
+        "id": "Menambahkan sisa"
+      },
+      "note": {
+        "en": "Adds the remainder to the quotient.",
+        "id": "Menambahkan sisa ke hasil bagi."
+      }
+    },
+    {
+      "code": "added_sides",
+      "title": {
+        "en": "Added the sides",
+        "id": "Menjumlahkan sisi"
+      },
+      "note": {
+        "en": "Adds length and width for the area instead of multiplying.",
+        "id": "Menjumlahkan panjang dan lebar untuk luas, bukan mengalikan."
+      }
+    },
+    {
+      "code": "added_tops_and_bottoms",
+      "title": {
+        "en": "Added tops and bottoms",
+        "id": "Menjumlahkan atas dan bawah"
+      },
+      "note": {
+        "en": "Combines two fractions by adding numerators and denominators.",
+        "id": "Menggabungkan dua pecahan dengan menjumlahkan pembilang dan penyebut."
+      }
+    },
+    {
+      "code": "added_whole_and_top",
+      "title": {
+        "en": "Added the whole and the top",
+        "id": "Menjumlahkan utuh dan pembilang"
+      },
+      "note": {
+        "en": "Adds the whole number to the numerator without multiplying by the denominator.",
+        "id": "Menjumlahkan bilangan utuh ke pembilang tanpa mengalikan dengan penyebut."
+      }
+    },
+    {
+      "code": "added_zeros",
+      "title": {
+        "en": "Added zeros to a decimal",
+        "id": "Menambah nol-nol pada desimal"
+      },
+      "note": {
+        "en": "Writes zeros at the end, which leaves a decimal the same.",
+        "id": "Menulis nol di ujung, padahal desimalnya tidak berubah."
+      }
+    },
+    {
+      "code": "additive_thinking",
+      "title": {
+        "en": "Added instead of scaling",
+        "id": "Menambah, bukan mengalikan"
+      },
+      "note": {
+        "en": "Adds the same amount to top and bottom to make an equal fraction.",
+        "id": "Menambahkan bilangan yang sama ke atas dan bawah untuk membuat pecahan senilai."
+      }
+    },
+    {
+      "code": "aligned_right",
+      "title": {
+        "en": "Lined up from the right",
+        "id": "Disejajarkan dari kanan"
+      },
+      "note": {
+        "en": "Lines up a whole number with the last decimal digit.",
+        "id": "Menyejajarkan bilangan utuh dengan angka desimal terakhir."
+      }
+    },
+    {
+      "code": "always_one",
+      "title": {
+        "en": "Said the factor is 1",
+        "id": "Menyebut faktornya 1"
+      },
+      "note": {
+        "en": "Gives 1 as the common factor although a larger one exists.",
+        "id": "Menyebut 1 sebagai faktor persekutuan padahal ada yang lebih besar."
+      }
+    },
+    {
+      "code": "bigger_denominator_bigger",
+      "title": {
+        "en": "Bigger denominator, bigger fraction",
+        "id": "Penyebut besar, pecahan besar"
+      },
+      "note": {
+        "en": "Thinks a larger denominator makes a larger fraction, like 1/8 more than 1/4.",
+        "id": "Mengira penyebut yang lebih besar membuat pecahan lebih besar, misalnya 1/8 lebih dari 1/4."
+      }
+    },
+    {
+      "code": "carry_lost",
+      "title": {
+        "en": "Lost a carry",
+        "id": "Simpanan hilang"
+      },
+      "note": {
+        "en": "Forgets to add a carried ten in the multiplication.",
+        "id": "Lupa menambahkan puluhan simpanan dalam perkalian."
+      }
+    },
+    {
+      "code": "carry_to_hundreds",
+      "title": {
+        "en": "Carried to the wrong place",
+        "id": "Menyimpan ke tempat yang salah"
+      },
+      "note": {
+        "en": "Carries into the hundreds when the carry belongs to the tens.",
+        "id": "Menyimpan ke ratusan padahal simpanannya milik puluhan."
+      }
+    },
+    {
+      "code": "carry_when_none",
+      "title": {
+        "en": "Carried when nothing to carry",
+        "id": "Menyimpan padahal tidak perlu"
+      },
+      "note": {
+        "en": "Adds a carry although the ones did not reach ten.",
+        "id": "Menambah simpanan padahal satuannya tidak sampai sepuluh."
+      }
+    },
+    {
+      "code": "composite_factor",
+      "title": {
+        "en": "Gave a factor that is not prime",
+        "id": "Menyebut faktor yang bukan prima"
+      },
+      "note": {
+        "en": "Gives a product of primes as the prime factor.",
+        "id": "Menyebut hasil kali beberapa bilangan prima sebagai faktor prima."
+      }
+    },
+    {
+      "code": "copied_denominator",
+      "title": {
+        "en": "Copied the denominator",
+        "id": "Menyalin penyebut"
+      },
+      "note": {
+        "en": "Writes the denominator as the missing part of a whole.",
+        "id": "Menulis penyebut sebagai bagian yang hilang dari satu utuh."
+      }
+    },
+    {
+      "code": "copied_factor",
+      "title": {
+        "en": "Copied the given factor",
+        "id": "Menyalin faktor yang diberikan"
+      },
+      "note": {
+        "en": "Gives the factor already in the question as the missing one.",
+        "id": "Menulis faktor yang sudah ada di soal sebagai faktor yang hilang."
+      }
+    },
+    {
+      "code": "copied_numerator",
+      "title": {
+        "en": "Copied the numerator",
+        "id": "Menyalin pembilang"
+      },
+      "note": {
+        "en": "Writes the given numerator as the missing part of a whole.",
+        "id": "Menulis pembilang yang diberikan sebagai bagian yang hilang dari satu utuh."
+      }
+    },
+    {
+      "code": "counted_the_rest",
+      "title": {
+        "en": "Gave the rest",
+        "id": "Menyebut sisanya"
+      },
+      "note": {
+        "en": "Gives the part not shaded instead of the equal numerator.",
+        "id": "Menyebut bagian yang tidak diarsir, bukan pembilang yang senilai."
+      }
+    },
+    {
+      "code": "counted_up_to_divisor",
+      "title": {
+        "en": "Counted up to the divisor",
+        "id": "Menghitung sampai pembagi"
+      },
+      "note": {
+        "en": "Gives how much more would make another group instead of what is left.",
+        "id": "Menyebut berapa lagi agar jadi satu kelompok, bukan sisanya."
+      }
+    },
+    {
+      "code": "cross_multiplied",
+      "title": {
+        "en": "Multiplied across",
+        "id": "Mengalikan silang"
+      },
+      "note": {
+        "en": "Multiplies crosswise as if dividing.",
+        "id": "Mengalikan silang seperti membagi."
+      }
+    },
+    {
+      "code": "denominator_off_by_one",
+      "title": {
+        "en": "Denominator off by one",
+        "id": "Penyebut selisih satu"
+      },
+      "note": {
+        "en": "Changes the denominator when writing a mixed number.",
+        "id": "Mengubah penyebut saat menulis pecahan campuran."
+      }
+    },
+    {
+      "code": "digit_only",
+      "title": {
+        "en": "Gave the digit, not its value",
+        "id": "Menyebut angka, bukan nilainya"
+      },
+      "note": {
+        "en": "Says the digit itself instead of what it is worth in its place.",
+        "id": "Menyebut angkanya saja, bukan nilai angka itu di tempatnya."
+      }
+    },
+    {
+      "code": "digits_after_point",
+      "title": {
+        "en": "Wrote the digits after the point",
+        "id": "Angka ditulis di belakang koma"
+      },
+      "note": {
+        "en": "Puts the numerator and denominator side by side after the point, like 1/4 as 0.14.",
+        "id": "Menaruh pembilang dan penyebut berdampingan di belakang koma, misalnya 1/4 sebagai 0,14."
+      }
+    },
+    {
+      "code": "divided_bottom_only",
+      "title": {
+        "en": "Divided the denominator only",
+        "id": "Hanya membagi penyebut"
+      },
+      "note": {
+        "en": "Simplifies the denominator but leaves the numerator.",
+        "id": "Menyederhanakan penyebut tetapi pembilangnya dibiarkan."
+      }
+    },
+    {
+      "code": "divided_instead",
+      "title": {
+        "en": "Divided instead of multiplying",
+        "id": "Membagi, bukan mengalikan"
+      },
+      "note": {
+        "en": "Moves the digits the wrong way.",
+        "id": "Menggeser angka ke arah yang salah."
+      }
+    },
+    {
+      "code": "divided_top_only",
+      "title": {
+        "en": "Divided the numerator only",
+        "id": "Hanya membagi pembilang"
+      },
+      "note": {
+        "en": "Simplifies the numerator but leaves the denominator.",
+        "id": "Menyederhanakan pembilang tetapi penyebutnya dibiarkan."
+      }
+    },
+    {
+      "code": "doubled",
+      "title": {
+        "en": "Doubled the sum",
+        "id": "Menggandakan jumlah"
+      },
+      "note": {
+        "en": "Doubles the sum of the sides as if for a rectangle.",
+        "id": "Menggandakan jumlah sisi seperti untuk persegi panjang."
+      }
+    },
+    {
+      "code": "doubled_denominator",
+      "title": {
+        "en": "Doubled the denominator",
+        "id": "Penyebut digandakan"
+      },
+      "note": {
+        "en": "Doubles the denominator while subtracting.",
+        "id": "Menggandakan penyebut saat mengurangi."
+      }
+    },
+    {
+      "code": "doubled_instead",
+      "title": {
+        "en": "Doubled instead of halving",
+        "id": "Menggandakan, bukan membagi dua"
+      },
+      "note": {
+        "en": "Treats times one half as times two.",
+        "id": "Menganggap kali setengah sama dengan kali dua."
+      }
+    },
+    {
+      "code": "doubled_side",
+      "title": {
+        "en": "Doubled the side",
+        "id": "Menggandakan sisi"
+      },
+      "note": {
+        "en": "Doubles the side of a square instead of multiplying it by itself.",
+        "id": "Menggandakan sisi persegi, bukan mengalikannya dengan dirinya sendiri."
+      }
+    },
+    {
+      "code": "drop_zero_placeholder",
+      "title": {
+        "en": "Left out a zero placeholder",
+        "id": "Melewatkan nol penjaga tempat"
+      },
+      "note": {
+        "en": "Writes the digits side by side and drops the zero for the empty place.",
+        "id": "Menulis angka berdampingan dan tidak menulis nol untuk tempat yang kosong."
+      }
+    },
+    {
+      "code": "dropped_zero",
+      "title": {
+        "en": "Dropped a zero",
+        "id": "Nol terbuang"
+      },
+      "note": {
+        "en": "Loses a zero of the dividend, so the answer is ten times too small.",
+        "id": "Membuang satu nol dari bilangan yang dibagi, jadi jawabannya sepuluh kali terlalu kecil."
+      }
+    },
+    {
+      "code": "ends_in_five",
+      "title": {
+        "en": "Ends in 5 but chosen as prime",
+        "id": "Berakhiran 5 tetapi dipilih prima"
+      },
+      "note": {
+        "en": "Misses that a number ending in 5 divides by 5.",
+        "id": "Tidak melihat bahwa bilangan berakhiran 5 habis dibagi 5."
+      }
+    },
+    {
+      "code": "even_number",
+      "title": {
+        "en": "Picked an even number",
+        "id": "Memilih bilangan genap"
+      },
+      "note": {
+        "en": "Takes an even number above 2 as prime.",
+        "id": "Menganggap bilangan genap di atas 2 sebagai prima."
+      }
+    },
+    {
+      "code": "extra_carry",
+      "title": {
+        "en": "An extra carry",
+        "id": "Simpanan berlebih"
+      },
+      "note": {
+        "en": "Adds a carry that was not there.",
+        "id": "Menambah simpanan yang sebenarnya tidak ada."
+      }
+    },
+    {
+      "code": "extra_hundred",
+      "title": {
+        "en": "An extra hundred",
+        "id": "Kelebihan seratus"
+      },
+      "note": {
+        "en": "Adds a hundred too many, often from a carry that was not there.",
+        "id": "Menambah seratus terlalu banyak, sering dari simpanan yang sebenarnya tidak ada."
+      }
+    },
+    {
+      "code": "extra_ten",
+      "title": {
+        "en": "An extra ten",
+        "id": "Kelebihan sepuluh"
+      },
+      "note": {
+        "en": "Adds a ten too many, often from a carry that was not there.",
+        "id": "Menambah sepuluh terlalu banyak, sering dari simpanan yang sebenarnya tidak ada."
+      }
+    },
+    {
+      "code": "extra_whole",
+      "title": {
+        "en": "An extra whole",
+        "id": "Kelebihan satu utuh"
+      },
+      "note": {
+        "en": "Adds a whole that was not there.",
+        "id": "Menambah satu utuh yang sebenarnya tidak ada."
+      }
+    },
+    {
+      "code": "extra_zero",
+      "title": {
+        "en": "An extra zero",
+        "id": "Kelebihan nol"
+      },
+      "note": {
+        "en": "Adds a zero, so the answer is ten times too large.",
+        "id": "Menambah satu nol, jadi jawabannya sepuluh kali terlalu besar."
+      }
+    },
+    {
+      "code": "forget_carry",
+      "title": {
+        "en": "Forgot to carry",
+        "id": "Lupa menyimpan"
+      },
+      "note": {
+        "en": "Writes the ones of a column sum but does not carry the ten.",
+        "id": "Menulis satuan dari jumlah satu kolom tetapi tidak menyimpan puluhannya."
+      }
+    },
+    {
+      "code": "forgot_a_side",
+      "title": {
+        "en": "Left out a side",
+        "id": "Satu sisi terlewat"
+      },
+      "note": {
+        "en": "Adds three sides of the rectangle and misses one.",
+        "id": "Menjumlahkan tiga sisi persegi panjang, satu sisi terlewat."
+      }
+    },
+    {
+      "code": "forgot_borrow",
+      "title": {
+        "en": "Forgot to borrow",
+        "id": "Lupa meminjam"
+      },
+      "note": {
+        "en": "Takes the smaller digit from the larger instead of borrowing.",
+        "id": "Mengurangi angka kecil dari yang besar, bukan meminjam."
+      }
+    },
+    {
+      "code": "forgot_borrow_hundreds",
+      "title": {
+        "en": "Forgot to borrow from the hundreds",
+        "id": "Lupa meminjam dari ratusan"
+      },
+      "note": {
+        "en": "Borrows into a column but leaves the hundreds digit as it was.",
+        "id": "Meminjam untuk satu kolom tetapi angka ratusannya dibiarkan tetap."
+      }
+    },
+    {
+      "code": "forgot_borrow_thousands",
+      "title": {
+        "en": "Forgot to borrow from the thousands",
+        "id": "Lupa meminjam dari ribuan"
+      },
+      "note": {
+        "en": "Borrows into a column but leaves the thousands digit as it was.",
+        "id": "Meminjam untuk satu kolom tetapi angka ribuannya dibiarkan tetap."
+      }
+    },
+    {
+      "code": "forgot_carry",
+      "title": {
+        "en": "Forgot to carry a whole",
+        "id": "Lupa menyimpan satu utuh"
+      },
+      "note": {
+        "en": "Leaves an improper fraction instead of carrying a whole.",
+        "id": "Membiarkan pecahan tidak murni, bukan menyimpannya sebagai satu utuh."
+      }
+    },
+    {
+      "code": "forgot_numerator",
+      "title": {
+        "en": "Left out the numerator",
+        "id": "Pembilang terlewat"
+      },
+      "note": {
+        "en": "Turns the wholes into parts but forgets to add the numerator.",
+        "id": "Mengubah bilangan utuh menjadi bagian tetapi lupa menambahkan pembilang."
+      }
+    },
+    {
+      "code": "forgot_one_part",
+      "title": {
+        "en": "Left out one part",
+        "id": "Satu bagian terlewat"
+      },
+      "note": {
+        "en": "Finds the area of one rectangle only.",
+        "id": "Hanya mencari luas satu persegi panjang."
+      }
+    },
+    {
+      "code": "forgot_tens_partial",
+      "title": {
+        "en": "Left out the tens part",
+        "id": "Bagian puluhan terlewat"
+      },
+      "note": {
+        "en": "Multiplies by the ones digit only and forgets the tens.",
+        "id": "Hanya mengalikan dengan angka satuan dan lupa puluhannya."
+      }
+    },
+    {
+      "code": "forgot_the_whole",
+      "title": {
+        "en": "Lost the whole",
+        "id": "Satu utuh hilang"
+      },
+      "note": {
+        "en": "Takes a whole away from a sum that is more than one.",
+        "id": "Membuang satu utuh dari jumlah yang lebih dari satu."
+      }
+    },
+    {
+      "code": "forgot_to_halve",
+      "title": {
+        "en": "Forgot to halve",
+        "id": "Lupa membagi dua"
+      },
+      "note": {
+        "en": "Multiplies the legs of a right triangle but does not halve.",
+        "id": "Mengalikan kedua sisi siku segitiga tetapi tidak dibagi dua."
+      }
+    },
+    {
+      "code": "found_unit_only",
+      "title": {
+        "en": "Found one part only",
+        "id": "Hanya mencari satu bagian"
+      },
+      "note": {
+        "en": "Finds one part but not the whole amount.",
+        "id": "Menemukan satu bagian tetapi bukan jumlah keseluruhan."
+      }
+    },
+    {
+      "code": "gave_area",
+      "title": {
+        "en": "Gave the area",
+        "id": "Menyebut luas"
+      },
+      "note": {
+        "en": "Multiplies the sides when the perimeter was asked.",
+        "id": "Mengalikan sisi padahal yang ditanya keliling."
+      }
+    },
+    {
+      "code": "gave_denominator",
+      "title": {
+        "en": "Gave the denominator",
+        "id": "Menyebut penyebut"
+      },
+      "note": {
+        "en": "Answers with the number of parts instead of the size of one part.",
+        "id": "Menjawab banyaknya bagian, bukan besar satu bagian."
+      }
+    },
+    {
+      "code": "gave_divisor",
+      "title": {
+        "en": "Gave the divisor",
+        "id": "Menyebut pembaginya"
+      },
+      "note": {
+        "en": "Answers with the number divided by instead of the result.",
+        "id": "Menjawab dengan bilangan pembagi, bukan hasil baginya."
+      }
+    },
+    {
+      "code": "gave_larger_factor",
+      "title": {
+        "en": "Gave the larger factor",
+        "id": "Menyebut faktor yang lebih besar"
+      },
+      "note": {
+        "en": "Picks the largest prime factor when the smallest was asked.",
+        "id": "Memilih faktor prima terbesar padahal yang diminta terkecil."
+      }
+    },
+    {
+      "code": "gave_lcm",
+      "title": {
+        "en": "Gave a multiple, not a factor",
+        "id": "Menyebut kelipatan, bukan faktor"
+      },
+      "note": {
+        "en": "Finds a common multiple when the greatest common factor was asked.",
+        "id": "Mencari kelipatan persekutuan padahal yang diminta faktor persekutuan terbesar."
+      }
+    },
+    {
+      "code": "gave_perimeter",
+      "title": {
+        "en": "Gave the perimeter",
+        "id": "Menyebut keliling"
+      },
+      "note": {
+        "en": "Adds the sides around the shape when the area was asked.",
+        "id": "Menjumlahkan sisi di sekeliling bangun padahal yang ditanya luas."
+      }
+    },
+    {
+      "code": "gave_quotient",
+      "title": {
+        "en": "Gave the quotient for the remainder",
+        "id": "Menyebut hasil bagi untuk sisa"
+      },
+      "note": {
+        "en": "Answers with how many groups when the question asks what is left over.",
+        "id": "Menjawab banyaknya kelompok padahal yang ditanya sisanya."
+      }
+    },
+    {
+      "code": "gave_smaller_number",
+      "title": {
+        "en": "Gave the smaller number",
+        "id": "Menyebut bilangan yang lebih kecil"
+      },
+      "note": {
+        "en": "Takes the smaller number as the common factor without checking it divides both.",
+        "id": "Mengambil bilangan yang lebih kecil sebagai faktor persekutuan tanpa memeriksa apakah membagi keduanya."
+      }
+    },
+    {
+      "code": "gave_the_number",
+      "title": {
+        "en": "Gave the number itself",
+        "id": "Menyebut bilangannya sendiri"
+      },
+      "note": {
+        "en": "Answers with the whole number instead of one of its prime factors.",
+        "id": "Menjawab dengan bilangan itu sendiri, bukan salah satu faktor primanya."
+      }
+    },
+    {
+      "code": "gave_the_percent",
+      "title": {
+        "en": "Gave the percent",
+        "id": "Menyebut persennya"
+      },
+      "note": {
+        "en": "Answers with the percent instead of that part of the number.",
+        "id": "Menjawab dengan persennya, bukan bagian dari bilangan itu."
+      }
+    },
+    {
+      "code": "gave_the_rest",
+      "title": {
+        "en": "Gave the rest",
+        "id": "Menyebut sisanya"
+      },
+      "note": {
+        "en": "Gives the percent left over instead of the part asked.",
+        "id": "Menyebut persen sisanya, bukan bagian yang ditanya."
+      }
+    },
+    {
+      "code": "half_guess",
+      "title": {
+        "en": "Guessed from half",
+        "id": "Menebak dari setengah"
+      },
+      "note": {
+        "en": "Guesses near half of a number instead of finding a factor.",
+        "id": "Menebak sekitar setengah bilangan, bukan mencari faktornya."
+      }
+    },
+    {
+      "code": "halved",
+      "title": {
+        "en": "Halved instead of dividing",
+        "id": "Membagi dua, bukan membagi dengan sisi"
+      },
+      "note": {
+        "en": "Halves the area instead of dividing by the known side.",
+        "id": "Membagi luas dengan dua, bukan dengan sisi yang diketahui."
+      }
+    },
+    {
+      "code": "halved_instead",
+      "title": {
+        "en": "Halved instead of quartering",
+        "id": "Membagi dua, bukan empat"
+      },
+      "note": {
+        "en": "Divides a square's perimeter by 2 instead of 4.",
+        "id": "Membagi keliling persegi dengan 2, bukan 4."
+      }
+    },
+    {
+      "code": "halved_only",
+      "title": {
+        "en": "Halved only",
+        "id": "Hanya membagi dua"
+      },
+      "note": {
+        "en": "Halves the perimeter but does not take the known side away.",
+        "id": "Membagi keliling dengan dua tetapi tidak mengurangi sisi yang diketahui."
+      }
+    },
+    {
+      "code": "hundredths",
+      "title": {
+        "en": "Read as hundredths",
+        "id": "Dibaca perseratusan"
+      },
+      "note": {
+        "en": "Writes tenths as hundredths, like 0.7 as 7/100.",
+        "id": "Menulis persepuluhan sebagai perseratusan, misalnya 0,7 sebagai 7/100."
+      }
+    },
+    {
+      "code": "ignore_decimal_point",
+      "title": {
+        "en": "Ignored the decimal point",
+        "id": "Mengabaikan koma"
+      },
+      "note": {
+        "en": "Adds the digits as whole numbers and loses the point.",
+        "id": "Menjumlahkan angka sebagai bilangan utuh dan komanya hilang."
+      }
+    },
+    {
+      "code": "ignored_brackets",
+      "title": {
+        "en": "Ignored the brackets",
+        "id": "Mengabaikan kurung"
+      },
+      "note": {
+        "en": "Multiplies first although the brackets come first.",
+        "id": "Mengalikan dulu padahal yang dalam kurung harus lebih dulu."
+      }
+    },
+    {
+      "code": "ignored_division",
+      "title": {
+        "en": "Left out the division",
+        "id": "Pembagian terlewat"
+      },
+      "note": {
+        "en": "Skips the division step and adds the numbers as they are.",
+        "id": "Melewatkan langkah pembagian dan menjumlahkan bilangan apa adanya."
+      }
+    },
+    {
+      "code": "ignored_ones",
+      "title": {
+        "en": "Left out the ones",
+        "id": "Satuan terlewat"
+      },
+      "note": {
+        "en": "Adds only the tens and forgets the ones.",
+        "id": "Hanya menjumlahkan puluhan dan lupa satuannya."
+      }
+    },
+    {
+      "code": "inverted",
+      "title": {
+        "en": "Turned the fraction upside down",
+        "id": "Pecahan dibalik"
+      },
+      "note": {
+        "en": "Swaps the numerator and the denominator.",
+        "id": "Menukar pembilang dan penyebut."
+      }
+    },
+    {
+      "code": "kept_centimetres",
+      "title": {
+        "en": "Kept the centimetres",
+        "id": "Tetap dalam sentimeter"
+      },
+      "note": {
+        "en": "Gives the length in centimetres instead of rounding to metres.",
+        "id": "Menyebut panjang dalam sentimeter, bukan membulatkan ke meter."
+      }
+    },
+    {
+      "code": "kept_millimetres",
+      "title": {
+        "en": "Kept the millimetres",
+        "id": "Tetap dalam milimeter"
+      },
+      "note": {
+        "en": "Gives the length in millimetres instead of rounding to centimetres.",
+        "id": "Menyebut panjang dalam milimeter, bukan membulatkan ke sentimeter."
+      }
+    },
+    {
+      "code": "kept_smaller_denominator",
+      "title": {
+        "en": "Kept the smaller denominator",
+        "id": "Mempertahankan penyebut yang kecil"
+      },
+      "note": {
+        "en": "Converts the numerator but keeps the old denominator.",
+        "id": "Mengubah pembilang tetapi tetap memakai penyebut lama."
+      }
+    },
+    {
+      "code": "kept_the_fraction",
+      "title": {
+        "en": "Kept the fraction",
+        "id": "Pecahannya tetap"
+      },
+      "note": {
+        "en": "Takes one whole away but keeps the fraction instead of what is left of it.",
+        "id": "Mengambil satu utuh tetapi pecahannya tetap, bukan sisa dari satu utuh itu."
+      }
+    },
+    {
+      "code": "left_to_right",
+      "title": {
+        "en": "Worked left to right",
+        "id": "Mengerjakan dari kiri ke kanan"
+      },
+      "note": {
+        "en": "Does the operations in reading order instead of multiplying first.",
+        "id": "Mengerjakan operasi sesuai urutan baca, bukan perkalian dulu."
+      }
+    },
+    {
+      "code": "longer_is_larger",
+      "title": {
+        "en": "Longer is larger",
+        "id": "Lebih panjang berarti lebih besar"
+      },
+      "note": {
+        "en": "Thinks a decimal with more digits is larger, like 0.25 more than 0.3.",
+        "id": "Mengira desimal dengan angka lebih banyak lebih besar, misalnya 0,25 lebih dari 0,3."
+      }
+    },
+    {
+      "code": "longest_is_larger",
+      "title": {
+        "en": "Longest is larger",
+        "id": "Paling panjang berarti terbesar"
+      },
+      "note": {
+        "en": "Thinks the decimal with the most digits is the largest.",
+        "id": "Mengira desimal dengan angka paling banyak adalah yang terbesar."
+      }
+    },
+    {
+      "code": "misalign_decimal_places",
+      "title": {
+        "en": "Points not lined up",
+        "id": "Koma tidak sejajar"
+      },
+      "note": {
+        "en": "Lines up the digits from the right instead of lining up the decimal points.",
+        "id": "Menyejajarkan angka dari kanan, bukan menyejajarkan tanda komanya."
+      }
+    },
+    {
+      "code": "misaligned_point",
+      "title": {
+        "en": "Points not lined up",
+        "id": "Koma tidak sejajar"
+      },
+      "note": {
+        "en": "Lines up the last digits instead of the decimal points.",
+        "id": "Menyejajarkan angka terakhir, bukan tanda komanya."
+      }
+    },
+    {
+      "code": "moved_one_place",
+      "title": {
+        "en": "Moved one place only",
+        "id": "Hanya bergeser satu tempat"
+      },
+      "note": {
+        "en": "Moves the digits one place when multiplying or dividing by 100.",
+        "id": "Menggeser angka satu tempat saat mengalikan atau membagi dengan 100."
+      }
+    },
+    {
+      "code": "moved_three_places",
+      "title": {
+        "en": "Moved three places",
+        "id": "Bergeser tiga tempat"
+      },
+      "note": {
+        "en": "Moves the digits three places when multiplying or dividing by 100.",
+        "id": "Menggeser angka tiga tempat saat mengalikan atau membagi dengan 100."
+      }
+    },
+    {
+      "code": "moved_two_places",
+      "title": {
+        "en": "Moved two places",
+        "id": "Bergeser dua tempat"
+      },
+      "note": {
+        "en": "Moves the digits two places when multiplying or dividing by 10.",
+        "id": "Menggeser angka dua tempat saat mengalikan atau membagi dengan 10."
+      }
+    },
+    {
+      "code": "multiplied",
+      "title": {
+        "en": "Multiplied the numbers",
+        "id": "Mengalikan kedua bilangan"
+      },
+      "note": {
+        "en": "Multiplies the two numbers, which is a common multiple but not the least.",
+        "id": "Mengalikan kedua bilangan; hasilnya kelipatan persekutuan, tetapi bukan yang terkecil."
+      }
+    },
+    {
+      "code": "multiplied_both",
+      "title": {
+        "en": "Multiplied top and bottom",
+        "id": "Mengalikan atas dan bawah"
+      },
+      "note": {
+        "en": "Multiplies both parts by the whole number, which leaves the value the same.",
+        "id": "Mengalikan kedua bagian dengan bilangan utuh, jadi nilainya tetap."
+      }
+    },
+    {
+      "code": "multiplied_bottoms_only",
+      "title": {
+        "en": "Multiplied the denominators only",
+        "id": "Hanya mengalikan penyebut"
+      },
+      "note": {
+        "en": "Finds a common denominator but does not change the numerators.",
+        "id": "Mencari penyebut bersama tetapi pembilangnya tidak diubah."
+      }
+    },
+    {
+      "code": "multiplied_by_both",
+      "title": {
+        "en": "Multiplied by both numbers",
+        "id": "Mengalikan dengan kedua bilangan"
+      },
+      "note": {
+        "en": "Multiplies by the numerator and the denominator to find the whole.",
+        "id": "Mengalikan dengan pembilang dan penyebut untuk mencari keseluruhan."
+      }
+    },
+    {
+      "code": "multiplied_by_place",
+      "title": {
+        "en": "Multiplied place by place",
+        "id": "Mengalikan tempat demi tempat"
+      },
+      "note": {
+        "en": "Multiplies tens by tens and ones by ones and leaves out the cross parts.",
+        "id": "Mengalikan puluhan dengan puluhan dan satuan dengan satuan, bagian silangnya terlewat."
+      }
+    },
+    {
+      "code": "multiplied_by_ten",
+      "title": {
+        "en": "Multiplied by ten",
+        "id": "Dikali sepuluh"
+      },
+      "note": {
+        "en": "Multiplies by ten when 10% means dividing by ten.",
+        "id": "Mengalikan dengan sepuluh padahal 10% berarti dibagi sepuluh."
+      }
+    },
+    {
+      "code": "multiplied_denominator",
+      "title": {
+        "en": "Multiplied the denominator",
+        "id": "Mengalikan penyebut"
+      },
+      "note": {
+        "en": "Multiplies the denominator by the whole number instead of the numerator.",
+        "id": "Mengalikan penyebut dengan bilangan utuh, bukan pembilang."
+      }
+    },
+    {
+      "code": "multiplied_fraction_only",
+      "title": {
+        "en": "Multiplied the fraction only",
+        "id": "Hanya mengalikan pecahannya"
+      },
+      "note": {
+        "en": "Multiplies the fraction part of a mixed number and leaves the whole.",
+        "id": "Mengalikan bagian pecahan dari pecahan campuran dan membiarkan bilangan utuhnya."
+      }
+    },
+    {
+      "code": "multiplied_instead",
+      "title": {
+        "en": "Multiplied instead of dividing",
+        "id": "Mengalikan, bukan membagi"
+      },
+      "note": {
+        "en": "Moves the digits the wrong way.",
+        "id": "Menggeser angka ke arah yang salah."
+      }
+    },
+    {
+      "code": "multiplied_one_term",
+      "title": {
+        "en": "Multiplied one term only",
+        "id": "Hanya mengalikan satu suku"
+      },
+      "note": {
+        "en": "Multiplies only one number in the brackets.",
+        "id": "Hanya mengalikan satu bilangan di dalam kurung."
+      }
+    },
+    {
+      "code": "multiplied_only",
+      "title": {
+        "en": "Multiplied without dividing",
+        "id": "Mengalikan tanpa membagi"
+      },
+      "note": {
+        "en": "Multiplies by the numerator and the denominator instead of dividing by the denominator.",
+        "id": "Mengalikan dengan pembilang dan penyebut, bukan membagi dengan penyebut."
+      }
+    },
+    {
+      "code": "multiplied_parts",
+      "title": {
+        "en": "Multiplied the parts",
+        "id": "Mengalikan kedua bagian"
+      },
+      "note": {
+        "en": "Multiplies the numerator and denominator to get a percent.",
+        "id": "Mengalikan pembilang dan penyebut untuk mendapat persen."
+      }
+    },
+    {
+      "code": "multiplied_whole_only",
+      "title": {
+        "en": "Multiplied the whole only",
+        "id": "Hanya mengalikan bilangan utuh"
+      },
+      "note": {
+        "en": "Multiplies the whole part of a mixed number and leaves the fraction.",
+        "id": "Mengalikan bagian utuh pecahan campuran dan membiarkan pecahannya."
+      }
+    },
+    {
+      "code": "multiplied_wrong_parts",
+      "title": {
+        "en": "Multiplied the wrong parts",
+        "id": "Mengalikan bagian yang salah"
+      },
+      "note": {
+        "en": "Multiplies the whole by the numerator instead of the denominator.",
+        "id": "Mengalikan bilangan utuh dengan pembilang, bukan penyebut."
+      }
+    },
+    {
+      "code": "multiply_numerators",
+      "title": {
+        "en": "Multiplied the numerators",
+        "id": "Mengalikan pembilang"
+      },
+      "note": {
+        "en": "Multiplies the numerators when the fractions are to be added.",
+        "id": "Mengalikan pembilang padahal pecahannya harus dijumlahkan."
+      }
+    },
+    {
+      "code": "near_multiple",
+      "title": {
+        "en": "Close to a multiple",
+        "id": "Dekat dengan kelipatan"
+      },
+      "note": {
+        "en": "Picks a number next to a multiple, as if close were enough.",
+        "id": "Memilih bilangan di sebelah kelipatan, seolah-olah dekat sudah cukup."
+      }
+    },
+    {
+      "code": "no_conversion",
+      "title": {
+        "en": "Did not make the denominators equal",
+        "id": "Penyebut tidak disamakan"
+      },
+      "note": {
+        "en": "Adds the numerators over one of the denominators without converting first.",
+        "id": "Menjumlahkan pembilang di atas salah satu penyebut tanpa menyamakan dulu."
+      }
+    },
+    {
+      "code": "not_rounded",
+      "title": {
+        "en": "Did not round",
+        "id": "Tidak membulatkan"
+      },
+      "note": {
+        "en": "Gives the number as it is instead of rounding it.",
+        "id": "Menyebut bilangannya apa adanya, bukan membulatkannya."
+      }
+    },
+    {
+      "code": "numerator_as_hundredths",
+      "title": {
+        "en": "Numerator as hundredths",
+        "id": "Pembilang sebagai perseratusan"
+      },
+      "note": {
+        "en": "Writes the numerator as hundredths whatever the denominator.",
+        "id": "Menulis pembilang sebagai perseratusan apa pun penyebutnya."
+      }
+    },
+    {
+      "code": "numerator_as_tenths",
+      "title": {
+        "en": "Numerator as tenths",
+        "id": "Pembilang sebagai persepuluhan"
+      },
+      "note": {
+        "en": "Writes the numerator after the point whatever the denominator.",
+        "id": "Menulis pembilang di belakang koma apa pun penyebutnya."
+      }
+    },
+    {
+      "code": "numerator_only",
+      "title": {
+        "en": "Gave the numerator",
+        "id": "Menyebut pembilang"
+      },
+      "note": {
+        "en": "Takes the numerator as the percent.",
+        "id": "Menganggap pembilang sebagai persennya."
+      }
+    },
+    {
+      "code": "numerator_times_ten",
+      "title": {
+        "en": "Numerator times ten",
+        "id": "Pembilang dikali sepuluh"
+      },
+      "note": {
+        "en": "Multiplies the numerator by ten whatever the denominator.",
+        "id": "Mengalikan pembilang dengan sepuluh apa pun penyebutnya."
+      }
+    },
+    {
+      "code": "odd_looks_prime",
+      "title": {
+        "en": "Odd so prime",
+        "id": "Ganjil berarti prima"
+      },
+      "note": {
+        "en": "Thinks every odd number is prime, like 9 or 21.",
+        "id": "Mengira semua bilangan ganjil prima, misalnya 9 atau 21."
+      }
+    },
+    {
+      "code": "off_by_one",
+      "title": {
+        "en": "Off by one",
+        "id": "Selisih satu"
+      },
+      "note": {
+        "en": "Gets the method right but counts one too many or too few at the end.",
+        "id": "Caranya benar tetapi di akhir menghitung kelebihan atau kekurangan satu."
+      }
+    },
+    {
+      "code": "off_by_one_tenth",
+      "title": {
+        "en": "One tenth too many",
+        "id": "Kelebihan satu persepuluhan"
+      },
+      "note": {
+        "en": "Adds a carry into the tenths that was not there.",
+        "id": "Menambah simpanan ke persepuluhan yang sebenarnya tidak ada."
+      }
+    },
+    {
+      "code": "off_by_ten",
+      "title": {
+        "en": "Off by ten",
+        "id": "Selisih sepuluh"
+      },
+      "note": {
+        "en": "Adds or takes ten while finding a percent of 100.",
+        "id": "Menambah atau mengurangi sepuluh saat mencari persen dari 100."
+      }
+    },
+    {
+      "code": "one_as_prime",
+      "title": {
+        "en": "Counted 1 as prime",
+        "id": "Menganggap 1 prima"
+      },
+      "note": {
+        "en": "Thinks 1 is a prime number.",
+        "id": "Mengira 1 adalah bilangan prima."
+      }
+    },
+    {
+      "code": "one_big_rectangle",
+      "title": {
+        "en": "Made one big rectangle",
+        "id": "Dijadikan satu persegi panjang besar"
+      },
+      "note": {
+        "en": "Adds the sides of two rectangles before multiplying.",
+        "id": "Menjumlahkan sisi dua persegi panjang sebelum mengalikan."
+      }
+    },
+    {
+      "code": "one_group_extra",
+      "title": {
+        "en": "One group too many",
+        "id": "Kelebihan satu kelompok"
+      },
+      "note": {
+        "en": "Counts one group more than the question has, like 7 x 5 as 7 x 6.",
+        "id": "Menghitung satu kelompok lebih banyak, misalnya 7 x 5 dihitung 7 x 6."
+      }
+    },
+    {
+      "code": "one_group_short",
+      "title": {
+        "en": "One group short",
+        "id": "Kurang satu kelompok"
+      },
+      "note": {
+        "en": "Leaves out one group of the multiplication.",
+        "id": "Satu kelompok perkalian terlewat."
+      }
+    },
+    {
+      "code": "one_group_too_few",
+      "title": {
+        "en": "One group too few",
+        "id": "Kurang satu kelompok"
+      },
+      "note": {
+        "en": "Skip counts one step short of the answer.",
+        "id": "Melompat hitung kurang satu langkah dari jawabannya."
+      }
+    },
+    {
+      "code": "one_group_too_many",
+      "title": {
+        "en": "One group too many",
+        "id": "Kelebihan satu kelompok"
+      },
+      "note": {
+        "en": "Skip counts one step past the answer.",
+        "id": "Melompat hitung satu langkah melewati jawabannya."
+      }
+    },
+    {
+      "code": "one_more_than_top",
+      "title": {
+        "en": "One more than the top",
+        "id": "Satu lebih dari pembilang"
+      },
+      "note": {
+        "en": "Makes the denominator one more than the numerator.",
+        "id": "Membuat penyebut satu lebih besar dari pembilang."
+      }
+    },
+    {
+      "code": "one_part_extra",
+      "title": {
+        "en": "One part too many",
+        "id": "Kelebihan satu bagian"
+      },
+      "note": {
+        "en": "Takes one part more than the fraction asks.",
+        "id": "Mengambil satu bagian lebih banyak dari yang diminta pecahan."
+      }
+    },
+    {
+      "code": "one_row_short",
+      "title": {
+        "en": "One row short",
+        "id": "Kurang satu baris"
+      },
+      "note": {
+        "en": "Leaves out one row of squares.",
+        "id": "Satu baris persegi terlewat."
+      }
+    },
+    {
+      "code": "one_step_short",
+      "title": {
+        "en": "One step short",
+        "id": "Kurang satu langkah"
+      },
+      "note": {
+        "en": "Stops one step before the first common multiple.",
+        "id": "Berhenti satu langkah sebelum kelipatan persekutuan pertama."
+      }
+    },
+    {
+      "code": "one_whole_extra",
+      "title": {
+        "en": "One whole too many",
+        "id": "Kelebihan satu utuh"
+      },
+      "note": {
+        "en": "Counts one whole more when turning a fraction into a mixed number.",
+        "id": "Menghitung satu utuh lebih banyak saat mengubah pecahan menjadi pecahan campuran."
+      }
+    },
+    {
+      "code": "ones_as_tens",
+      "title": {
+        "en": "Ones written as tens",
+        "id": "Satuan ditulis sebagai puluhan"
+      },
+      "note": {
+        "en": "Puts the ones digit in the tens place.",
+        "id": "Menaruh angka satuan di tempat puluhan."
+      }
+    },
+    {
+      "code": "picked_larger",
+      "title": {
+        "en": "Picked the larger",
+        "id": "Memilih yang lebih besar"
+      },
+      "note": {
+        "en": "Picks the larger fraction when the smaller was asked.",
+        "id": "Memilih pecahan yang lebih besar padahal yang diminta lebih kecil."
+      }
+    },
+    {
+      "code": "picked_largest",
+      "title": {
+        "en": "Picked the largest",
+        "id": "Memilih yang terbesar"
+      },
+      "note": {
+        "en": "Picks the largest when the smallest was asked.",
+        "id": "Memilih yang terbesar padahal yang diminta terkecil."
+      }
+    },
+    {
+      "code": "picked_middle",
+      "title": {
+        "en": "Picked the middle one",
+        "id": "Memilih yang tengah"
+      },
+      "note": {
+        "en": "Picks the value in the middle when the smallest or largest was asked.",
+        "id": "Memilih nilai di tengah padahal yang diminta terkecil atau terbesar."
+      }
+    },
+    {
+      "code": "picked_smaller",
+      "title": {
+        "en": "Picked the smaller",
+        "id": "Memilih yang lebih kecil"
+      },
+      "note": {
+        "en": "Picks the smaller fraction when the larger was asked.",
+        "id": "Memilih pecahan yang lebih kecil padahal yang diminta lebih besar."
+      }
+    },
+    {
+      "code": "picked_smallest",
+      "title": {
+        "en": "Picked the smallest",
+        "id": "Memilih yang terkecil"
+      },
+      "note": {
+        "en": "Picks the smallest when the largest was asked.",
+        "id": "Memilih yang terkecil padahal yang diminta terbesar."
+      }
+    },
+    {
+      "code": "place_shift_down",
+      "title": {
+        "en": "Place read one too low",
+        "id": "Tempat dibaca satu lebih rendah"
+      },
+      "note": {
+        "en": "Reads the digit's place one step too small, like tens for hundreds.",
+        "id": "Membaca tempat angka satu tingkat terlalu kecil, misalnya puluhan untuk ratusan."
+      }
+    },
+    {
+      "code": "place_shift_up",
+      "title": {
+        "en": "Place read one too high",
+        "id": "Tempat dibaca satu lebih tinggi"
+      },
+      "note": {
+        "en": "Reads the digit's place one step too large, like thousands for hundreds.",
+        "id": "Membaca tempat angka satu tingkat terlalu besar, misalnya ribuan untuk ratusan."
+      }
+    },
+    {
+      "code": "place_too_high",
+      "title": {
+        "en": "Place value too high",
+        "id": "Nilai tempat terlalu tinggi"
+      },
+      "note": {
+        "en": "Turns tens into hundreds when writing the number.",
+        "id": "Mengubah puluhan menjadi ratusan saat menulis bilangan."
+      }
+    },
+    {
+      "code": "prime_chosen",
+      "title": {
+        "en": "Picked the prime",
+        "id": "Memilih yang prima"
+      },
+      "note": {
+        "en": "Picks a prime when a number that is not prime was asked.",
+        "id": "Memilih bilangan prima padahal yang diminta bukan prima."
+      }
+    },
+    {
+      "code": "rounded_to_hundreds",
+      "title": {
+        "en": "Rounded to hundreds",
+        "id": "Membulatkan ke ratusan"
+      },
+      "note": {
+        "en": "Rounds to the nearest hundred when a larger place was asked.",
+        "id": "Membulatkan ke ratusan terdekat padahal yang diminta tempat yang lebih besar."
+      }
+    },
+    {
+      "code": "rounded_to_ten_thousands",
+      "title": {
+        "en": "Rounded to ten thousands",
+        "id": "Membulatkan ke puluh ribuan"
+      },
+      "note": {
+        "en": "Rounds to the nearest ten thousand when a larger place was asked.",
+        "id": "Membulatkan ke puluh ribuan terdekat padahal yang diminta tempat yang lebih besar."
+      }
+    },
+    {
+      "code": "rounded_to_tens",
+      "title": {
+        "en": "Rounded to tens",
+        "id": "Membulatkan ke puluhan"
+      },
+      "note": {
+        "en": "Rounds to the nearest ten when a larger place was asked.",
+        "id": "Membulatkan ke puluhan terdekat padahal yang diminta tempat yang lebih besar."
+      }
+    },
+    {
+      "code": "rounded_to_thousands",
+      "title": {
+        "en": "Rounded to thousands",
+        "id": "Membulatkan ke ribuan"
+      },
+      "note": {
+        "en": "Rounds to the nearest thousand when a larger place was asked.",
+        "id": "Membulatkan ke ribuan terdekat padahal yang diminta tempat yang lebih besar."
+      }
+    },
+    {
+      "code": "rounded_up",
+      "title": {
+        "en": "Rounded the quotient up",
+        "id": "Membulatkan hasil bagi ke atas"
+      },
+      "note": {
+        "en": "Counts the remainder as one more whole group.",
+        "id": "Menghitung sisa sebagai satu kelompok utuh tambahan."
+      }
+    },
+    {
+      "code": "same_place",
+      "title": {
+        "en": "Put two digits in one place",
+        "id": "Dua angka di satu tempat"
+      },
+      "note": {
+        "en": "Writes two digits into the same place.",
+        "id": "Menulis dua angka di tempat yang sama."
+      }
+    },
+    {
+      "code": "shifted_left",
+      "title": {
+        "en": "Shifted one place left",
+        "id": "Bergeser satu tempat ke kiri"
+      },
+      "note": {
+        "en": "Writes every digit one place too high.",
+        "id": "Menulis setiap angka satu tempat terlalu tinggi."
+      }
+    },
+    {
+      "code": "shorter_is_smaller",
+      "title": {
+        "en": "Shorter is smaller",
+        "id": "Lebih pendek berarti lebih kecil"
+      },
+      "note": {
+        "en": "Thinks a decimal with fewer digits is smaller, like 0.4 less than 0.35.",
+        "id": "Mengira desimal dengan angka lebih sedikit lebih kecil, misalnya 0,4 kurang dari 0,35."
+      }
+    },
+    {
+      "code": "skipped_one",
+      "title": {
+        "en": "Skipped a multiple",
+        "id": "Melompati satu kelipatan"
+      },
+      "note": {
+        "en": "Jumps two steps and misses the next multiple.",
+        "id": "Melompat dua langkah dan melewati kelipatan berikutnya."
+      }
+    },
+    {
+      "code": "smaller_from_larger",
+      "title": {
+        "en": "Took the smaller digit from the larger",
+        "id": "Mengurangi angka kecil dari yang besar"
+      },
+      "note": {
+        "en": "In each column subtracts the smaller digit from the larger instead of borrowing.",
+        "id": "Di tiap kolom mengurangi angka yang lebih kecil dari yang lebih besar, bukan meminjam."
+      }
+    },
+    {
+      "code": "subtracted_both",
+      "title": {
+        "en": "Subtracted both factors",
+        "id": "Mengurangi kedua faktor"
+      },
+      "note": {
+        "en": "Takes away each factor instead of their product.",
+        "id": "Mengurangi masing-masing faktor, bukan hasil kalinya."
+      }
+    },
+    {
+      "code": "subtracted_first",
+      "title": {
+        "en": "Subtracted first",
+        "id": "Mengurangi lebih dulu"
+      },
+      "note": {
+        "en": "Subtracts the middle numbers before doing the multiplications.",
+        "id": "Mengurangi bilangan di tengah sebelum mengerjakan perkalian."
+      }
+    },
+    {
+      "code": "subtracted_four",
+      "title": {
+        "en": "Subtracted four",
+        "id": "Mengurangi empat"
+      },
+      "note": {
+        "en": "Takes 4 away instead of dividing by 4.",
+        "id": "Mengurangi 4, bukan membagi dengan 4."
+      }
+    },
+    {
+      "code": "subtracted_inside",
+      "title": {
+        "en": "Pulled the subtraction into the brackets",
+        "id": "Pengurangan dimasukkan ke kurung"
+      },
+      "note": {
+        "en": "Subtracts inside the brackets before multiplying.",
+        "id": "Mengurangi di dalam kurung sebelum mengalikan."
+      }
+    },
+    {
+      "code": "subtracted_instead",
+      "title": {
+        "en": "Subtracted instead of dividing",
+        "id": "Mengurangi, bukan membagi"
+      },
+      "note": {
+        "en": "Takes the known side away from the area instead of dividing.",
+        "id": "Mengurangi luas dengan sisi yang diketahui, bukan membagi."
+      }
+    },
+    {
+      "code": "subtracted_once",
+      "title": {
+        "en": "Took away one group only",
+        "id": "Hanya mengurangi satu kelompok"
+      },
+      "note": {
+        "en": "Subtracts the divisor once instead of finding how many groups fit.",
+        "id": "Mengurangi pembagi sekali saja, bukan mencari berapa kelompok yang muat."
+      }
+    },
+    {
+      "code": "swapped_places",
+      "title": {
+        "en": "Swapped two places",
+        "id": "Dua tempat tertukar"
+      },
+      "note": {
+        "en": "Writes the tenths and hundredths in each other's place.",
+        "id": "Menulis persepuluhan dan perseratusan di tempat yang tertukar."
+      }
+    },
+    {
+      "code": "ten_groups_short",
+      "title": {
+        "en": "Ten groups short",
+        "id": "Kurang sepuluh kelompok"
+      },
+      "note": {
+        "en": "Leaves out ten groups, often a lost row in long multiplication.",
+        "id": "Sepuluh kelompok terlewat, sering satu baris hilang di perkalian bersusun."
+      }
+    },
+    {
+      "code": "tens_as_ones",
+      "title": {
+        "en": "Tens written as ones",
+        "id": "Puluhan ditulis sebagai satuan"
+      },
+      "note": {
+        "en": "Adds the number of tens as if they were ones.",
+        "id": "Menambahkan banyaknya puluhan seolah-olah satuan."
+      }
+    },
+    {
+      "code": "tens_off",
+      "title": {
+        "en": "Quotient off by ten",
+        "id": "Hasil bagi selisih sepuluh"
+      },
+      "note": {
+        "en": "Puts the quotient's tens digit one too high.",
+        "id": "Angka puluhan hasil bagi terlalu besar satu."
+      }
+    },
+    {
+      "code": "tens_off_by_one",
+      "title": {
+        "en": "Tens off by one",
+        "id": "Puluhan selisih satu"
+      },
+      "note": {
+        "en": "Borrows but does not take the ten away from the tens column.",
+        "id": "Meminjam tetapi tidak mengurangi satu puluhan dari kolom puluhan."
+      }
+    },
+    {
+      "code": "tenths",
+      "title": {
+        "en": "Read as tenths",
+        "id": "Dibaca persepuluhan"
+      },
+      "note": {
+        "en": "Writes hundredths as tenths, like 0.07 as 7/10.",
+        "id": "Menulis perseratusan sebagai persepuluhan, misalnya 0,07 sebagai 7/10."
+      }
+    },
+    {
+      "code": "tenths_as_hundredths",
+      "title": {
+        "en": "Tenths written as hundredths",
+        "id": "Persepuluhan ditulis sebagai perseratusan"
+      },
+      "note": {
+        "en": "Puts every digit after the point one place too low.",
+        "id": "Menaruh setiap angka di belakang koma satu tempat terlalu rendah."
+      }
+    },
+    {
+      "code": "thousands_as_hundreds",
+      "title": {
+        "en": "Thousands written as hundreds",
+        "id": "Ribuan ditulis sebagai ratusan"
+      },
+      "note": {
+        "en": "Puts the thousands digit in the hundreds place.",
+        "id": "Menaruh angka ribuan di tempat ratusan."
+      }
+    },
+    {
+      "code": "thousandths",
+      "title": {
+        "en": "Read as thousandths",
+        "id": "Dibaca perseribuan"
+      },
+      "note": {
+        "en": "Writes hundredths as thousandths.",
+        "id": "Menulis perseratusan sebagai perseribuan."
+      }
+    },
+    {
+      "code": "thousandths_as_hundredths",
+      "title": {
+        "en": "Thousandths written as hundredths",
+        "id": "Perseribuan ditulis sebagai perseratusan"
+      },
+      "note": {
+        "en": "Puts thousandths in the hundredths place.",
+        "id": "Menaruh perseribuan di tempat perseratusan."
+      }
+    },
+    {
+      "code": "took_away_one_part",
+      "title": {
+        "en": "Took one part away",
+        "id": "Membuang satu bagian"
+      },
+      "note": {
+        "en": "Gives what is left after one part instead of the part itself.",
+        "id": "Menyebut sisa setelah satu bagian diambil, bukan bagian itu sendiri."
+      }
+    },
+    {
+      "code": "two_sides_only",
+      "title": {
+        "en": "Added two sides only",
+        "id": "Hanya menjumlahkan dua sisi"
+      },
+      "note": {
+        "en": "Adds one length and one width instead of all four sides.",
+        "id": "Menjumlahkan satu panjang dan satu lebar, bukan keempat sisinya."
+      }
+    },
+    {
+      "code": "unit_part_only",
+      "title": {
+        "en": "Found one part only",
+        "id": "Hanya mencari satu bagian"
+      },
+      "note": {
+        "en": "Divides by the denominator but does not multiply by the numerator.",
+        "id": "Membagi dengan penyebut tetapi tidak mengalikan dengan pembilang."
+      }
+    },
+    {
+      "code": "used_hundred",
+      "title": {
+        "en": "Used a hundred",
+        "id": "Memakai seratus"
+      },
+      "note": {
+        "en": "Converts with 100 when the units are 10 apart.",
+        "id": "Mengonversi dengan 100 padahal satuannya berselisih 10."
+      }
+    },
+    {
+      "code": "used_ten",
+      "title": {
+        "en": "Used ten",
+        "id": "Memakai sepuluh"
+      },
+      "note": {
+        "en": "Converts with 10 when the units are 100 apart.",
+        "id": "Mengonversi dengan 10 padahal satuannya berselisih 100."
+      }
+    },
+    {
+      "code": "used_thousand",
+      "title": {
+        "en": "Used a thousand",
+        "id": "Memakai seribu"
+      },
+      "note": {
+        "en": "Converts with 1000 when the units are 100 apart.",
+        "id": "Mengonversi dengan 1000 padahal satuannya berselisih 100."
+      }
+    },
+    {
+      "code": "whole_as_tenths",
+      "title": {
+        "en": "Whole read as tenths",
+        "id": "Bilangan utuh dibaca persepuluhan"
+      },
+      "note": {
+        "en": "Treats a whole number as tenths when adding.",
+        "id": "Menganggap bilangan utuh sebagai persepuluhan saat menjumlahkan."
+      }
+    },
+    {
+      "code": "whole_number",
+      "title": {
+        "en": "Dropped the denominator",
+        "id": "Penyebut dibuang"
+      },
+      "note": {
+        "en": "Gives the numerator as a whole number, like 3/10 as 3.",
+        "id": "Menyebut pembilang sebagai bilangan utuh, misalnya 3/10 sebagai 3."
+      }
+    },
+    {
+      "code": "wrong_direction",
+      "title": {
+        "en": "Rounded the wrong way",
+        "id": "Membulatkan ke arah yang salah"
+      },
+      "note": {
+        "en": "Rounds up when it should round down, or down when it should round up.",
+        "id": "Membulatkan ke atas padahal seharusnya ke bawah, atau sebaliknya."
+      }
+    }
+  ]
+}

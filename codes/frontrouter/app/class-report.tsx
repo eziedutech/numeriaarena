@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
-import { ClassInsight, type MistakeRow } from "./class-insight";
+import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
 
 /**
@@ -33,6 +33,8 @@ interface Report {
   rows: ReportRow[];
   /** Wrong first tries by the kind of mistake their answer showed. */
   mistakes: (MistakeRow & { source: "class" | "own" })[];
+  /** Title and a sentence for each kind of mistake above that has them. */
+  misconceptions?: Record<string, { title: I18n; note: I18n }>;
 }
 
 /** A skill is called the weakest only with at least this many first tries. */
@@ -142,6 +144,10 @@ export function ClassReport({
   useEffect(load, [base]);
 
   const skillTitle = (code: string) => report?.skills[code]?.[lang] ?? code;
+  const mistake = (code: string): MistakeWords => {
+    const m = report?.misconceptions?.[code];
+    return m ? { title: m.title[lang], note: m.note[lang] } : { title: words(code) };
+  };
   const question = (tpl: Report["templates"][string] | undefined, id: string) =>
     tpl ? (tpl.example?.[lang] ?? blank(tpl.prompt[lang])) : id;
   const rows = (report?.rows ?? []).filter((r) => pick === 0 || r.seat === pick);
@@ -203,7 +209,7 @@ export function ClassReport({
         </p>
       )}
       {report && (
-        <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} seatName={seatName} />
+        <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} mistake={mistake} seatName={seatName} />
       )}
       {report && (
         <div className="report-sources">

@@ -25,7 +25,7 @@ use foldlings_core::race::Phase;
 use foldlings_core::session::SessionError;
 use foldlings_core::setup::RoomSetup;
 use foldlings_core::template::{I18n, ItemTemplate};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
@@ -114,6 +114,26 @@ pub struct Content {
     pub version: String,
     /// Each skill's title by its code, for the teacher's report.
     pub skills: HashMap<String, I18n>,
+    /// Each kind of mistake's title and a sentence for the teacher, by its code.
+    pub misconceptions: HashMap<String, Misconception>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Misconception {
+    pub title: I18n,
+    pub note: I18n,
+}
+
+#[derive(Deserialize)]
+struct MisconceptionFile {
+    misconceptions: Vec<MisconceptionEntry>,
+}
+
+#[derive(Deserialize)]
+struct MisconceptionEntry {
+    code: String,
+    #[serde(flatten)]
+    words: Misconception,
 }
 
 #[derive(Deserialize)]
@@ -172,10 +192,21 @@ impl Content {
                 .collect(),
             Err(_) => HashMap::new(),
         };
+        // Likewise: without the file a mistake shows as its code.
+        let misconceptions = match std::fs::read_to_string(dir.join("misconceptions.json")) {
+            Ok(text) => serde_json::from_str::<MisconceptionFile>(&text)
+                .map_err(|e| format!("misconceptions.json: {e}"))?
+                .misconceptions
+                .into_iter()
+                .map(|m| (m.code, m.words))
+                .collect(),
+            Err(_) => HashMap::new(),
+        };
         Ok(Content {
             templates,
             version,
             skills,
+            misconceptions,
         })
     }
 }

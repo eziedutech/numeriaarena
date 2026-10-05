@@ -64,8 +64,14 @@ const TEXT = {
   },
 };
 
-/** A mistake's code read as words (`added_denominators` as "added denominators"). */
-const words = (code: string) => code.replace(/_/gu, " ");
+/** A mistake's code read as words (`added_denominators` as "added denominators"), for a code with no title yet. */
+export const words = (code: string) => code.replace(/_/gu, " ");
+
+/** A kind of mistake as the teacher reads it: a short title and one sentence. */
+export interface MistakeWords {
+  title: string;
+  note?: string;
+}
 
 function level(right: number, total: number): Level {
   if (total < ENOUGH) return "few";
@@ -79,6 +85,7 @@ export function ClassInsight({
   mistakes,
   whole,
   skillTitle,
+  mistake,
   seatName,
 }: {
   lang: Lang;
@@ -88,6 +95,7 @@ export function ClassInsight({
   /** The whole class, not one seat. */
   whole: boolean;
   skillTitle: (code: string) => string;
+  mistake: (code: string) => MistakeWords;
   seatName: (seat: number) => string;
 }) {
   const t = TEXT[lang];
@@ -167,7 +175,8 @@ export function ClassInsight({
           <ul className="report-missed">
             {topMistakes.map((e) => (
               <li key={`${e.skill} ${e.code}`}>
-                <div>{words(e.code)}</div>
+                <div>{mistake(e.code).title}</div>
+                {mistake(e.code).note && <div className="soft">{mistake(e.code).note}</div>}
                 <div className="soft">
                   {skillTitle(e.skill)} · {whole ? t.students(e.seats.size) : t.times(e.count)}
                 </div>
@@ -187,7 +196,7 @@ export function ClassInsight({
             return (
               <li key={s.code}>
                 <div>{s.level === "practice" ? t.practise(skillTitle(s.code)) : t.keepGoing(skillTitle(s.code))}</div>
-                {m && <div className="soft">{t.watch(words(m.code))}</div>}
+                {m && <div className="soft">{t.watch(mistake(m.code).title.toLowerCase())}</div>}
                 {help.length > 0 && (
                   <div className="soft">
                     {t.help} {help.join(", ")}

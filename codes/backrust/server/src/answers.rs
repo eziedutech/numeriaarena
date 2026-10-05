@@ -263,6 +263,12 @@ pub(crate) async fn class_report(
         })
         .collect();
     let mistakes: Vec<MistakeRow> = sqlx::query_as(MISTAKES_SQL).bind(id).fetch_all(db).await?;
+    let mut words = Map::new();
+    for (_, _, _, code, _) in &mistakes {
+        if let Some(m) = content.misconceptions.get(code) {
+            words.insert(code.clone(), json!(m));
+        }
+    }
     let mistakes: Vec<Value> = mistakes
         .iter()
         .map(|(seat, source, skill, code, count)| {
@@ -275,6 +281,7 @@ pub(crate) async fn class_report(
         "templates": templates,
         "rows": rows,
         "mistakes": mistakes,
+        "misconceptions": words,
     }))
 }
 

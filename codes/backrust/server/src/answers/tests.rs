@@ -27,6 +27,21 @@ fn answer(c: &Content, id: &str, result: &str, attempt: u32) -> Sent {
 }
 
 #[test]
+fn every_kind_of_mistake_in_the_bank_has_words_for_the_teacher() {
+    let c = content();
+    let missing: Vec<_> = c
+        .templates
+        .iter()
+        .flat_map(|t| t.distractors.iter().map(|d| &d.misconception))
+        .filter(|code| !c.misconceptions.contains_key(*code))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "not in misconceptions.json: {missing:?}"
+    );
+}
+
+#[test]
 fn only_answers_to_the_bank_are_kept() {
     let c = content();
     assert!(
