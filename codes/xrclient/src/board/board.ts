@@ -42,8 +42,8 @@ const ABOVE = 84 + 24 + 64 + 10 + FIELD_TOP;
 const COUNT = 9;
 /** After a right answer and after a wrong one, before the next question. */
 const PAUSE_RIGHT = 450;
-const PAUSE_WRONG = 1300;
-/** After a pass, long enough to see the right answer. */
+const PAUSE_WRONG = 800;
+/** After a pass, while the answers dim. */
 const PAUSE_PASS = 500;
 
 const CSS = `
@@ -498,7 +498,7 @@ class Board {
       let box: HTMLElement | null = null;
       if (c.done === null) {
         // A question the player cannot do need not hold them up; it counts as not right
-        // and its answer stays hidden, so a pass never gives one away.
+        // and like a wrong answer it leaves the right one hidden.
         const pass = el('button', 'pass shadow', head);
         pass.textContent = t.pass;
         pass.addEventListener('pointerdown', (e) => {
@@ -550,14 +550,13 @@ class Board {
       // A pass (k is -1) is kept as a wrong answer without a misconception.
       c.answers.push({ q, correct, time_ms: Math.round(performance.now() - c.shownAt), misconception: q.choices[k]?.misconception });
       if (correct) c.right++;
-      // Everything stops, so the player sees which one was right; a pass only dims them.
+      // Everything stops. This is a race, so the right answer is never shown: a right
+      // press glows, a wrong one shakes, and a pass only dims them all.
       box.classList.add('still');
       if (k < 0) box.classList.add('skip');
       else
         for (const b of box.querySelectorAll<HTMLElement>('.tgt')) {
-          if (b.dataset.k === '0') b.classList.add('yes');
-          else if (b.dataset.k === String(k)) b.classList.add('no');
-          if (b.dataset.k === String(k)) b.classList.add('hit');
+          if (b.dataset.k === String(k)) b.classList.add(correct ? 'yes' : 'no', 'hit');
         }
       this.timers.push(
         window.setTimeout(
