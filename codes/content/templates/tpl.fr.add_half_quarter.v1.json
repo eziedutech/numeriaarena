@@ -55,6 +55,13 @@
     },
     "balloon_burst": {
       "choices": 4
+    },
+    "bridge_builder": {
+      "max_planks": 3,
+      "decoys": 3
+    },
+    "balance_gate": {
+      "unknown_side": "right"
     }
   },
   "tags": [

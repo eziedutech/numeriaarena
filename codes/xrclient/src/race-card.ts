@@ -42,8 +42,14 @@ const LATER_ALPHA = 0.42;
 const CREAM = '#fff8ec';
 const DONE = '#2f7d32';
 const LATE = '#c62828';
-/** Round colours: balloons coral, crystals cobalt, the boss its own violet. */
-const GAME_COLOR: Record<GameKind, string> = { balloon_burst: '#f2716b', orb_forge: '#3469c4' };
+/** Round colours: balloons coral, crystals cobalt, gates purple, planks amber, weights green, the boss its own violet. */
+const GAME_COLOR: Record<GameKind, string> = {
+  balloon_burst: '#f2716b',
+  orb_forge: '#3469c4',
+  factory_sort: '#9b6bc2',
+  bridge_builder: '#e0a33c',
+  balance_gate: '#5aa469',
+};
 const BOSS_COLOR = '#6d597a';
 /** Stone-grey paper for an animal that got away: white would vanish on the card. */
 const MISSED_PAPER = 0xb9b2a3;

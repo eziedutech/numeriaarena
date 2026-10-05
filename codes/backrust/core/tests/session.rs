@@ -260,8 +260,8 @@ fn sessions_are_deterministic_and_reject_unsupported_games() {
         );
     }
     assert_eq!(
-        a.next(GameType::BalanceGate).err(),
-        Some(SessionError::NoItemForGame(GameType::BalanceGate))
+        a.next(GameType::MeasureHunt).err(),
+        Some(SessionError::NoItemForGame(GameType::MeasureHunt))
     );
 }
 
@@ -298,4 +298,93 @@ fn balloon_count_follows_the_chosen_template() {
         s.close(offer.offer_id);
     }
     assert!(seen_three, "the easy template was never chosen");
+}
+
+/// Every template in the pack, for the games that need the pack's adapters.
+fn pack(seed: u64) -> SoloSession {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/templates");
+    let mut templates = Vec::new();
+    for e in std::fs::read_dir(dir).unwrap() {
+        let text = std::fs::read_to_string(e.unwrap().path()).unwrap();
+        templates.push(ItemTemplate::from_json(&text).unwrap());
+    }
+    let cfg = SessionConfig {
+        seed,
+        grade: Some(5),
+        candidates: 12,
+        timed: true,
+        expected_answer_ms: 8000.0,
+        player_id: "test".into(),
+        content_pack_version: "cp-test".into(),
+    };
+    SoloSession::new(templates, cfg, FairnessParams::default())
+        .unwrap()
+        .0
+}
+
+#[test]
+fn factory_sort_numbers_go_through_their_gate() {
+    let mut s = pack(21);
+    let mut seen = [0u32; 2];
+    for _ in 0..200 {
+        let offer = s.next(GameType::FactorySort).unwrap();
+        assert_eq!(offer.gates.len(), 2);
+        assert!(offer.target.is_some() && offer.balloons.is_empty());
+        let key = s.answer_key(offer.offer_id).unwrap()[0];
+        seen[key] += 1;
+        let wrong = 1 - key;
+        let v = s.answer_sort(offer.offer_id, wrong, 4000.0, 0.0).unwrap();
+        assert!(!v.correct && v.retry_allowed);
+        assert_eq!(v.expected_gate, Some(key));
+        assert!(s.answer_sort(offer.offer_id, 2, 4000.0, 0.0).is_err());
+        let v = s.answer_sort(offer.offer_id, key, 4000.0, 0.0).unwrap();
+        assert!(v.correct);
+    }
+    // Each gate comes up about as often.
+    assert!(seen[0] > 70 && seen[1] > 70, "{seen:?}");
+    let events = s.drain_events();
+    assert!(events.iter().all(|e| e.game_type == GameType::FactorySort));
+}
+
+#[test]
+fn bridge_planks_add_up_to_the_gap() {
+    let mut s = pack(22);
+    let mut three = 0;
+    for _ in 0..200 {
+        let offer = s.next(GameType::BridgeBuilder).unwrap();
+        assert_eq!(offer.max_crystals, 3);
+        let gap = offer.target.clone().unwrap();
+        let gap = Rational::new(gap.num, gap.den).unwrap();
+        let key = s.answer_key(offer.offer_id).expect("a bridge can be built");
+        let sum = key.iter().fold(Rational::ZERO, |a, &i| {
+            a.checked_add(&Rational::new(offer.crystals[i].num, offer.crystals[i].den).unwrap())
+                .unwrap()
+        });
+        assert_eq!(sum, gap);
+        if key.len() == 3 {
+            three += 1;
+        }
+        let v = s.answer_bridge(offer.offer_id, &key, 5000.0, 0.0).unwrap();
+        assert!(v.correct, "{offer:?}");
+        assert!(v.built_text.is_some());
+    }
+    assert!(three > 0, "some bridges need three planks");
+}
+
+#[test]
+fn balance_gate_has_one_right_weight_of_three() {
+    let mut s = pack(23);
+    for _ in 0..200 {
+        let offer = s.next(GameType::BalanceGate).unwrap();
+        assert_eq!(offer.balloons.len(), 3, "{:?}", offer.balloons);
+        assert!(offer.prompt.en.ends_with("= ?"), "{}", offer.prompt.en);
+        let key = s.answer_key(offer.offer_id).unwrap()[0];
+        assert!(offer.balloons[key].misconception.is_none());
+        assert!(
+            s.answer_balloon(offer.offer_id, key, 1.0, 0.0).is_err(),
+            "a weight is not a balloon"
+        );
+        let v = s.answer_balance(offer.offer_id, key, 5000.0, 0.0).unwrap();
+        assert!(v.correct);
+    }
 }

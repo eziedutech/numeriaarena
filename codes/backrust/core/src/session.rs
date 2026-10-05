@@ -74,15 +74,19 @@ pub struct Offer {
     pub band: Band,
     pub p_final: f64,
     pub show_demo: bool,
-    /// Orb Forge: the value on the creature's shield.
+    /// Orb Forge: the value on the creature's shield. Bridge Builder: the
+    /// gap's length. Factory Sort: the number the creature carries.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<NumberView>,
-    /// Balloon Burst: shuffled options.
+    /// Balloon Burst: shuffled options. Balance Gate: the weights to pick from.
     pub balloons: Vec<BalloonView>,
-    /// Orb Forge: crystals the player can merge.
+    /// Orb Forge: crystals the player can merge. Bridge Builder: planks.
     pub crystals: Vec<NumberView>,
-    /// Orb Forge: how many crystals an orb may hold.
+    /// Orb Forge: how many crystals an orb may hold. Bridge Builder: planks a bridge may hold.
     pub max_crystals: u32,
+    /// Factory Sort: the gates' labels, in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gates: Vec<I18n>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -96,9 +100,12 @@ pub struct Verdict {
     pub expected_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub misconception: Option<String>,
-    /// Orb Forge: value of the orb the player built.
+    /// Orb Forge, Bridge Builder: value of what the player built.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub built_text: Option<String>,
+    /// Factory Sort: the gate the number belongs in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_gate: Option<usize>,
     pub streak: u32,
     pub total_points: u32,
 }
@@ -157,7 +164,8 @@ struct Open {
     offer: Offer,
     item: Item,
     expected: Rational,
-    correct_balloon: usize,
+    /// The right balloon or weight, or Factory Sort's right gate.
+    correct_choice: usize,
     balloon_values: Vec<Option<String>>,
     crystal_values: Vec<Rational>,
     attempt: u32,
@@ -190,6 +198,19 @@ fn adapter_key(game: GameType) -> &'static str {
         GameType::MeasureHunt => "measure_hunt",
     }
 }
+
+/// Options a player picks from in a choice game, for the chance of a lucky guess.
+pub(crate) fn guess_choices(game: GameType) -> Option<u32> {
+    match game {
+        GameType::BalloonBurst => Some(4),
+        GameType::BalanceGate => Some(BALANCE_WEIGHTS as u32),
+        GameType::FactorySort => Some(2),
+        _ => None,
+    }
+}
+
+/// Weights on Balance Gate's table: the right one and two that look close.
+const BALANCE_WEIGHTS: usize = 3;
 
 fn adapter_u32(t: &ItemTemplate, game: GameType, key: &str, default: u32) -> u32 {
     t.game_adapters
@@ -255,7 +276,11 @@ impl SoloSession {
                 .get("ops")
                 .and_then(|o| o.as_array())
                 .is_some_and(|ops| ops.iter().any(|op| op == "+"));
-        value_answer && ops_fit
+        match game {
+            GameType::FactorySort => ct.source.answer_kind == AnswerKind::Predicate,
+            GameType::MeasureHunt => false,
+            _ => value_answer && ops_fit,
+        }
     }
 
     /// Skill first (uniform for now), then `count` candidate items from that skill.
@@ -314,7 +339,7 @@ impl SoloSession {
         }
         let (_, mut items) = Self::draw(&self.templates, &usable, self.cfg.candidates, rng);
         let cands = Self::keyed(&items);
-        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let choices = guess_choices(game);
         let at = Situation {
             rating,
             game,
@@ -374,8 +399,12 @@ impl SoloSession {
         let (skill, mut items) = loop {
             let (skill, mut items) =
                 Self::draw(&self.templates, &usable, self.cfg.candidates, &mut self.rng);
-            if game == GameType::OrbForge {
-                items.retain(|(ti, item)| orb_buildable(&self.templates[*ti], item));
+            match game {
+                GameType::OrbForge | GameType::BridgeBuilder => {
+                    items.retain(|(ti, item)| orb_buildable(&self.templates[*ti], item));
+                }
+                GameType::FactorySort => items.retain(|(_, item)| !item.sort_items.is_empty()),
+                _ => {}
             }
             draws += 1;
             if !items.is_empty() || draws >= 8 {
@@ -395,7 +424,7 @@ impl SoloSession {
                 4,
             ))
         } else {
-            None
+            guess_choices(game)
         };
         let at = Situation {
             rating: self.rating(&skill),
@@ -413,13 +442,16 @@ impl SoloSession {
         }
 
         let ct = &self.templates[ti];
-        let answer = item
-            .answer
-            .clone()
-            .expect("value templates always have an answer");
-        let raw_den = answer.raw_den.unwrap_or(1);
-        let expected = Rational::new(answer.num.unwrap_or(0), answer.den.unwrap_or(1))
-            .expect("answers have a positive denominator");
+        // Factory Sort's items have no answer of their own: each number has a gate.
+        let (answer_text, raw_den, expected) = match &item.answer {
+            Some(a) => (
+                a.text.clone(),
+                a.raw_den.unwrap_or(1),
+                Rational::new(a.num.unwrap_or(0), a.den.unwrap_or(1))
+                    .expect("answers have a positive denominator"),
+            ),
+            None => (String::new(), 1, Rational::ZERO),
+        };
         let fmt = ct.distractor_format();
 
         let offer_id = self.next_id;
@@ -437,57 +469,36 @@ impl SoloSession {
             balloons: Vec::new(),
             crystals: Vec::new(),
             max_crystals: 2,
+            gates: Vec::new(),
         };
         let mut open = Open {
             offer: offer.clone(),
             item: item.clone(),
             expected,
-            correct_balloon: 0,
+            correct_choice: 0,
             balloon_values: Vec::new(),
             crystal_values: Vec::new(),
             attempt: 1,
         };
 
         match game {
-            GameType::BalloonBurst => {
+            GameType::BalloonBurst | GameType::BalanceGate => {
                 // The chosen template decides how many balloons, not the first candidate.
-                let n = adapter_u32(&ct.source, game, "choices", 4).max(2) as usize;
-                let mut opts: Vec<(Rational, String, Option<String>)> =
-                    vec![(expected, answer.text.clone(), None)];
-                for d in &item.distractors {
-                    if opts.len() >= n {
-                        break;
-                    }
-                    let v = Rational::new(d.num, d.den).expect("valid distractor");
-                    opts.push((v, d.text.clone(), Some(d.misconception.clone())));
-                }
-                let step = unit_step(&expected, raw_den, fmt);
-                let mut k = 1i128;
-                while opts.len() < n && k < 40 {
-                    for sign in [1i128, -1] {
-                        if opts.len() >= n {
-                            break;
-                        }
-                        let Ok(delta) = step.checked_mul(&Rational::int(sign * k)) else {
-                            continue;
-                        };
-                        let Ok(v) = expected.checked_add(&delta) else {
-                            continue;
-                        };
-                        if v.is_negative()
-                            || v == Rational::ZERO
-                            || opts.iter().any(|(w, _, _)| *w == v)
-                        {
-                            continue;
-                        }
-                        if let Some(text) = show(&v, raw_den, fmt) {
-                            opts.push((v, text, None));
-                        }
-                    }
-                    k += 1;
-                }
-                shuffle(&mut opts, &mut self.rng);
-                open.correct_balloon = opts
+                let n = if game == GameType::BalloonBurst {
+                    adapter_u32(&ct.source, game, "choices", 4).max(2) as usize
+                } else {
+                    BALANCE_WEIGHTS
+                };
+                let opts = options(
+                    &item,
+                    expected,
+                    &answer_text,
+                    raw_den,
+                    fmt,
+                    n,
+                    &mut self.rng,
+                );
+                open.correct_choice = opts
                     .iter()
                     .position(|(v, _, m)| *v == expected && m.is_none())
                     .unwrap_or(0);
@@ -500,45 +511,28 @@ impl SoloSession {
                     })
                     .collect();
             }
-            GameType::OrbForge => {
-                let max = adapter_u32(&ct.source, game, "max_crystals", 2).clamp(2, 4);
-                let decoys = adapter_u32(&ct.source, game, "decoys", 3) as usize;
-                // Decoys step by `step`; the two exact parts by `split`.
-                let step = orb_step(&expected, raw_den, fmt);
-                let (split, units) = orb_split(&expected, raw_den, fmt);
-                let mut values: Vec<Rational> = Vec::new();
-                if units >= 2 {
-                    let k = self.rng.int_between(1, units - 1).unwrap_or(1);
-                    values.push(split.checked_mul(&Rational::int(k)).expect("small"));
-                    values.push(split.checked_mul(&Rational::int(units - k)).expect("small"));
+            GameType::OrbForge | GameType::BridgeBuilder => {
+                let (max, decoys, pieces) = if game == GameType::OrbForge {
+                    let max = adapter_u32(&ct.source, game, "max_crystals", 2).clamp(2, 4);
+                    (max, adapter_u32(&ct.source, game, "decoys", 3), 2)
                 } else {
-                    values.push(expected);
-                }
-                let base = values[0];
-                let mut j = 1i128;
-                while values.len() < 2 + decoys && j < 40 {
-                    for sign in [1i128, -1] {
-                        if values.len() >= 2 + decoys {
-                            break;
-                        }
-                        let Ok(delta) = step.checked_mul(&Rational::int(sign * j)) else {
-                            continue;
-                        };
-                        let Ok(v) = base.checked_add(&delta) else {
-                            continue;
-                        };
-                        if v.is_negative()
-                            || v == Rational::ZERO
-                            || values.contains(&v)
-                            || v == expected
-                        {
-                            continue;
-                        }
-                        values.push(v);
-                    }
-                    j += 1;
-                }
-                shuffle(&mut values, &mut self.rng);
+                    let max = adapter_u32(&ct.source, game, "max_planks", 3).clamp(2, 4);
+                    // A bridge of three planks now and then, when it may hold three.
+                    let pieces = if max >= 3 && self.rng.below(2) == 1 {
+                        3
+                    } else {
+                        2
+                    };
+                    (max, adapter_u32(&ct.source, game, "decoys", 3), pieces)
+                };
+                let values = parts(
+                    &expected,
+                    raw_den,
+                    fmt,
+                    pieces,
+                    decoys as usize,
+                    &mut self.rng,
+                );
                 offer.crystals = values
                     .iter()
                     .map(|v| NumberView {
@@ -548,12 +542,29 @@ impl SoloSession {
                     })
                     .collect();
                 offer.target = Some(NumberView {
-                    text: answer.text.clone(),
+                    text: answer_text.clone(),
                     num: expected.num(),
                     den: expected.den(),
                 });
                 offer.max_crystals = max;
                 open.crystal_values = values;
+            }
+            GameType::FactorySort => {
+                // The gate is drawn first, so each gate comes up about as often.
+                let mut gates: Vec<usize> = item.sort_items.iter().map(|s| s.gate).collect();
+                gates.sort_unstable();
+                gates.dedup();
+                let gate = gates[self.rng.below(gates.len() as u64) as usize];
+                let these: Vec<_> = item.sort_items.iter().filter(|s| s.gate == gate).collect();
+                let one = these[self.rng.below(these.len() as u64) as usize];
+                offer.target = Some(NumberView {
+                    text: one.text.clone(),
+                    num: one.num,
+                    den: one.den,
+                });
+                offer.gates = item.gates.clone();
+                open.correct_choice = gate;
+                open.expected = Rational::new(one.num, one.den).expect("valid item");
             }
             other => return Err(SessionError::NoItemForGame(other)),
         }
@@ -569,28 +580,73 @@ impl SoloSession {
         time_ms: f64,
         now_ms: f64,
     ) -> Result<Verdict, SessionError> {
+        self.answer_choice(GameType::BalloonBurst, offer_id, index, time_ms, now_ms)
+    }
+
+    /// Balance Gate: the weight put on the empty pan.
+    pub fn answer_balance(
+        &mut self,
+        offer_id: u32,
+        index: usize,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<Verdict, SessionError> {
+        self.answer_choice(GameType::BalanceGate, offer_id, index, time_ms, now_ms)
+    }
+
+    fn check_open(&self, game: GameType, offer_id: u32) -> Result<&Open, SessionError> {
         let open = self
             .open
             .get(&offer_id)
             .ok_or(SessionError::UnknownOffer(offer_id))?;
-        if open.offer.game != GameType::BalloonBurst {
+        if open.offer.game != game {
             return Err(SessionError::WrongGame {
                 offer: offer_id,
                 expected: open.offer.game,
             });
         }
+        Ok(open)
+    }
+
+    fn answer_choice(
+        &mut self,
+        game: GameType,
+        offer_id: u32,
+        index: usize,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<Verdict, SessionError> {
+        let open = self.check_open(game, offer_id)?;
         if index >= open.offer.balloons.len() {
             return Err(SessionError::BadChoice(format!(
-                "balloon {index} does not exist"
+                "choice {index} does not exist"
             )));
         }
-        let correct = index == open.correct_balloon;
+        let correct = index == open.correct_choice;
         let misconception = if correct {
             None
         } else {
             open.balloon_values[index].clone()
         };
         self.judge(offer_id, correct, misconception, None, time_ms, now_ms)
+    }
+
+    /// Factory Sort: the gate the player sent the creature through.
+    pub fn answer_sort(
+        &mut self,
+        offer_id: u32,
+        gate: usize,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<Verdict, SessionError> {
+        let open = self.check_open(GameType::FactorySort, offer_id)?;
+        if gate >= open.offer.gates.len() {
+            return Err(SessionError::BadChoice(format!(
+                "gate {gate} does not exist"
+            )));
+        }
+        let correct = gate == open.correct_choice;
+        self.judge(offer_id, correct, None, None, time_ms, now_ms)
     }
 
     pub fn answer_orb(
@@ -600,16 +656,29 @@ impl SoloSession {
         time_ms: f64,
         now_ms: f64,
     ) -> Result<Verdict, SessionError> {
-        let open = self
-            .open
-            .get(&offer_id)
-            .ok_or(SessionError::UnknownOffer(offer_id))?;
-        if open.offer.game != GameType::OrbForge {
-            return Err(SessionError::WrongGame {
-                offer: offer_id,
-                expected: open.offer.game,
-            });
-        }
+        self.answer_sum(GameType::OrbForge, offer_id, crystals, time_ms, now_ms)
+    }
+
+    /// Bridge Builder: the planks laid across the gap.
+    pub fn answer_bridge(
+        &mut self,
+        offer_id: u32,
+        planks: &[usize],
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<Verdict, SessionError> {
+        self.answer_sum(GameType::BridgeBuilder, offer_id, planks, time_ms, now_ms)
+    }
+
+    fn answer_sum(
+        &mut self,
+        game: GameType,
+        offer_id: u32,
+        crystals: &[usize],
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<Verdict, SessionError> {
+        let open = self.check_open(game, offer_id)?;
         let mut seen = crystals.to_vec();
         seen.sort_unstable();
         seen.dedup();
@@ -618,7 +687,7 @@ impl SoloSession {
             || crystals.len() > open.offer.max_crystals as usize
         {
             return Err(SessionError::BadChoice(
-                "an orb needs 1 to max_crystals different crystals".into(),
+                "an orb or bridge needs 1 to max_crystals different parts".into(),
             ));
         }
         let mut sum = Rational::ZERO;
@@ -626,7 +695,7 @@ impl SoloSession {
             let v = open
                 .crystal_values
                 .get(i)
-                .ok_or_else(|| SessionError::BadChoice(format!("crystal {i} does not exist")))?;
+                .ok_or_else(|| SessionError::BadChoice(format!("part {i} does not exist")))?;
             sum = sum
                 .checked_add(v)
                 .map_err(|e| SessionError::BadChoice(e.to_string()))?;
@@ -720,20 +789,25 @@ impl SoloSession {
         });
 
         let retry_allowed = !correct && attempt == 1;
+        let sorting = open.offer.game == GameType::FactorySort;
         let verdict = Verdict {
             offer_id,
             correct,
             points: pts,
             attempt,
             retry_allowed,
-            expected_text: open
-                .item
-                .answer
-                .as_ref()
-                .map(|a| a.text.clone())
-                .unwrap_or_default(),
+            expected_text: match &open.offer.target {
+                Some(t) if sorting => t.text.clone(),
+                _ => open
+                    .item
+                    .answer
+                    .as_ref()
+                    .map(|a| a.text.clone())
+                    .unwrap_or_default(),
+            },
             misconception,
             built_text,
+            expected_gate: sorting.then_some(open.correct_choice),
             streak: self.streak,
             total_points: self.total_points,
         };
@@ -751,16 +825,29 @@ impl SoloSession {
     pub fn answer_key(&self, offer_id: u32) -> Option<Vec<usize>> {
         let open = self.open.get(&offer_id)?;
         match open.offer.game {
-            GameType::BalloonBurst => Some(vec![open.correct_balloon]),
-            GameType::OrbForge => {
+            GameType::BalloonBurst | GameType::BalanceGate | GameType::FactorySort => {
+                Some(vec![open.correct_choice])
+            }
+            GameType::OrbForge | GameType::BridgeBuilder => {
                 let v = &open.crystal_values;
-                if let Some(i) = v.iter().position(|x| *x == open.expected) {
-                    return Some(vec![i]);
-                }
-                for i in 0..v.len() {
-                    for j in i + 1..v.len() {
-                        if v[i].checked_add(&v[j]).ok() == Some(open.expected) {
-                            return Some(vec![i, j]);
+                // Fewest parts first, each size in order.
+                for size in 1..=(open.offer.max_crystals as usize).min(v.len()) {
+                    let mut pick: Vec<usize> = (0..size).collect();
+                    loop {
+                        let sum = pick
+                            .iter()
+                            .try_fold(Rational::ZERO, |a, &i| a.checked_add(&v[i]).ok());
+                        if sum == Some(open.expected) {
+                            return Some(pick);
+                        }
+                        // The next `size` indices in order.
+                        let Some(k) = (0..size).rev().find(|&k| pick[k] < v.len() - size + k)
+                        else {
+                            break;
+                        };
+                        pick[k] += 1;
+                        for j in k + 1..size {
+                            pick[j] = pick[j - 1] + 1;
                         }
                     }
                 }
@@ -779,6 +866,104 @@ impl SoloSession {
     pub fn close(&mut self, offer_id: u32) -> bool {
         self.open.remove(&offer_id).is_some()
     }
+}
+
+/// The right answer with its distractors, then near values, shuffled: as
+/// many options as `n`, each with its value, text and mistake.
+fn options(
+    item: &Item,
+    expected: Rational,
+    answer_text: &str,
+    raw_den: i128,
+    fmt: Option<NumberFormat>,
+    n: usize,
+    rng: &mut Rng,
+) -> Vec<(Rational, String, Option<String>)> {
+    let mut opts: Vec<(Rational, String, Option<String>)> =
+        vec![(expected, answer_text.to_string(), None)];
+    for d in &item.distractors {
+        if opts.len() >= n {
+            break;
+        }
+        let v = Rational::new(d.num, d.den).expect("valid distractor");
+        opts.push((v, d.text.clone(), Some(d.misconception.clone())));
+    }
+    let step = unit_step(&expected, raw_den, fmt);
+    let mut k = 1i128;
+    while opts.len() < n && k < 40 {
+        for sign in [1i128, -1] {
+            if opts.len() >= n {
+                break;
+            }
+            let Ok(delta) = step.checked_mul(&Rational::int(sign * k)) else {
+                continue;
+            };
+            let Ok(v) = expected.checked_add(&delta) else {
+                continue;
+            };
+            if v.is_negative() || v == Rational::ZERO || opts.iter().any(|(w, _, _)| *w == v) {
+                continue;
+            }
+            if let Some(text) = show(&v, raw_den, fmt) {
+                opts.push((v, text, None));
+            }
+        }
+        k += 1;
+    }
+    shuffle(&mut opts, rng);
+    opts
+}
+
+/// The parts an answer is built from (Orb Forge's crystals, Bridge Builder's
+/// planks): `pieces` of them that add up to it when the answer allows, and
+/// `decoys` more that step like them, shuffled.
+fn parts(
+    expected: &Rational,
+    raw_den: i128,
+    fmt: Option<NumberFormat>,
+    pieces: i128,
+    decoys: usize,
+    rng: &mut Rng,
+) -> Vec<Rational> {
+    // Decoys step by `step`; the exact parts by `split`.
+    let step = orb_step(expected, raw_den, fmt);
+    let (split, units) = orb_split(expected, raw_den, fmt);
+    let pieces = pieces.min(units);
+    let mut values: Vec<Rational> = Vec::new();
+    if pieces >= 2 {
+        let mut left = units;
+        for after in (1..pieces).rev() {
+            let k = rng.int_between(1, left - after).unwrap_or(1);
+            values.push(split.checked_mul(&Rational::int(k)).expect("small"));
+            left -= k;
+        }
+        values.push(split.checked_mul(&Rational::int(left)).expect("small"));
+    } else {
+        values.push(*expected);
+    }
+    let base = values[0];
+    let want = values.len().max(2) + decoys;
+    let mut j = 1i128;
+    while values.len() < want && j < 40 {
+        for sign in [1i128, -1] {
+            if values.len() >= want {
+                break;
+            }
+            let Ok(delta) = step.checked_mul(&Rational::int(sign * j)) else {
+                continue;
+            };
+            let Ok(v) = base.checked_add(&delta) else {
+                continue;
+            };
+            if v.is_negative() || v == Rational::ZERO || values.contains(&v) || v == *expected {
+                continue;
+            }
+            values.push(v);
+        }
+        j += 1;
+    }
+    shuffle(&mut values, rng);
+    values
 }
 
 /// How Orb Forge cuts an answer into two crystals: the size of one part

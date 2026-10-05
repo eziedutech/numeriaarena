@@ -421,6 +421,18 @@ export class ClassRace {
     return this.judge({ type: 'answer_orb', offer_id: offerId, crystals });
   }
 
+  answerBalance(offerId: number, index: number): Promise<RaceVerdict> {
+    return this.judge({ type: 'answer_balance', offer_id: offerId, index });
+  }
+
+  answerSort(offerId: number, gate: number): Promise<RaceVerdict> {
+    return this.judge({ type: 'answer_sort', offer_id: offerId, gate });
+  }
+
+  answerBridge(offerId: number, planks: number[]): Promise<RaceVerdict> {
+    return this.judge({ type: 'answer_bridge', offer_id: offerId, planks });
+  }
+
   private judge(msg: object): Promise<RaceVerdict> {
     if (this.judging || !this.ws) return Promise.reject(new Error(this.ws ? 'busy' : 'disconnected'));
     return new Promise((resolve, reject) => {

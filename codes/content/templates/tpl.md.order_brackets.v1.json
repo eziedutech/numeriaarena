@@ -67,6 +67,9 @@
     },
     "balloon_burst": {
       "choices": 4
+    },
+    "balance_gate": {
+      "unknown_side": "right"
     }
   },
   "tags": [

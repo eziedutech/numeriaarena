@@ -786,6 +786,8 @@ impl CompiledTemplate {
                     sort_items.push(SortItem {
                         text: format_auto(&x),
                         gate,
+                        num: x.num(),
+                        den: x.den(),
                     });
                 }
             }
@@ -1026,6 +1028,8 @@ pub struct DistractorOut {
 pub struct SortItem {
     pub text: String,
     pub gate: usize,
+    pub num: i128,
+    pub den: i128,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]

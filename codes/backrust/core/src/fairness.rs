@@ -167,11 +167,16 @@ impl Rating {
 }
 
 /// Chance of a correct answer, with guessing for choice games.
-/// `choices` is the number of options in Balloon Burst, `None` elsewhere.
+/// `choices` is the number of options in Balloon Burst, Balance Gate and
+/// Factory Sort, `None` elsewhere.
 pub fn p_correct(theta: f64, b: f64, game: GameType, choices: Option<u32>) -> f64 {
     let p = 1.0 / (1.0 + (-(theta - b) * game.discrimination()).exp());
     let c = match (game, choices) {
-        (GameType::BalloonBurst, Some(n)) if n > 0 => 1.0 / n as f64,
+        (GameType::BalloonBurst | GameType::BalanceGate | GameType::FactorySort, Some(n))
+            if n > 0 =>
+        {
+            1.0 / n as f64
+        }
         _ => 0.0,
     };
     c + (1.0 - c) * p

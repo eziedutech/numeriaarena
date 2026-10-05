@@ -48,6 +48,18 @@ pub enum ClientMsg {
         offer_id: u32,
         crystals: Vec<usize>,
     },
+    AnswerSort {
+        offer_id: u32,
+        gate: usize,
+    },
+    AnswerBalance {
+        offer_id: u32,
+        index: usize,
+    },
+    AnswerBridge {
+        offer_id: u32,
+        planks: Vec<usize>,
+    },
     /// A watcher cheers the room on; at most one every 10 s.
     Cheer,
 }

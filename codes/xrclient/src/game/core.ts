@@ -1,7 +1,12 @@
 import init, { GameSession, RaceGame, coreVersion } from '../wasm/pkg/foldlings_core.js';
 
 /** Shapes returned by the Rust core (see backrust/core/src/session.rs). */
-export type GameKind = 'balloon_burst' | 'orb_forge';
+export type GameKind = 'balloon_burst' | 'orb_forge' | 'factory_sort' | 'bridge_builder' | 'balance_gate';
+
+/** Games answered by picking one choice (a balloon, a weight, a gate). */
+export const PICK_GAMES: readonly GameKind[] = ['balloon_burst', 'balance_gate', 'factory_sort'];
+/** Games answered by putting pieces together (crystals, planks). */
+export const BUILD_GAMES: readonly GameKind[] = ['orb_forge', 'bridge_builder'];
 
 export interface NumberView {
   text: string;
@@ -18,10 +23,15 @@ export interface Offer {
   band: 'normal' | 'explore' | 'relief';
   p_final: number;
   show_demo: boolean;
+  /** Orb Forge's orb, Bridge Builder's gap, the number Factory Sort's creature carries. */
   target?: NumberView;
+  /** Balloons, or Balance Gate's weights. */
   balloons: { text: string; misconception?: string }[];
+  /** Crystals, or Bridge Builder's planks. */
   crystals: NumberView[];
   max_crystals: number;
+  /** Factory Sort's two gates. */
+  gates?: { en: string; id: string }[];
 }
 
 export interface Verdict {
@@ -33,6 +43,8 @@ export interface Verdict {
   expected_text: string;
   misconception?: string;
   built_text?: string;
+  /** Factory Sort: the gate the number belongs through. */
+  expected_gate?: number;
   streak: number;
   total_points: number;
 }
@@ -76,6 +88,18 @@ export class Core {
 
   answerOrb(offerId: number, crystals: number[], timeMs: number): Verdict {
     return JSON.parse(this.session.answerOrb(offerId, Uint32Array.from(crystals), timeMs, Date.now())) as Verdict;
+  }
+
+  answerBalance(offerId: number, index: number, timeMs: number): Verdict {
+    return JSON.parse(this.session.answerBalance(offerId, index, timeMs, Date.now())) as Verdict;
+  }
+
+  answerSort(offerId: number, gate: number, timeMs: number): Verdict {
+    return JSON.parse(this.session.answerSort(offerId, gate, timeMs, Date.now())) as Verdict;
+  }
+
+  answerBridge(offerId: number, planks: number[], timeMs: number): Verdict {
+    return JSON.parse(this.session.answerBridge(offerId, Uint32Array.from(planks), timeMs, Date.now())) as Verdict;
   }
 
   close(offerId: number): void {
@@ -157,7 +181,10 @@ export type RaceCall =
   | ['tick', number]
   | ['next']
   | ['balloon', number, number, number, number]
-  | ['orb', number, number[], number, number];
+  | ['orb', number, number[], number, number]
+  | ['balance', number, number, number, number]
+  | ['sort', number, number, number, number]
+  | ['bridge', number, number[], number, number];
 
 export class Race {
   /** Every call so far, in order. */
@@ -210,6 +237,21 @@ export class Race {
     return JSON.parse(this.game.answerOrb(offerId, Uint32Array.from(crystals), timeMs, now)) as RaceVerdict;
   }
 
+  answerBalance(offerId: number, index: number, timeMs: number, now: number): RaceVerdict {
+    this.calls.push(['balance', offerId, index, timeMs, now]);
+    return JSON.parse(this.game.answerBalance(offerId, index, timeMs, now)) as RaceVerdict;
+  }
+
+  answerSort(offerId: number, gate: number, timeMs: number, now: number): RaceVerdict {
+    this.calls.push(['sort', offerId, gate, timeMs, now]);
+    return JSON.parse(this.game.answerSort(offerId, gate, timeMs, now)) as RaceVerdict;
+  }
+
+  answerBridge(offerId: number, planks: number[], timeMs: number, now: number): RaceVerdict {
+    this.calls.push(['bridge', offerId, planks, timeMs, now]);
+    return JSON.parse(this.game.answerBridge(offerId, Uint32Array.from(planks), timeMs, now)) as RaceVerdict;
+  }
+
   /**
    * Plays recorded calls on this fresh race, in order. A call refused the
    * first time (an answer after the whistle) is refused again and skipped.
@@ -234,6 +276,15 @@ export class Race {
             break;
           case 'orb':
             this.answerOrb(c[1], c[2], c[3], c[4]);
+            break;
+          case 'balance':
+            this.answerBalance(c[1], c[2], c[3], c[4]);
+            break;
+          case 'sort':
+            this.answerSort(c[1], c[2], c[3], c[4]);
+            break;
+          case 'bridge':
+            this.answerBridge(c[1], c[2], c[3], c[4]);
             break;
         }
       } catch {

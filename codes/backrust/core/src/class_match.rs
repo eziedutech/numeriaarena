@@ -549,6 +549,45 @@ impl ClassMatch {
         Ok(self.after_answer(seat, v, time_ms))
     }
 
+    pub fn answer_balance(
+        &mut self,
+        seat: usize,
+        offer_id: u32,
+        index: usize,
+        now_ms: f64,
+    ) -> Result<RaceVerdict, ClassError> {
+        let time_ms = self.check_current(seat, offer_id, now_ms)?;
+        let h = self.human(seat)?;
+        let v = h.session.answer_balance(offer_id, index, time_ms, now_ms)?;
+        Ok(self.after_answer(seat, v, time_ms))
+    }
+
+    pub fn answer_sort(
+        &mut self,
+        seat: usize,
+        offer_id: u32,
+        gate: usize,
+        now_ms: f64,
+    ) -> Result<RaceVerdict, ClassError> {
+        let time_ms = self.check_current(seat, offer_id, now_ms)?;
+        let h = self.human(seat)?;
+        let v = h.session.answer_sort(offer_id, gate, time_ms, now_ms)?;
+        Ok(self.after_answer(seat, v, time_ms))
+    }
+
+    pub fn answer_bridge(
+        &mut self,
+        seat: usize,
+        offer_id: u32,
+        planks: &[usize],
+        now_ms: f64,
+    ) -> Result<RaceVerdict, ClassError> {
+        let time_ms = self.check_current(seat, offer_id, now_ms)?;
+        let h = self.human(seat)?;
+        let v = h.session.answer_bridge(offer_id, planks, time_ms, now_ms)?;
+        Ok(self.after_answer(seat, v, time_ms))
+    }
+
     /// Answers count only for the seat's open creature; returns the answer
     /// time on the server's clock.
     fn check_current(
@@ -801,7 +840,7 @@ impl ClassMatch {
             self.bot(d).free_at = at + BOT_BETWEEN_MS;
             return;
         };
-        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let choices = crate::session::guess_choices(game);
         let (_, ms) = bot_answer(theta, item.b, game, choices, pace, &mut self.rng);
         self.events.push(ClassEvent::SeatWorking {
             at_ms: at,
@@ -825,7 +864,7 @@ impl ClassMatch {
             let b = self.bot(d);
             (b.work.take().expect("checked"), b.theta, b.pace_ms)
         };
-        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let choices = crate::session::guess_choices(game);
         let (outcome, retry_ms) = bot_answer(theta, w.b, game, choices, pace * 0.6, &mut self.rng);
         let correct = outcome == Outcome::Correct;
         let params = self.bank.params().clone();

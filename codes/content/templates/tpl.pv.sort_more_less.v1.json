@@ -1,0 +1,75 @@
+{
+  "id": "tpl.pv.sort_more_less.v1",
+  "version": 1,
+  "skill": "PV.COMPARE",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "predicate",
+  "params": {
+    "k": {
+      "type": "int",
+      "min": 2,
+      "max": 9
+    },
+    "n": {
+      "type": "int",
+      "min": "1000 * k",
+      "max": "1000 * k"
+    }
+  },
+  "predicate": {
+    "gates": [
+      {
+        "rule": "x >= n",
+        "label": {
+          "en": "{n} or more",
+          "id": "{n} atau lebih"
+        }
+      },
+      {
+        "rule": "x < n",
+        "label": {
+          "en": "Less than {n}",
+          "id": "Kurang dari {n}"
+        }
+      }
+    ],
+    "item_pool": {
+      "type": "int",
+      "min": "n - 500",
+      "max": "n + 500"
+    },
+    "exclusive": true
+  },
+  "answer": {
+    "expr": "x >= n",
+    "format": "bool"
+  },
+  "difficulty": {
+    "base": -1.2,
+    "features": []
+  },
+  "distractors": [],
+  "prompt": {
+    "en": "Sort: {n} or more, or less?",
+    "id": "Pilah: {n} atau lebih, atau kurang?"
+  },
+  "visual_model": "number_line",
+  "game_adapters": {
+    "factory_sort": {
+      "items_per_wave": 10
+    }
+  },
+  "tags": [
+    "compare",
+    "sort"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-10-05-sort",
+    "created_at": "2026-10-05T09:00:00Z"
+  }
+}

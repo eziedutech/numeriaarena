@@ -52,8 +52,10 @@ import {
 import { BUTTON_H, BUTTON_W } from './art/paper-props.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { makePaperHand } from './art/paper-hand.js';
-import { placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
+import { BANK_H, GATE_H, PLANK_L, PLANK_T, WEIGHT_H, makeBalance, makeBank, makeGate, makePlank, makeWeight } from './art/game-props.js';
+import { UI_HEIGHT, placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
 import {
+  BUILD_GAMES,
   Core,
   Race,
   type GameKind,
@@ -146,6 +148,20 @@ const STAND = new Vector3(0, 0.023, -0.03);
  * the headset they stand ahead of and below the resting hands.
  */
 const BALLOON_Z = 0.08;
+/** Balance Gate: the weights in a row before the book, the balance on its left. */
+const WEIGHT_Z = 0.12;
+const WEIGHT_GAP = 0.12;
+const BALANCE_AT = new Vector3(-0.27, 0, 0.02);
+/** How far the beam leans to the left pan while it waits for its weight (radians). */
+const BALANCE_TIP = 0.22;
+/** Factory Sort: the two gates either side of the middle, before the book. */
+const GATE_X = 0.11;
+const GATE_Z = 0.1;
+/** Bridge Builder: the gap between the banks, and the planks in a row before it. */
+const GAP_W = 0.3;
+const GAP_Z = 0.09;
+const PLANK_Z = 0.2;
+const PLANK_GAP = 0.095;
 /** Lane spacing: 3.7 cm clear between neighbours (a balloon is 0.063 m wide). */
 const BALLOON_GAP = 0.1;
 /**
@@ -333,6 +349,9 @@ const QUESTION_INK = 0x1f4fa3;
 const ENVELOPE_TILT = 1.3;
 /** Envelopes lie this far in front of the book's front edge (desk frame z). */
 const ENVELOPE_Z = 0.11;
+/** The menu's second row of envelopes, nearer the player. */
+const ENVELOPE_ROW2_Z = 0.19;
+const MENU_GAMES: MenuChoice[] = ['race', 'balloon_burst', 'orb_forge', 'factory_sort', 'bridge_builder', 'balance_gate'];
 /** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
 const FLAP_S = 0.45;
 const LETTER_S = 0.35;
@@ -420,7 +439,13 @@ export class GameSystem extends createSystem({
   private hint?: Label;
   private timerBar!: Mesh;
   private timing = false;
-  private seen: Record<GameKind, number> = { balloon_burst: 0, orb_forge: 0 };
+  private seen: Record<GameKind, number> = { balloon_burst: 0, orb_forge: 0, factory_sort: 0, bridge_builder: 0, balance_gate: 0 };
+  /** What stands on the desk for the creature's question (a balance, the banks of a gap): gone with its card. */
+  private props: Entity[] = [];
+  /** Balance Gate: the beam that levels and the right pan's card. */
+  private balance?: { beam: Object3D; right: Label };
+  /** Bridge Builder: the planks laid in the gap, left to right. */
+  private laid: Entity[] = [];
   private figure?: Figure;
   /** Feedback words rising from the creature and fading out. */
   private pops: { entity: Entity; mesh: Mesh; t: number }[] = [];
@@ -448,7 +473,7 @@ export class GameSystem extends createSystem({
   private hintLabel?: Label;
   private hintT = 0;
   /** The how-to on a game's first creature: which game, how long it has run, and the hand. */
-  private demo?: { game: 'balloon_burst' | 'orb_forge'; t: number; hand: Group };
+  private demo?: { game: GameKind; t: number; hand: Group };
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -528,12 +553,12 @@ export class GameSystem extends createSystem({
       const onKey = (ev: KeyboardEvent) => {
         if (ev.repeat) return;
         if (ev.code === 'KeyT') this.emulatorTouch();
-        // 1, 2, 3: open the first, second or third menu envelope, in or out of XR.
-        const pick = ['Digit1', 'Digit2', 'Digit3'].indexOf(ev.code);
+        // 1 to 6: open that menu envelope, in or out of XR.
+        const pick = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(ev.code);
         // From the home page the keys start a game straight away, in this view.
         if (pick >= 0 && this.home.visible) {
           this.wantHome = false;
-          this.start((['race', 'balloon_burst', 'orb_forge'] as MenuChoice[])[pick]);
+          this.start(MENU_GAMES[pick]);
         } else if (pick >= 0) {
           const e = [...this.queries.buttons.entities][pick];
           if (e) this.pressButton(e);
@@ -885,7 +910,7 @@ export class GameSystem extends createSystem({
           if (!obj?.visible || obj.scale.x < 0.5 || ((obj.userData.opacity as number | undefined) ?? 1) < 0.3) continue;
           obj.getWorldPosition(this.creatureWorld);
           // A balloon's paper envelope is well above its origin.
-          if (cand.hasComponent(Balloon)) this.creatureWorld.y += 0.07 * obj.scale.x;
+          if (cand.hasComponent(Balloon)) this.creatureWorld.y += ((obj.userData.middle as number | undefined) ?? 0.07) * obj.scale.x;
           const angle = this.b.angleTo(this.creatureWorld.sub(this.a));
           if (angle < best) {
             best = angle;
@@ -980,14 +1005,18 @@ export class GameSystem extends createSystem({
       });
     }
     this.showTitle();
-    const games: [MenuChoice, string, number, number][] = [
-      ['race', T.race, -0.135, 0x3fb6a0],
-      ['balloon_burst', T.gameName.balloon_burst, 0, 0xf2716b],
-      ['orb_forge', T.gameName.orb_forge, 0.135, 0x3469c4],
+    // The race and the first two games in front, the three newer games in a row nearer the player.
+    const games: [MenuChoice, string, number, number, number][] = [
+      ['race', T.race, -0.135, ENVELOPE_Z, 0x3fb6a0],
+      ['balloon_burst', T.gameName.balloon_burst, 0, ENVELOPE_Z, 0xf2716b],
+      ['orb_forge', T.gameName.orb_forge, 0.135, ENVELOPE_Z, 0x3469c4],
+      ['factory_sort', T.gameName.factory_sort, -0.12, ENVELOPE_ROW2_Z, 0x9b6bc2],
+      ['bridge_builder', T.gameName.bridge_builder, 0, ENVELOPE_ROW2_Z, 0xe0a33c],
+      ['balance_gate', T.gameName.balance_gate, 0.12, ENVELOPE_ROW2_Z, 0x5aa469],
     ];
-    for (const [game, title, x, color] of games) {
+    for (const [game, title, x, z, color] of games) {
       if (only === 'practice' && game === 'race') continue;
-      this.addEnvelope(game, title, only === 'practice' ? x - 0.0675 : x, color);
+      this.addEnvelope(game, title, only === 'practice' && z === ENVELOPE_Z ? x - 0.0675 : x, color, z);
     }
     // In the headset the home page cannot show, so a paper HOME card on the
     // desk ends the session and goes back to it.
@@ -1122,7 +1151,7 @@ export class GameSystem extends createSystem({
   }
 
   /** Starts the how-to for `game` if this device has not seen it. */
-  private startDemo(game: 'balloon_burst' | 'orb_forge'): void {
+  private startDemo(game: GameKind): void {
     if (this.demo) return;
     try {
       if (localStorage.getItem(HOWTO_KEY + game)) return;
@@ -1154,9 +1183,9 @@ export class GameSystem extends createSystem({
 
   /**
    * The hand plays the first move over and over: in Balloon Burst it comes
-   * in from the front and pokes the first balloon; in Orb Forge it lifts
-   * over the first crystal and carries across to the second. It only shows
-   * the move, never the answer.
+   * in from the front and pokes the first balloon (the first weight, gate or
+   * plank in the newer games); in Orb Forge it lifts over the first crystal
+   * and carries across to the second. It only shows the move, never the answer.
    */
   private runDemo(delta: number): void {
     const d = this.demo;
@@ -1172,8 +1201,8 @@ export class GameSystem extends createSystem({
       const c = Math.min(1, Math.max(0, x));
       return c * c * (3 - 2 * c);
     };
-    if (d.game === 'balloon_burst') {
-      const b = desk?.getObjectByName('balloon-0');
+    if (d.game !== 'orb_forge') {
+      const b = desk?.getObjectByName(d.game === 'balloon_burst' ? 'balloon-0' : 'choice-0');
       d.hand.visible = Boolean(b);
       if (!b) return;
       // In, a short press on the balloon's middle, then back out.
@@ -1221,7 +1250,7 @@ export class GameSystem extends createSystem({
    * A game on the menu: an origami envelope standing on the desk. Touch it
    * with a fingertip, or point at it and pinch (a mouse click in the browser).
    */
-  private addEnvelope(game: MenuChoice, title: string, x: number, color: number): void {
+  private addEnvelope(game: MenuChoice, title: string, x: number, color: number, z = ENVELOPE_Z): void {
     const envelope = makeEnvelope(color);
     envelope.root.name = `menu-${game}`;
     // Leaning back on the table like envelopes on a stand: low enough that
@@ -1235,19 +1264,24 @@ export class GameSystem extends createSystem({
       envelope.root.add(star);
     }
     envelope.root.rotation.x = -ENVELOPE_TILT;
-    envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), ENVELOPE_Z);
+    envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), z);
     const e = this.add(envelope.root);
     e.addComponent(MenuButton, { game });
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
     // On the bottom pocket, below the flap's tip and seal: the paper label,
     // with a text card standing in until it has loaded.
-    const sticker: UiName = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
-    placeUiImage(sticker, envelope.root, [0, -0.022, 0.0016], {
-      scale: 0.85,
-      maxWidth: 0.09,
-      fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0016, false).mesh,
-    });
+    const sticker = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
+    if (sticker in UI_HEIGHT) {
+      placeUiImage(sticker as UiName, envelope.root, [0, -0.022, 0.0016], {
+        scale: 0.85,
+        maxWidth: 0.09,
+        fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0016, false).mesh,
+      });
+    } else {
+      // A game without its paper label yet: its name, small enough to fit the pocket.
+      this.label(title, 0.012, envelope.root, -0.022, 0.0016, false);
+    }
     this.envelopes.set(e, envelope);
   }
 
@@ -2058,7 +2092,11 @@ export class GameSystem extends createSystem({
       `[game] offer ${offer.offer_id} ${offer.game} ${offer.prompt.en} | ` +
         (offer.game === 'orb_forge'
           ? `target ${offer.target?.text} crystals ${offer.crystals.map((c) => c.text).join(', ')}`
-          : `balloons ${offer.balloons.map((b) => b.text).join(', ')}`) +
+          : offer.game === 'bridge_builder'
+            ? `gap ${offer.target?.text} planks ${offer.crystals.map((c) => c.text).join(', ')}`
+            : offer.game === 'factory_sort'
+              ? `number ${offer.target?.text} gates ${(offer.gates ?? []).map((g) => g.en).join(' | ')}`
+              : `balloons ${offer.balloons.map((b) => b.text).join(', ')}`) +
         (boss ? ' | boss' : ''),
     );
     const color = boss ? 0x6d597a : accentForSkill(offer.skill);
@@ -2074,21 +2112,24 @@ export class GameSystem extends createSystem({
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
     // The card above the creature says what to do: the question in Balloon
-    // Burst, the number to build in Orb Forge. The first few creatures of a
-    // game also get a how-to line.
+    // Burst and Balance Gate, the number to build in Orb Forge and Bridge
+    // Builder, the rule and the number in Factory Sort. The first few
+    // creatures of a game also get a how-to line.
     this.clearPrompt();
     const seen = this.seen[offer.game]++;
-    const target = offer.target?.text ?? '';
-    const card =
-      offer.game === 'balloon_burst' ? offer.prompt[getLang()] : seen < HINTED ? T.orbFirst(target) : T.orbTask(target);
+    const card = this.cardText(offer, seen < HINTED);
+    const howTo =
+      seen >= HINTED
+        ? undefined
+        : { balloon_burst: T.popHint, balance_gate: T.balanceHint, factory_sort: T.sortHint }[offer.game as string];
     const desk = this.deskEntity()!.object3D!;
     this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK, question: true });
     this.prompt.mesh.name = 'prompt-label';
     this.prompt.mesh.position.copy(PROMPT_POS);
     desk.add(this.prompt.mesh);
     this.labels.add(this.prompt.mesh);
-    if (offer.game === 'balloon_burst' && seen < HINTED) {
-      this.hint = new Label(T.popHint, { height: 0.022 });
+    if (howTo) {
+      this.hint = new Label(howTo, { height: 0.022 });
       this.hint.mesh.name = 'hint-label';
       this.hint.mesh.position.set(PROMPT_POS.x, PROMPT_POS.y - 0.034, PROMPT_POS.z);
       desk.add(this.hint.mesh);
@@ -2100,8 +2141,7 @@ export class GameSystem extends createSystem({
     this.creatureScale = boss ? 1.4 : 1;
     this.offering = undefined;
     this.tween(root, STAND, 0.7, 0.03, this.creatureScale, () => {
-      if (offer.game === 'balloon_burst') this.showBalloons(offer);
-      else this.showCrystals(offer);
+      this.showPieces(offer);
       // A different game came up while a how-to ran: that one is over.
       if (this.demo && this.demo.game !== offer.game) this.endDemo(true);
       this.startDemo(offer.game);
@@ -2113,6 +2153,162 @@ export class GameSystem extends createSystem({
   private creature(): Entity | undefined {
     for (const e of this.queries.creatures.entities) return e;
     return undefined;
+  }
+
+  /** The card's words for an offer; `first` for the first few creatures of its game. */
+  private cardText(offer: Offer, first: boolean): string {
+    const target = offer.target?.text ?? '';
+    switch (offer.game) {
+      case 'orb_forge':
+        return first ? T.orbFirst(target) : T.orbTask(target);
+      case 'bridge_builder':
+        return first ? T.bridgeFirst(target) : T.bridgeTask(target);
+      case 'factory_sort':
+        return T.sortTask(offer.prompt[getLang()], target);
+      default:
+        return offer.prompt[getLang()];
+    }
+  }
+
+  /** What the player answers with, once the creature stands at the book. */
+  private showPieces(offer: Offer): void {
+    switch (offer.game) {
+      case 'balloon_burst':
+        return this.showBalloons(offer);
+      case 'orb_forge':
+        return this.showCrystals(offer);
+      case 'balance_gate':
+        return this.showWeights(offer);
+      case 'factory_sort':
+        return this.showGates(offer);
+      case 'bridge_builder':
+        return this.showPlanks(offer);
+    }
+  }
+
+  /**
+   * A choice that stands still on the desk (a weight, a gate, a plank): it is
+   * touched, pointed at or clicked like a balloon, and so goes through
+   * `popBalloon`. `middle` is how high its middle is, for a fingertip near it.
+   */
+  private addChoice(obj: Object3D, index: number, middle: number): Entity {
+    obj.name = `choice-${index}`;
+    obj.userData.middle = middle;
+    const e = this.add(obj);
+    e.addComponent(Balloon, { index });
+    obj.userData.balloon = e;
+    e.addComponent(PokeInteractable);
+    this.clickable(e);
+    return e;
+  }
+
+  private addProp(obj: Object3D): void {
+    this.props.push(this.add(obj));
+  }
+
+  /** Balance Gate: the question on the left pan, which hangs low, and a row of weights; the right one levels the beam. */
+  private showWeights(offer: Offer): void {
+    const b = makeBalance();
+    b.root.name = 'balance';
+    b.root.position.copy(BALANCE_AT);
+    b.beam.rotation.z = BALANCE_TIP;
+    const left = offer.prompt[getLang()].replace(/\s*=\s*\?\s*$/u, '');
+    this.label(left, 0.02 * textScale(), b.pans[0], 0.03);
+    const right = this.label('?', 0.02 * textScale(), b.pans[1], 0.03);
+    this.addProp(b.root);
+    this.balance = { beam: b.beam, right };
+    const n = offer.balloons.length;
+    offer.balloons.forEach((w, i) => {
+      const g = makeWeight(BALLOON_COLORS[i % BALLOON_COLORS.length]);
+      g.position.set((i - (n - 1) / 2) * WEIGHT_GAP, 0, WEIGHT_Z);
+      this.addChoice(g, i, WEIGHT_H / 2);
+      this.label(w.text, 0.03 * textScale(), g, WEIGHT_H + 0.025);
+    });
+  }
+
+  /** Factory Sort: two gates with their rules; the number goes through one. */
+  private showGates(offer: Offer): void {
+    (offer.gates ?? []).forEach((gate, i) => {
+      const g = makeGate(i === 0 ? 0x3fb6a0 : 0xe8b64c);
+      g.position.set((i === 0 ? -1 : 1) * GATE_X, 0, GATE_Z);
+      this.addChoice(g, i, GATE_H / 2);
+      this.label(gate[getLang()], 0.016 * textScale(), g, GATE_H + 0.015, 0.008, false);
+    });
+  }
+
+  /**
+   * Bridge Builder: two banks with the gap between them, and planks in a row
+   * before it, all the same length until laid: laid, a plank is as long as
+   * its number is against the gap, so the player sees how much is left.
+   */
+  private showPlanks(offer: Offer): void {
+    this.laid = [];
+    for (const side of [-1, 1]) {
+      const bank = makeBank();
+      bank.name = 'bridge-bank';
+      bank.position.set(side * (GAP_W / 2 + 0.03), 0, GAP_Z);
+      this.addProp(bank);
+    }
+    const n = offer.crystals.length;
+    offer.crystals.forEach((c, i) => {
+      const g = makePlank(CRYSTAL_COLORS[i % CRYSTAL_COLORS.length]);
+      g.position.set((i - (n - 1) / 2) * PLANK_GAP, 0, PLANK_Z);
+      g.userData.home = g.position.clone();
+      this.addChoice(g, i, PLANK_T);
+      this.label(c.text, 0.026 * textScale(), g, 0.03);
+    });
+  }
+
+  private board(plank: Object3D): Object3D {
+    return plank.getObjectByName('board') ?? plank;
+  }
+
+  /**
+   * A plank touched goes into the gap, or back to its row if it was laid
+   * already. A gap filled (or overfilled), or as many planks as may be used,
+   * is the answer.
+   */
+  private layPlank(e: Entity): void {
+    const o = this.offer;
+    const obj = e.object3D;
+    if (!o?.target || !obj) return;
+    this.endDemo(true);
+    const at = this.laid.indexOf(e);
+    if (at >= 0) {
+      this.laid.splice(at, 1);
+      this.board(obj).scale.x = 1;
+      this.tween(obj, obj.userData.home as Vector3, 0.3, 0.03, 1);
+    } else {
+      this.laid.push(e);
+    }
+    const value = (p: Entity) => {
+      const c = o.crystals[p.getValue(Balloon, 'index') as number];
+      return c ? c.num / c.den : 0;
+    };
+    const gap = o.target.num / o.target.den;
+    let filled = 0;
+    let sum = 0;
+    for (const p of this.laid) {
+      const w = Math.max(0.01, Math.min(GAP_W * 1.3, (value(p) / gap) * GAP_W));
+      this.board(p.object3D!).scale.x = w / PLANK_L;
+      this.tween(p.object3D!, new Vector3(-GAP_W / 2 + filled + w / 2, BANK_H - PLANK_T, GAP_Z), 0.3, 0.03, 1);
+      filled += w;
+      sum += value(p);
+    }
+    if (this.laid.length > 0 && (sum >= gap - 1e-9 || this.laid.length >= o.max_crystals)) {
+      this.submitOrb(this.laid.map((p) => p.getValue(Balloon, 'index') as number));
+    }
+  }
+
+  /** Planks laid for a wrong bridge go back to their row for the second try. */
+  private liftPlanks(): void {
+    for (const p of this.laid) {
+      const obj = p.object3D;
+      if (!obj) continue;
+      this.board(obj).scale.x = 1;
+      this.tween(obj, obj.userData.home as Vector3, 0.4, 0.04, 1);
+    }
+    this.laid = [];
   }
 
   private showBalloons(offer: Offer): void {
@@ -2174,19 +2370,43 @@ export class GameSystem extends createSystem({
     // The player has done it once: the how-to has done its job.
     this.endDemo(true);
     const index = e.getValue(Balloon, 'index') as number;
+    const game = this.offer.game;
+    if (game === 'bridge_builder') {
+      this.layPlank(e);
+      return;
+    }
     this.lastBalloon = index;
     const timeMs = performance.now() - this.shownAt;
+    const id = this.offer.offer_id;
     let verdict: Verdict | RaceVerdict;
     const race = this.race;
     if (race instanceof ClassRace) {
-      this.classAnswer(race.answerBalloon(this.offer.offer_id, index), (v) => this.balloonVerdict(e, index, v));
+      const judged =
+        game === 'balance_gate'
+          ? race.answerBalance(id, index)
+          : game === 'factory_sort'
+            ? race.answerSort(id, index)
+            : race.answerBalloon(id, index);
+      this.classAnswer(judged, (v) => this.balloonVerdict(e, index, v));
       return;
     } else if (race) {
-      const v = this.raceAnswer(() => race.answerBalloon(this.offer!.offer_id, index, timeMs, this.now()));
+      const now = this.now();
+      const v = this.raceAnswer(() =>
+        game === 'balance_gate'
+          ? race.answerBalance(id, index, timeMs, now)
+          : game === 'factory_sort'
+            ? race.answerSort(id, index, timeMs, now)
+            : race.answerBalloon(id, index, timeMs, now),
+      );
       if (!v) return;
       verdict = v;
     } else if (this.core) {
-      verdict = this.core.answerBalloon(this.offer.offer_id, index, timeMs);
+      verdict =
+        game === 'balance_gate'
+          ? this.core.answerBalance(id, index, timeMs)
+          : game === 'factory_sort'
+            ? this.core.answerSort(id, index, timeMs)
+            : this.core.answerBalloon(id, index, timeMs);
     } else {
       return;
     }
@@ -2200,12 +2420,21 @@ export class GameSystem extends createSystem({
         `expected ${verdict.expected_text}, +${verdict.points}, total ${verdict.total_points}`,
     );
     const obj = e.object3D;
+    const balloon = this.offer.game === 'balloon_burst';
     if (!obj) {
       // The balloon went while the server judged.
     } else if (verdict.correct) {
-      this.tween(obj, obj.position.clone(), 0.15, 0, 1.6, () => this.remove(e));
+      if (balloon) this.tween(obj, obj.position.clone(), 0.15, 0, 1.6, () => this.remove(e));
+    } else if (this.offer.game === 'factory_sort') {
+      // Both gates stay: a second try goes through the other one.
+      this.tween(obj, obj.position.clone(), 0.25, 0.02, 1);
     } else {
       this.tween(obj, obj.position.clone(), 0.2, 0, 0.01, () => this.remove(e));
+    }
+    // The right weight levels the beam, its number on the right pan.
+    if (verdict.correct && this.balance) {
+      this.balance.beam.rotation.z = 0;
+      this.balance.right.set(this.offer.balloons[index]?.text ?? '?');
     }
     this.afterVerdict(verdict);
   }
@@ -2215,17 +2444,21 @@ export class GameSystem extends createSystem({
     if (!this.offer || this.judging) return;
     this.endDemo(true);
     const timeMs = performance.now() - this.shownAt;
+    const id = this.offer.offer_id;
+    // Bridge Builder's planks are judged as Orb Forge's crystals are.
+    const bridge = this.offer.game === 'bridge_builder';
     let verdict: Verdict | RaceVerdict;
     const race = this.race;
     if (race instanceof ClassRace) {
-      this.classAnswer(race.answerOrb(this.offer.offer_id, picks), (v) => this.orbVerdict(v));
+      this.classAnswer(bridge ? race.answerBridge(id, picks) : race.answerOrb(id, picks), (v) => this.orbVerdict(v));
       return;
     } else if (race) {
-      const v = this.raceAnswer(() => race.answerOrb(this.offer!.offer_id, picks, timeMs, this.now()));
+      const now = this.now();
+      const v = this.raceAnswer(() => (bridge ? race.answerBridge(id, picks, timeMs, now) : race.answerOrb(id, picks, timeMs, now)));
       if (!v) return;
       verdict = v;
     } else if (this.core) {
-      verdict = this.core.answerOrb(this.offer.offer_id, picks, timeMs);
+      verdict = bridge ? this.core.answerBridge(id, picks, timeMs) : this.core.answerOrb(id, picks, timeMs);
     } else {
       return;
     }
@@ -2261,9 +2494,22 @@ export class GameSystem extends createSystem({
       `[game] orb ${verdict.built_text ?? '?'} for ${this.offer.target?.text}: ${verdict.correct ? 'right' : 'wrong'}, ` +
         `attempt ${verdict.attempt}, +${verdict.points}, total ${verdict.total_points}`,
     );
-    this.clear(this.queries.orbs);
-    this.clear(this.queries.crystals);
-    if (!verdict.correct && verdict.retry_allowed) this.showCrystals(this.offer);
+    if (this.offer.game === 'bridge_builder') {
+      if (verdict.correct) {
+        // The bridge stays standing while the creature goes home.
+        for (const p of this.laid) {
+          p.removeComponent(Balloon);
+          this.props.push(p);
+        }
+        this.laid = [];
+      } else if (verdict.retry_allowed) {
+        this.liftPlanks();
+      }
+    } else {
+      this.clear(this.queries.orbs);
+      this.clear(this.queries.crystals);
+      if (!verdict.correct && verdict.retry_allowed) this.showCrystals(this.offer);
+    }
     this.afterVerdict(verdict);
   }
 
@@ -2284,9 +2530,12 @@ export class GameSystem extends createSystem({
   private afterVerdict(v: Verdict | RaceVerdict): void {
     this.saveAnswers();
     if (!this.race) this.practiceTotal = v.total_points;
+    // Factory Sort's right answer is a gate: its rule, not the number.
+    const gate = v.expected_gate === undefined ? undefined : this.offer?.gates?.[v.expected_gate]?.[getLang()];
+    const expected = gate ?? v.expected_text;
     if (!v.correct) {
       if (v.retry_allowed) this.pop(T.tryAgain, WRONG_INK, 'feedback_try_again');
-      else this.pop(T.itWas(v.expected_text), WRONG_INK);
+      else this.pop(T.itWas(expected), WRONG_INK);
     }
     if (v.correct || !v.retry_allowed) {
       this.timing = false;
@@ -2317,7 +2566,7 @@ export class GameSystem extends createSystem({
       this.clear(this.queries.balloons);
       this.clear(this.queries.crystals);
       this.clear(this.queries.orbs);
-      this.prompt?.set(this.prompt.value.replace('?', v.expected_text));
+      this.prompt?.set(gate ? `${this.prompt.value} → ${gate}` : this.prompt.value.replace('?', v.expected_text));
       this.stampMissed();
       this.phase = 'between';
       // Missed twice: it walks home without points.
@@ -2336,9 +2585,10 @@ export class GameSystem extends createSystem({
   private solveCard(): void {
     if (!this.prompt || !this.offer) return;
     const o = this.offer;
-    const text =
-      o.game === 'orb_forge'
-        ? `${this.lastPicks.map((i) => o.crystals[i]?.text ?? '?').join(' + ')} = ${o.target?.text ?? ''}`
+    const text = BUILD_GAMES.includes(o.game)
+      ? `${this.lastPicks.map((i) => o.crystals[i]?.text ?? '?').join(' + ')} = ${o.target?.text ?? ''}`
+      : o.game === 'factory_sort'
+        ? `${o.target?.text ?? ''} → ${o.gates?.[this.lastBalloon]?.[getLang()] ?? ''}`
         : this.prompt.value.replace('?', o.balloons.find((_, i) => i === this.lastBalloon)?.text ?? '?');
     const solved = new Label(text, { height: 0.036 * textScale(), ink: RIGHT_INK, question: true });
     solved.mesh.name = 'prompt-label';
@@ -2438,7 +2688,7 @@ export class GameSystem extends createSystem({
     };
     const nearBalloon = (obj: Object3D) => {
       if (!immersive) return false;
-      this.a.set(0, BALLOON_MIDDLE, 0);
+      this.a.set(0, (obj.userData.middle as number | undefined) ?? BALLOON_MIDDLE, 0);
       obj.localToWorld(this.a);
       return this.tipPos.some((t) => t.distanceTo(this.a) < BALLOON_REACH);
     };
@@ -2534,7 +2784,12 @@ export class GameSystem extends createSystem({
     for (const e of this.queries.balloons.entities) {
       const obj = e.object3D;
       const r = obj?.userData.rise as Drift | undefined;
-      if (!obj || !r || this.tweens.some((t) => t.obj === obj)) continue;
+      if (!obj || this.tweens.some((t) => t.obj === obj)) continue;
+      if (!r) {
+        // A choice that stands still (a weight, a gate, a plank) only grows a little while pointed at.
+        obj.scale.setScalar(1 + HOVER_GROW * ((obj.userData.hover as number | undefined) ?? 0));
+        continue;
+      }
       if (r.wait > 0) {
         r.wait -= delta;
         continue;
@@ -2626,6 +2881,10 @@ export class GameSystem extends createSystem({
     }
     this.prompt = undefined;
     this.hint = undefined;
+    for (const p of this.props) if (p.active) this.remove(p);
+    this.props = [];
+    this.balance = undefined;
+    this.laid = [];
   }
 
   /** The speed-bonus strip shrinks from full to nothing over the expected time. */

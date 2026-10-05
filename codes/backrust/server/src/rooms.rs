@@ -1057,7 +1057,12 @@ impl Room {
                     self.broadcast(&ServerMsg::Cheer { at_ms: now });
                 }
             }
-            ClientMsg::Next | ClientMsg::AnswerBalloon { .. } | ClientMsg::AnswerOrb { .. } => {
+            ClientMsg::Next
+            | ClientMsg::AnswerBalloon { .. }
+            | ClientMsg::AnswerOrb { .. }
+            | ClientMsg::AnswerSort { .. }
+            | ClientMsg::AnswerBalance { .. }
+            | ClientMsg::AnswerBridge { .. } => {
                 let (Some(s), Some(m)) = (seat, self.game.as_mut()) else {
                     self.send(
                         conn,
@@ -1081,6 +1086,18 @@ impl Room {
                         .map_err(|e| error_code(&e)),
                     ClientMsg::AnswerOrb { offer_id, crystals } => m
                         .answer_orb(s, offer_id, &crystals, now)
+                        .map(ServerMsg::Verdict)
+                        .map_err(|e| error_code(&e)),
+                    ClientMsg::AnswerSort { offer_id, gate } => m
+                        .answer_sort(s, offer_id, gate, now)
+                        .map(ServerMsg::Verdict)
+                        .map_err(|e| error_code(&e)),
+                    ClientMsg::AnswerBalance { offer_id, index } => m
+                        .answer_balance(s, offer_id, index, now)
+                        .map(ServerMsg::Verdict)
+                        .map_err(|e| error_code(&e)),
+                    ClientMsg::AnswerBridge { offer_id, planks } => m
+                        .answer_bridge(s, offer_id, &planks, now)
                         .map(ServerMsg::Verdict)
                         .map_err(|e| error_code(&e)),
                     _ => unreachable!("matched above"),

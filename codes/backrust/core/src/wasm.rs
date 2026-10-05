@@ -115,6 +115,52 @@ impl GameSession {
         serde_json::to_string(&v).map_err(js)
     }
 
+    #[wasm_bindgen(js_name = answerBalance)]
+    pub fn answer_balance(
+        &mut self,
+        offer_id: u32,
+        index: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_balance(offer_id, index as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerSort)]
+    pub fn answer_sort(
+        &mut self,
+        offer_id: u32,
+        gate: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_sort(offer_id, gate as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerBridge)]
+    pub fn answer_bridge(
+        &mut self,
+        offer_id: u32,
+        planks: Vec<u32>,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let picks: Vec<usize> = planks.into_iter().map(|c| c as usize).collect();
+        let v = self
+            .inner
+            .answer_bridge(offer_id, &picks, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
     pub fn close(&mut self, offer_id: u32) -> bool {
         self.inner.close(offer_id)
     }
@@ -196,6 +242,52 @@ impl RaceGame {
         let v = self
             .inner
             .answer_orb(offer_id, &picks, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerBalance)]
+    pub fn answer_balance(
+        &mut self,
+        offer_id: u32,
+        index: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_balance(offer_id, index as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerSort)]
+    pub fn answer_sort(
+        &mut self,
+        offer_id: u32,
+        gate: u32,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer_sort(offer_id, gate as usize, time_ms, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    #[wasm_bindgen(js_name = answerBridge)]
+    pub fn answer_bridge(
+        &mut self,
+        offer_id: u32,
+        planks: Vec<u32>,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let picks: Vec<usize> = planks.into_iter().map(|c| c as usize).collect();
+        let v = self
+            .inner
+            .answer_bridge(offer_id, &picks, time_ms, now_ms)
             .map_err(js)?;
         serde_json::to_string(&v).map_err(js)
     }

@@ -18,7 +18,7 @@ export function meta({}: Route.MetaArgs) {
  * codes/backrust/core); a watcher cannot answer anything.
  */
 
-type GameKind = "balloon_burst" | "orb_forge";
+type GameKind = "balloon_burst" | "orb_forge" | "factory_sort" | "bridge_builder" | "balance_gate";
 type Highlight = "best_save" | "most_improved" | "sharpest_aim" | "steady_streak" | "brave_try";
 
 interface Seat {
@@ -136,7 +136,7 @@ const TEXT = {
     break: "BREAK",
     ready: "GET READY",
     results: "RESULTS",
-    games: { balloon_burst: "Balloon Burst", orb_forge: "Orb Forge" } as Record<GameKind, string>,
+    games: { balloon_burst: "Balloon Burst", orb_forge: "Orb Forge", factory_sort: "Factory Sort", bridge_builder: "Bridge Builder", balance_gate: "Balance Gate" } as Record<GameKind, string>,
     bot: "BOT",
     away: "AWAY",
     standIn: "ROBOT HELPER",
@@ -229,7 +229,7 @@ const TEXT = {
     break: "ISTIRAHAT",
     ready: "BERSIAP",
     results: "HASIL",
-    games: { balloon_burst: "Balloon Burst", orb_forge: "Orb Forge" } as Record<GameKind, string>,
+    games: { balloon_burst: "Balloon Burst", orb_forge: "Orb Forge", factory_sort: "Factory Sort", bridge_builder: "Bridge Builder", balance_gate: "Balance Gate" } as Record<GameKind, string>,
     bot: "BOT",
     away: "PERGI",
     standIn: "ROBOT PEMBANTU",

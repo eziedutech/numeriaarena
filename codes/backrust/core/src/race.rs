@@ -484,6 +484,46 @@ impl RaceMatch {
         Ok(self.after_player(v, time_ms))
     }
 
+    pub fn answer_balance(
+        &mut self,
+        offer_id: u32,
+        index: usize,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<RaceVerdict, SessionError> {
+        self.check_current(offer_id)?;
+        let v = self
+            .session
+            .answer_balance(offer_id, index, time_ms, now_ms)?;
+        Ok(self.after_player(v, time_ms))
+    }
+
+    pub fn answer_sort(
+        &mut self,
+        offer_id: u32,
+        gate: usize,
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<RaceVerdict, SessionError> {
+        self.check_current(offer_id)?;
+        let v = self.session.answer_sort(offer_id, gate, time_ms, now_ms)?;
+        Ok(self.after_player(v, time_ms))
+    }
+
+    pub fn answer_bridge(
+        &mut self,
+        offer_id: u32,
+        planks: &[usize],
+        time_ms: f64,
+        now_ms: f64,
+    ) -> Result<RaceVerdict, SessionError> {
+        self.check_current(offer_id)?;
+        let v = self
+            .session
+            .answer_bridge(offer_id, planks, time_ms, now_ms)?;
+        Ok(self.after_player(v, time_ms))
+    }
+
     /// Answers count only for the open creature and only before the round's
     /// clock runs out.
     fn check_current(&self, offer_id: u32) -> Result<(), SessionError> {
@@ -640,7 +680,7 @@ impl RaceMatch {
             self.bots[d].free_at = at + BOT_BETWEEN_MS;
             return;
         };
-        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let choices = crate::session::guess_choices(game);
         let (_, ms) = bot_answer(
             self.bots[d].theta,
             item.b,
@@ -666,7 +706,7 @@ impl RaceMatch {
     fn finish_bot_answer(&mut self, d: usize, at: f64) {
         let game = self.game();
         let mut w = self.bots[d].work.take().expect("checked");
-        let choices = (game == GameType::BalloonBurst).then_some(4);
+        let choices = crate::session::guess_choices(game);
         let (outcome, retry_ms) = bot_answer(
             self.bots[d].theta,
             w.b,
