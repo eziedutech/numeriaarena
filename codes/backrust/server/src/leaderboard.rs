@@ -9,7 +9,8 @@
 //!   most one a day, so it rewards coming back rather than playing long.
 //!
 //! The top ten show, and the asking seat's own row wherever it is; never the
-//! bottom of a list. Global shows only a pseudonym and the class's grade. A
+//! bottom of a list. Global shows only a pseudonym and the class's grade
+//! (and a sample class's label, marked as a demo). A
 //! month starts on the 1st at 00:00 UTC, the same moment for everyone.
 
 use axum::Json;
@@ -29,14 +30,18 @@ const TOP: i64 = 10;
 const WHOLE_CLASS: i64 = 100;
 
 /// The seats a board ranks: `$1` is a class, or empty for Global, which takes
-/// the active classes of approved teachers (not the samples of TRY THE
-/// TEACHER PAGE) that have not left it.
+/// the active classes of approved teachers that have not left it. A sample
+/// class of TRY THE TEACHER PAGE takes part too, marked with its label (like
+/// `5A Demo`) so nobody mistakes it for a real class; a real class's label
+/// never shows.
 const SCOPE: &str = "
     scope AS (
-        SELECT s.id, s.pseudonym, c.grade FROM class_seats s JOIN classes c ON c.id = s.class_id
+        SELECT s.id, s.pseudonym, c.grade,
+               CASE WHEN EXISTS (SELECT 1 FROM demo_teachers d WHERE d.user_id = c.owner)
+                    THEN c.label || ' Demo' END AS demo
+        FROM class_seats s JOIN classes c ON c.id = s.class_id
         WHERE ($1 <> '' AND s.class_id = $1)
            OR ($1 = '' AND c.on_global AND c.status = 'active'
-               AND NOT EXISTS (SELECT 1 FROM demo_teachers d WHERE d.user_id = c.owner)
                AND EXISTS (SELECT 1 FROM users u WHERE u.id = c.owner AND u.status = 'active'
                    AND (u.global_role = 'admin' OR EXISTS (
                        SELECT 1 FROM organizer_approvals a WHERE a.user_id = u.id AND a.status = 'approved'))))
@@ -49,7 +54,7 @@ const SCOPE: &str = "
 /// The rows of `ranked` (seat, score, place) to show: the top and the asking seat `$3`.
 const ROWS: &str = "
     SELECT json_build_object('place', place, 'name', scope.pseudonym, 'grade', scope.grade,
-                             'score', score, 'me', seat = $3)
+                             'demo', scope.demo, 'score', score, 'me', seat = $3)
     FROM ranked JOIN scope ON scope.id = ranked.seat
     WHERE place <= $4 OR seat = $3
     ORDER BY place";

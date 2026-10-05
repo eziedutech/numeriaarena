@@ -26,6 +26,8 @@ interface Row {
   place: number;
   name: string;
   grade: number;
+  /** A sample class's label, like `5A Demo`; a real class's never comes. */
+  demo: string | null;
   score: number;
   me: boolean;
 }
@@ -218,7 +220,7 @@ class Leaders {
       const name = el('div', 'name', row);
       name.textContent = r.name;
       if (r.me) el('span', 'you', name).textContent = t.you;
-      el('div', 'grade', row).textContent = this.which === 'global' ? t.grade(r.grade) : '';
+      el('div', 'grade', row).textContent = this.which === 'global' ? [t.grade(r.grade), r.demo].filter(Boolean).join(' · ') : '';
       const score = el('div', 'score', row);
       score.textContent = this.kind === 'strike' ? t.points(r.score) : t.dayCount(r.score);
       if (!r.me && r.place === 1) score.style.color = BLUE;

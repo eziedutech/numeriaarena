@@ -174,7 +174,8 @@ async fn global_takes_classes_that_take_part_and_shows_the_seat_beyond_the_top()
     // Only the pseudonym and the grade: no class, no seat number.
     let mut keys: Vec<_> = strike[0].as_object().unwrap().keys().cloned().collect();
     keys.sort();
-    assert_eq!(keys, vec!["grade", "me", "name", "place", "score"]);
+    assert_eq!(keys, vec!["demo", "grade", "me", "name", "place", "score"]);
+    assert!(strike[TOP as usize]["demo"].is_null());
 
     // The teacher takes the class off Global.
     set_on_global(&db, owner, &id, false).await.unwrap();
@@ -208,4 +209,34 @@ async fn global_takes_classes_that_take_part_and_shows_the_seat_beyond_the_top()
             .iter()
             .all(|r| !r["me"].as_bool().unwrap())
     );
+}
+
+#[tokio::test]
+async fn a_sample_class_takes_part_in_global_marked_as_a_demo() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db, true).await;
+    sqlx::query(
+        "INSERT INTO demo_teachers (token_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '1 day')",
+    )
+    .bind(crate::classes::token_hash(&random_hex()))
+    .bind(owner)
+    .execute(&db)
+    .await
+    .unwrap();
+    let (_, seats) = class(&db, owner, 1).await;
+    race(&db, owner, seats[0], 99_000, 0).await;
+    let global = board(&db, None, Period::Month, Some(seats[0]), TOP)
+        .await
+        .unwrap();
+    let mine = global["strike"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["me"].as_bool().unwrap())
+        .expect("on Global")
+        .clone();
+    assert_eq!(mine["demo"], "5B Demo");
 }
