@@ -260,6 +260,11 @@ export class LocalStore {
       .slice(0, limit);
   }
 
+  /** Every answer kept on the device; a guest's are all here. */
+  answers(): Promise<StoredEvent[]> {
+    return this.backend.all<StoredEvent>('outbox');
+  }
+
   /** The server stored these: they leave the device. */
   ack(eventIds: string[]): Promise<void> {
     return this.backend.remove('outbox', eventIds);

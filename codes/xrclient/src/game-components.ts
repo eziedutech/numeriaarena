@@ -38,13 +38,18 @@ const Games = {
   /** ROOM, floating over the desk menu in the headset: the room around the desk. */
   Room: 'room',
   Town: 'town',
-  /** MY FOLD TOWN on the desk: TURN, DONE, and the four kinds of a first land. */
+  /** MY FOLD TOWN on the desk: TURN, DONE, the four kinds of a first land, and a building's card. */
   TownTurn: 'town_turn',
   TownDone: 'town_done',
   TownPlain: 'town_plain',
   TownRiver: 'town_river',
   TownHills: 'town_hills',
   TownBeach: 'town_beach',
+  /** The three answers of FINISH NOW, and closing a building's card. */
+  TownAnswer0: 'town_a0',
+  TownAnswer1: 'town_a1',
+  TownAnswer2: 'town_a2',
+  TownCardClose: 'town_card',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

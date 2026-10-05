@@ -5,7 +5,10 @@ import { getLang } from '../settings.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
 import { TownModel } from './town-model.js';
 import { buildPage, foldUp, Ghost, pieceObject, type PageScene } from './town-scene.js';
-import { TOWN_TEXT } from './town-text.js';
+import { factsOf, finishQuestion, type Question } from './town-facts.js';
+import { skillTitle, unmarked } from './town-landmarks.js';
+import { gradeOf, hasFacts, pageTiles, RETRY_MS, shapeOf, tries } from './town-maths.js';
+import { TOWN_TEXT, waitText } from './town-text.js';
 
 /**
  * MY FOLD TOWN in the headset: the town's newest page lies on the book, the
@@ -17,7 +20,17 @@ import { TOWN_TEXT } from './town-text.js';
  */
 
 export type Side = 'left' | 'right';
-export type TownChoice = 'town_turn' | 'town_done' | 'town_plain' | 'town_river' | 'town_hills' | 'town_beach';
+export type TownChoice =
+  | 'town_turn'
+  | 'town_done'
+  | 'town_plain'
+  | 'town_river'
+  | 'town_hills'
+  | 'town_beach'
+  | 'town_a0'
+  | 'town_a1'
+  | 'town_a2'
+  | 'town_card';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -52,6 +65,8 @@ const LIMIT_S = 120;
 const TAP_MS = 300;
 const MESSAGE_S = 2.6;
 const FOLD_S = 0.7;
+/** A landmark seen for the first time rises slower than a building. */
+const RISE_S = 1.6;
 /** How far off the page, in tiles, still counts as over it. */
 const PAGE_MARGIN = 0.6;
 
@@ -61,6 +76,12 @@ const SHELF_STEP = 0.06;
 const SHELF_COLS = 4;
 const SLOT = 0.04;
 const HEADER = new Vector3(0, 0.17, -0.14);
+/** A building's card stands left of the book, its answers on the desk below it. */
+const CARD = new Vector3(-0.45, 0.3, -0.12);
+const CARD_CHARS = 32;
+const ANSWER_X = [-0.56, -0.45, -0.34];
+const ANSWER_Z = -0.03;
+const CLOSE_AT = [-0.47, 0.06] as const;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
 const TEAL = 0x3fb6a0;
@@ -69,6 +90,19 @@ const slotGeo = new BoxGeometry(SLOT + 0.012, SLOT + 0.02, SLOT + 0.012);
 const slotMat = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 const barGeo = new PlaneGeometry(1, 1);
 const barMat = new MeshBasicMaterial({ color: TEAL });
+
+type Line = [text: string, height: number, ink?: number];
+
+interface Card {
+  /** The placed item, or "" for the page's landmark. */
+  id: string;
+  group: Group;
+  q?: Question;
+  attempt: number;
+  answered: boolean;
+  /** Whether the item was finished when the card was drawn. */
+  ready: boolean;
+}
 
 interface Carry {
   side: Side;
@@ -100,6 +134,8 @@ export class TownDesk {
   private bar: Mesh;
   private land = 0;
   private carry?: Carry;
+  private card?: Card;
+  private cardButtons: Entity[] = [];
   private rot = 0;
   private left = LIMIT_S;
   private message = '';
@@ -108,7 +144,7 @@ export class TownDesk {
   private messageLeft = 0;
   private second = 0;
   private readySeen = new Set<string>();
-  private folding: { obj: Object3D; t: number }[] = [];
+  private folding: { obj: Object3D; t: number; s: number }[] = [];
   private unlisten: () => void;
   private gone = false;
 
@@ -195,9 +231,16 @@ export class TownDesk {
       if (!it.ready || this.readySeen.has(it.id)) continue;
       this.readySeen.add(it.id);
       if (obj) {
-        this.folding.push({ obj: obj.children[0], t: 0 });
+        this.folding.push({ obj: obj.children[0], t: 0, s: FOLD_S });
         this.say(this.t.finished(this.name(it.asset)));
       }
+    }
+    const lm = this.model.doc.landmarks[this.land];
+    const raised = this.page.root.getObjectByName('landmark');
+    if (lm && raised && unmarked('grown', this.model.owner, [lm]).length) {
+      this.folding.push({ obj: raised.children[0], t: 0, s: RISE_S });
+      this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, getLang())), MESSAGE_S * 2);
+      console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
     }
   }
 
@@ -264,6 +307,14 @@ export class TownDesk {
       this.host.closed();
       return;
     }
+    if (choice === 'town_card') {
+      this.closeCard();
+      return;
+    }
+    if (choice === 'town_a0' || choice === 'town_a1' || choice === 'town_a2') {
+      void this.answer(Number(choice.slice('town_a'.length)));
+      return;
+    }
     if (choice === 'town_turn') {
       if (this.carry) {
         this.carry.rot = (this.carry.rot + 90) % 360;
@@ -291,7 +342,7 @@ export class TownDesk {
     }
     if (this.message && (this.messageLeft -= delta) <= 0) this.say(this.carry ? this.note : this.t.xr.hint, 0);
     this.folding = this.folding.filter((f) => {
-      f.t += delta / FOLD_S;
+      f.t += delta / f.s;
       foldUp(f.obj, Math.min(1, f.t));
       return f.t < 1;
     });
@@ -300,6 +351,7 @@ export class TownDesk {
       // A frame whose time is up is drawn again as the finished building.
       const v = this.model.view();
       if (v.items.some((it) => it.ready && !this.readySeen.has(it.id))) this.redraw();
+      this.refreshCard();
     }
     if (!this.page) return;
     for (const side of SIDES) {
@@ -332,6 +384,7 @@ export class TownDesk {
           const a = assetOf(id)!;
           if (a.price > v.balance) {
             this.say(this.reason('not_enough_folds'));
+            console.info(`[town] ${id} costs ${a.price}, ${v.balance} Folds kept`);
             return true;
           }
           return this.take(from, id, '', this.rot);
@@ -339,6 +392,10 @@ export class TownDesk {
         const placeId = o.userData.placeId as string | undefined;
         const it = placeId && v.items.find((i) => i.id === placeId);
         if (it) return this.take(from, it.asset, it.id, it.rot);
+        if (o.name === 'landmark' && this.model.doc.landmarks[this.land]) {
+          this.showLandmark();
+          return true;
+        }
         if (o === this.holder?.object3D) {
           // On the page but not on a building's own shape: the tile under the ray.
           if (!this.onPage(from)) return false;
@@ -357,6 +414,7 @@ export class TownDesk {
   }
 
   private take(side: Side, asset: string, placeId: string, rot: number): boolean {
+    this.closeCard();
     this.carry = { side, asset, placeId, rot, at: performance.now(), tapped: false, over: false, x: NaN, y: NaN, fits: '' };
     const obj = placeId ? this.page?.items.get(placeId) : undefined;
     if (obj) obj.visible = false;
@@ -428,6 +486,13 @@ export class TownDesk {
       this.redraw();
       this.say(reason ? this.reason(reason) : said);
     };
+    const was = c.placeId ? this.model.view().items.find((i) => i.id === c.placeId) : undefined;
+    if (was && c.over && c.x === was.x && c.y === was.y && c.rot === was.rot) {
+      // Let go where it stood: its card instead of a move.
+      this.redraw();
+      this.showCard(was);
+      return;
+    }
     if (c.over && !Number.isNaN(c.x)) {
       if (c.fits) return done(c.fits, '');
       const at = { land: this.land, x: c.x, y: c.y, rot: c.rot };
@@ -444,6 +509,130 @@ export class TownDesk {
     this.say(this.t.xr.hint, 0);
   }
 
+  // ------------------------------------------------------------ the card
+
+  /** A building's card: its maths once finished, FINISH NOW while it is a paper frame. */
+  private showCard(it: Placed, again = false): void {
+    this.closeCard();
+    const t = this.t;
+    const lang = getLang();
+    const lines: Line[] = [[this.name(it.asset).toUpperCase(), 0.02]];
+    let q: Question | undefined;
+    const tried = tries.get(it.id) ?? { attempt: 0, next_at: 0 };
+    if (it.ready) {
+      lines.push([t.status.ready, 0.013]);
+      if (hasFacts(it.asset)) {
+        lines.push([t.maths, 0.014, TEAL]);
+        for (const f of factsOf(shapeOf(it), pageTiles(this.model, it.land), gradeOf(this.model), lang)) this.wrap(f, lines);
+      }
+    } else {
+      lines.push([t.status.building(waitText(it.ready_at_ms - this.model.now(), lang)), 0.013]);
+      const wait = tried.next_at - Date.now();
+      if (wait > 0) lines.push([t.nextIn(waitText(wait, lang)), 0.013, ORANGE]);
+      else {
+        q = finishQuestion(shapeOf(it), gradeOf(this.model), tried.attempt, lang);
+        lines.push([t.finishNow, 0.014, TEAL]);
+        this.wrap(q.prompt, lines);
+      }
+    }
+    const group = this.cardGroup(lines);
+    if (q) q.choices.forEach((c, i) => this.cardButtons.push(this.host.button(`town_a${i}` as TownChoice, c, ANSWER_X[i], ANSWER_Z, 0xe8b64c)));
+    this.cardButtons.push(this.host.button('town_card', t.close, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
+    this.card = { id: it.id, group, q, attempt: tried.attempt, answered: false, ready: it.ready };
+    if (!again) console.info(`[town] card of ${it.asset}: ${q ? `asks ${q.kind}` : it.ready ? (hasFacts(it.asset) ? 'its maths' : 'finished') : 'waits'}`);
+  }
+
+  /** The page's landmark: what raised it and how many stars its mission has. */
+  private showLandmark(): void {
+    const lm = this.model.doc.landmarks[this.land];
+    if (!lm) return;
+    this.closeCard();
+    const t = this.t;
+    const lines: Line[] = [[this.name(lm.landmark).toUpperCase(), 0.02]];
+    this.wrap(t.landmarkBy(skillTitle(lm.skill, getLang())), lines);
+    lines.push([t.landmarkStars(lm.tier), 0.013, TEAL]);
+    this.wrap(t.landmarkFixed, lines);
+    const group = this.cardGroup(lines);
+    this.cardButtons.push(this.host.button('town_card', t.close, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
+    this.card = { id: '', group, attempt: 0, answered: true, ready: true };
+    console.info(`[town] card of the landmark ${lm.landmark}`);
+  }
+
+  /** Words cut to lines short enough to read beside the book. */
+  private wrap(text: string, into: Line[], height = 0.012): void {
+    let line = '';
+    for (const word of text.split(' ')) {
+      if (line && line.length + 1 + word.length > CARD_CHARS) {
+        into.push([line, height]);
+        line = word;
+      } else line = line ? `${line} ${word}` : word;
+    }
+    if (line) into.push([line, height]);
+  }
+
+  private cardGroup(lines: Line[]): Group {
+    const g = new Group();
+    g.name = 'town-card';
+    g.position.copy(CARD);
+    let y = 0;
+    for (const [text, height, ink] of lines) {
+      if (text) {
+        const l = new Label(text, ink === undefined ? { height } : { height, ink });
+        l.mesh.position.set(0, y - height / 2, 0);
+        g.add(l.mesh);
+        this.host.billboard(l.mesh);
+      }
+      y -= height * 1.45;
+    }
+    this.root.object3D!.add(g);
+    return g;
+  }
+
+  private closeCard(): void {
+    this.card?.group.removeFromParent();
+    this.card = undefined;
+    for (const e of this.cardButtons) if (e.active) this.host.remove(e);
+    this.cardButtons = [];
+  }
+
+  /** A card drawn again when its building finishes or while it waits, closed when the building is gone. */
+  private refreshCard(): void {
+    const c = this.card;
+    if (!c?.id || (c.q && c.answered)) return;
+    const it = this.model.view().items.find((i) => i.id === c.id);
+    if (!it) return this.closeCard();
+    // A card waiting for its next question counts down each second.
+    const waiting = !c.q && !c.ready && !c.answered;
+    if (it.ready !== c.ready || waiting) this.showCard(it, true);
+  }
+
+  private async answer(i: number): Promise<void> {
+    const c = this.card;
+    if (!c?.q || c.answered) return;
+    c.answered = true;
+    const t = this.t;
+    const right = i === c.q.right;
+    tries.set(c.id, { attempt: c.attempt + 1, next_at: right ? 0 : Date.now() + RETRY_MS });
+    const it = this.model.view().items.find((x) => x.id === c.id);
+    console.info(`[town] FINISH NOW ${c.q.kind}: ${right ? 'right' : 'wrong'}`);
+    if (!it) return this.closeCard();
+    if (!right) {
+      const hint = c.q.hint;
+      this.closeCard();
+      const lines: Line[] = [[this.name(it.asset).toUpperCase(), 0.02]];
+      this.wrap(t.wrong, lines);
+      lines.push(['', 0.006]);
+      this.wrap(hint, lines);
+      const group = this.cardGroup(lines);
+      this.cardButtons.push(this.host.button('town_card', t.ok, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
+      this.card = { id: it.id, group, attempt: c.attempt + 1, answered: true, ready: false };
+      return;
+    }
+    const reason = await this.model.act({ type: 'town_finish', place_id: c.id });
+    this.closeCard();
+    this.say(reason ? this.reason(reason) : t.right(this.name(it.asset)));
+  }
+
   // ------------------------------------------------------------ words
 
   private name(id: string): string {
@@ -457,6 +646,7 @@ export class TownDesk {
   dispose(): void {
     if (this.gone) return;
     this.gone = true;
+    this.closeCard();
     this.unlisten();
     this.model.dispose();
     for (const e of [this.root, this.holder, this.shelf, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);

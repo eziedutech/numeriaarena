@@ -11,12 +11,17 @@ import {
 import { getLang, type Lang } from '../settings.js';
 import { el, paperText } from '../home/paper.js';
 import { online } from '../offline.js';
-import { assetOf, footprint, LAND_KINDS, townRulesNow, type LandKind, type Placed } from './town-core.js';
+import { assetOf, footprint, LAND_KINDS, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
 import { classMap, takeCell, TownModel, type ClassMap } from './town-model.js';
 import { buildPage, foldUp, Ghost, type PageScene } from './town-scene.js';
 import { shelfPictures } from './town-thumbs.js';
-import { factsOf, finishQuestion, GRADES, type Grade, type Shape } from './town-facts.js';
+import { skillTitle, unmarked } from './town-landmarks.js';
+import { factsOf, finishQuestion, GRADES, type Grade } from './town-facts.js';
+import { gradeOf, GRADE_KEY, hasFacts, pageTiles, RETRY_MS, shapeOf, tries } from './town-maths.js';
 import { TOWN_TEXT, waitText, type TownText } from './town-text.js';
+
+/** What `selected` holds while the page's landmark is chosen. */
+const LANDMARK = '#landmark';
 
 /**
  * MY FOLD TOWN on a computer or phone: the page of the town drawn in its own
@@ -97,35 +102,6 @@ const CSS = `
 
 let open: TownPage | null = null;
 
-const GRADE_KEY = 'numeria.town.grade';
-const TRIES_KEY = 'numeria.town.tries';
-const RETRY_MS = 30_000;
-
-/** FINISH NOW tries by building, kept on the device so a reload does not skip the wait. */
-const tries = {
-  all(): Record<string, { attempt: number; next_at: number }> {
-    try {
-      return JSON.parse(localStorage.getItem(TRIES_KEY) ?? '{}') as Record<string, { attempt: number; next_at: number }>;
-    } catch {
-      return {};
-    }
-  },
-  get(id: string): { attempt: number; next_at: number } | undefined {
-    return this.all()[id];
-  },
-  set(id: string, v: { attempt: number; next_at: number }): void {
-    const all = this.all();
-    all[id] = v;
-    // Only the newest few are worth keeping.
-    const kept = Object.entries(all).slice(-50);
-    try {
-      localStorage.setItem(TRIES_KEY, JSON.stringify(Object.fromEntries(kept)));
-    } catch {
-      // Without storage no wait can be kept; the next question comes at once.
-    }
-  },
-};
-
 /** Opens the town over the page; one at a time. */
 export function openTown(): void {
   if (open) return;
@@ -152,7 +128,7 @@ class TownPage {
   private camera = new PerspectiveCamera(38, 1, 0.1, 100);
   private page?: PageScene;
   private ghost = new Ghost();
-  private folding: { obj: Group; start: number }[] = [];
+  private folding: { obj: Group; start: number; ms: number }[] = [];
   private frame = 0;
   private tick = 0;
 
@@ -283,7 +259,7 @@ class TownPage {
   private loop = (time: number) => {
     this.frame = requestAnimationFrame(this.loop);
     this.folding = this.folding.filter((f) => {
-      const t = (time - f.start) / 700;
+      const t = (time - f.start) / f.ms;
       foldUp(f.obj, f.start ? t : 0);
       if (!f.start) f.start = time;
       return t < 1;
@@ -312,12 +288,14 @@ class TownPage {
         this.readySeen.add(it.id);
         const obj = this.page.items.get(it.id);
         if (obj) {
-          this.folding.push({ obj: obj.children[0] as Group, start: 0 });
+          this.folding.push({ obj: obj.children[0] as Group, start: 0, ms: 700 });
           this.say(this.t.finished(this.name(it.asset)));
         }
       }
+      this.growLandmark();
     }
-    if (this.selected && !v.items.some((i) => i.id === this.selected)) this.selected = '';
+    if (this.selected && this.selected !== LANDMARK && !v.items.some((i) => i.id === this.selected)) this.selected = '';
+    if (this.selected === LANDMARK && !this.landmarkHere()) this.selected = '';
     this.drawCard(v.items);
     this.drawNote();
     this.showGhost();
@@ -367,38 +345,14 @@ class TownPage {
 
   private closedText(code: string, last: number): string {
     if (code !== 'land_not_full') return this.reason(code);
-    const { free, used } = this.pageTiles(last);
+    const { free, used } = pageTiles(this.model!, last);
     return this.t.landClosed(used, Math.ceil((free * townRulesNow().full_tenths) / 10));
-  }
-
-  /** Tiles of page `land` that can be built on, and those built. */
-  private pageTiles(land: number): { free: number; used: number } {
-    const kind = this.model!.view().lands[land];
-    const layout = townRulesNow().lands.find((l) => l.kind === kind)?.layout ?? [];
-    const free = layout.join('').split('').filter((c) => c === '.').length;
-    let used = 0;
-    for (const it of this.model!.view().items) {
-      if (it.land !== land) continue;
-      const a = assetOf(it.asset);
-      if (a) used += a.w * a.h;
-    }
-    return { free, used };
   }
 
   // ------------------------------------------------------------ maths
 
-  /** A seat's grade from its class; a guest picks one, grade 5 at first. */
   private grade(): Grade {
-    const seat = this.model?.seat;
-    let g = seat?.grade;
-    if (!seat) {
-      try {
-        g = Number(localStorage.getItem(GRADE_KEY) ?? localStorage.getItem('numeria.board.grade'));
-      } catch {
-        g = undefined;
-      }
-    }
-    return (GRADES as readonly number[]).includes(g ?? 0) ? (g as Grade) : 5;
+    return gradeOf(this.model);
   }
 
   private gradePicker(): void {
@@ -421,11 +375,6 @@ class TownPage {
     }
   }
 
-  private shapeOf(it: Placed): Shape {
-    const a = assetOf(it.asset)!;
-    const [w, h] = footprint(a, it.rot);
-    return { w, h, windows: a.windows, floors: a.floors };
-  }
 
   private finishLabel(b: HTMLButtonElement, id: string): void {
     const wait = (tries.get(id)?.next_at ?? 0) - Date.now();
@@ -438,7 +387,7 @@ class TownPage {
     const t = this.t;
     const tried = tries.get(it.id) ?? { attempt: 0, next_at: 0 };
     if (tried.next_at > Date.now()) return;
-    const q = finishQuestion(this.shapeOf(it), this.grade(), tried.attempt, this.lang);
+    const q = finishQuestion(shapeOf(it), this.grade(), tried.attempt, this.lang);
     const sheet = this.openCover(`${t.finishNow}: ${this.name(it.asset).toUpperCase()}`);
     el('p', '', sheet).textContent = t.finishNote;
     const ask = el('p', 'ask', sheet);
@@ -507,10 +456,17 @@ class TownPage {
 
   private drawCard(items: Placed[]): void {
     const it = items.find((i) => i.id === this.selected);
-    this.card.hidden = !it;
+    const lm = this.selected === LANDMARK ? this.landmarkHere() : undefined;
+    this.card.hidden = !it && !lm;
     this.card.innerHTML = '';
-    if (!it) return;
     const t = this.t;
+    if (lm) {
+      el('h3', '', this.card).textContent = this.name(lm.landmark);
+      const facts = el('ul', '', this.card);
+      for (const f of [t.landmarkBy(skillTitle(lm.skill, this.lang)), t.landmarkStars(lm.tier), t.landmarkFixed]) el('li', '', facts).textContent = f;
+      return;
+    }
+    if (!it) return;
     el('h3', '', this.card).textContent = this.name(it.asset);
     const status = el('p', 'status', this.card);
     status.textContent = it.ready ? t.status.ready : t.status.building(waitText(it.ready_at_ms - this.model!.now(), this.lang));
@@ -519,11 +475,10 @@ class TownPage {
       this.finishLabel(finish, it.id);
       finish.addEventListener('click', () => this.askFinish(it));
     } else {
-      const a = assetOf(it.asset);
-      if (a && a.group !== 'road' && a.group !== 'nature') {
+      if (hasFacts(it.asset)) {
         el('b', '', this.card).textContent = t.maths;
         const facts = el('ul', '', this.card);
-        for (const f of factsOf(this.shapeOf(it), this.pageTiles(it.land), this.grade(), this.lang)) el('li', '', facts).textContent = f;
+        for (const f of factsOf(shapeOf(it), pageTiles(this.model!, it.land), this.grade(), this.lang)) el('li', '', facts).textContent = f;
         if (!this.model!.seat) this.gradePicker();
       }
     }
@@ -624,9 +579,31 @@ class TownPage {
 
   private select(x: number, y: number): void {
     const it = this.itemAt(x, y);
-    this.selected = it?.id ?? '';
+    this.selected = it?.id ?? (this.onPlot(x, y) && this.landmarkHere() ? LANDMARK : '');
     this.redraw();
     if (it) this.say(`${this.name(it.asset)}. ${it.ready ? this.t.status.ready : ''}`);
+    else if (this.selected === LANDMARK) this.say(this.name(this.landmarkHere()!.landmark));
+  }
+
+  /** The landmark raised for this page, if one has been. */
+  private landmarkHere(): Landmark | undefined {
+    return this.model?.doc.landmarks[this.land];
+  }
+
+  private onPlot(x: number, y: number): boolean {
+    const kind = this.model?.view().lands[this.land];
+    const plot = townRulesNow().lands.find((l) => l.kind === kind)?.plot;
+    return !!plot && plot[0] === x && plot[1] === y;
+  }
+
+  /** A landmark seen for the first time folds up slowly, naming the skill that raised it. */
+  private growLandmark(): void {
+    const lm = this.landmarkHere();
+    const obj = this.page?.root.getObjectByName('landmark');
+    if (!lm || !obj || !unmarked('grown', this.model!.owner, [lm]).length) return;
+    this.folding.push({ obj: obj.children[0] as Group, start: 0, ms: 1600 });
+    this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, this.lang)));
+    console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
   }
 
   private itemAt(x: number, y: number): Placed | undefined {
@@ -659,9 +636,10 @@ class TownPage {
       };
       if (m.kind === 'idle') {
         const it = this.itemAt(this.cursor.x, this.cursor.y);
-        this.selected = it?.id ?? '';
+        const lm = !it && this.onPlot(this.cursor.x, this.cursor.y) ? this.landmarkHere() : undefined;
+        this.selected = it?.id ?? (lm ? LANDMARK : '');
         this.redraw();
-        this.say(`${this.t.tile(this.cursor.x, this.cursor.y)}: ${it ? this.name(it.asset) : this.t.empty}`);
+        this.say(`${this.t.tile(this.cursor.x, this.cursor.y)}: ${it ? this.name(it.asset) : lm ? this.name(lm.landmark) : this.t.empty}`);
       } else {
         this.showGhost();
         this.drawNote();

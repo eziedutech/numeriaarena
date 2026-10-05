@@ -2,6 +2,7 @@ import { sharedStore, type LocalStore } from '../storage.js';
 import { online } from '../offline.js';
 import { seatKey, studentState, type Student } from '../home/student.js';
 import { Book, earningsOf, loadTownCore, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
+import { guestLandmarks } from './town-landmarks.js';
 
 /**
  * One player's MY FOLD TOWN on this device. A guest's lives only here, its
@@ -83,6 +84,8 @@ export class TownModel {
     const seat = studentState();
     const owner = seat ? `seat:${seatKey(seat)}` : 'guest';
     const doc = (await store.town<TownDoc>(owner)) ?? { events: [], pending: [], refused: [], landmarks: [], skew_ms: 0 };
+    // A guest's landmarks come from the answers on this device, worked out again each time.
+    if (!seat) doc.landmarks = await guestLandmarks(store);
     const model = new TownModel(store, owner, seat, doc);
     model.rebuild();
     return model;

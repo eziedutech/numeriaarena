@@ -78,7 +78,8 @@ import { T, useLanguage } from './text.js';
 import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
-import { noteGuestPlay } from './town/town-model.js';
+import { noteGuestPlay, TownModel } from './town/town-model.js';
+import { skillTitle, unmarked } from './town/town-landmarks.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
 import { openTown } from './town/town-page.js';
 import { TOWN_TEXT } from './town/town-text.js';
@@ -1727,7 +1728,7 @@ export class GameSystem extends createSystem({
     const recap = this.race.recap();
     console.info('[race] recap', JSON.stringify(recap));
     clearCheckpoint();
-    this.saveAnswers(true);
+    const saved = this.saveAnswers(true);
     this.phase = 'recap';
     this.clearPlay();
     this.removeQuitCard();
@@ -1750,6 +1751,7 @@ export class GameSystem extends createSystem({
       ['build', T.build, 0xe0a33c],
       ['done', T.done, 0x3469c4],
     ]);
+    void this.landmarkNews(saved);
   }
 
   /** The teacher closed the Class Match room, or called another group: back to the menu, saying so. */
@@ -1783,7 +1785,7 @@ export class GameSystem extends createSystem({
   private showPracticeDone(points: number): void {
     this.phase = 'recap';
     this.removeQuitCard();
-    this.saveAnswers(true);
+    const saved = this.saveAnswers(true);
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
     noteGuestPlay(points);
     reportPlay({
@@ -1815,6 +1817,7 @@ export class GameSystem extends createSystem({
       ['build', T.build, 0xe0a33c],
       ['done', T.done, 0x3469c4],
     ]);
+    void this.landmarkNews(saved);
   }
 
   private clearPracticeCards(): void {
@@ -2630,16 +2633,51 @@ export class GameSystem extends createSystem({
 
   /** Writes the answers just judged to the device before anything else happens. */
   /** Keeps the answers judged so far; at the end of a play (`send`) they also go to the student's seat. */
-  private saveAnswers(send = false): void {
+  private saveAnswers(send = false): Promise<unknown> {
     const mode = this.race ? 'race' : 'practice';
     const events = this.race ? this.race.drainEvents() : (this.core?.drainEvents() ?? []);
     const s = studentState();
     const seat = s ? seatKey(s) : undefined;
     const store = this.store;
     if (events.length > 0 && !store) this.unsaved.push({ events, mode, seat });
-    if (!store) return;
+    if (!store) return Promise.resolve();
     const saved = events.length > 0 ? store.record(events, mode, seat) : Promise.resolve(0);
-    if (send && seat) void saved.then(() => syncAnswers(store));
+    return send && seat ? saved.then(() => syncAnswers(store)) : saved;
+  }
+
+  /**
+   * After a play, once its answers are kept (and sent, for a seat): a Fold
+   * Town landmark they raised is named on the results screen with its skill.
+   */
+  private async landmarkNews(saved: Promise<unknown>): Promise<void> {
+    try {
+      await saved;
+      const model = await TownModel.open();
+      try {
+        if (model.seat) await model.sync();
+        const desk = this.deskEntity()?.object3D;
+        if (this.phase !== 'recap' || !desk) return;
+        const fresh = unmarked('told', model.owner, model.doc.landmarks);
+        const lm = fresh[fresh.length - 1];
+        if (!lm) return;
+        const t = TOWN_TEXT[getLang()];
+        console.info(`[town] new landmark on the results: ${lm.landmark} from ${lm.skill}`);
+        const page = model.doc.landmarks.indexOf(lm);
+        const lines: [string, number][] = [[t.landmarkNews(t.names[lm.landmark] ?? lm.landmark, skillTitle(lm.skill, getLang())), 0.022]];
+        if (page >= model.view().lands.length) lines.push([t.landmarkWaits(page + 1), 0.016]);
+        lines.forEach(([text, height], i) => {
+          const l = new Label(text, { height: height * textScale(), ink: 0xb07a12 });
+          l.mesh.position.set(0, CHOICE_H + 0.03 - i * 0.022, ENVELOPE_Z);
+          desk.add(l.mesh);
+          this.labels.add(l.mesh);
+          this.practiceCards.push(l.mesh);
+        });
+      } finally {
+        model.dispose();
+      }
+    } catch (error) {
+      console.warn(`[town] could not check for new landmarks: ${String(error)}`);
+    }
   }
 
   private afterVerdict(v: Verdict | RaceVerdict): void {
