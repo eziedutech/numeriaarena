@@ -7,7 +7,8 @@ import type { Lang } from "./legal";
 /**
  * LEADERBOARD on a class's page: the same two boards the students see in the
  * game (HIGH STRIKE, the best points in one race the server judged, and MOST
- * DAYS, the days played), but every seat, with the names kept in this browser.
+ * DAYS, the days played, and CITY BUILDER, the Folds in finished buildings
+ * of MY FOLD TOWN), but every seat, with the names kept in this browser.
  * The teacher also decides here whether the class takes part in GLOBAL.
  */
 
@@ -20,6 +21,7 @@ interface Row {
 interface Boards {
   strike: Row[];
   days: Row[];
+  city: Row[];
   on_global: boolean;
 }
 
@@ -28,11 +30,13 @@ type Period = "month" | "all";
 const TEXT = {
   en: {
     title: "LEADERBOARD",
-    note: "What your students see in the game under MY CLASS. HIGH STRIKE counts only races the server judged: class races, rooms and FIND A RIVAL. MOST DAYS counts the days a student played anything, one a day at most.",
+    note: "What your students see in the game under MY CLASS. HIGH STRIKE counts only races the server judged: class races, rooms and FIND A RIVAL. MOST DAYS counts the days a student played anything, one a day at most. CITY BUILDER counts the Folds in the finished buildings of a student's MY FOLD TOWN (this month: finished this month).",
     periods: { month: "THIS MONTH", all: "ALL TIME" },
     month1: "A month starts on the 1st at 07:00 in Western Indonesia.",
     strike: "HIGH STRIKE",
     days: "MOST DAYS",
+    city: "CITY BUILDER",
+    folds: (n: number) => `${n} Folds`,
     cols: ["Place", "Student", ""],
     points: (n: number) => `${n} pts`,
     dayCount: (n: number) => (n === 1 ? "1 day" : `${n} days`),
@@ -45,11 +49,13 @@ const TEXT = {
   },
   id: {
     title: "PAPAN PERINGKAT",
-    note: "Yang dilihat siswa di game pada KELASKU. HIGH STRIKE hanya menghitung lomba yang dinilai server: lomba kelas, ruang, dan CARI LAWAN. PALING RAJIN menghitung hari siswa bermain apa saja, paling banyak satu per hari.",
+    note: "Yang dilihat siswa di game pada KELASKU. HIGH STRIKE hanya menghitung lomba yang dinilai server: lomba kelas, ruang, dan CARI LAWAN. PALING RAJIN menghitung hari siswa bermain apa saja, paling banyak satu per hari. CITY BUILDER menghitung Folds pada bangunan MY FOLD TOWN siswa yang sudah jadi (bulan ini: yang jadi bulan ini).",
     periods: { month: "BULAN INI", all: "SEPANJANG MASA" },
     month1: "Bulan baru mulai tanggal 1 pukul 07.00 WIB.",
     strike: "HIGH STRIKE",
     days: "PALING RAJIN",
+    city: "CITY BUILDER",
+    folds: (n: number) => `${n} Folds`,
     cols: ["Peringkat", "Siswa", ""],
     points: (n: number) => `${n} poin`,
     dayCount: (n: number) => `${n} hari`,
@@ -138,7 +144,7 @@ export function ClassLeaders({
       )}
       {boards && (
         <div className="report-sources">
-          {(["strike", "days"] as const).map((kind) => (
+          {(["strike", "days", "city"] as const).map((kind) => (
             <div key={kind} className="report-source">
               <h4>{t[kind]}</h4>
               {boards[kind].length === 0 ? (
@@ -159,7 +165,7 @@ export function ClassLeaders({
                       <tr key={r.place}>
                         <td className="num">{r.place}</td>
                         <td>{who(r.name)}</td>
-                        <td className="num">{kind === "strike" ? t.points(r.score) : t.dayCount(r.score)}</td>
+                        <td className="num">{kind === "strike" ? t.points(r.score) : kind === "days" ? t.dayCount(r.score) : t.folds(r.score)}</td>
                       </tr>
                     ))}
                   </tbody>

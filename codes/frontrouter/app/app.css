@@ -1744,3 +1744,72 @@ button.tool {
 .students td {
   white-space: nowrap;
 }
+
+.town-map {
+  display: grid;
+  gap: 3px;
+  max-width: 520px;
+  margin: 8px 0;
+}
+
+.town-map-row {
+  display: contents;
+}
+
+.town-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.town-cell.free {
+  background: rgba(255, 253, 248, 0.45);
+  outline: 1px dashed rgba(58, 63, 75, 0.25);
+}
+
+.town-cell.plain {
+  background: #b9d98a;
+}
+
+.town-cell.river {
+  background: linear-gradient(180deg, #b9d98a 40%, #7fb3e0 40%, #7fb3e0 60%, #b9d98a 60%);
+}
+
+.town-cell.hills {
+  background: linear-gradient(225deg, #a88d5e 30%, #b9d98a 30%);
+}
+
+.town-cell.beach {
+  background: linear-gradient(180deg, #b9d98a 75%, #f0dca0 75%);
+}
+
+.town-cell small {
+  font-size: 0.65rem;
+  color: var(--ink-soft);
+}
+
+.town-legend {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.town-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.town-legend .town-cell {
+  width: 18px;
+  display: inline-block;
+}
