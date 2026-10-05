@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { GAME } from "./game-link";
 
 /** The same choice as the game (`numeria.lang` on this site), so a page opens in the player's language. */
 export type Lang = "en" | "id";
@@ -48,7 +49,7 @@ export function PaperPage({
   return (
     <main className="paper-page">
       <nav className="paper-nav" aria-label={lang === "id" ? "Navigasi" : "Navigation"}>
-        <a className="paper-chip" href="/play/">
+        <a className="paper-chip" href={GAME}>
           {lang === "id" ? "KE GAME" : "TO THE GAME"}
         </a>
         <span className="paper-chip" role="group" aria-label={lang === "id" ? "Bahasa" : "Language"}>

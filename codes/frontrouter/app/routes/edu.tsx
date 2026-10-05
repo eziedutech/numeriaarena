@@ -4,6 +4,7 @@ import { AREAS, type Area, TOPICS, ready } from "../edu/catalog";
 import { EduNav } from "../edu/nav";
 import { useLang } from "../legal";
 import "../edu/edu.css";
+import { GAME } from "../game-link";
 
 export function meta() {
   return [
@@ -49,7 +50,7 @@ export default function Edu() {
 
   return (
     <main className="paper-page edu">
-      <EduNav lang={lang} setLang={setLang} back={{ href: "/play/", label: t.game }} />
+      <EduNav lang={lang} setLang={setLang} back={{ href: GAME, label: t.game }} />
       <article className="paper-sheet edu-index">
         <h1>{t.title}</h1>
         <p className="soft">{t.lead}</p>

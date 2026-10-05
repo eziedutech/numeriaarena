@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { GAME } from "./game-link";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -67,7 +68,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         <h1>{message}</h1>
         <p>{details}</p>
         <p>
-          <a href="/play/">Numeria Arena</a>
+          <a href={GAME}>Numeria Arena</a>
         </p>
         {stack && (
           <pre className="w-full p-4 overflow-x-auto">

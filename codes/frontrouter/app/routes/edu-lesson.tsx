@@ -7,6 +7,7 @@ import { EduNav } from "../edu/nav";
 import { Sheet } from "../edu/sheet";
 import { useLang } from "../legal";
 import "../edu/edu.css";
+import { GAME } from "../game-link";
 
 export function meta() {
   return [{ title: "Math Edu - Numeria Arena" }];
@@ -196,7 +197,7 @@ export default function EduLesson() {
                   {t.next}
                 </button>
               ) : (
-                <a className="btn blue" href="/play/">
+                <a className="btn blue" href={GAME}>
                   {t.game}
                 </a>
               )}

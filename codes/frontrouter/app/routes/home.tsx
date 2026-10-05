@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import type { Route } from "./+types/home";
+import { GAME } from "../game-link";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -15,11 +16,11 @@ export function meta({}: Route.MetaArgs) {
  */
 export default function Home() {
   useEffect(() => {
-    window.location.replace("/play/");
+    window.location.replace(GAME);
   }, []);
   return (
     <main className="paper-page">
-      <a className="paper-link" href="/play/">
+      <a className="paper-link" href={GAME}>
         Numeria Arena
       </a>
     </main>

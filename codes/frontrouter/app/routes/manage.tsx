@@ -8,6 +8,7 @@ import { MyClasses } from "../classes";
 import { RaceSetup, USUAL, describe, readSetup, type RoomSetup } from "../race-setup";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
+import { GAME } from "../game-link";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Manage - Numeria Arena" }, { name: "robots", content: "noindex" }];
@@ -352,7 +353,7 @@ export default function Manage() {
           ))}
         </ol>
         <span className="nav-right">
-          <a className="paper-chip" href="/play/">
+          <a className="paper-chip" href={GAME}>
             {t.toGame}
           </a>
           <LangSwitch lang={lang} setLang={setLang} />

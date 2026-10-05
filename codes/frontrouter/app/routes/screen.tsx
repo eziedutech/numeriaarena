@@ -5,6 +5,7 @@ import { avatarSvg, robotSvg } from "../avatar";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
 import { describe, type RoomSetup } from "../race-setup";
+import { GAME } from "../game-link";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Arena Screen - Numeria Arena" }, { name: "robots", content: "noindex" }];
@@ -455,7 +456,7 @@ export default function Screen() {
   return (
     <main className="arena">
       <nav className="paper-nav">
-        <a className="paper-chip" href="/play/">
+        <a className="paper-chip" href={GAME}>
           {t.toGame}
         </a>
         <LangSwitch lang={lang} setLang={setLang} />
