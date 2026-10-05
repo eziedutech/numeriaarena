@@ -1096,10 +1096,8 @@ button.tool {
 }
 
 .report-missed li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  line-height: 1.4;
 }
 
 @media (max-width: 640px) {

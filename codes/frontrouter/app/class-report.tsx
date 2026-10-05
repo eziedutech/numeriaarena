@@ -27,7 +27,8 @@ interface ReportRow {
 
 interface Report {
   skills: Record<string, I18n>;
-  templates: Record<string, { skill: string; prompt: I18n }>;
+  /** `example` is one question made from the template, with real numbers. */
+  templates: Record<string, { skill: string; prompt: I18n; example: I18n | null }>;
   rows: ReportRow[];
 }
 
@@ -48,6 +49,7 @@ const TEXT = {
     nothing: "No answers yet.",
     weakest: "weakest",
     missed: "Missed most",
+    like: "like",
     wrongOf: (wrong: number, total: number) => `${wrong} wrong of ${total}`,
     refresh: "REFRESH",
     download: "DOWNLOAD THE REPORT (CSV)",
@@ -68,6 +70,7 @@ const TEXT = {
     nothing: "Belum ada jawaban.",
     weakest: "terlemah",
     missed: "Paling sering salah",
+    like: "misalnya",
     wrongOf: (wrong: number, total: number) => `${wrong} salah dari ${total}`,
     refresh: "MUAT ULANG",
     download: "UNDUH LAPORAN (CSV)",
@@ -81,8 +84,8 @@ const TEXT = {
 
 const two = (n: number) => String(n).padStart(2, "0");
 const percent = (right: number, total: number) => (total > 0 ? Math.round((right / total) * 100) : 0);
-/** A question as a type: its numbers change each time, so they show as boxes. */
-const blank = (prompt: string) => prompt.replace(/\{[^}]*\}/gu, "□");
+/** A question with its numbers left out, when no example could be made. */
+const blank = (prompt: string) => prompt.replace(/\{[^}]*\}/gu, "...");
 const cell = (v: string) => (/[",\n\r]/u.test(v) ? `"${v.replace(/"/gu, '""')}"` : v);
 
 interface Tally {
@@ -136,6 +139,8 @@ export function ClassReport({
   useEffect(load, [base]);
 
   const skillTitle = (code: string) => report?.skills[code]?.[lang] ?? code;
+  const question = (tpl: Report["templates"][string] | undefined, id: string) =>
+    tpl ? (tpl.example?.[lang] ?? blank(tpl.prompt[lang])) : id;
   const rows = (report?.rows ?? []).filter((r) => pick === 0 || r.seat === pick);
 
   const download = () => {
@@ -151,7 +156,7 @@ export function ClassReport({
           r.source,
           r.skill,
           skillTitle(r.skill),
-          blank(report.templates[r.template_id]?.prompt[lang] ?? r.template_id),
+          question(report.templates[r.template_id], r.template_id),
           String(r.right),
           String(r.total),
         ]
@@ -239,11 +244,14 @@ export function ClassReport({
                             const tpl = report.templates[q.key];
                             return (
                               <li key={q.key}>
-                                <span>{tpl ? blank(tpl.prompt[lang]) : q.key}</span>
-                                <span className="soft">
+                                <div>
+                                  {tpl?.example && <span className="soft">{t.like} </span>}
+                                  {question(tpl, q.key)}
+                                </div>
+                                <div className="soft">
                                   {tpl ? `${skillTitle(tpl.skill)} · ` : ""}
                                   {t.wrongOf(q.total - q.right, q.total)}
-                                </span>
+                                </div>
                               </li>
                             );
                           })}

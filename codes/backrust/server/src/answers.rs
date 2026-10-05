@@ -6,6 +6,7 @@
 use axum::Json;
 use axum::extract::{Path, State as Extract};
 use axum::http::{HeaderMap, StatusCode};
+use foldlings_core::template::CompiledTemplate;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sqlx::PgPool;
@@ -211,10 +212,18 @@ pub(crate) async fn class_report(
         if let Some(title) = content.skills.get(skill) {
             skills.insert(skill.clone(), json!(title));
         }
+        if templates.contains_key(template) {
+            continue;
+        }
         if let Some(t) = content.templates.iter().find(|t| &t.id == template) {
+            // The prompt has the template's blanks; one question made from it reads as a real one.
+            let example = CompiledTemplate::compile(t.clone())
+                .ok()
+                .and_then(|c| c.instantiate(1).ok())
+                .map(|item| item.prompt);
             templates.insert(
                 template.clone(),
-                json!({ "skill": t.skill, "prompt": t.prompt }),
+                json!({ "skill": t.skill, "prompt": t.prompt, "example": example }),
             );
         }
     }

@@ -192,6 +192,10 @@ async fn own_answers_and_class_races_are_reported_apart() {
     );
     assert!(report["skills"][&t.skill]["en"].is_string());
     assert_eq!(report["templates"][&t.id]["skill"], json!(t.skill));
+    let example = report["templates"][&t.id]["example"]["en"]
+        .as_str()
+        .unwrap();
+    assert!(!example.contains('{'), "{example}");
     // Another adult sees nothing of it.
     let stranger = teacher(&db).await;
     let hidden = class_report(&db, &c, stranger, &id).await.unwrap_err();
