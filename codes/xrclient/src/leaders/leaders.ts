@@ -7,9 +7,10 @@ import { LEADERS_TEXT, type LeadersText } from './leaders-text.js';
 /**
  * The leaderboards over the home page: MY CLASS (a signed-in seat's class)
  * and GLOBAL, each ranking HIGH STRIKE (the best points in one race the
- * server judged) and MOST DAYS (days played), this month or all time. The
+ * server judged), MOST DAYS (days played) and CITY BUILDER, this month or all time. The
  * server sends the top ten and the seat's own row; nobody's place below the
- * top is shown but one's own. CITY BUILDER waits for the Fold Town.
+ * top is shown but one's own. CITY BUILDER ranks the Folds in a seat's
+ * finished Fold Town buildings.
  */
 
 const INK = '#3a3f4b';
@@ -35,6 +36,7 @@ interface Row {
 interface Boards {
   strike: Row[];
   days: Row[];
+  city: Row[];
   on_global?: boolean;
   class?: string;
 }
@@ -50,8 +52,6 @@ const CSS = `
 #leaders .tab { padding: 10px 18px; min-height: 48px; background: #f1e3c4; font-size: 18px; font-weight: 700; }
 #leaders .tab.on { background: ${INK}; color: ${PAPER}; }
 #leaders .tab.small { min-height: 40px; padding: 6px 14px; font-size: 16px; }
-#leaders .tab .soon { background: ${INK}; color: ${PAPER}; font-size: 12px; padding: 2px 6px; }
-#leaders .tab.on .soon { background: ${PAPER}; color: ${INK}; }
 #leaders .about { margin: 0; font-size: 17px; color: #6b6352; }
 #leaders .list { display: flex; flex-direction: column; gap: 8px; min-height: 120px; overflow-y: auto; }
 #leaders .row { display: grid; grid-template-columns: 64px 1fr auto auto; align-items: center; gap: 14px; padding: 8px 14px; background: #f8efdc; font-size: 22px; }
@@ -140,8 +140,7 @@ class Leaders {
     }
     const kinds = el('div', 'tabs', sheet);
     for (const k of ['strike', 'days', 'city'] as Kind[]) {
-      const b = this.tab(kinds, t[k], this.kind === k, () => this.pick({ kind: k }), true);
-      if (k === 'city') el('span', 'soon', b).textContent = t.soon;
+      this.tab(kinds, t[k], this.kind === k, () => this.pick({ kind: k }), true);
     }
     el('p', 'about', sheet).textContent = t.about[this.kind];
 
@@ -172,7 +171,6 @@ class Leaders {
 
   private async fill(list: HTMLElement): Promise<void> {
     const t = this.t;
-    if (this.kind === 'city') return void this.note(list, t.about.city);
     const seat = studentState();
     if (this.which === 'class' && !seat) return void this.note(list, t.signIn);
     if (!online()) return void this.note(list, t.offline);
@@ -205,7 +203,7 @@ class Leaders {
       loading.remove();
     }
 
-    const rows = this.kind === 'strike' ? boards.strike : boards.days;
+    const rows = boards[this.kind] ?? [];
     if (this.which === 'global' && boards.on_global === false) this.note(list, t.offClass);
     if (!rows.length) return void this.note(list, t.empty[this.kind]);
     let last = 0;
@@ -222,7 +220,7 @@ class Leaders {
       if (r.me) el('span', 'you', name).textContent = t.you;
       el('div', 'grade', row).textContent = this.which === 'global' ? [t.grade(r.grade), r.demo].filter(Boolean).join(' · ') : '';
       const score = el('div', 'score', row);
-      score.textContent = this.kind === 'strike' ? t.points(r.score) : t.dayCount(r.score);
+      score.textContent = this.kind === 'strike' ? t.points(r.score) : this.kind === 'days' ? t.dayCount(r.score) : t.folds(r.score);
       if (!r.me && r.place === 1) score.style.color = BLUE;
     }
   }
