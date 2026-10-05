@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
+import { ClassAi } from "./class-ai";
 import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
 
@@ -211,6 +212,7 @@ export function ClassReport({
       {report && (
         <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} mistake={mistake} seatName={seatName} />
       )}
+      {report && <ClassAi lang={lang} user={user} base={base} seat={pick} seatName={seatName} />}
       {report && (
         <div className="report-sources">
           {(["class", "own"] as const).map((source) => {

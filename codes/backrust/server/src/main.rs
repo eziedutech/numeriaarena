@@ -7,6 +7,7 @@ mod answers;
 mod auth;
 mod classes;
 mod demo_teacher;
+mod insight;
 mod organizer;
 mod rooms;
 
@@ -93,6 +94,7 @@ pub fn router(state: State) -> Router {
         .route("/api/classes/{id}/seats/{n}/group", post(classes::group))
         .route("/api/classes/{id}/groups", delete(classes::ungroup))
         .route("/api/classes/{id}/report", get(answers::report))
+        .route("/api/classes/{id}/insight", post(insight::insight))
         .route("/api/demo/teacher", post(demo_teacher::start))
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))

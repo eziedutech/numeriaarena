@@ -1536,3 +1536,11 @@ button.tool {
   max-width: none;
   font-size: 13px;
 }
+
+.ai-insight {
+  border-style: dashed;
+}
+
+.ai-insight .btn {
+  margin-top: 6px;
+}
