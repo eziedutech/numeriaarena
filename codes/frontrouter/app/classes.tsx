@@ -85,6 +85,7 @@ const TEXT = {
     none: "No classes yet.",
     trial: "Until an admin approves you: one class with up to 5 seats.",
     newClass: "NEW CLASS",
+    eduHint: "Paper lessons to show on the smartboard or share with the class",
     allClasses: "ALL CLASSES",
     race: "NEW RACE ROOM FOR THIS CLASS",
     open: "OPEN",
@@ -181,6 +182,7 @@ const TEXT = {
     none: "Belum ada kelas.",
     trial: "Sampai admin menyetujui Anda: satu kelas dengan paling banyak 5 kursi.",
     newClass: "KELAS BARU",
+    eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
     allClasses: "SEMUA KELAS",
     race: "BUAT RUANG LOMBA UNTUK KELAS INI",
     open: "BUKA",
@@ -345,9 +347,14 @@ export function MyClasses({ lang, user, trial, onRace }: { lang: Lang; user: Use
         <>
           <div className="admin-head">
             <h2>{t.title}</h2>
-            <button type="button" className="btn blue" onClick={() => setMaking(true)} disabled={!classes}>
-              {t.newClass}
-            </button>
+            <span className="head-buttons">
+              <a className="btn" href="/edu/" title={t.eduHint}>
+                MATH EDU
+              </a>
+              <button type="button" className="btn blue" onClick={() => setMaking(true)} disabled={!classes}>
+                {t.newClass}
+              </button>
+            </span>
           </div>
           <p className="soft">{t.intro}</p>
           {trial && <p className="soft">{t.trial}</p>}

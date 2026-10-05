@@ -47,6 +47,9 @@ const STAGE_H = 900;
 const HOME_EYE = new Vector3(0, 1.06, 0.2);
 const HOME_AT = new Vector3(0, 0.95, -0.22);
 
+/** Math Edu is a page of the site; the dev server here only has the game, so it points to the site's own dev server. */
+const EDU = import.meta.env.DEV ? `http://${location.hostname}:3320/edu/` : '/edu/';
+
 const ICONS: Record<string, string> = {
   practice: '<rect width="54" height="54" fill="#fff8ec"/><path d="M27 8 32 22 47 22 35 31 39 46 27 37 15 46 19 31 7 22 22 22z" fill="#3fb6a0"/><path d="M27 8 32 22 47 22 35 31 39 46 27 37z" fill="#2f8f7d"/>',
   robots: '<rect width="54" height="54" fill="#fff8ec"/><rect x="25.5" y="7" width="3" height="9" fill="#3a3f4b"/><rect x="21" y="5" width="12" height="4" fill="#3469c4"/><rect x="11" y="16" width="32" height="26" fill="#3469c4"/><path d="M27 16h16v26H27z" fill="#2a54a0"/><rect x="18" y="24" width="6" height="6" fill="#fff8ec"/><rect x="30" y="24" width="6" height="6" fill="#fff8ec"/><rect x="20" y="34" width="14" height="3" fill="#fff8ec"/>',
@@ -496,7 +499,7 @@ export class Home {
         card.setAttribute('aria-busy', 'true');
       }
     }
-    this.card('right', row++, t.tips, 'tips', COLORS.teal, () => this.message(t.tips[0], t.soonBody.tips), true);
+    this.card('right', row++, t.tips, 'tips', COLORS.teal, () => window.location.assign(EDU));
     this.card('right', row++, t.watch, 'watch', COLORS.violet, () => this.watch());
 
     // The town the player builds with the Folds they earn: a small round

@@ -38,7 +38,7 @@ const EN = {
   studentFirst: 'Enter your student code first',
   student: ["I'M IN A CLASS", 'Class code, seat and pictures'],
   teacher: ['TEACHER SIGN IN', 'Classes, rooms and reports'],
-  tips: ['MATH TIPS', 'Ways to understand primary maths'],
+  tips: ['MATH EDU', 'Paper lessons for grade 4 to 6'],
   watch: ['WATCH A MATCH', 'With a watch code, or the demo match'],
   town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
   board: ['LEADERBOARD', 'My class and the world'],
@@ -164,7 +164,6 @@ const EN = {
     other: 'Something went wrong. Try again.',
   } as Record<string, string>,
   soonBody: {
-    tips: 'Short lessons and tips for every topic in the game are on their way.',
     board:
       'Two boards: MY CLASS and GLOBAL. Each ranks HIGH STRIKE (the best race scores) and CITY BUILDER (the biggest Fold Towns), for this month or for all time. Players show only as made-up names, like BLUE CRANE 07.',
     town: 'Every right answer earns Folds. Soon you will spend them on paper houses, trees and bridges, and unlock a landmark for every topic you master.',
@@ -218,7 +217,7 @@ const ID: typeof EN = {
   studentFirst: 'Masukkan kode siswa dulu',
   student: ['AKU DI KELAS', 'Kode kelas, kursi, dan gambar'],
   teacher: ['MASUK SEBAGAI GURU', 'Kelas, ruang main, dan laporan'],
-  tips: ['TIPS MATEMATIKA', 'Cara memahami matematika SD'],
+  tips: ['MATH EDU', 'Pelajaran kertas kelas 4 sampai 6'],
   watch: ['TONTON PERTANDINGAN', 'Dengan kode tonton, atau pertandingan demo'],
   town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
   board: ['PAPAN PERINGKAT', 'Kelasku dan seluruh dunia'],
@@ -343,7 +342,6 @@ const ID: typeof EN = {
     other: 'Ada yang salah. Coba lagi.',
   } as Record<string, string>,
   soonBody: {
-    tips: 'Pelajaran singkat dan tips untuk setiap topik di game sedang disiapkan.',
     board:
       'Dua papan: KELASKU dan GLOBAL. Masing-masing memeringkat HIGH STRIKE (skor lomba terbaik) dan CITY BUILDER (Kota Lipat terbesar), untuk bulan ini atau sepanjang masa. Pemain hanya tampil dengan nama samaran, misalnya BLUE CRANE 07.',
     town: 'Setiap jawaban benar memberi Folds. Sebentar lagi kamu bisa membelanjakannya untuk rumah, pohon, dan jembatan kertas, dan membuka landmark untuk setiap topik yang kamu kuasai.',
