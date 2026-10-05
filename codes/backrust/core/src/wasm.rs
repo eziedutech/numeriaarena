@@ -305,3 +305,92 @@ impl RaceGame {
         serde_json::to_string(&self.inner.drain_answer_events()).unwrap_or_default()
     }
 }
+
+/// What the shop sells and the rules of Fold Town, as JSON.
+#[wasm_bindgen(js_name = townRules)]
+pub fn town_rules() -> String {
+    use crate::town::*;
+    serde_json::json!({
+        "catalog": CATALOG,
+        "cols": COLS,
+        "rows": ROWS,
+        "full_tenths": FULL_TENTHS,
+        "points_per_fold": POINTS_PER_FOLD,
+        "session_bonus": SESSION_BONUS,
+        "streak_step": STREAK_STEP,
+        "streak_max": STREAK_MAX,
+        "welcome": WELCOME_FOLDS,
+        "device_daily_cap": DEVICE_DAILY_CAP,
+    })
+    .to_string()
+}
+
+/// Folds earned from plays (`[{day, points, source}]`), as JSON.
+#[wasm_bindgen(js_name = townEarnings)]
+pub fn town_earnings(plays_json: &str) -> Result<String, JsError> {
+    let plays: Vec<crate::town::Play> = serde_json::from_str(plays_json).map_err(js)?;
+    serde_json::to_string(&crate::town::earnings(&plays)).map_err(js)
+}
+
+/// A town replayed from its events, kept to try and apply new ones.
+#[wasm_bindgen]
+pub struct TownBook {
+    town: crate::town::Town,
+    earned: u32,
+    refused: Vec<(String, crate::town::Refusal)>,
+}
+
+#[wasm_bindgen]
+impl TownBook {
+    /// `events_json`: town events in order. Refused ones are kept in `refused`.
+    #[wasm_bindgen(constructor)]
+    pub fn new(events_json: &str, earned: u32) -> Result<TownBook, JsError> {
+        let events: Vec<crate::town::TownEvent> = serde_json::from_str(events_json).map_err(js)?;
+        let (town, refused) = crate::town::Town::replay(&events, earned);
+        Ok(TownBook {
+            town,
+            earned,
+            refused,
+        })
+    }
+
+    /// Events the replay refused, as `[[event_id, reason], ...]`.
+    pub fn refused(&self) -> String {
+        let list: Vec<(&str, &str)> = self
+            .refused
+            .iter()
+            .map(|(id, r)| (id.as_str(), r.code()))
+            .collect();
+        serde_json::to_string(&list).unwrap_or_default()
+    }
+
+    #[wasm_bindgen(js_name = setEarned)]
+    pub fn set_earned(&mut self, earned: u32) {
+        self.earned = earned;
+    }
+
+    /// Applies one event; returns "" or the reason it was refused.
+    pub fn apply(&mut self, event_json: &str) -> Result<String, JsError> {
+        let ev: crate::town::TownEvent = serde_json::from_str(event_json).map_err(js)?;
+        Ok(match self.town.apply(&ev, self.earned) {
+            Ok(()) => String::new(),
+            Err(r) => r.code().to_string(),
+        })
+    }
+
+    /// Whether an asset fits: "" or the reason, for the placing shadow.
+    pub fn fits(&self, asset: &str, land: u16, x: u8, y: u8, rot: u16, ignore: &str) -> String {
+        let Some(a) = crate::town::asset_by_id(asset) else {
+            return crate::town::Refusal::UnknownAsset.code().to_string();
+        };
+        let ignore = (!ignore.is_empty()).then_some(ignore);
+        match self.town.fits(a, land, x, y, rot, ignore) {
+            Ok(()) => String::new(),
+            Err(r) => r.code().to_string(),
+        }
+    }
+
+    pub fn view(&self, now_ms: f64) -> String {
+        serde_json::to_string(&self.town.view(self.earned, now_ms as i64)).unwrap_or_default()
+    }
+}

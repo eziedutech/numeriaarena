@@ -14,6 +14,7 @@ pub mod session;
 pub mod setup;
 pub mod sim;
 pub mod template;
+pub mod town;
 pub mod validate;
 
 #[cfg(feature = "wasm")]
