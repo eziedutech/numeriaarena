@@ -321,6 +321,12 @@ pub fn town_rules() -> String {
         "streak_max": STREAK_MAX,
         "welcome": WELCOME_FOLDS,
         "device_daily_cap": DEVICE_DAILY_CAP,
+        "lands": LAND_KINDS
+            .iter()
+            .map(|k| serde_json::json!({ "kind": k, "plot": k.plot(), "layout": k.layout() }))
+            .collect::<Vec<_>>(),
+        "map_cols": MAP_COLS,
+        "map_rows": MAP_ROWS,
     })
     .to_string()
 }

@@ -11,6 +11,7 @@ mod insight;
 mod leaderboard;
 mod organizer;
 mod rooms;
+mod town;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -104,6 +105,9 @@ pub fn router(state: State) -> Router {
         )
         .route("/api/leaderboard", get(leaderboard::global))
         .route("/api/student/leaderboard", get(leaderboard::for_student))
+        .route("/api/student/town/map", get(town::student_map))
+        .route("/api/student/town/plot", post(town::student_plot))
+        .route("/api/classes/{id}/town/map", get(town::class_map))
         .route("/api/demo/teacher", post(demo_teacher::start))
         .route("/api/student/sign-in", post(classes::student_sign_in))
         .route("/api/student/me", get(classes::student_me))

@@ -96,6 +96,135 @@ pub const ROWS: u8 = 7;
 pub const FULL_TENTHS: u32 = 7;
 pub const MAX_LANDS: usize = 24;
 
+/// The kind of a page of land, chosen before building on it. Its nature
+/// (water, hills, sand) stays and cannot be built on; every page keeps one
+/// marked plot for a landmark.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LandKind {
+    /// Every tile free.
+    #[default]
+    Plain,
+    /// A river along one row; the landmark plot stands on the water.
+    River,
+    /// Hills in one corner.
+    Hills,
+    /// Sand along one side.
+    Beach,
+}
+
+pub const LAND_KINDS: [LandKind; 4] = [
+    LandKind::Plain,
+    LandKind::River,
+    LandKind::Hills,
+    LandKind::Beach,
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Tile {
+    Free,
+    Water,
+    Hill,
+    Sand,
+    /// Kept for a landmark.
+    Plot,
+}
+
+impl Tile {
+    /// One character per tile, for drawing a page from the rules.
+    pub fn mark(self) -> char {
+        match self {
+            Tile::Free => '.',
+            Tile::Water => '~',
+            Tile::Hill => '^',
+            Tile::Sand => ':',
+            Tile::Plot => '*',
+        }
+    }
+}
+
+impl LandKind {
+    pub fn code(self) -> &'static str {
+        match self {
+            LandKind::Plain => "plain",
+            LandKind::River => "river",
+            LandKind::Hills => "hills",
+            LandKind::Beach => "beach",
+        }
+    }
+
+    pub fn of_code(code: &str) -> Option<LandKind> {
+        LAND_KINDS.into_iter().find(|k| k.code() == code)
+    }
+
+    /// The landmark plot of a page of this kind.
+    pub fn plot(self) -> (u8, u8) {
+        match self {
+            LandKind::Plain => (8, 1),
+            LandKind::River => (5, 3),
+            LandKind::Hills => (8, 0),
+            LandKind::Beach => (8, 5),
+        }
+    }
+
+    pub fn tile(self, x: u8, y: u8) -> Tile {
+        if (x, y) == self.plot() {
+            return Tile::Plot;
+        }
+        match self {
+            LandKind::River if y == 3 => Tile::Water,
+            LandKind::Hills if (x >= 7 && y <= 1) || (x, y) == (9, 2) => Tile::Hill,
+            LandKind::Beach if y == ROWS - 1 => Tile::Sand,
+            _ => Tile::Free,
+        }
+    }
+
+    /// Tiles a building could stand on.
+    pub fn free_tiles(self) -> u32 {
+        (0..ROWS)
+            .flat_map(|y| (0..COLS).map(move |x| (x, y)))
+            .filter(|&(x, y)| self.tile(x, y) == Tile::Free)
+            .count() as u32
+    }
+
+    /// The page as rows of tile marks.
+    pub fn layout(self) -> Vec<String> {
+        (0..ROWS)
+            .map(|y| (0..COLS).map(|x| self.tile(x, y).mark()).collect())
+            .collect()
+    }
+}
+
+/// The class map: every seat's land as one cell of MAP_COLS x MAP_ROWS. A
+/// student picks a free cell for their first land; each later land joins
+/// beside their own when there is room, else it is only a new page.
+pub const MAP_COLS: u8 = 10;
+pub const MAP_ROWS: u8 = 8;
+
+pub fn on_map(x: u8, y: u8) -> bool {
+    x < MAP_COLS && y < MAP_ROWS
+}
+
+/// The cell a later land takes on the class map: the first free cell beside
+/// one of the student's own (`own` in the order they were taken; right,
+/// below, left, above), or None when every neighbour is taken.
+pub fn next_cell(own: &[(u8, u8)], taken: impl Fn((u8, u8)) -> bool) -> Option<(u8, u8)> {
+    for &(x, y) in own {
+        let (x, y) = (i16::from(x), i16::from(y));
+        for (nx, ny) in [(x + 1, y), (x, y + 1), (x - 1, y), (x, y - 1)] {
+            if nx < 0 || ny < 0 {
+                continue;
+            }
+            let cell = (nx as u8, ny as u8);
+            if on_map(cell.0, cell.1) && !own.contains(&cell) && !taken(cell) {
+                return Some(cell);
+            }
+        }
+    }
+    None
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Group {
@@ -207,8 +336,13 @@ pub fn footprint(a: &Asset, rot: u16) -> (u8, u8) {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TownEvent {
-    /// Opens the next page of land.
-    TownLand { event_id: String, at_ms: i64 },
+    /// Opens the next page of land, of the kind chosen.
+    TownLand {
+        event_id: String,
+        at_ms: i64,
+        #[serde(default)]
+        kind: LandKind,
+    },
     TownPlace {
         event_id: String,
         at_ms: i64,
@@ -278,6 +412,10 @@ pub enum Refusal {
     OffLand,
     /// Another building stands there.
     Taken,
+    /// Water, a hill or sand: the page's own nature.
+    Nature,
+    /// Kept for a landmark.
+    LandmarkPlot,
     NotEnoughFolds,
     UnknownPlace,
     /// A new page opens only once the last one is full enough.
@@ -296,6 +434,8 @@ impl Refusal {
             Refusal::BadRotation => "bad_rotation",
             Refusal::OffLand => "off_land",
             Refusal::Taken => "taken",
+            Refusal::Nature => "nature",
+            Refusal::LandmarkPlot => "landmark_plot",
             Refusal::NotEnoughFolds => "not_enough_folds",
             Refusal::UnknownPlace => "unknown_place",
             Refusal::LandNotFull => "land_not_full",
@@ -346,7 +486,7 @@ impl Placed {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Town {
     /// Pages of land, in the order they were opened.
-    pub lands: u16,
+    pub lands: Vec<LandKind>,
     pub items: Vec<Placed>,
     #[serde(skip)]
     seen: BTreeSet<String>,
@@ -384,8 +524,10 @@ impl Town {
     }
 
     /// Tiles a building could stand on.
-    pub fn free_tiles(&self, _land: u16) -> u32 {
-        u32::from(COLS) * u32::from(ROWS)
+    pub fn free_tiles(&self, land: u16) -> u32 {
+        self.lands
+            .get(usize::from(land))
+            .map_or(0, |k| k.free_tiles())
     }
 
     pub fn used_tiles(&self, land: u16) -> u32 {
@@ -405,10 +547,10 @@ impl Town {
 
     /// A new page may open: the first one, or once the last is full enough.
     pub fn may_open_land(&self) -> Result<(), Refusal> {
-        if usize::from(self.lands) >= MAX_LANDS {
+        if self.lands.len() >= MAX_LANDS {
             return Err(Refusal::TooManyLands);
         }
-        if self.lands > 0 && !self.is_full(self.lands - 1) {
+        if !self.lands.is_empty() && !self.is_full(self.lands.len() as u16 - 1) {
             return Err(Refusal::LandNotFull);
         }
         Ok(())
@@ -428,9 +570,9 @@ impl Town {
         if !rot.is_multiple_of(90) || rot >= 360 {
             return Err(Refusal::BadRotation);
         }
-        if land >= self.lands {
+        let Some(kind) = self.lands.get(usize::from(land)) else {
             return Err(Refusal::NoLand);
-        }
+        };
         let (w, h) = footprint(a, rot);
         if u16::from(x) + u16::from(w) > u16::from(COLS)
             || u16::from(y) + u16::from(h) > u16::from(ROWS)
@@ -439,6 +581,11 @@ impl Town {
         }
         for ty in y..y + h {
             for tx in x..x + w {
+                match kind.tile(tx, ty) {
+                    Tile::Free => {}
+                    Tile::Plot => return Err(Refusal::LandmarkPlot),
+                    _ => return Err(Refusal::Nature),
+                }
                 if self
                     .items
                     .iter()
@@ -458,9 +605,9 @@ impl Town {
             return Err(Refusal::Duplicate);
         }
         match ev {
-            TownEvent::TownLand { .. } => {
+            TownEvent::TownLand { kind, .. } => {
                 self.may_open_land()?;
-                self.lands += 1;
+                self.lands.push(*kind);
             }
             TownEvent::TownPlace {
                 event_id,
@@ -564,7 +711,7 @@ impl Town {
 /// The town as the game draws it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct TownView {
-    pub lands: u16,
+    pub lands: Vec<LandKind>,
     pub items: Vec<PlacedView>,
     pub earned: u32,
     pub balance: i64,
@@ -585,7 +732,7 @@ pub struct PlacedView {
 impl Town {
     pub fn view(&self, earned: u32, now_ms: i64) -> TownView {
         TownView {
-            lands: self.lands,
+            lands: self.lands.clone(),
             items: self
                 .items
                 .iter()
@@ -609,9 +756,14 @@ mod tests {
     use super::*;
 
     fn land(id: &str) -> TownEvent {
+        land_of(id, LandKind::Plain)
+    }
+
+    fn land_of(id: &str, kind: LandKind) -> TownEvent {
         TownEvent::TownLand {
             event_id: id.into(),
             at_ms: 0,
+            kind,
         }
     }
 
@@ -808,11 +960,11 @@ mod tests {
         let mut t = Town::default();
         t.apply(&land("l0"), 10_000).unwrap();
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        // 48 roads cover 48 of 70 tiles: not yet 70%.
+        // 48 roads cover 48 of the 69 free tiles: not yet 70%.
         let mut n = 0;
         for y in 0..ROWS {
             for x in 0..COLS {
-                if n < 48 {
+                if n < 48 && (x, y) != LandKind::Plain.plot() {
                     t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)
                         .unwrap();
                     n += 1;
@@ -821,11 +973,11 @@ mod tests {
         }
         assert!(!t.is_full(0));
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        t.apply(&place("r48", "road_cross", 0, 8, 4, 0), 10_000)
+        t.apply(&place("r48", "road_cross", 0, 9, 4, 0), 10_000)
             .unwrap();
         assert!(t.is_full(0));
         t.apply(&land("l1"), 10_000).unwrap();
-        assert_eq!(t.lands, 2);
+        assert_eq!(t.lands.len(), 2);
         t.apply(&place("h", "house_hut", 1, 0, 0, 0), 10_000)
             .unwrap();
     }
@@ -874,6 +1026,82 @@ mod tests {
         assert!(json.contains("\"type\":\"town_place\""));
         let back: TownEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(back, events[2]);
+    }
+
+    #[test]
+    fn nature_and_the_landmark_plot_cannot_be_built_on() {
+        let mut t = Town::default();
+        t.apply(&land_of("l0", LandKind::River), 1000).unwrap();
+        assert_eq!(t.free_tiles(0), 60);
+        assert_eq!(
+            t.apply(&place("w", "road_straight", 0, 0, 3, 0), 1000),
+            Err(Refusal::Nature)
+        );
+        assert_eq!(
+            t.apply(&place("p", "road_straight", 0, 5, 3, 0), 1000),
+            Err(Refusal::LandmarkPlot)
+        );
+        // A turned two-storey house would reach into the river.
+        t.apply(&place("a", "tree_round", 0, 0, 0, 0), 1000)
+            .unwrap();
+        t.apply(&place("b", "tree_round", 0, 1, 0, 0), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place("h", "house_two_storey", 0, 4, 2, 90), 1000),
+            Err(Refusal::Nature)
+        );
+        t.apply(&place("h", "house_two_storey", 0, 4, 1, 90), 1000)
+            .unwrap();
+        assert_eq!(LandKind::Plain.free_tiles(), 69);
+        assert_eq!(LandKind::Hills.free_tiles(), 63);
+        assert_eq!(LandKind::Beach.free_tiles(), 59);
+        assert_eq!(LandKind::Beach.layout()[6], "::::::::::");
+        assert_eq!(LandKind::Beach.layout()[5], "........*.");
+        assert_eq!(LandKind::Hills.layout()[0], ".......^*^");
+        assert_eq!(LandKind::River.layout()[3], "~~~~~*~~~~");
+        for k in LAND_KINDS {
+            assert_eq!(LandKind::of_code(k.code()), Some(k));
+            assert_eq!(serde_json::to_value(k).unwrap(), k.code());
+        }
+    }
+
+    #[test]
+    fn later_lands_may_be_of_another_kind() {
+        let mut t = Town::default();
+        t.apply(&land_of("l0", LandKind::Beach), 10_000).unwrap();
+        // 42 of the 59 free tiles is just past 70%.
+        let free: Vec<(u8, u8)> = (0..ROWS)
+            .flat_map(|y| (0..COLS).map(move |x| (x, y)))
+            .filter(|&(x, y)| LandKind::Beach.tile(x, y) == Tile::Free)
+            .take(42)
+            .collect();
+        for (n, (x, y)) in free.into_iter().enumerate() {
+            t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)
+                .unwrap();
+        }
+        assert!(t.is_full(0));
+        t.apply(&land_of("l1", LandKind::Hills), 10_000).unwrap();
+        assert_eq!(t.lands, vec![LandKind::Beach, LandKind::Hills]);
+        let json = r#"{"type":"town_land","event_id":"x","at_ms":1}"#;
+        let ev: TownEvent = serde_json::from_str(json).unwrap();
+        assert!(matches!(
+            ev,
+            TownEvent::TownLand {
+                kind: LandKind::Plain,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_later_land_joins_beside_the_first_when_there_is_room() {
+        let taken = [(4u8, 3u8), (3, 4)];
+        let is_taken = |c| taken.contains(&c);
+        assert_eq!(next_cell(&[(3, 3)], is_taken), Some((2, 3)));
+        assert_eq!(next_cell(&[(9, 7)], |_| false), Some((8, 7)));
+        assert_eq!(next_cell(&[(0, 0), (1, 0)], |_| false), Some((0, 1)));
+        assert_eq!(next_cell(&[(0, 0)], |_| true), None);
+        assert!(on_map(9, 7) && !on_map(10, 0) && !on_map(0, 8));
     }
 
     #[test]
