@@ -92,6 +92,7 @@ const TEXT = {
     maxTokens: "Max tokens",
     priceIn: "USD a million tokens in",
     priceOut: "USD a million tokens out",
+    addFirst: "ADD A PROVIDER",
     addLink: "ADD BACKUP",
     remove: "REMOVE",
     saveChain: "SAVE",
@@ -169,6 +170,7 @@ const TEXT = {
     maxTokens: "Token maksimum",
     priceIn: "USD per sejuta token masuk",
     priceOut: "USD per sejuta token keluar",
+    addFirst: "PILIH PENYEDIA",
     addLink: "TAMBAH CADANGAN",
     remove: "BUANG",
     saveChain: "SIMPAN",
@@ -621,7 +623,14 @@ function Chain({ t, user, task, providers, onSaved }: { t: T; user: User; task: 
               <input className="field short" inputMode="decimal" value={d.price_out} onChange={(e) => change(i, { price_out: e.target.value })} />
             </label>
           </div>
-          <button type="button" className="btn small" onClick={() => setDrafts(drafts.filter((_, j) => j !== i))}>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => {
+              setSaved(false);
+              setDrafts(drafts.filter((_, j) => j !== i));
+            }}
+          >
             {t.remove}
           </button>
         </div>
@@ -633,14 +642,18 @@ function Chain({ t, user, task, providers, onSaved }: { t: T; user: User; task: 
           <button
             type="button"
             className="btn small"
-            onClick={() => setDrafts([...drafts, { provider: allowed[0].code, model: "", max_tokens: "8000", price_in: "0", price_out: "0" }])}
+            onClick={() => {
+              setSaved(false);
+              setDrafts([...drafts, { provider: allowed[0].code, model: "", max_tokens: "8000", price_in: "0", price_out: "0" }]);
+            }}
           >
-            {t.addLink}
+            {drafts.length === 0 ? t.addFirst : t.addLink}
           </button>
         )}
         <button
           type="button"
           className="btn small blue"
+          disabled={drafts.length === 0 && task.chain.length === 0}
           onClick={() => {
             setError("");
             const chain = drafts.map((d) => ({
