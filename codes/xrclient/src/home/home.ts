@@ -206,8 +206,9 @@ export class Home {
   private askedToRegister = false;
   /**
    * Whether the player opened the sign-in on this page. A session kept from
-   * before is checked by itself on every load: a server out of reach then
-   * shows on the teacher card, not as a box to close each time.
+   * before is checked by itself on every load: a server out of reach, or a
+   * session it no longer accepts, then shows on the teacher card, not as a
+   * box to close each time.
    */
   private signInAsked = false;
   /** Opened in a headset's own browser: XR or this window, and no smartboard. */
@@ -263,7 +264,7 @@ export class Home {
         this.askedToRegister = true;
         this.registration(s.me);
       }
-      if (s.kind === 'error' && (s.code !== 'offline' || this.signInAsked)) this.message(this.t.teacher[0], this.errorText(s.code));
+      if (s.kind === 'error' && this.signInAsked) this.message(this.t.teacher[0], this.errorText(s.code));
     });
     startTeacher()
       .then((r) => {
@@ -471,10 +472,11 @@ export class Home {
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
-      if (teacher.kind === 'error' && teacher.code === 'offline') {
+      if (teacher.kind === 'error') {
+        const note = teacher.code === 'offline' ? t.serverAway : t.signInAgain;
         const sub = card.querySelector('.sub');
-        if (sub) sub.textContent = t.serverAway;
-        card.setAttribute('aria-label', `${t.teacher[0]}. ${t.serverAway}`);
+        if (sub) sub.textContent = note;
+        card.setAttribute('aria-label', `${t.teacher[0]}. ${note}`);
       }
       if (teacher.kind === 'loading') {
         const sub = card.querySelector('.sub');
