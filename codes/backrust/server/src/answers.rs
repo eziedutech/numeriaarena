@@ -191,6 +191,28 @@ const REPORT_SQL: &str = "
 /// Seat number, source, template, skill, first tries right, first tries.
 type ReportRow = (i16, String, String, String, i64, i64);
 
+/// Per seat, source, skill and kind of mistake: wrong first tries whose
+/// answer was a lure made for that mistake (like adding the denominators).
+const MISTAKES_SQL: &str = "
+    WITH seats AS (SELECT id, number FROM class_seats WHERE class_id = $1)
+    SELECT s.number, 'class' AS source, COALESCE(a.event->>'skill', ''), a.event->>'misconception', count(*)
+    FROM seats s
+    JOIN match_seat_results r ON r.class_seat_id = s.id AND r.official
+    JOIN match_answers a ON a.match_id = r.match_id AND a.seat = r.seat
+    WHERE a.event->>'result' = 'wrong' AND a.event->>'attempt' = '1'
+      AND COALESCE(a.event->>'misconception', '') <> ''
+    GROUP BY 1, 2, 3, 4
+    UNION ALL
+    SELECT s.number, 'own', e.skill, e.misconception, count(*)
+    FROM seats s
+    JOIN seat_answers e ON e.class_seat_id = s.id
+    WHERE NOT e.correct AND e.attempt = 1 AND COALESCE(e.misconception, '') <> ''
+    GROUP BY 1, 2, 3, 4
+    ORDER BY 1, 2, 3, 4";
+
+/// Seat number, source, skill, kind of mistake, how many.
+type MistakeRow = (i16, String, String, String, i64);
+
 /// The class's report for its teacher, with the titles of its skills and
 /// the prompts of its questions.
 pub(crate) async fn class_report(
@@ -240,7 +262,20 @@ pub(crate) async fn class_report(
             })
         })
         .collect();
-    Ok(json!({ "label": label, "skills": skills, "templates": templates, "rows": rows }))
+    let mistakes: Vec<MistakeRow> = sqlx::query_as(MISTAKES_SQL).bind(id).fetch_all(db).await?;
+    let mistakes: Vec<Value> = mistakes
+        .iter()
+        .map(|(seat, source, skill, code, count)| {
+            json!({ "seat": seat, "source": source, "skill": skill, "misconception": code, "count": count })
+        })
+        .collect();
+    Ok(json!({
+        "label": label,
+        "skills": skills,
+        "templates": templates,
+        "rows": rows,
+        "mistakes": mistakes,
+    }))
 }
 
 /// `GET /api/classes/{id}/report`.

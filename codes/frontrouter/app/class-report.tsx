@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
+import { ClassInsight, type MistakeRow } from "./class-insight";
 import type { Lang } from "./legal";
 
 /**
@@ -30,6 +31,8 @@ interface Report {
   /** `example` is one question made from the template, with real numbers. */
   templates: Record<string, { skill: string; prompt: I18n; example: I18n | null }>;
   rows: ReportRow[];
+  /** Wrong first tries by the kind of mistake their answer showed. */
+  mistakes: (MistakeRow & { source: "class" | "own" })[];
 }
 
 /** A skill is called the weakest only with at least this many first tries. */
@@ -142,6 +145,11 @@ export function ClassReport({
   const question = (tpl: Report["templates"][string] | undefined, id: string) =>
     tpl ? (tpl.example?.[lang] ?? blank(tpl.prompt[lang])) : id;
   const rows = (report?.rows ?? []).filter((r) => pick === 0 || r.seat === pick);
+  const mistakes = (report?.mistakes ?? []).filter((m) => pick === 0 || m.seat === pick);
+  const seatName = (n: number) => {
+    const s = seats.find((x) => x.number === n);
+    return `${two(n)} ${names[n] || s?.pseudonym || ""}`.trim();
+  };
 
   const download = () => {
     if (!report) return;
@@ -193,6 +201,9 @@ export function ClassReport({
         <p className="err" role="alert">
           {t.errors[error] ?? t.errors.other}
         </p>
+      )}
+      {report && (
+        <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} seatName={seatName} />
       )}
       {report && (
         <div className="report-sources">

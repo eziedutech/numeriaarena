@@ -1095,6 +1095,70 @@ button.tool {
   padding-left: 18px;
 }
 
+/* Insights: skills by level, the mistakes made most, what to practise next. */
+.insight {
+  margin: 12px 0 20px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(58, 63, 75, 0.12);
+  border-radius: 10px;
+}
+
+.insight h4 {
+  margin: 0 0 4px;
+  letter-spacing: 0.04em;
+}
+
+.insight-levels {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.insight-level {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+}
+
+.insight-level-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  min-width: 11em;
+}
+
+.insight-level.strong .insight-level-name {
+  background: #bfe3c9;
+}
+
+.insight-level.middle .insight-level-name {
+  background: #fde8c4;
+}
+
+.insight-level.practice .insight-level-name {
+  background: #f8c2bf;
+}
+
+.insight-level.few .insight-level-name {
+  background: rgba(58, 63, 75, 0.08);
+}
+
+.insight-skill {
+  padding: 2px 8px;
+  border: 1px solid rgba(58, 63, 75, 0.12);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.insight-head {
+  margin: 12px 0 4px;
+  font-weight: 700;
+}
+
 .report-missed li {
   margin-bottom: 8px;
   line-height: 1.4;

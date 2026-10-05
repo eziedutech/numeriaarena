@@ -159,7 +159,11 @@ async fn own_answers_and_class_races_are_reported_apart() {
     let batch = vec![
         answer(&c, "e1", "correct", 1),
         answer(&c, "e2", "correct", 1),
-        answer(&c, "e3", "wrong", 1),
+        {
+            let mut e = answer(&c, "e3", "wrong", 1);
+            e.event["misconception"] = json!("off_by_one");
+            e
+        },
         answer(&c, "e4", "correct", 2),
         answer(&c, "e5", "void", 1),
         stray,
@@ -191,6 +195,10 @@ async fn own_answers_and_class_races_are_reported_apart() {
         ]
     );
     assert!(report["skills"][&t.skill]["en"].is_string());
+    assert_eq!(
+        report["mistakes"],
+        json!([{ "seat": 1, "source": "own", "skill": t.skill, "misconception": "off_by_one", "count": 1 }])
+    );
     assert_eq!(report["templates"][&t.id]["skill"], json!(t.skill));
     let example = report["templates"][&t.id]["example"]["en"]
         .as_str()
