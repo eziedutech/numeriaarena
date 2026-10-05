@@ -390,8 +390,12 @@ export class Home {
       tab.appendChild(paperText(t.device[d], 20, this.device === d ? PAPER : INK));
       tab.setAttribute('aria-label', `${t.playOn} ${t.device[d]}`);
       tab.setAttribute('aria-pressed', String(this.device === d));
-      if (off) tab.title = t.noXr;
-      else tab.addEventListener('click', () => this.setDevice(d));
+      // Without a headset the tab stays, and says where the game opens on one.
+      if (off) {
+        tab.title = t.noXr;
+        tab.setAttribute('aria-disabled', 'true');
+        tab.addEventListener('click', () => this.message(t.noXr, t.noXrBody));
+      } else tab.addEventListener('click', () => this.setDevice(d));
     }
     const chips = el('div', 'chips', this.stage);
     const lang = el('div', 'chip shadow', chips);
