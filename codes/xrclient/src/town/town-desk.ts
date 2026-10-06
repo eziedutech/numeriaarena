@@ -161,9 +161,11 @@ const MINI_TILT = 0.3;
 const HEADER = new Vector3(0, 0.3, -0.5);
 const HEADER_SCALE = 1.5;
 /** A building's card stands left of the land, its answers on the desk below it. */
-const CARD = new Vector3(-0.62, 0.34, -0.25);
-const CARD_CHARS = 32;
-const ANSWER_X = [-0.74, -0.62, -0.5];
+const CARD = new Vector3(-0.64, 0.5, -0.25);
+/** Every line of the card twice the height it is written with, to be read from the chair. */
+const CARD_TEXT = 2;
+const CARD_CHARS = 26;
+const ANSWER_X = [-0.83, -0.67, -0.51];
 const ANSWER_Z = -0.17;
 const CLOSE_AT = [-0.65, -0.06] as const;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
@@ -1189,13 +1191,14 @@ export class TownDesk {
     g.position.copy(CARD);
     let y = 0;
     for (const [text, height, ink] of lines) {
+      const h = height * CARD_TEXT;
       if (text) {
-        const l = new Label(text, ink === undefined ? { height } : { height, ink });
-        l.mesh.position.set(0, y - height / 2, 0);
+        const l = new Label(text, ink === undefined ? { height: h } : { height: h, ink });
+        l.mesh.position.set(0, y - h / 2, 0);
         g.add(l.mesh);
         this.host.billboard(l.mesh);
       }
-      y -= height * 1.45;
+      y -= h * 1.45;
     }
     this.root.object3D!.add(g);
     return g;
