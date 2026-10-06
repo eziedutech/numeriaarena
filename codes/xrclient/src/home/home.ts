@@ -36,7 +36,7 @@ import { openTown } from '../town/town-page.js';
  */
 export type Device = 'computer' | 'xr' | 'smartboard';
 /** `class`: the seat joined on the home page (`ClassRace.pending`), to the desk. */
-export type PlayMode = 'practice' | 'race' | 'resume' | 'class';
+export type PlayMode = 'practice' | 'race' | 'resume' | 'class' | 'town';
 
 const INK = '#3a3f4b';
 const PAPER = '#fff8ec';
@@ -496,7 +496,8 @@ export class Home {
     label.appendChild(paperText(t.town[0], 18, INK));
     el('div', 'sub', label).textContent = t.town[1];
     town.setAttribute('aria-label', `${t.town[0]}. ${t.town[1]}`);
-    town.addEventListener('click', () => openTown());
+    // With the headset chosen, the town opens on the desk once the session starts.
+    town.addEventListener('click', () => (this.device === 'xr' ? this.play('town') : openTown()));
 
     // Its partner on the right: the leaderboards, a podium on a sticker.
     const board = el('button', 'town board', this.stage);

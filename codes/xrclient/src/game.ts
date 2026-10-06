@@ -2044,6 +2044,7 @@ export class GameSystem extends createSystem({
     if (mode === 'race') this.start('race');
     else if (mode === 'resume') this.resumeRace();
     else if (mode === 'class') this.playClass();
+    else if (mode === 'town') this.openTown();
     else this.showMenu('practice');
   }
 
