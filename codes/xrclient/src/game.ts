@@ -26,8 +26,8 @@ import {
 } from '@iwsdk/core';
 
 import { Label, type LabelOptions } from './art/label.js';
+import { ToolButton, toolTray, type ToolIcon, type ToolLook } from './art/tool-icon.js';
 import {
-  type Envelope,
   forgetMixers,
   makeBalloon,
   makeBird,
@@ -38,8 +38,6 @@ import {
   BALLOON_TAG_TOP,
   CRYSTAL_HALF,
   PAGE_TOP,
-  ENVELOPE_FLAP_REST,
-  makeEnvelope,
   makeFoldling,
   setOpacity,
   makeOrb,
@@ -192,25 +190,34 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * of the table, front of the line on the right (they face +X, in profile).
  * They are plain white paper until called, then take the question's colour.
  */
-/** The HOME card on the headset menu: right of the envelopes, a little smaller. */
 /**
- * The rest of the desk menu: settings cards on the left, the best score
- * above HOME, the Fold Town sticker beside the book, and the hand that shows
- * a first-time player what to do.
+ * The desk menu, drawn as the town's toolbar is: the games are one paper
+ * block of flat cells, three across and two deep, each an envelope in its
+ * game's colour over its name, leaning back in front of the book; the
+ * settings and HOME are one toolbar strip nearer the player; the best score
+ * stands right of the block, the Fold Town sticker beside the book, and a
+ * paper hand shows a first-time player what to do.
  */
-/**
- * The two settings cards stand left of the envelopes, the size of HOME on
- * the right and spaced like it, with letters large enough to read from the
- * seat; the best score sits just above HOME.
- */
-const SETTINGS_X = [-0.265, -0.385];
-const SETTINGS_SCALE = 1.05;
-/** The ROOM card floats here in the desk's frame (above LANGUAGE and BIG NUMBERS), tipped back this much. */
-const ROOM_CARD_AT = [-0.325, 0.3, 0.01] as const;
-const ROOM_CARD_TILT = -0.35;
-/** Room names run longer than ON or EN, so they are printed a little smaller. */
-const ROOM_VALUE_H = 0.024;
-const BEST_AT = new Vector3(0.26, 0.097, 0.11);
+const GAME_W = 0.095;
+const GAME_H = 0.08;
+const GAMES_AT = new Vector3(0, 0.048, 0.16);
+const SET_W = 0.08;
+const SET_H = 0.07;
+const SETTINGS_AT = new Vector3(0, 0.025, 0.275);
+const MENU_FOLD = 0.026;
+const MENU_LEAN = -1;
+/** The way a leaning strip's face looks: up and towards the player. */
+const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
+/** Each game's colour, for its envelope. */
+const GAME_TINT: Record<MenuChoice, string> = {
+  race: '#3fb6a0',
+  balloon_burst: '#f2716b',
+  orb_forge: '#3469c4',
+  factory_sort: '#9b6bc2',
+  bridge_builder: '#e0a33c',
+  balance_gate: '#5aa469',
+};
+const BEST_AT = new Vector3(0.24, 0.06, 0.16);
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
@@ -242,7 +249,6 @@ const CHOICE_PAD = 0.022;
 const CHOICE_SPACE = 0.03;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
-const HOME_CARD_X = 0.26;
 /**
  * The QUIT card during a game in the headset: just over the race card on the
  * right, turned to the player like it, away from the balloons and crystals
@@ -262,7 +268,6 @@ const SIDES = ['left', 'right'] as const;
 /** How far and how long a pressed desk card sinks. */
 const PRESS_DIP_M = 0.006;
 const PRESS_DIP_MS = 160;
-const HOME_CARD_SCALE = 0.95;
 /** The first-time hand repeats its press every this many seconds. */
 const HINT_LOOP_S = 2.2;
 const LINE_SIZE = 5;
@@ -353,17 +358,9 @@ const RIGHT_INK = 0x2f7d32;
 const WRONG_INK = 0xc62828;
 /** The question in dark blue, so it stands out from every other card. */
 const QUESTION_INK = 0x1f4fa3;
-/** Menu envelopes lean back this far (radians) from upright. */
-const ENVELOPE_TILT = 1.3;
-/** Envelopes lie this far in front of the book's front edge (desk frame z). */
+/** Desk cards (a results screen's choices) stand this far in front of the book's front edge (desk frame z). */
 const ENVELOPE_Z = 0.11;
-/** The menu's second row of envelopes, nearer the player, clear of the first row's near edge. */
-const ENVELOPE_ROW2_Z = 0.205;
 const MENU_GAMES: MenuChoice[] = ['race', 'balloon_burst', 'orb_forge', 'factory_sort', 'bridge_builder', 'balance_gate'];
-/** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
-const FLAP_S = 0.45;
-const LETTER_S = 0.35;
-const LETTER_RISE = 0.045;
 
 interface Tween {
   obj: Object3D;
@@ -377,7 +374,7 @@ interface Tween {
   done?: () => void;
 }
 
-type Phase = 'loading' | 'menu' | 'opening' | 'playing' | 'between' | 'recap' | 'town';
+type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap' | 'town';
 /** An animal waiting in the line behind the book. */
 interface LineAnimal {
   species: Species;
@@ -563,8 +560,10 @@ export class GameSystem extends createSystem({
   private bootGone = false;
   private recapIn = -1;
   private stage!: Stage;
-  private envelopes = new Map<Entity, Envelope>();
-  private opening?: { envelope: Envelope; choice: MenuChoice; t: number };
+  /** The menu's paper strips the cells lie on, gone with the menu. */
+  private menuTrays: Entity[] = [];
+  /** The race's cell, which the first-time hand presses, in the desk's frame. */
+  private hintAt = new Vector3();
 
   init(): void {
     this.score = new Label(T.title, { height: 0.04 });
@@ -723,8 +722,7 @@ export class GameSystem extends createSystem({
       console.info('[menu] brushed by a controller without its trigger: ignored');
       return;
     }
-    // Envelopes open with their own move; the paper cards sink.
-    if (e.object3D && !this.envelopes.has(e)) this.dip(e.object3D);
+    if (e.object3D) this.dip(e.object3D);
     if (e.getValue(MenuButton, 'game') === 'quit') {
       this.pressQuit(e);
       return;
@@ -800,15 +798,7 @@ export class GameSystem extends createSystem({
     // PRACTICE AGAIN and Done belong to results, the town's cards to the town; a late touch from them does nothing here.
     if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit' || pressed === 'build' || isTownChoice(pressed)) return;
     this.hideHint(true);
-    const choice: MenuChoice = pressed;
-    const envelope = this.envelopes.get(e);
-    if (!envelope) {
-      this.start(choice);
-      return;
-    }
-    // The chosen envelope opens before its game starts.
-    this.phase = 'opening';
-    this.opening = { envelope, choice, t: 0 };
+    this.start(pressed);
   }
 
   /**
@@ -1057,32 +1047,27 @@ export class GameSystem extends createSystem({
       });
     }
     this.showTitle();
-    // The race and the first two games in front, the three newer games in a row nearer the player.
-    const games: [MenuChoice, string, number, number, number][] = [
-      ['race', T.race, -0.135, ENVELOPE_Z, 0x3fb6a0],
-      ['balloon_burst', T.gameName.balloon_burst, 0, ENVELOPE_Z, 0xf2716b],
-      ['orb_forge', T.gameName.orb_forge, 0.135, ENVELOPE_Z, 0x3469c4],
-      ['factory_sort', T.gameName.factory_sort, -0.135, ENVELOPE_ROW2_Z, 0x9b6bc2],
-      ['bridge_builder', T.gameName.bridge_builder, 0, ENVELOPE_ROW2_Z, 0xe0a33c],
-      ['balance_gate', T.gameName.balance_gate, 0.135, ENVELOPE_ROW2_Z, 0x5aa469],
-    ];
-    for (const [game, title, x, z, color] of games) {
-      if (only === 'practice' && game === 'race') continue;
-      this.addEnvelope(game, title, only === 'practice' && z === ENVELOPE_Z ? x - 0.0675 : x, color, z);
-    }
-    // In the headset the home page cannot show, so a paper HOME card on the
-    // desk ends the session and goes back to it.
+    // The race first; a practice has no race, and its five games fill the block from the front left.
+    const games = MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race');
+    this.menuStrip(
+      'menu-games',
+      GAMES_AT,
+      3,
+      2,
+      GAME_W,
+      GAME_H,
+      games.map((game) => [game, 'envelope', (game === 'race' ? T.race : T.gameName[game]).toUpperCase(), game === 'race' ? 'on' : 'plain', GAME_TINT[game]]),
+    );
+    // In the headset the home page cannot show, so the strip's HOME ends the
+    // session and goes back to it; the settings sit beside it, so the
+    // headset never has to come off for them.
     if (this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
-      this.addButton('home', T.home, HOME_CARD_X, 0xe8b64c, HOME_CARD_SCALE);
-      // Settings on the desk, so the headset never has to come off for them.
-      this.addSettingCard('lang', T.langCaption, getLang().toUpperCase(), SETTINGS_X[0], 0xfff8ec);
-      // Teal while big numbers are on, plain paper while off.
-      this.addSettingCard('bigtext', T.bigCaption, T.onOff(bigText()), SETTINGS_X[1], bigText() ? 0x3fb6a0 : 0xfff8ec);
-      // The room is not part of the game: its card floats above the desk,
-      // tipped towards the seat. Plain paper in the real room, teal in a virtual one.
-      const room = this.addSettingCard('room', T.roomCaption, T.roomName[getRoom()], ROOM_CARD_AT[0], getRoom() === 'here' ? 0xfff8ec : 0x3fb6a0, ROOM_VALUE_H);
-      room.position.set(ROOM_CARD_AT[0], ROOM_CARD_AT[1], ROOM_CARD_AT[2]);
-      room.rotation.x = ROOM_CARD_TILT;
+      this.menuStrip('menu-settings', SETTINGS_AT, 4, 1, SET_W, SET_H, [
+        ['lang', 'language', `${T.langCaption}\n${getLang().toUpperCase()}`, 'plain'],
+        ['bigtext', 'bigText', `${T.bigCaption}\n${T.onOff(bigText())}`, bigText() ? 'on' : 'plain'],
+        ['room', 'room', `${T.roomCaption}\n${T.roomName[getRoom()]}`, getRoom() === 'here' ? 'plain' : 'on'],
+        ['home', 'exit', T.home, 'accent'],
+      ]);
       this.addTownSticker();
       this.showHint();
     }
@@ -1092,7 +1077,8 @@ export class GameSystem extends createSystem({
   /** Clears the desk menu: its buttons, envelopes, best card and hint. */
   private clearMenu(): void {
     this.clear(this.queries.buttons);
-    this.envelopes.clear();
+    for (const e of this.menuTrays) this.remove(e);
+    this.menuTrays = [];
     this.bestCard?.mesh.removeFromParent();
     this.bestCard = undefined;
     this.hideHint(false);
@@ -1175,7 +1161,7 @@ export class GameSystem extends createSystem({
     this.deskEntity()?.object3D?.add(hand);
     this.hintHand = hand;
     const label = new Label(T.touchHint, { height: 0.02 });
-    label.mesh.position.set(-0.135, 0.11, ENVELOPE_Z);
+    label.mesh.position.copy(MENU_FACING).multiplyScalar(0.07).add(this.hintAt);
     this.deskEntity()?.object3D?.add(label.mesh);
     this.labels.add(label.mesh);
     this.hintLabel = label;
@@ -1274,7 +1260,7 @@ export class GameSystem extends createSystem({
     }
   }
 
-  /** The hand moves in, presses the envelope's face, and backs out again. */
+  /** The hand moves in along the block's facing, presses the race's cell, and backs out again. */
   private runHint(delta: number): void {
     if (!this.hintHand) return;
     this.hintT = (this.hintT + delta) % HINT_LOOP_S;
@@ -1282,8 +1268,8 @@ export class GameSystem extends createSystem({
     // In over the first half, a short press, then away.
     const reach = k < 0.45 ? k / 0.45 : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     const ease = reach * reach * (3 - 2 * reach);
-    this.hintHand.position.set(-0.135, 0.05 + 0.05 * (1 - ease), ENVELOPE_Z + 0.03 + 0.09 * (1 - ease));
-    this.hintHand.rotation.x = -0.6;
+    this.hintHand.position.copy(MENU_FACING).multiplyScalar(0.02 + 0.08 * (1 - ease)).add(this.hintAt);
+    this.hintHand.rotation.x = MENU_LEAN;
   }
 
   /** Touching an animal in the line: it hops and its name shows above it. */
@@ -1299,58 +1285,47 @@ export class GameSystem extends createSystem({
   }
 
   /**
-   * A game on the menu: an origami envelope standing on the desk. Touch it
-   * with a fingertip, or point at it and pinch (a mouse click in the browser).
+   * A paper strip of `cols` by `rows` cells on the desk, leaning back as the
+   * town's toolbar does, its right end's top corner folded over. Each cell is
+   * a button of its own (touch it, or point at it and pinch; a click in the
+   * browser), named `menu-<choice>`.
    */
-  private addEnvelope(game: MenuChoice, title: string, x: number, color: number, z = ENVELOPE_Z): void {
-    const envelope = makeEnvelope(color);
-    envelope.root.name = `menu-${game}`;
-    // Leaning back on the table like envelopes on a stand: low enough that
-    // the book behind them stays in view, faces still towards the player.
-    // The robot race, the main game, stands a little larger with a gold star.
-    envelope.root.scale.setScalar(game === 'race' ? 1.18 : 1.05);
-    if (game === 'race') {
-      const star = makeStar(true);
-      star.scale.setScalar(0.42);
-      star.position.set(0.034, 0.02, 0.003);
-      envelope.root.add(star);
-    }
-    envelope.root.rotation.x = -ENVELOPE_TILT;
-    envelope.root.position.set(x, 0.035 * Math.cos(ENVELOPE_TILT), z);
-    const e = this.add(envelope.root);
-    e.addComponent(MenuButton, { game });
-    e.addComponent(PokeInteractable);
-    e.addComponent(RayInteractable);
-    // On the bottom pocket, below the flap's tip and seal: the paper label,
-    // with a text card standing in until it has loaded.
-    const sticker = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
-    if (sticker in UI_HEIGHT) {
-      placeUiImage(sticker as UiName, envelope.root, [0, -0.022, 0.0016], {
-        scale: 1,
-        maxWidth: 0.097,
-        fallback: () => this.label(title, 0.021, envelope.root, -0.022, 0.0016, false).mesh,
-      });
-    } else {
-      // A game without its paper label yet: its name, small enough to fit the pocket.
-      this.label(title, 0.014, envelope.root, -0.022, 0.0016, false);
-    }
-    this.envelopes.set(e, envelope);
-  }
-
-  private runOpening(delta: number): void {
-    const o = this.opening;
-    if (!o) return;
-    o.t += delta;
-    const k = Math.min(1, o.t / FLAP_S);
-    // From resting on the pockets to just past upright, so it ends behind the letter.
-    o.envelope.flap.rotation.x = ENVELOPE_FLAP_REST - (Math.PI + 0.2) * (k * k * (3 - 2 * k));
-    const l = Math.min(1, Math.max(0, (o.t - FLAP_S) / LETTER_S));
-    o.envelope.letter.visible = l > 0;
-    o.envelope.letter.position.y = LETTER_RISE * l;
-    if (o.t >= FLAP_S + LETTER_S + 0.15) {
-      this.opening = undefined;
-      this.start(o.choice);
-    }
+  private menuStrip(
+    name: string,
+    at: Vector3,
+    cols: number,
+    rows: number,
+    cw: number,
+    ch: number,
+    cells: [ButtonChoice, ToolIcon, string, ToolLook, string?][],
+  ): void {
+    const w = cols * cw + MENU_FOLD;
+    const h = rows * ch;
+    const tray = new Group();
+    tray.name = name;
+    tray.position.copy(at);
+    tray.rotation.x = MENU_LEAN;
+    tray.add(toolTray(w, h, MENU_FOLD));
+    this.menuTrays.push(this.add(tray));
+    cells.forEach(([choice, icon, word, look, tint], i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      // A thin line to the next cell in its row, none before HOME's own colour.
+      const next = cells[i + 1];
+      const divider = col < cols - 1 && next !== undefined && next[3] !== 'accent';
+      const b = new ToolButton(icon, word, cw, ch, look, { divider, tint });
+      const cell = new Group();
+      cell.name = `menu-${choice}`;
+      cell.add(b.mesh);
+      // Laid on the strip a hair in front of its paper, placed in the desk's frame.
+      cell.position.set(-w / 2 + (col + 0.5) * cw, h / 2 - (row + 0.5) * ch, 0.0015).applyEuler(tray.rotation).add(at);
+      cell.rotation.x = MENU_LEAN;
+      if (i === 0 && name === 'menu-games') this.hintAt.copy(cell.position);
+      const e = this.add(cell);
+      e.addComponent(MenuButton, { game: choice });
+      e.addComponent(PokeInteractable);
+      e.addComponent(RayInteractable);
+    });
   }
 
   private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {
@@ -1363,7 +1338,7 @@ export class GameSystem extends createSystem({
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
     if (title === '') {
-      // The caller writes on it (see addSettingCard).
+      // The caller writes on it (see addChoiceButton).
     } else if (title === T.done) {
       placeUiImage('button_done', button, [0, 0, 0.002], {
         scale: 0.9,
@@ -1420,25 +1395,6 @@ export class GameSystem extends createSystem({
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
     if (performance.now() - (obj.userData.shownAt as number) < CHOICE_GRACE_MS) return false;
     return !immersive || obj.userData.armed === true;
-  }
-
-  /**
-   * A settings card on the desk: a small caption on top and its value large
-   * below ("LANGUAGE" over "ID"), so the value reads from the seat.
-   */
-  private addSettingCard(choice: ButtonChoice, caption: string, value: string, x: number, color: number, valueH = 0.034): Object3D {
-    const button = this.addButton(choice, '', x, color, SETTINGS_SCALE);
-    // Printed straight on the card (no paper of their own), the value about
-    // as tall as HOME's letters and the caption as wide as the card allows.
-    for (const [text, height, y] of [
-      [caption, 0.016, 0.017],
-      [value, valueH, -0.008],
-    ] as const) {
-      const l = new Label(text, { height, card: false });
-      l.mesh.position.set(0, y, 0.002);
-      button.add(l.mesh);
-    }
-    return button;
   }
 
   private start(choice: MenuChoice, resume?: RaceCheckpoint, link?: ClassRace): void {
@@ -1999,7 +1955,7 @@ export class GameSystem extends createSystem({
 
   /** First press asks (SURE?), a second within QUIT_ASK_MS leaves the game for the desk menu. */
   private pressQuit(e: Entity): void {
-    const playing = this.phase === 'playing' || this.phase === 'between' || this.phase === 'opening' || (this.phase === 'loading' && this.race);
+    const playing = this.phase === 'playing' || this.phase === 'between' || (this.phase === 'loading' && this.race);
     if (!playing || !this.choiceReady(e)) return;
     const obj = e.object3D;
     if (!obj) return;
@@ -2024,7 +1980,6 @@ export class GameSystem extends createSystem({
       this.endRace();
       return;
     }
-    this.opening = undefined;
     this.clearPlay();
     this.score.set(T.title);
     this.showMenu();
@@ -2087,7 +2042,6 @@ export class GameSystem extends createSystem({
     this.removeQuitCard();
     this.clearPracticeCards();
     this.clear(this.queries.buttons);
-    this.opening = undefined;
     this.clearPlay();
     this.score.set(T.title);
     this.showMenu('practice');
@@ -2099,8 +2053,7 @@ export class GameSystem extends createSystem({
       this.endRace();
     } else {
       this.clearMenu();
-      this.opening = undefined;
-      this.clearPlay();
+        this.clearPlay();
       this.score.set(T.title);
     }
     this.phase = 'menu';
@@ -2133,7 +2086,7 @@ export class GameSystem extends createSystem({
     }
     // A practice in the browser can be left for another game (in the headset QUIT does it).
     const practising =
-      !this.race && (this.phase === 'playing' || this.phase === 'between' || (this.phase === 'opening' && this.opening?.choice !== 'race'));
+      !this.race && (this.phase === 'playing' || this.phase === 'between');
     this.home.setOtherGame(practising);
     // The page has its own title; the 3D title and score come back after it.
     if (home !== this.homeWasShown) {
@@ -3184,7 +3137,6 @@ export class GameSystem extends createSystem({
     this.trackTips(delta);
     this.runTweens(delta);
     for (const m of mixers) m.update(delta);
-    if (this.phase === 'opening') this.runOpening(delta);
     this.runTimer();
     this.runPops(delta);
     this.runHint(delta);

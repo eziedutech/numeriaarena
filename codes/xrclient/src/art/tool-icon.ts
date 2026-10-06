@@ -40,6 +40,9 @@ const ICONS = {
     'M19 18v2',
   ],
   stand: ['M13 5a1 1 0 1 0-2 0a1 1 0 1 0 2 0', 'M9 20l3-6 3 6', 'M6 8l6 2 6-2', 'M12 10v4'],
+  envelope: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M22 7l-8.991 5.727a2 2 0 0 1-2.009 0L2 7'],
+  language: ['M22 12a10 10 0 1 0-20 0a10 10 0 1 0 20 0', 'M12 2a14.5 14.5 0 0 0 0 20a14.5 14.5 0 0 0 0-20', 'M2 12h20'],
+  bigText: ['M21 14h-5', 'M16 16v-3.5a2.5 2.5 0 0 1 5 0V16', 'M4.5 13h6', 'M3 16l4.5-9 4.5 9'],
 } as const;
 export type ToolIcon = keyof typeof ICONS;
 
@@ -82,6 +85,8 @@ export interface ToolOptions {
   divider?: boolean;
   /** Standing on its own, not on a strip: it draws its own paper and a thin edge. */
   alone?: boolean;
+  /** The icon in this colour instead of the look's ink, its first outline filled with a light wash of it. */
+  tint?: string;
 }
 
 /** A toolbar cell `w` by `h` metres, facing +Z; `set` draws it again with another icon, look or word. */
@@ -137,24 +142,33 @@ export class ToolButton {
       c.fillStyle = LINE;
       c.fillRect(W - hair, H * 0.1, hair, H * 0.8);
     }
-    const worded = this.word !== '';
-    const size = worded ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.66;
-    const cy = worded ? H * 0.4 : H / 2;
+    // A word with a line break is two lines under a smaller icon: a caption over its value.
+    const lines = this.word === '' ? [] : this.word.split('\n');
+    const two = lines.length > 1;
+    const size = two ? Math.min(W * 0.6, H * 0.44) : lines.length ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.66;
+    const cy = two ? H * 0.31 : lines.length ? H * 0.4 : H / 2;
+    const ink = this.opts.tint ?? s.ink;
     c.save();
     c.translate(W / 2 - size / 2, cy - size / 2);
     c.scale(size / 24, size / 24);
-    c.strokeStyle = s.ink;
-    c.lineWidth = STROKE;
+    if (this.opts.tint) {
+      c.fillStyle = this.opts.tint;
+      c.globalAlpha = 0.22;
+      c.fill(new Path2D(ICONS[this.icon][0]));
+      c.globalAlpha = 1;
+    }
+    c.strokeStyle = ink;
+    c.lineWidth = this.opts.tint ? STROKE * 1.4 : STROKE;
     c.lineCap = 'round';
     c.lineJoin = 'round';
     for (const d of ICONS[this.icon]) c.stroke(new Path2D(d));
     c.restore();
-    if (worded) {
-      let px = H * 0.13;
+    lines.forEach((line, i) => {
+      let px = H * (two ? 0.12 : 0.13);
       c.font = `700 ${px}px ${FONT}`;
       // A long word is made smaller to fit the cell.
       const room = W * 0.86;
-      const wide = c.measureText(this.word).width;
+      const wide = c.measureText(line).width;
       if (wide > room) {
         px *= room / wide;
         c.font = `700 ${px}px ${FONT}`;
@@ -162,8 +176,8 @@ export class ToolButton {
       c.fillStyle = s.ink;
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillText(this.word, W / 2, H * 0.82);
-    }
+      c.fillText(line, W / 2, two ? H * (0.67 + 0.17 * i) : H * 0.82);
+    });
     this.texture.needsUpdate = true;
   }
 }
