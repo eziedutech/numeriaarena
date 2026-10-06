@@ -57,7 +57,8 @@ export type TownChoice =
   | 'town_remove'
   | 'town_zoom_in'
   | 'town_zoom_out'
-  | 'town_pan';
+  | 'town_pan'
+  | 'town_shelf_big';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -140,6 +141,10 @@ const TAB_TEXT_TWO = 0.016;
 const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
+/** The shelf's enlarge button, past its top right corner; pressed, the shelf stands twice as big, its left edge where it was. */
+const BIG_AT = new Vector3(SHELF_W / 2 + 0.032, SHELF_H - 0.026, -0.03);
+const BIG_W = 0.044;
+const UP = new Vector3(0, 1, 0);
 /** The box a shelf piece fits in as it stands turned and leaning, so none reaches past its ledge, its neighbours or the board. */
 const FIT_W = CELL_W - 0.016;
 const FIT_H = 0.085;
@@ -191,6 +196,8 @@ const viewMats = {
   off: new MeshStandardMaterial({ color: 0xc9ccd3, roughness: 1 }),
   on: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
 };
+const bigGeo = new BoxGeometry(BIG_W, BIG_W, 0.008);
+const inkMat = new MeshBasicMaterial({ color: 0x30343c });
 /** The window's four sides in the world; the land's pieces and its mark are cut there, the shelf's are not. */
 const clipPlanes = [new Plane(), new Plane(), new Plane(), new Plane()];
 const clipMat = townMaterial().clone();
@@ -205,6 +212,7 @@ const SHARED = new Set<Material>([
   ledgeMat,
   barMat,
   markMat,
+  inkMat,
   ...Object.values(optMats),
   ...Object.values(viewMats),
 ]);
@@ -277,6 +285,8 @@ export class TownDesk {
   private panning?: { side: Side; grip: boolean; x: number; z: number };
   private panFrom = new Vector3();
   private viewRow?: Entity;
+  private shelfBig = false;
+  private bigButton?: Mesh;
   private panButton?: Mesh;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
@@ -404,6 +414,7 @@ export class TownDesk {
       const board = new Mesh(boardGeo, plateMat);
       board.position.set(0, SHELF_H / 2, -0.04);
       g.add(board);
+      g.add(this.bigIcon());
       this.shelf = this.host.add(g, true);
     }
     const g = this.shelf.object3D!;
@@ -587,6 +598,10 @@ export class TownDesk {
       console.info(`[town] zoom ${this.zoom}x`);
       return;
     }
+    if (choice === 'town_shelf_big') {
+      this.setShelfBig(!this.shelfBig);
+      return;
+    }
     if (choice === 'town_pan') {
       this.setPan(!this.panMode);
       this.say(this.panMode ? this.t.xr.panOn : this.t.xr.panOff);
@@ -701,6 +716,42 @@ export class TownDesk {
       row.add(b);
     });
     return row;
+  }
+
+  /** The enlarge button: a square with its four corners drawn on it. */
+  private bigIcon(): Mesh {
+    const b = new Mesh(bigGeo, viewMats.off);
+    b.name = 'town-shelf-big';
+    b.userData.townOpt = 'town_shelf_big';
+    b.position.copy(BIG_AT);
+    const arm = BIG_W * 0.28;
+    const thick = BIG_W * 0.08;
+    const reach = BIG_W * 0.32;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        const across = new Mesh(barGeo, inkMat);
+        across.scale.set(arm, thick, 1);
+        across.position.set(sx * (reach - arm / 2 + thick / 2), sy * reach, 0.0045);
+        const down = new Mesh(barGeo, inkMat);
+        down.scale.set(thick, arm, 1);
+        down.position.set(sx * reach, sy * (reach - arm / 2 + thick / 2), 0.0045);
+        b.add(across, down);
+      }
+    }
+    this.bigButton = b;
+    return b;
+  }
+
+  /** The shelf twice as big or back as it was, grown to the right and up so it stays clear of the land. */
+  private setShelfBig(big: boolean): void {
+    const g = this.shelf?.object3D;
+    if (!g) return;
+    this.shelfBig = big;
+    const k = big ? 2 : 1;
+    g.scale.setScalar(k);
+    g.position.copy(SHELF_AT).add(new Vector3(((k - 1) * SHELF_W) / 2, 0, 0).applyAxisAngle(UP, SHELF_TURN));
+    if (this.bigButton) this.bigButton.material = big ? viewMats.on : viewMats.off;
+    console.info(`[town] shelf ${big ? 'twice as big' : 'as it was'}`);
   }
 
   private setPan(on: boolean): void {
