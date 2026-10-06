@@ -287,9 +287,10 @@ class TownPage {
   private loop = (time: number) => {
     this.frame = requestAnimationFrame(this.loop);
     this.folding = this.folding.filter((f) => {
-      const t = (time - f.start) / f.ms;
-      foldUp(f.obj, f.start ? t : 0);
+      // Timed from its first frame; until then it lies flat.
       if (!f.start) f.start = time;
+      const t = (time - f.start) / f.ms;
+      foldUp(f.obj, t);
       return t < 1;
     });
     this.renderer?.render(this.scene, this.camera);
