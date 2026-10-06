@@ -1,42 +1,49 @@
 import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from '@iwsdk/core';
 
 /**
- * Flat toolbar buttons for the headset, drawn as a web app's are: a rounded
- * tile with a line icon and its word under it, on a white rounded tray.
- * The icons are Google's Material Icons paths (Apache 2.0), on a 24 unit grid.
+ * Flat toolbar buttons for the headset, drawn as a web app's are: a square
+ * paper strip in one soft tint, thin lines between its cells, a large line
+ * icon in each with its word under it, and the strip's end folded over.
+ * The icons are Lucide's (ISC licence), stroked on a 24 unit grid.
  */
 const ICONS = {
-  zoomIn:
-    'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm2.5-4h-2v2H9v-2H7V9h2V7h1v2h2v1z',
-  zoomOut:
-    'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z',
-  pan: 'M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z',
-  reset:
-    'M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
-  exit: 'M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z',
-  enlarge: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
-  shrink: 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z',
-  sit: 'M7 11v2h10v-2c0-1.86 1.28-3.41 3-3.86V6c0-1.65-1.35-3-3-3H7C5.35 3 4 4.35 4 6v1.14c1.72.45 3 2 3 3.86zm14-2c-1.1 0-2 .9-2 2v4H5v-4c0-1.1-.9-2-2-2s-2 .9-2 2v5c0 1.1.9 2 2 2v3h2v-3h14v3h2v-3c1.1 0 2-.9 2-2v-5c0-1.1-.9-2-2-2z',
-  stand:
-    'M20.5 6c-2.61.7-5.67 1-8.5 1s-5.89-.3-8.5-1L3 8c1.86.5 4 .83 6 1v13h2v-6h2v6h2V9c2-.17 4.14-.5 6-1l-.5-2zM12 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z',
+  zoomIn: ['M19 11a8 8 0 1 0-16 0a8 8 0 1 0 16 0', 'M21 21l-4.35-4.35', 'M11 8v6', 'M8 11h6'],
+  zoomOut: ['M19 11a8 8 0 1 0-16 0a8 8 0 1 0 16 0', 'M21 21l-4.35-4.35', 'M8 11h6'],
+  pan: [
+    'M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2',
+    'M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2',
+    'M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8',
+    'M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15',
+  ],
+  reset: ['M3 12a9 9 0 1 0 9-9a9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
+  exit: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'],
+  enlarge: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'],
+  shrink: ['M4 14h6v6', 'M20 10h-6V4', 'M14 10l7-7', 'M3 21l7-7'],
+  sit: [
+    'M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3',
+    'M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z',
+    'M5 18v2',
+    'M19 18v2',
+  ],
+  stand: ['M13 5a1 1 0 1 0-2 0a1 1 0 1 0 2 0', 'M9 20l3-6 3 6', 'M6 8l6 2 6-2', 'M12 10v4'],
 } as const;
 export type ToolIcon = keyof typeof ICONS;
 
-/** plain: white with dark ink; on: a tool that is on; accent: a button that leaves. */
+/** plain: on the strip's tint; on: a tool that is on; accent: a button that leaves. */
 export type ToolLook = 'plain' | 'on' | 'accent';
-const LOOKS: Record<ToolLook, { bg: string; edge: string; ink: string; word: string }> = {
-  plain: { bg: '#ffffff', edge: '#d5dae1', ink: '#2f3542', word: '#5b6270' },
-  on: { bg: '#3fb6a0', edge: '#2f9a86', ink: '#ffffff', word: '#ffffff' },
-  accent: { bg: '#3469c4', edge: '#2a56a3', ink: '#ffffff', word: '#ffffff' },
+const PAPER = '#fbe4d7';
+const LINE = '#f0b796';
+const FOLD = '#f5c3a6';
+const LOOKS: Record<ToolLook, { bg: string; ink: string }> = {
+  plain: { bg: '', ink: '#e8672b' },
+  on: { bg: '#f6c4a7', ink: '#c94f17' },
+  accent: { bg: '#e8672b', ink: '#ffffff' },
 };
 const FONT = '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif';
 /** Canvas pixels per metre. */
 const PX = 5120;
-
-function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  c.beginPath();
-  c.roundRect(x, y, w, h, r);
-}
+/** The icon's stroke on its 24 unit grid: thin, as a web icon's. */
+const STROKE = 1.3;
 
 function plane(w: number, h: number, canvas: HTMLCanvasElement): { mesh: Mesh; texture: CanvasTexture } {
   const texture = new CanvasTexture(canvas);
@@ -47,7 +54,14 @@ function plane(w: number, h: number, canvas: HTMLCanvasElement): { mesh: Mesh; t
   return { mesh, texture };
 }
 
-/** A toolbar button `w` by `h` metres, facing +Z; `set` draws it again with another icon, word or look. */
+export interface ToolOptions {
+  /** A thin line down its right edge, to the next cell. */
+  divider?: boolean;
+  /** Standing on its own, not on a strip: it draws its own paper and a thin edge. */
+  alone?: boolean;
+}
+
+/** A toolbar cell `w` by `h` metres, facing +Z; `set` draws it again with another icon, look or word. */
 export class ToolButton {
   readonly mesh: Mesh;
   private canvas = document.createElement('canvas');
@@ -59,6 +73,7 @@ export class ToolButton {
     w: number,
     h: number,
     private look: ToolLook = 'plain',
+    private opts: ToolOptions = {},
   ) {
     this.canvas.width = Math.round(w * PX);
     this.canvas.height = Math.round(h * PX);
@@ -80,55 +95,81 @@ export class ToolButton {
     const c = this.canvas.getContext('2d')!;
     const { width: W, height: H } = this.canvas;
     const s = LOOKS[this.look];
+    const hair = Math.max(1.5, W * 0.008);
     c.clearRect(0, 0, W, H);
-    const line = Math.max(2, W * 0.025);
-    roundRect(c, line, line, W - 2 * line, H - 2 * line, Math.min(W, H) * 0.2);
-    c.fillStyle = s.bg;
-    c.fill();
-    c.lineWidth = line;
-    c.strokeStyle = s.edge;
-    c.stroke();
+    if (this.opts.alone) {
+      c.fillStyle = PAPER;
+      c.fillRect(0, 0, W, H);
+    }
+    if (s.bg) {
+      c.fillStyle = s.bg;
+      c.fillRect(0, 0, W, H);
+    }
+    if (this.opts.alone) {
+      c.lineWidth = hair;
+      c.strokeStyle = LINE;
+      c.strokeRect(hair / 2, hair / 2, W - hair, H - hair);
+    }
+    if (this.opts.divider) {
+      c.fillStyle = LINE;
+      c.fillRect(W - hair, H * 0.1, hair, H * 0.8);
+    }
     const worded = this.word !== '';
-    const size = Math.min(W, worded ? H * 0.62 : H) * 0.6;
+    const size = worded ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.66;
     const cy = worded ? H * 0.4 : H / 2;
     c.save();
     c.translate(W / 2 - size / 2, cy - size / 2);
     c.scale(size / 24, size / 24);
-    c.fillStyle = s.ink;
-    c.fill(new Path2D(ICONS[this.icon]));
+    c.strokeStyle = s.ink;
+    c.lineWidth = STROKE;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    for (const d of ICONS[this.icon]) c.stroke(new Path2D(d));
     c.restore();
     if (worded) {
-      let px = H * 0.15;
+      let px = H * 0.13;
       c.font = `700 ${px}px ${FONT}`;
-      // A long word is made smaller to fit the tile.
-      const room = W * 0.88;
+      // A long word is made smaller to fit the cell.
+      const room = W * 0.86;
       const wide = c.measureText(this.word).width;
       if (wide > room) {
         px *= room / wide;
         c.font = `700 ${px}px ${FONT}`;
       }
-      c.fillStyle = s.word;
+      c.fillStyle = s.ink;
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillText(this.word, W / 2, H * 0.8);
+      c.fillText(this.word, W / 2, H * 0.82);
     }
     this.texture.needsUpdate = true;
   }
 }
 
-/** The white rounded tray a row of tool buttons sits on, with a soft shadow round it. */
-export function toolTray(w: number, h: number): Mesh {
+/** The square paper strip a row of cells lies on, its right end's top corner folded over by `fold` metres. */
+export function toolTray(w: number, h: number, fold: number): Mesh {
   const canvas = document.createElement('canvas');
-  const pad = 0.006;
-  canvas.width = Math.round((w + 2 * pad) * PX);
-  canvas.height = Math.round((h + 2 * pad) * PX);
+  canvas.width = Math.round(w * PX);
+  canvas.height = Math.round(h * PX);
   const c = canvas.getContext('2d')!;
-  const p = pad * PX;
-  c.shadowColor = 'rgba(20, 30, 50, 0.35)';
-  c.shadowBlur = p * 0.8;
-  c.shadowOffsetY = p * 0.25;
-  roundRect(c, p, p, w * PX, h * PX, Math.min(w, h) * PX * 0.18);
-  c.fillStyle = '#f7f8fa';
+  const W = canvas.width;
+  const H = canvas.height;
+  const f = fold * PX;
+  c.fillStyle = PAPER;
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.lineTo(W - f, 0);
+  c.lineTo(W, f);
+  c.lineTo(W, H);
+  c.lineTo(0, H);
+  c.closePath();
   c.fill();
-  return plane(w + 2 * pad, h + 2 * pad, canvas).mesh;
+  // The folded corner, lying on the strip.
+  c.fillStyle = FOLD;
+  c.beginPath();
+  c.moveTo(W - f, 0);
+  c.lineTo(W, f);
+  c.lineTo(W - f, f);
+  c.closePath();
+  c.fill();
+  return plane(w, h, canvas).mesh;
 }

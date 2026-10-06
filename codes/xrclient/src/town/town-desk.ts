@@ -122,12 +122,10 @@ const ZOOMS = [1, 1.5, 2, 3];
 /** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
 const PAPER = 0.25;
 /** The toolbar past the land's front edge on its right: zoom, the hand, reset and EXIT. */
-const TOOL_W = 0.05;
-const TOOL_H = 0.058;
-const TOOL_GAP = 0.006;
-/** Extra room before EXIT, so leaving stands apart from the view's tools. */
-const TOOL_PART = 0.012;
-const TOOL_PAD = 0.008;
+const TOOL_W = 0.056;
+const TOOL_H = 0.064;
+/** The strip's end past EXIT, its top corner folded over. */
+const TOOL_FOLD = 0.026;
 const TOOL_LEAN = -1;
 
 /**
@@ -705,24 +703,21 @@ export class TownDesk {
       ['town_view_reset', 'reset', this.t.xr.reset, 'plain'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
-    const inner = tools.length * TOOL_W + (tools.length - 1) * TOOL_GAP + TOOL_PART;
-    const w = inner + 2 * TOOL_PAD;
+    const w = tools.length * TOOL_W + TOOL_FOLD;
     const row = new Group();
     row.name = 'town-view';
     row.position.set((r.cols / 2 + PAPER) * TILE - w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
     row.rotation.x = TOOL_LEAN;
-    row.add(toolTray(w, TOOL_H + 2 * TOOL_PAD));
-    let x = -inner / 2 + TOOL_W / 2;
-    for (const [choice, icon, word, look] of tools) {
-      if (choice === 'town_done') x += TOOL_PART;
-      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look);
+    row.add(toolTray(w, TOOL_H, TOOL_FOLD));
+    tools.forEach(([choice, icon, word, look], i) => {
+      // A thin line between the view's tools; EXIT's own colour parts it from them.
+      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { divider: i < tools.length - 2 });
       b.mesh.name = `town-view-${choice}`;
       b.mesh.userData.townOpt = choice;
-      b.mesh.position.set(x, 0, 0.0015);
+      b.mesh.position.set(-w / 2 + (i + 0.5) * TOOL_W, 0, 0.0015);
       row.add(b.mesh);
       if (choice === 'town_pan') this.panButton = b;
-      x += TOOL_W + TOOL_GAP;
-    }
+    });
     return row;
   }
 
@@ -740,7 +735,7 @@ export class TownDesk {
 
   /** The shelf's enlarge button, the same flat tile as the toolbar's. */
   private bigIcon(): Mesh {
-    const b = new ToolButton('enlarge', '', BIG_W, BIG_W);
+    const b = new ToolButton('enlarge', '', BIG_W, BIG_W, 'plain', { alone: true });
     b.mesh.name = 'town-shelf-big';
     b.mesh.userData.townOpt = 'town_shelf_big';
     b.mesh.position.copy(BIG_AT);

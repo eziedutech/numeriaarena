@@ -71,7 +71,7 @@ export class DevSeatSystem extends createSystem({
   private build(desk: Entity): void {
     const group = new Group();
     group.name = 'dev-seat-card';
-    this.button = new ToolButton('sit', T.devSit, CARD_W, CARD_H);
+    this.button = new ToolButton('sit', T.devSit, CARD_W, CARD_H, 'plain', { alone: true });
     group.add(this.button.mesh);
     group.position.copy(CARD_AT);
     group.visible = false;
