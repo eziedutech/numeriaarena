@@ -180,15 +180,17 @@ const CARD_TEXT = 1.85;
 const CARD_MAX_W = 0.4;
 const CARD_MIN_W = 0.24;
 const CARD_PAD = 0.022;
-const CARD_FOLD = 0.03;
+/** The card's soft shadow, as the toolbar's chips cast. */
+const CARD_BLUR = 0.012;
 const CELL_H = 0.06;
 const CELL_GAP = 0.01;
-const CARD_INK = 0x5b3a26;
-const CARD_HEAD = 0xc94f17;
-const CARD_ACCENT = 0xe8672b;
+/** The home page's colours: dark ink, a blue heading, coral for what matters, teal and coral buttons. */
+const CARD_INK = 0x3a3f4b;
+const CARD_HEAD = 0x3469c4;
+const CARD_ACCENT = 0xf2716b;
 const CELL_MATS = {
-  on: new MeshBasicMaterial({ color: 0xf6c4a7, toneMapped: false }),
-  accent: new MeshBasicMaterial({ color: 0xe8672b, toneMapped: false }),
+  on: new MeshBasicMaterial({ color: 0x3fb6a0, toneMapped: false }),
+  accent: new MeshBasicMaterial({ color: 0xf2716b, toneMapped: false }),
 };
 const cellGeo = new PlaneGeometry(1, 1);
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
@@ -1240,12 +1242,15 @@ export class TownDesk {
       size: height * CARD_TEXT,
       ink: ink(color ?? (i === 0 ? CARD_HEAD : CARD_INK)),
     }));
-    const marks = cells.map(([, word, look]) => new Label(word, { height: 0.034, card: false, ink: look === 'on' ? CARD_HEAD : 0xffffff }));
+    const marks = cells.map(([, word]) => new Label(word, { height: 0.034, card: false, ink: 0xffffff }));
     const cellW = marks.map((m) => Math.max(0.08, m.width + 0.024));
     const rowW = cellW.reduce((a, b) => a + b, 0) + CELL_GAP * Math.max(0, cells.length - 1);
     const foot = cells.length ? CELL_H + CARD_PAD : 0;
-    const { mesh } = textPanel(rows, Math.max(CARD_MAX_W, rowW + 2 * CARD_PAD), rowW + 2 * CARD_PAD, CARD_PAD, foot, CARD_FOLD);
-    g.add(mesh);
+    const { mesh, w, h } = textPanel(rows, Math.max(CARD_MAX_W, rowW + 2 * CARD_PAD), rowW + 2 * CARD_PAD, CARD_PAD, foot, 0, 'home');
+    const shade = softShadow(w, h, CARD_BLUR);
+    shade.position.set(0.003, h / 2 - 0.005, -0.002);
+    (shade as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    g.add(shade, mesh);
     let x = -rowW / 2;
     cells.forEach(([choice, , look], i) => {
       const cell = new Mesh(cellGeo, CELL_MATS[look]);

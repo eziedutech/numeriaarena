@@ -113,7 +113,6 @@ const PALETTES: Record<ToolTheme, Palette> = {
     },
   },
 };
-const { paper: PAPER, fold: FOLD } = PALETTES.peach;
 const FONT = '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif';
 /** Canvas pixels per metre. */
 const PX = 5120;
@@ -333,10 +332,19 @@ export interface PanelLine {
  * A paper panel in the strip's tint with lines of text written on it, left
  * aligned and cut to fit `maxW` metres, sharp at the toolbar's resolution;
  * `foot` metres are left clear under the text for cells laid on it. The panel
- * is no narrower than `minW`. Returns the solid mesh with its origin at the
+ * is no narrower than `minW`, its paper in `theme`'s colours. Returns the solid mesh with its origin at the
  * middle of its foot, and its size.
  */
-export function textPanel(lines: PanelLine[], maxW: number, minW: number, pad: number, foot: number, fold: number): { mesh: Mesh; w: number; h: number } {
+export function textPanel(
+  lines: PanelLine[],
+  maxW: number,
+  minW: number,
+  pad: number,
+  foot: number,
+  fold: number,
+  theme: ToolTheme = 'peach',
+): { mesh: Mesh; w: number; h: number } {
+  const { paper, fold: folded } = PALETTES[theme];
   const c = document.createElement('canvas').getContext('2d')!;
   const font = (size: number) => `700 ${size * PANEL_PX}px ${FONT}`;
   const rows: { text: string; size: number; ink: string }[] = [];
@@ -369,7 +377,7 @@ export function textPanel(lines: PanelLine[], maxW: number, minW: number, pad: n
   const g = canvas.getContext('2d')!;
   const W = canvas.width;
   const f = fold * PANEL_PX;
-  g.fillStyle = PAPER;
+  g.fillStyle = paper;
   g.beginPath();
   g.moveTo(0, 0);
   g.lineTo(W - f, 0);
@@ -378,7 +386,7 @@ export function textPanel(lines: PanelLine[], maxW: number, minW: number, pad: n
   g.lineTo(0, canvas.height);
   g.closePath();
   g.fill();
-  g.fillStyle = FOLD;
+  g.fillStyle = folded;
   g.beginPath();
   g.moveTo(W - f, 0);
   g.lineTo(W, f);
