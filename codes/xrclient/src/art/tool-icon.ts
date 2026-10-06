@@ -143,6 +143,8 @@ export interface ToolOptions {
   divider?: boolean;
   /** Standing on its own, not on a strip: it draws its own paper and a thin edge. */
   alone?: boolean;
+  /** Alone, but without the thin edge (a chip with a shadow under it). */
+  bare?: boolean;
   /** The icon in this colour instead of the look's ink, its first outline filled with a light wash of it. */
   tint?: string;
   /** Its letters this many metres tall, however tall the cell. */
@@ -202,7 +204,7 @@ export class ToolButton {
       c.fillStyle = s.bg;
       c.fillRect(0, 0, W, H);
     }
-    if (this.opts.alone) {
+    if (this.opts.alone && !this.opts.bare) {
       c.lineWidth = hair;
       c.strokeStyle = p.line;
       c.strokeRect(hair / 2, hair / 2, W - hair, H - hair);
@@ -321,6 +323,28 @@ export function toolTray(w: number, h: number, fold: number, theme: ToolTheme = 
   c.closePath();
   c.fill();
   return plane(w, h, canvas, true).mesh;
+}
+
+/** A soft shadow's canvas pixels per metre: it is blurred, so few are needed. */
+const SHADOW_PX = 1500;
+
+/**
+ * A soft black shadow for a card `w` by `h` metres, as the home page's chips
+ * cast: a plane `blur` metres wider all round, drawn before the card and
+ * without writing depth, to lie just behind it.
+ */
+export function softShadow(w: number, h: number, blur: number, alpha = 0.28): Mesh {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round((w + 2 * blur) * SHADOW_PX);
+  canvas.height = Math.round((h + 2 * blur) * SHADOW_PX);
+  const c = canvas.getContext('2d')!;
+  const b = blur * SHADOW_PX;
+  c.filter = `blur(${b / 2.5}px)`;
+  c.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+  c.fillRect(b, b, canvas.width - 2 * b, canvas.height - 2 * b);
+  const { mesh } = plane(w + 2 * blur, h + 2 * blur, canvas, false);
+  mesh.renderOrder = 9;
+  return mesh;
 }
 
 /** A text panel's canvas pixels per metre: sharp letters, and light enough to draw again each second. */

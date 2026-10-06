@@ -26,7 +26,7 @@ import {
 } from '@iwsdk/core';
 
 import { Label, type LabelOptions } from './art/label.js';
-import { ToolButton, toolTray, type ToolIcon, type ToolLook } from './art/tool-icon.js';
+import { softShadow, ToolButton, toolTray, type ToolIcon, type ToolLook } from './art/tool-icon.js';
 import {
   forgetMixers,
   makeBalloon,
@@ -196,8 +196,8 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * block of flat cells, three across and two deep, each an envelope in its
  * game's colour over its name, leaning back in front of the book; the
  * settings and HOME are one line of paper chips beside it on the right, as
- * the home page's header has them, each a thin card leaning back as the
- * block does; the best score stands over them,
+ * the home page's header has them, each with a soft shadow, leaning back as
+ * the block does; the best score stands over them,
  * the Fold Town sticker beside the book, and a paper hand shows a
  * first-time player what to do.
  */
@@ -206,15 +206,16 @@ const GAME_W = 0.058;
 const GAME_H = 0.042;
 const GAME_WORD_H = 0.0104;
 const GAMES_AT = new Vector3(-0.177, 0.04, 0.11);
-/** A settings chip: square, the language one wider for both languages; CHIP_D thick, CHIP_GAP apart. */
+/** A settings chip: square, the language one wider for both languages, CHIP_GAP apart. */
 const CHIP_W = 0.042;
 const CHIP_H = 0.042;
 const CHIP_LANG_W = 0.1;
-const CHIP_D = 0.004;
 const CHIP_GAP = 0.007;
 /** The home page header's line, on the icon's 24 unit grid. */
 const CHIP_STROKE = 2.2;
-const CHIP_EDGE = 0xe6d5b8;
+/** A chip's soft black shadow: this blurred, and moved this far right and down its face. */
+const CHIP_BLUR = 0.006;
+const CHIP_SHADOW = new Vector3(0.0015, -0.003, -0.001);
 /** The middle of the chips' line, its front edge level with the games block's. */
 const SETTINGS_AT = new Vector3(0.107, 0.029, 0.127);
 const MENU_FOLD = 0.02;
@@ -1367,8 +1368,8 @@ export class GameSystem extends createSystem({
   /** Touching an animal in the line: it hops and its name shows above it. */
   /**
    * The settings and HOME as the home page's header has them: one line of
-   * separate paper chips centred on SETTINGS_AT, each a thin card with its
-   * edge showing, leaning back as the games block does. Each is a button
+   * separate paper chips centred on SETTINGS_AT, each a card with a soft
+   * black shadow, leaning back as the games block does. Each is a button
    * named `menu-<choice>`, its name shown over it while pointed at.
    */
   private menuChips(cells: MenuCell[]): void {
@@ -1378,16 +1379,14 @@ export class GameSystem extends createSystem({
     cells.forEach(([choice, icon, word, look], i) => {
       const w = widths[i];
       const segments = choice === 'lang' ? { labels: ['EN', 'ID'], on: getLang() === 'en' ? 0 : 1 } : undefined;
-      const b = new ToolButton(icon, '', w, CHIP_H, look, { alone: true, theme: 'home', stroke: CHIP_STROKE, segments });
-      b.mesh.position.z = 0.0005;
-      // The card's thickness, its edge a shade darker than its face.
-      const slab = new Mesh(new BoxGeometry(w, CHIP_H, CHIP_D), new MeshBasicMaterial({ color: CHIP_EDGE, toneMapped: false }));
-      slab.position.z = -CHIP_D / 2;
+      const b = new ToolButton(icon, '', w, CHIP_H, look, { alone: true, bare: true, theme: 'home', stroke: CHIP_STROKE, segments });
+      const shadow = softShadow(w, CHIP_H, CHIP_BLUR);
+      shadow.position.copy(CHIP_SHADOW);
       const cell = new Group();
       cell.name = `menu-${choice}`;
       cell.userData.tip = word;
       cell.userData.tipH = CHIP_H;
-      cell.add(slab, b.mesh);
+      cell.add(shadow, b.mesh);
       cell.position.set(x + w / 2, SETTINGS_AT.y, SETTINGS_AT.z);
       cell.rotation.x = MENU_LEAN;
       x += w + CHIP_GAP;
