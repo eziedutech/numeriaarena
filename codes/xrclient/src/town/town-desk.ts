@@ -274,7 +274,7 @@ export class TownDesk {
     this.text(this.t.title, 0.034, header, 0.092);
     this.folds = this.text('', 0.026, header, 0.05);
     this.status = this.text('', 0.02, header, 0.012);
-    this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0.05, 0x3469c4));
+    this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0, 0x3469c4));
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
     this.redraw();
@@ -303,7 +303,6 @@ export class TownDesk {
       this.say(this.t.xr.pickLandXr, 0);
       return;
     }
-    if (!this.buttons.has('town_turn')) this.buttons.set('town_turn', this.host.button('town_turn', this.t.turn, BUTTON_X, -0.05, 0xe8b64c));
     this.drawPage(kind, v.items);
     const key = `${v.balance}|${v.buildings}`;
     if (key !== this.shelfKey) this.drawShelf(v.balance, v.buildings);

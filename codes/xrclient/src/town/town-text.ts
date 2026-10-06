@@ -102,7 +102,7 @@ const EN = {
   landmarkWaits: (n: number) => `It stands on land ${n} once you open it.`,
   xr: {
     hint: 'Hold the grip or pinch on a shelf piece, let go on the land.',
-    done: 'DONE',
+    done: 'EXIT',
     carry: (name: string) => `${name}: let go over a tile.`,
     dropRemove: (n: number) => `Let go here to remove it (+${n} Folds back).`,
     dropBack: 'Let go here to put it back on the shelf.',
@@ -212,7 +212,7 @@ const ID: typeof EN = {
   landmarkWaits: (n: number) => `Berdiri di lahan ${n} setelah kamu membukanya.`,
   xr: {
     hint: 'Tahan grip atau cubit potongan di rak, lepas di atas lahan.',
-    done: 'SELESAI',
+    done: 'KELUAR',
     carry: (name: string) => `${name}: lepaskan di atas petak.`,
     dropRemove: (n: number) => `Lepaskan di sini untuk menghapusnya (+${n} Folds kembali).`,
     dropBack: 'Lepaskan di sini untuk mengembalikannya ke rak.',

@@ -38,7 +38,7 @@ const Games = {
   /** ROOM, floating over the desk menu in the headset: the room around the desk. */
   Room: 'room',
   Town: 'town',
-  /** MY FOLD TOWN on the desk: TURN, DONE, the four kinds of a first land, and a building's card. */
+  /** MY FOLD TOWN on the desk: turning with A, B, X or Y, EXIT, the four kinds of a first land, and a building's card. */
   TownTurn: 'town_turn',
   TownDone: 'town_done',
   TownPlain: 'town_plain',
