@@ -160,14 +160,29 @@ const MINI_TILT = 0.3;
 /** The title, the Folds and the hint stand over the land's far edge, large enough to read from the chair. */
 const HEADER = new Vector3(0, 0.3, -0.5);
 const HEADER_SCALE = 1.5;
-/** A building's card stands left of the land, its answers on the desk below it. */
-const CARD = new Vector3(-0.64, 0.5, -0.25);
-/** Every line of the card twice the height it is written with, to be read from the chair. */
-const CARD_TEXT = 2;
-const CARD_CHARS = 26;
-const ANSWER_X = [-0.83, -0.67, -0.51];
-const ANSWER_Z = -0.17;
-const CLOSE_AT = [-0.65, -0.06] as const;
+/**
+ * A building's card is one paper panel in the toolbar's colours standing left
+ * of the land, turned towards the player; its answers and its close button
+ * are cells along its foot. Its foot's middle, in the desk's frame:
+ */
+const CARD = new Vector3(-0.64, 0.07, -0.06);
+const CARD_TURN = 0.55;
+const CARD_LEAN = -0.12;
+/** Every line drawn this much taller than it is written, to be read from the chair. */
+const CARD_TEXT = 1.4;
+const CARD_CHARS = 30;
+const CARD_PAD = 0.022;
+const CARD_FOLD = 0.03;
+const CELL_H = 0.052;
+const CELL_GAP = 0.01;
+const CARD_INK = 0x5b3a26;
+const CARD_HEAD = 0xc94f17;
+const CARD_ACCENT = 0xe8672b;
+const CELL_MATS = {
+  on: new MeshBasicMaterial({ color: 0xf6c4a7, toneMapped: false }),
+  accent: new MeshBasicMaterial({ color: 0xe8672b, toneMapped: false }),
+};
+const cellGeo = new PlaneGeometry(1, 1);
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
 const TEAL = 0x3fb6a0;
@@ -200,17 +215,21 @@ const SHARED = new Set<Material>([
   ledgeMat,
   barMat,
   markMat,
+  ...Object.values(CELL_MATS),
 ]);
 const fitBox = new Box3();
 const fitSize = new Vector3();
 const fitMid = new Vector3();
 
 type Line = [text: string, height: number, ink?: number];
+/** A cell along a card's foot: what it does, its word and its colour. */
+type Cell = [choice: TownChoice, word: string, look: 'on' | 'accent'];
 
 interface Card {
   /** The placed item, or "" for the page's landmark. */
   id: string;
-  group: Group;
+  /** The panel, a ray target for its cells. */
+  entity: Entity;
   q?: Question;
   attempt: number;
   answered: boolean;
@@ -256,7 +275,6 @@ export class TownDesk {
   private land = 0;
   private carry?: Carry;
   private card?: Card;
-  private cardButtons: Entity[] = [];
   private rot = 0;
   /** The placed piece whose card is open, its tiles marked on the land. */
   private selected = '';
@@ -1136,7 +1154,7 @@ export class TownDesk {
     if (it.ready) {
       lines.push([t.status.ready, 0.013]);
       if (hasFacts(it.asset)) {
-        lines.push([t.maths, 0.014, TEAL]);
+        lines.push([t.maths, 0.014, CARD_ACCENT]);
         for (const f of factsOf(shapeOf(it), pageTiles(this.model, it.land), gradeOf(this.model), lang)) this.wrap(f, lines);
       }
     } else {
@@ -1145,13 +1163,12 @@ export class TownDesk {
       if (wait > 0) lines.push([t.nextIn(waitText(wait, lang)), 0.013, ORANGE]);
       else {
         q = finishQuestion(shapeOf(it), gradeOf(this.model), tried.attempt, lang);
-        lines.push([t.finishNow, 0.014, TEAL]);
+        lines.push([t.finishNow, 0.014, CARD_ACCENT]);
         this.wrap(q.prompt, lines);
       }
     }
-    const group = this.cardGroup(lines);
-    if (q) q.choices.forEach((c, i) => this.cardButtons.push(this.host.button(`town_a${i}` as TownChoice, c, ANSWER_X[i], ANSWER_Z, 0xe8b64c)));
-    this.card = { id: it.id, group, q, attempt: tried.attempt, answered: false, ready: it.ready };
+    const entity = this.cardPanel(lines, q ? q.choices.map((c, i) => [`town_a${i}` as TownChoice, c, 'on'] as Cell) : []);
+    this.card = { id: it.id, entity, q, attempt: tried.attempt, answered: false, ready: it.ready };
     this.selected = it.id;
     this.placeMark();
     if (!again) console.info(`[town] card of ${it.asset}: ${q ? `asks ${q.kind}` : it.ready ? (hasFacts(it.asset) ? 'its maths' : 'finished') : 'waits'}`);
@@ -1165,11 +1182,10 @@ export class TownDesk {
     const t = this.t;
     const lines: Line[] = [[this.name(lm.landmark).toUpperCase(), 0.02]];
     this.wrap(t.landmarkBy(skillTitle(lm.skill, getLang())), lines);
-    lines.push([t.landmarkStars(lm.tier), 0.013, TEAL]);
+    lines.push([t.landmarkStars(lm.tier), 0.013, CARD_ACCENT]);
     this.wrap(t.landmarkFixed, lines);
-    const group = this.cardGroup(lines);
-    this.cardButtons.push(this.host.button('town_card', t.close, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
-    this.card = { id: '', group, attempt: 0, answered: true, ready: true };
+    const entity = this.cardPanel(lines, [['town_card', t.close, 'accent']]);
+    this.card = { id: '', entity, attempt: 0, answered: true, ready: true };
     console.info(`[town] card of the landmark ${lm.landmark}`);
   }
 
@@ -1185,30 +1201,68 @@ export class TownDesk {
     if (line) into.push([line, height]);
   }
 
-  private cardGroup(lines: Line[]): Group {
+  /** The card's lines on one paper panel, left aligned, with its cells in a row along the foot. */
+  private cardPanel(lines: Line[], cells: Cell[]): Entity {
     const g = new Group();
     g.name = 'town-card';
-    g.position.copy(CARD);
-    let y = 0;
+    const words: { l: Label; h: number; step: number }[] = [];
+    let textW = 0;
+    let textH = 0;
     for (const [text, height, ink] of lines) {
       const h = height * CARD_TEXT;
-      if (text) {
-        const l = new Label(text, ink === undefined ? { height: h } : { height: h, ink });
-        l.mesh.position.set(0, y - h / 2, 0);
-        g.add(l.mesh);
-        this.host.billboard(l.mesh);
-      }
-      y -= h * 1.45;
+      const step = h * 1.45;
+      textH += step;
+      if (!text) continue;
+      const l = new Label(text, { height: h, card: false, ink: ink ?? (words.length ? CARD_INK : CARD_HEAD) });
+      words.push({ l, h, step });
+      textW = Math.max(textW, l.width);
     }
-    this.root.object3D!.add(g);
-    return g;
+    const marks = cells.map(([, word, look]) => new Label(word, { height: 0.024, card: false, ink: look === 'on' ? CARD_HEAD : 0xffffff }));
+    const cellW = marks.map((m) => Math.max(0.07, m.width + 0.024));
+    const rowW = cellW.reduce((a, b) => a + b, 0) + CELL_GAP * Math.max(0, cells.length - 1);
+    const w = Math.max(textW, rowW, 0.22) + 2 * CARD_PAD;
+    const rowH = cells.length ? CELL_H + CARD_PAD : 0;
+    const h = textH + rowH + 2 * CARD_PAD;
+    const paper = toolTray(w, h, CARD_FOLD);
+    paper.position.y = h / 2;
+    g.add(paper);
+    let y = h - CARD_PAD;
+    let k = 0;
+    for (const [text, height] of lines) {
+      const step = height * CARD_TEXT * 1.45;
+      if (text) {
+        const { l, h: lh } = words[k++];
+        l.mesh.position.set(-w / 2 + CARD_PAD + l.width / 2, y - lh / 2, 0.002);
+        g.add(l.mesh);
+      }
+      y -= step;
+    }
+    let x = -rowW / 2;
+    cells.forEach(([choice, , look], i) => {
+      const cell = new Mesh(cellGeo, CELL_MATS[look]);
+      cell.name = `town-card-${choice}`;
+      cell.userData.townOpt = choice;
+      cell.scale.set(cellW[i], CELL_H, 1);
+      cell.position.set(x + cellW[i] / 2, CARD_PAD + CELL_H / 2, 0.0015);
+      cell.renderOrder = 5;
+      const m = marks[i];
+      m.mesh.position.set(cell.position.x, cell.position.y, 0.003);
+      (m.mesh as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+      g.add(cell, m.mesh);
+      x += cellW[i] + CELL_GAP;
+    });
+    g.position.copy(CARD);
+    g.rotation.set(CARD_LEAN, CARD_TURN, 0, 'YXZ');
+    return this.host.add(g, true);
   }
 
   private closeCard(): void {
-    this.card?.group.removeFromParent();
+    const e = this.card?.entity;
     this.card = undefined;
-    for (const e of this.cardButtons) if (e.active) this.host.remove(e);
-    this.cardButtons = [];
+    if (e?.active) {
+      this.spare(e.object3D);
+      this.host.remove(e);
+    }
     this.selected = '';
     this.placeMark();
   }
@@ -1288,9 +1342,8 @@ export class TownDesk {
       this.wrap(t.wrong, lines);
       lines.push(['', 0.006]);
       this.wrap(hint, lines);
-      const group = this.cardGroup(lines);
-      this.cardButtons.push(this.host.button('town_card', t.ok, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
-      this.card = { id: it.id, group, attempt: c.attempt + 1, answered: true, ready: false };
+      const entity = this.cardPanel(lines, [['town_card', t.ok, 'accent']]);
+      this.card = { id: it.id, entity, attempt: c.attempt + 1, answered: true, ready: false };
       return;
     }
     const reason = await this.model.act({ type: 'town_finish', place_id: c.id });
