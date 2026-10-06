@@ -17,7 +17,8 @@ import {
 import { Label } from '../art/label.js';
 import { ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
-import { getLang } from '../settings.js';
+import { getLang, getRoom, ROOMS, setRoom } from '../settings.js';
+import { T } from '../text.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
 import { TownModel } from './town-model.js';
 import { SHELF_NAMES } from './town-names.js';
@@ -60,7 +61,8 @@ export type TownChoice =
   | 'town_zoom_out'
   | 'town_pan'
   | 'town_shelf_big'
-  | 'town_shelf_show';
+  | 'town_shelf_show'
+  | 'town_room';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -121,7 +123,7 @@ const HAND_CARRY_DROP = 0.05;
 const ZOOMS = [1, 1.5, 2, 3];
 /** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
 const PAPER = 0.25;
-/** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, and EXIT. */
+/** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, the room and EXIT. */
 const TOOL_W = 0.056;
 const TOOL_H = 0.064;
 /** The strip's end past EXIT, its top corner folded over. */
@@ -285,6 +287,7 @@ export class TownDesk {
   private bigButton?: ToolButton;
   private panButton?: ToolButton;
   private showButton?: ToolButton;
+  private roomButton?: ToolButton;
   private shelfShown = true;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
@@ -612,6 +615,14 @@ export class TownDesk {
       console.info(`[town] zoom ${this.zoom}x`);
       return;
     }
+    if (choice === 'town_room') {
+      // The same rooms as the desk menu's ROOM card, in turn.
+      const next = ROOMS[(ROOMS.indexOf(getRoom()) + 1) % ROOMS.length];
+      console.info(`[town] room ${next}`);
+      setRoom(next);
+      this.roomButton?.set('room', 'plain', T.roomName[next]);
+      return;
+    }
     if (choice === 'town_shelf_show') {
       this.showShelf(!this.shelfShown);
       return;
@@ -707,7 +718,7 @@ export class TownDesk {
 
   // ------------------------------------------------------------ zoom and the hand tool
 
-  /** The toolbar: zoom out, zoom in, the hand tool, the shelf and EXIT, each a tile with its icon and word. */
+  /** The toolbar: zoom out, zoom in, the hand tool, the shelf, the room and EXIT, each a tile with its icon and word. */
   private viewButtons(): Group {
     const r = townRulesNow();
     const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
@@ -715,6 +726,7 @@ export class TownDesk {
       ['town_zoom_in', 'zoomIn', this.t.xr.zoomIn, 'plain'],
       ['town_pan', 'pan', this.t.xr.pan, 'plain'],
       ['town_shelf_show', 'shown', this.t.xr.shelf, 'on'],
+      ['town_room', 'room', T.roomName[getRoom()], 'plain'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
     const w = tools.length * TOOL_W + TOOL_FOLD;
@@ -732,6 +744,7 @@ export class TownDesk {
       row.add(b.mesh);
       if (choice === 'town_pan') this.panButton = b;
       if (choice === 'town_shelf_show') this.showButton = b;
+      if (choice === 'town_room') this.roomButton = b;
     });
     return row;
   }

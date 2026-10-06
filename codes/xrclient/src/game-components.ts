@@ -62,6 +62,8 @@ const Games = {
   TownShelfBig: 'town_shelf_big',
   /** The toolbar's SHELF: the shelf shown or hidden. */
   TownShelfShow: 'town_shelf_show',
+  /** The toolbar's ROOM: the room around the desk, as the menu's ROOM card. */
+  TownRoom: 'town_room',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

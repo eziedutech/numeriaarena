@@ -357,8 +357,8 @@ const QUESTION_INK = 0x1f4fa3;
 const ENVELOPE_TILT = 1.3;
 /** Envelopes lie this far in front of the book's front edge (desk frame z). */
 const ENVELOPE_Z = 0.11;
-/** The menu's second row of envelopes, nearer the player. */
-const ENVELOPE_ROW2_Z = 0.19;
+/** The menu's second row of envelopes, nearer the player, clear of the first row's near edge. */
+const ENVELOPE_ROW2_Z = 0.205;
 const MENU_GAMES: MenuChoice[] = ['race', 'balloon_burst', 'orb_forge', 'factory_sort', 'bridge_builder', 'balance_gate'];
 /** Opening an envelope: the flap folds back, then the letter slides out (seconds). */
 const FLAP_S = 0.45;
@@ -1062,9 +1062,9 @@ export class GameSystem extends createSystem({
       ['race', T.race, -0.135, ENVELOPE_Z, 0x3fb6a0],
       ['balloon_burst', T.gameName.balloon_burst, 0, ENVELOPE_Z, 0xf2716b],
       ['orb_forge', T.gameName.orb_forge, 0.135, ENVELOPE_Z, 0x3469c4],
-      ['factory_sort', T.gameName.factory_sort, -0.12, ENVELOPE_ROW2_Z, 0x9b6bc2],
+      ['factory_sort', T.gameName.factory_sort, -0.135, ENVELOPE_ROW2_Z, 0x9b6bc2],
       ['bridge_builder', T.gameName.bridge_builder, 0, ENVELOPE_ROW2_Z, 0xe0a33c],
-      ['balance_gate', T.gameName.balance_gate, 0.12, ENVELOPE_ROW2_Z, 0x5aa469],
+      ['balance_gate', T.gameName.balance_gate, 0.135, ENVELOPE_ROW2_Z, 0x5aa469],
     ];
     for (const [game, title, x, z, color] of games) {
       if (only === 'practice' && game === 'race') continue;
@@ -1326,13 +1326,13 @@ export class GameSystem extends createSystem({
     const sticker = game === 'race' ? 'menu_robot_race' : `menu_${game}`;
     if (sticker in UI_HEIGHT) {
       placeUiImage(sticker as UiName, envelope.root, [0, -0.022, 0.0016], {
-        scale: 0.85,
-        maxWidth: 0.09,
-        fallback: () => this.label(title, 0.018, envelope.root, -0.022, 0.0016, false).mesh,
+        scale: 1,
+        maxWidth: 0.097,
+        fallback: () => this.label(title, 0.021, envelope.root, -0.022, 0.0016, false).mesh,
       });
     } else {
       // A game without its paper label yet: its name, small enough to fit the pocket.
-      this.label(title, 0.012, envelope.root, -0.022, 0.0016, false);
+      this.label(title, 0.014, envelope.root, -0.022, 0.0016, false);
     }
     this.envelopes.set(e, envelope);
   }
