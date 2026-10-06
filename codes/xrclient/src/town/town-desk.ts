@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Group,
@@ -32,8 +33,9 @@ import { TOWN_TEXT, waitText } from './town-text.js';
  * or the land) takes it into the hand, and a hand's pinch does the same; it
  * is carried with its ray over a tile, which shows a green or orange shadow,
  * and let go to place it. Let go off the land, a placed piece is removed and
- * its Folds come back. A building session lasts two minutes; the town is saved
- * with every change.
+ * its Folds come back. A piece let go on the land stays chosen, marked under
+ * it, with its card on the left and buttons to turn or remove it. The town is
+ * saved with every change, so building has no time limit.
  */
 
 export type Side = 'left' | 'right';
@@ -47,7 +49,10 @@ export type TownChoice =
   | 'town_a0'
   | 'town_a1'
   | 'town_a2'
-  | 'town_card';
+  | 'town_card'
+  | 'town_left'
+  | 'town_right'
+  | 'town_remove';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -90,9 +95,6 @@ const SIDES: readonly Side[] = ['right', 'left'];
 const TILE = 0.065;
 /** The middle of the land, front to back on the desk. */
 const PAGE_Z = -0.17;
-const LIMIT_S = 120;
-/** The time left is said once this many seconds before the end. */
-const SOON_S = 20;
 /** A pinch let go sooner than this is a tap: the piece stays on the ray until the next pinch. */
 const TAP_MS = 300;
 const MESSAGE_S = 2.6;
@@ -121,18 +123,26 @@ const TAB_TEXT = 0.016;
 const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
-const SLOT = 0.075;
+/** The box a shelf piece fits in as it stands turned and leaning, so none reaches past its ledge, its neighbours or the board. */
+const FIT_W = CELL_W - 0.016;
+const FIT_H = 0.085;
+const FIT_D = 0.055;
 /** Shelf pieces are turned a little and lean back, so they show a side and their top as well as the front. */
 const MINI_TURN = 0.45;
 const MINI_TILT = 0.3;
-const BAR_W = 0.32;
 const HEADER = new Vector3(0, 0.28, -0.44);
 /** A building's card stands left of the land, its answers on the desk below it. */
 const CARD = new Vector3(-0.62, 0.34, -0.25);
 const CARD_CHARS = 32;
 const ANSWER_X = [-0.74, -0.62, -0.5];
 const ANSWER_Z = -0.17;
-const CLOSE_AT = [-0.64, -0.06] as const;
+const CLOSE_AT = [-0.65, -0.06] as const;
+/** A chosen piece's buttons under its card: turn left, turn right, and remove beside CLOSE. */
+const TURN_AT = [
+  [-0.76, 0.05],
+  [-0.65, 0.05],
+] as const;
+const REMOVE_AT = [-0.76, -0.06] as const;
 const BUTTON_X = -0.45;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
@@ -150,8 +160,13 @@ const ledgeMat = new MeshStandardMaterial({ color: 0xe6d3ad, roughness: 1 });
 const barGeo = new PlaneGeometry(1, 1);
 const barMat = new MeshBasicMaterial({ color: TEAL });
 const spareMat = new MeshBasicMaterial();
+const markGeo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
 /** Materials every page and the shelf share, never freed with one of them. */
-const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat]);
+const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat, markMat]);
+const fitBox = new Box3();
+const fitSize = new Vector3();
+const fitMid = new Vector3();
 
 type Line = [text: string, height: number, ink?: number];
 
@@ -201,15 +216,14 @@ export class TownDesk {
   private kindCaption?: Label;
   private folds: Label;
   private status: Label;
-  private bar: Mesh;
-  private clock: Label;
-  private shown = -1;
   private land = 0;
   private carry?: Carry;
   private card?: Card;
   private cardButtons: Entity[] = [];
   private rot = 0;
-  private left = LIMIT_S;
+  /** The placed piece whose card is open, its tiles marked on the land. */
+  private selected = '';
+  private mark?: Mesh;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
   private note = '';
@@ -250,11 +264,6 @@ export class TownDesk {
     this.text(this.t.title, 0.034, header, 0.092);
     this.folds = this.text('', 0.026, header, 0.05);
     this.status = this.text('', 0.02, header, 0.012);
-    this.bar = new Mesh(barGeo, barMat);
-    this.bar.position.set(0, -0.018, 0);
-    this.bar.scale.set(BAR_W, 0.005, 1);
-    header.add(this.bar);
-    this.clock = this.text('', 0.024, header, -0.05);
     this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0.05, 0x3469c4));
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
@@ -316,6 +325,7 @@ export class TownDesk {
         this.say(this.t.finished(this.name(it.asset)));
       }
     }
+    this.placeMark();
     const lm = this.model.doc.landmarks[this.land];
     const raised = this.page.root.getObjectByName('landmark');
     if (lm && raised && unmarked('grown', this.model.owner, [lm]).length) {
@@ -423,13 +433,21 @@ export class TownDesk {
   /** A shelf piece as a small model on its ledge, its whole size inside one slot. */
   private miniature(a: Asset): Group {
     const piece = pieceObject(a.id);
-    const top = pieceInfo(a.id)?.top ?? 1;
-    piece.scale.setScalar(SLOT / Math.max(a.w, a.h, top));
     piece.rotation.y = MINI_TURN;
     const lean = new Group();
     lean.rotation.x = MINI_TILT;
     lean.add(piece);
-    return lean;
+    // Measured as it stands turned and leaning, then scaled into the slot and stood on the ledge.
+    lean.updateMatrixWorld(true);
+    fitBox.setFromObject(lean);
+    fitBox.getSize(fitSize);
+    fitBox.getCenter(fitMid);
+    const k = Math.min(FIT_W / Math.max(fitSize.x, 1e-3), FIT_H / Math.max(fitSize.y, 1e-3), FIT_D / Math.max(fitSize.z, 1e-3));
+    lean.scale.setScalar(k);
+    lean.position.set(-fitMid.x * k, -fitBox.min.y * k, -fitMid.z * k);
+    const slot = new Group();
+    slot.add(lean);
+    return slot;
   }
 
   /**
@@ -497,6 +515,14 @@ export class TownDesk {
       this.closeCard();
       return;
     }
+    if (choice === 'town_left' || choice === 'town_right') {
+      void this.turnPlaced(choice === 'town_left' ? 270 : 90);
+      return;
+    }
+    if (choice === 'town_remove') {
+      void this.removeSelected();
+      return;
+    }
     if (choice === 'town_a0' || choice === 'town_a1' || choice === 'town_a2') {
       void this.answer(Number(choice.slice('town_a'.length)));
       return;
@@ -506,6 +532,9 @@ export class TownDesk {
         this.carry.rot = (this.carry.rot + 90) % 360;
         this.carry.x = NaN;
         this.carry.model.rotation.y = -(this.carry.rot * Math.PI) / 180;
+      } else if (this.selected) {
+        void this.turnPlaced(90);
+        return;
       } else this.rot = (this.rot + 90) % 360;
       this.say(`${this.t.turn} ${this.carry?.rot ?? this.rot}°`);
       console.info(`[town] turned to ${this.carry?.rot ?? this.rot}°`);
@@ -521,20 +550,6 @@ export class TownDesk {
 
   update(delta: number): void {
     if (this.gone) return;
-    this.left -= delta;
-    this.bar.scale.x = BAR_W * Math.max(0, this.left / LIMIT_S);
-    const secs = Math.max(0, Math.ceil(this.left));
-    if (secs !== this.shown) {
-      this.shown = secs;
-      this.clock.set(this.t.xr.timeLeft(secs));
-      if (secs === SOON_S) this.say(this.t.xr.soon(SOON_S), 4);
-    }
-    // A piece in the hand is let go first, so the time never takes it away.
-    if (this.left <= 0 && !this.carry) {
-      console.info('[town] building time is over');
-      this.host.closed(this.t.xr.timeUp);
-      return;
-    }
     if (this.message && (this.messageLeft -= delta) <= 0) this.say(this.carry ? this.note : this.t.xr.hint, 0);
     this.folding = this.folding.filter((f) => {
       f.t += delta / f.s;
@@ -722,6 +737,13 @@ export class TownDesk {
       console.info(`[town] ${c.placeId || c.asset}: ${reason || said}`);
       this.redraw();
       this.say(reason ? this.reason(reason) : said);
+      if (reason || !c.over) return;
+      // Let go on the land, the piece stays chosen with its card.
+      const v = this.model.view().items;
+      const it = c.placeId
+        ? v.find((i) => i.id === c.placeId)
+        : v.filter((i) => i.asset === c.asset && i.land === this.land && i.x === c.x && i.y === c.y).pop();
+      if (it) this.showCard(it);
     };
     const was = c.placeId ? this.model.view().items.find((i) => i.id === c.placeId) : undefined;
     if (was && c.over && c.x === was.x && c.y === was.y && c.rot === was.rot) {
@@ -775,7 +797,12 @@ export class TownDesk {
     const group = this.cardGroup(lines);
     if (q) q.choices.forEach((c, i) => this.cardButtons.push(this.host.button(`town_a${i}` as TownChoice, c, ANSWER_X[i], ANSWER_Z, 0xe8b64c)));
     this.cardButtons.push(this.host.button('town_card', t.close, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
+    this.cardButtons.push(this.host.button('town_left', `↺ ${t.turn}`, TURN_AT[0][0], TURN_AT[0][1], 0xe8b64c));
+    this.cardButtons.push(this.host.button('town_right', `${t.turn} ↻`, TURN_AT[1][0], TURN_AT[1][1], 0xe8b64c));
+    this.cardButtons.push(this.host.button('town_remove', t.refund(it.price), REMOVE_AT[0], REMOVE_AT[1], ORANGE));
     this.card = { id: it.id, group, q, attempt: tried.attempt, answered: false, ready: it.ready };
+    this.selected = it.id;
+    this.placeMark();
     if (!again) console.info(`[town] card of ${it.asset}: ${q ? `asks ${q.kind}` : it.ready ? (hasFacts(it.asset) ? 'its maths' : 'finished') : 'waits'}`);
   }
 
@@ -830,6 +857,51 @@ export class TownDesk {
     this.card = undefined;
     for (const e of this.cardButtons) if (e.active) this.host.remove(e);
     this.cardButtons = [];
+    this.selected = '';
+    this.placeMark();
+  }
+
+  /** The chosen piece's tiles in teal under it, or no mark. */
+  private placeMark(): void {
+    const h = this.holder?.object3D;
+    const it = this.selected ? this.model.view().items.find((i) => i.id === this.selected && i.land === this.land) : undefined;
+    if (!h || !it || it.id === this.carry?.placeId) {
+      if (this.mark) this.mark.visible = false;
+      return;
+    }
+    if (!this.mark) {
+      this.mark = new Mesh(markGeo, markMat);
+      this.mark.name = 'town-chosen';
+      (this.mark as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    }
+    if (this.mark.parent !== h) h.add(this.mark);
+    const [w, d] = footprint(assetOf(it.asset)!, it.rot);
+    this.mark.scale.set(w + 0.15, 1, d + 0.15);
+    this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
+    this.mark.visible = true;
+  }
+
+  /** Turns the chosen piece where it stands, a quarter round left (270) or right (90); it stays chosen. */
+  private async turnPlaced(step: number): Promise<void> {
+    const it = this.model.view().items.find((i) => i.id === this.selected);
+    if (!it) return;
+    const rot = (it.rot + step) % 360;
+    const reason = await this.model.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot });
+    console.info(`[town] ${it.id} turned to ${rot}°: ${reason || 'done'}`);
+    if (reason) return this.say(this.reason(reason));
+    this.say(`${this.t.turn} ${rot}°`);
+    const now = this.model.view().items.find((i) => i.id === it.id);
+    if (now) this.showCard(now, true);
+  }
+
+  /** Takes the chosen piece off the land, its Folds back. */
+  private async removeSelected(): Promise<void> {
+    const it = this.model.view().items.find((i) => i.id === this.selected);
+    if (!it) return;
+    this.closeCard();
+    const reason = await this.model.act({ type: 'town_remove', place_id: it.id });
+    console.info(`[town] ${it.id} removed: ${reason || 'done'}`);
+    this.say(reason ? this.reason(reason) : this.t.removed(this.name(it.asset), it.price));
   }
 
   /** A card drawn again when its building finishes or while it waits, closed when the building is gone. */

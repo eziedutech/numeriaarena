@@ -50,6 +50,10 @@ const Games = {
   TownAnswer1: 'town_a1',
   TownAnswer2: 'town_a2',
   TownCardClose: 'town_card',
+  /** A chosen piece's card: turn it left or right, or remove it. */
+  TownTurnLeft: 'town_left',
+  TownTurnRight: 'town_right',
+  TownRemove: 'town_remove',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */
