@@ -1167,6 +1167,14 @@ button.tool {
   background: #f4b98f;
 }
 
+.lesson-link {
+  margin-left: 10px;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #3469c4;
+  white-space: nowrap;
+}
+
 .report-missed-title {
   margin: 12px 0 4px;
   font-weight: 700;

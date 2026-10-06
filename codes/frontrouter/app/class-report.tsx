@@ -6,6 +6,7 @@ import { ClassAi } from "./class-ai";
 import { ClassStudents } from "./class-students";
 import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
+import { LessonLink } from "./lesson-link";
 import { Pick } from "./pick";
 
 /**
@@ -254,6 +255,7 @@ export function ClassReport({
                             <td>
                               {skillTitle(s.key)}
                               {s.key === weakest && <span className="past-state weak-tag">{t.weakest}</span>}
+                              {s.key === weakest && <LessonLink skill={s.key} lang={lang} />}
                             </td>
                             <td className="num">{s.right}</td>
                             <td className="num">{s.total}</td>

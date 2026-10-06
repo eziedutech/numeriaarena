@@ -1,4 +1,5 @@
 import type { Lang } from "./legal";
+import { LessonLink } from "./lesson-link";
 
 /**
  * INSIGHTS above a class's report, made by fixed rules from the same numbers
@@ -195,7 +196,10 @@ export function ClassInsight({
             const help = whole ? needHelp(s.code) : [];
             return (
               <li key={s.code}>
-                <div>{s.level === "practice" ? t.practise(skillTitle(s.code)) : t.keepGoing(skillTitle(s.code))}</div>
+                <div>
+                  {s.level === "practice" ? t.practise(skillTitle(s.code)) : t.keepGoing(skillTitle(s.code))}
+                  <LessonLink skill={s.code} lang={lang} />
+                </div>
                 {m && <div className="soft">{t.watch(mistake(m.code).title.toLowerCase())}</div>}
                 {help.length > 0 && (
                   <div className="soft">

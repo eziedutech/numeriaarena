@@ -99,5 +99,8 @@ const file = (id: string) => `./lessons/${id}.ts`;
 /** Whether the topic's lesson is made; known without loading it. */
 export const ready = (id: string) => file(id) in LESSONS;
 
+/** The first made lesson that teaches a skill, lowest grade first, for a report's weak skill. */
+export const lessonFor = (skill: string) => TOPICS.filter((x) => x.skills.includes(skill) && ready(x.id)).sort((a, b) => a.grade - b.grade)[0];
+
 /** The lesson's own code, loaded only when it is opened. */
 export const loadLesson = async (id: string) => (await LESSONS[file(id)]()).lesson;
