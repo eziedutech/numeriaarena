@@ -73,7 +73,8 @@ import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore, sharedStore } from './storage.js';
 import { T, useLanguage } from './text.js';
-import { ROOMS, bigText, getLang, getRoom, onSettings, setBigText, setLang, setRoom, textScale } from './settings.js';
+import { ROOMS, bigText, getLang, getRoom, musicOn, onSettings, setBigText, setLang, setMusic, setRoom, setSound, soundOn, textScale } from './settings.js';
+import { onCaption, setEars, sfx, type Cue, type Spot } from './audio.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
@@ -206,7 +207,7 @@ const GAME_WORD_H = 0.0104;
 const GAMES_AT = new Vector3(-0.235, 0.04, 0.11);
 const SET_W = 0.08;
 const SET_H = 0.07;
-const SETTINGS_AT = new Vector3(0.18, 0.025, 0.15);
+const SETTINGS_AT = new Vector3(0.18, 0.04, 0.13);
 const MENU_FOLD = 0.026;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
@@ -220,7 +221,12 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.18, 0.075, 0.11);
+const BEST_AT = new Vector3(0.18, 0.115, 0.065);
+/** A caption for an important sound, low in the view in the headset, and how long it stays. */
+const CAPTION_AT = new Vector3(0, -0.17, -0.6);
+const CAPTION_S = 1.6;
+/** The last ten seconds of a round tick; the last three higher. */
+const TICK_FROM_S = 10;
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
@@ -399,7 +405,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -567,6 +573,14 @@ export class GameSystem extends createSystem({
   private menuTrays: Entity[] = [];
   /** The race's cell, which the first-time hand presses, in the desk's frame. */
   private hintAt = new Vector3();
+  /** Where a sound happens, in the world, filled in just before it plays. */
+  private spotAt: Spot = { x: 0, y: 0, z: 0 };
+  private earV = new Vector3();
+  private earQ = new Quaternion();
+  private caption?: Label;
+  private captionLeft = 0;
+  /** The round clock's last whole second ticked, so each second ticks once. */
+  private lastTick = -1;
 
   init(): void {
     this.score = new Label(T.title, { height: 0.04 });
@@ -577,6 +591,26 @@ export class GameSystem extends createSystem({
     this.timerBar.name = 'answer-timer';
     this.timerBar.visible = false;
     this.labels.add(this.timerBar);
+    // In the headset sounds come from where they happen: the head is the listener.
+    setEars((pos, forward, up) => {
+      if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return false;
+      this.camera.getWorldPosition(this.earV);
+      pos[0] = this.earV.x;
+      pos[1] = this.earV.y;
+      pos[2] = this.earV.z;
+      this.camera.getWorldDirection(this.earV);
+      forward[0] = this.earV.x;
+      forward[1] = this.earV.y;
+      forward[2] = this.earV.z;
+      this.camera.getWorldQuaternion(this.earQ);
+      this.earV.set(0, 1, 0).applyQuaternion(this.earQ);
+      up[0] = this.earV.x;
+      up[1] = this.earV.y;
+      up[2] = this.earV.z;
+      return true;
+    });
+    // The page shows captions itself; in the headset they float low in the view.
+    this.cleanupFuncs.push(onCaption((text) => this.showCaption(text)));
     this.stage = {
       add: (obj) => this.add(obj),
       remove: (e) => this.remove(e),
@@ -712,6 +746,7 @@ export class GameSystem extends createSystem({
       // chosen by a click before is let go, so a click and a grab do not mix.
       this.queries.heldCrystals.subscribe('qualify', (e) => {
         this.endDemo(true);
+        this.sound('grab', e.object3D);
         this.unselect(e);
       }),
       this.queries.heldCrystals.subscribe('disqualify', (e) => this.released(e)),
@@ -726,6 +761,7 @@ export class GameSystem extends createSystem({
       return;
     }
     if (e.object3D) this.dip(e.object3D);
+    this.sound('tap', e.object3D);
     if (e.getValue(MenuButton, 'game') === 'quit') {
       this.pressQuit(e);
       return;
@@ -793,6 +829,18 @@ export class GameSystem extends createSystem({
     if (pressed === 'bigtext') {
       console.info('[menu] big numbers toggled');
       setBigText(!bigText());
+      return;
+    }
+    if (pressed === 'sound') {
+      setSound(!soundOn());
+      console.info(`[menu] sound ${soundOn() ? 'on' : 'off'}`);
+      // Turned on, it says so at once.
+      if (soundOn()) this.sound('tap', e.object3D);
+      return;
+    }
+    if (pressed === 'music') {
+      setMusic(!musicOn());
+      console.info(`[menu] music ${musicOn() ? 'on' : 'off'}`);
       return;
     }
     if (pressed === 'town') {
@@ -1065,10 +1113,12 @@ export class GameSystem extends createSystem({
     );
     // The settings sit beside the games, so the headset never has to come
     // off for them; HOME ends the session (or the game in the browser) for the home page.
-    this.menuStrip('menu-settings', SETTINGS_AT, 4, 1, SET_W, SET_H, [
+    this.menuStrip('menu-settings', SETTINGS_AT, 3, 2, SET_W, SET_H, [
       ['lang', 'language', `${T.langCaption}\n${getLang().toUpperCase()}`, 'plain'],
       ['bigtext', 'bigText', `${T.bigCaption}\n${T.onOff(bigText())}`, bigText() ? 'on' : 'plain'],
       ['room', 'room', `${T.roomCaption}\n${T.roomName[getRoom()]}`, getRoom() === 'here' ? 'plain' : 'on'],
+      ['sound', soundOn() ? 'sound' : 'soundOff', `${T.soundCaption}\n${T.onOff(soundOn())}`, soundOn() ? 'on' : 'plain'],
+      ['music', 'music', `${T.musicCaption}\n${T.onOff(musicOn())}`, musicOn() ? 'on' : 'plain'],
       ['home', 'exit', T.home, 'accent'],
     ]);
     this.addTownSticker();
@@ -1582,6 +1632,7 @@ export class GameSystem extends createSystem({
     const ends = this.raceState?.ends_at_ms ?? null;
     this.camera.getWorldPosition(scene.eye);
     scene.clock(ends === null || this.phase === 'recap' ? null : ends - this.now());
+    if (ends !== null && this.phase !== 'recap') this.tickClock(ends - this.now());
     if (this.recapIn > 0) {
       this.recapIn -= delta;
       if (this.recapIn <= 0) this.showRecap();
@@ -1656,6 +1707,7 @@ export class GameSystem extends createSystem({
         // The paper banners read "WAVE n OF 3"; other lengths keep the text card.
         const paper: UiName[] = total === 3 ? [`race_wave_${ev.wave + 1}` as UiName] : [];
         scene.showBanner(`${T.wave(ev.wave + 1, total)}: ${T.gameName[ev.game]}`, 2.5, paper);
+        sfx('wave');
         this.beginRound(ev.wave);
         break;
       }
@@ -1670,6 +1722,7 @@ export class GameSystem extends createSystem({
         break;
       case 'boss_start':
         scene.showBanner(T.bossRound, 3, ['race_boss_round', 'race_double_points']);
+        sfx('wave');
         this.beginRound(this.raceState?.waves ?? 3);
         break;
       case 'match_end':
@@ -1677,6 +1730,7 @@ export class GameSystem extends createSystem({
         break;
       case 'time_up':
         scene.timeUp();
+        sfx('timeUp');
         scene.showBanner(T.timeUp, 2, ['race_times_up']);
         // A creature still open when the clock ran out goes home unanswered.
         if (ev.player_cut) {
@@ -1701,6 +1755,9 @@ export class GameSystem extends createSystem({
     this.clearPlay();
     this.removeQuitCard();
     this.raceScene.showRecap(recap, this.race instanceof ClassRace ? this.race.name.toUpperCase() || T.you : T.you);
+    sfx('fanfare');
+    // A bell for each star the player won, rising.
+    for (let i = 0; i < (recap.players[0]?.stars ?? 0); i++) window.setTimeout(() => sfx('star', { step: i }), 900 + i * 350);
     // The best kept on the device is the race against the robots.
     const own = recap.players[0];
     if (own && this.race instanceof Race) {
@@ -1755,6 +1812,7 @@ export class GameSystem extends createSystem({
     this.removeQuitCard();
     const saved = this.saveAnswers(true);
     console.info(`[game] practice done: ${this.practiceRight} of ${WAVE}, ${points} points`);
+    sfx('fanfare');
     noteGuestPlay(points);
     reportPlay({
       kind: 'practice',
@@ -2486,6 +2544,7 @@ export class GameSystem extends createSystem({
     this.endDemo(true);
     const index = e.getValue(Balloon, 'index') as number;
     const game = this.offer.game;
+    this.sound(game === 'balloon_burst' ? 'pop' : game === 'bridge_builder' ? 'place' : 'tap', e.object3D);
     if (game === 'bridge_builder') {
       this.layPlank(e);
       return;
@@ -2679,6 +2738,7 @@ export class GameSystem extends createSystem({
 
   private afterVerdict(v: Verdict | RaceVerdict): void {
     this.saveAnswers();
+    this.sound(v.correct ? 'right' : 'wrong', this.creature()?.object3D);
     if (!this.race) this.practiceTotal = v.total_points;
     // Factory Sort's right answer is a gate: its rule, not the number.
     const gate = v.expected_gate === undefined ? undefined : this.offer?.gates?.[v.expected_gate]?.[getLang()];
@@ -2995,6 +3055,7 @@ export class GameSystem extends createSystem({
     this.tween(obj, obj.position.clone(), cheer.getClip().duration, 0, obj.scale.x, () => {
       const to = (this.race && this.raceScene?.stampTarget(round)) || (this.race ? BOARD_AT : SCORE_AT);
       this.figure?.play('idle');
+      this.sound('fold', obj);
       this.tween(obj, to, TO_SCORE_S, 0.05, this.creatureScale * 0.2, () => {
         this.remove(creature);
         if (this.race) this.raceScene?.stamp(round, species, color, true);
@@ -3014,6 +3075,7 @@ export class GameSystem extends createSystem({
     // The bird flies towards its +X; turn it to head for the book.
     bird.rotation.y = Math.PI / 2;
     const birdEntity = this.add(bird);
+    this.sound('fold', obj);
     this.remove(creature);
     this.tween(bird, new Vector3(0, 0.1, HOME.z), 0.9, 0.12, 0.4, () => {
       this.remove(birdEntity);
@@ -3118,7 +3180,46 @@ export class GameSystem extends createSystem({
     this.welcomeShown = show;
   }
 
+  /** Plays `cue` from where `obj` is (heard from there in the headset). */
+  private sound(cue: Cue, obj?: Object3D | null): void {
+    if (!obj) {
+      sfx(cue);
+      return;
+    }
+    obj.getWorldPosition(this.earV);
+    this.spotAt.x = this.earV.x;
+    this.spotAt.y = this.earV.y;
+    this.spotAt.z = this.earV.z;
+    sfx(cue, { at: this.spotAt });
+  }
+
+  /** The round's clock: one tick a second over the last ten. */
+  private tickClock(msLeft: number): void {
+    const s = Math.ceil(msLeft / 1000);
+    if (s === this.lastTick) return;
+    this.lastTick = s;
+    if (s >= 1 && s <= TICK_FROM_S) sfx(s <= 3 ? 'tickLast' : 'tick');
+  }
+
+  /** A sound's caption in the headset, low in the view; the page shows its own. */
+  private showCaption(text: string): void {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
+    if (!this.caption) {
+      this.caption = new Label(text, { height: 0.022 });
+      this.caption.mesh.name = 'sound-caption';
+      this.caption.mesh.position.copy(CAPTION_AT);
+      this.camera.add(this.caption.mesh);
+    }
+    this.caption.set(text);
+    this.caption.mesh.visible = true;
+    this.captionLeft = CAPTION_S;
+  }
+
   update(delta: number): void {
+    if (this.captionLeft > 0) {
+      this.captionLeft -= delta;
+      if (this.captionLeft <= 0 && this.caption) this.caption.mesh.visible = false;
+    }
     // The classroom's board shows the player's question as on its card.
     classroom.question = this.race ? (this.prompt?.value ?? '') : '';
     if (this.pausedAt !== undefined) return;
@@ -3246,6 +3347,7 @@ export class GameSystem extends createSystem({
     this.deskEntity()!.object3D!.worldToLocal(orb.position.copy(this.a));
     orb.position.y = Math.max(orb.position.y, 0.08);
     const e = this.add(orb);
+    this.sound('join', other.object3D);
     this.label(`${texts[i].text} + ${texts[j].text}`, 0.03, orb, 0.05);
     this.selected = undefined;
     this.submitOrb([i, j]);
@@ -3363,6 +3465,7 @@ export class GameSystem extends createSystem({
     if (!this.selected) {
       this.selected = e;
       obj.position.y += SELECT_LIFT;
+      this.sound('grab', obj);
       return;
     }
     const first = this.selected;

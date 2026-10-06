@@ -12,6 +12,8 @@ const EN = {
   language: 'LANGUAGE',
   accessibility: 'ACCESSIBILITY',
   bigNumbers: (on: boolean) => `BIG NUMBERS: ${on ? 'ON' : 'OFF'}`,
+  sound: (on: boolean) => `SOUND: ${on ? 'ON' : 'OFF'}`,
+  music: (on: boolean) => `MUSIC: ${on ? 'ON' : 'OFF'}`,
   howtoAgain: 'SHOW THE HOW-TO AGAIN',
   howtoReset: 'Done. The paper hand will show each game again the next time it comes up.',
   hint: {
@@ -195,6 +197,8 @@ const ID: typeof EN = {
   language: 'BAHASA',
   accessibility: 'AKSESIBILITAS',
   bigNumbers: (on: boolean) => `ANGKA BESAR: ${on ? 'NYALA' : 'MATI'}`,
+  sound: (on: boolean) => `SUARA: ${on ? 'NYALA' : 'MATI'}`,
+  music: (on: boolean) => `MUSIK: ${on ? 'NYALA' : 'MATI'}`,
   howtoAgain: 'TAMPILKAN PETUNJUK LAGI',
   howtoReset: 'Selesai. Tangan kertas akan memperagakan setiap game lagi saat game itu muncul.',
   hint: {

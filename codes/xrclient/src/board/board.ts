@@ -1,4 +1,5 @@
 import { getLang } from '../settings.js';
+import { sfx } from '../audio.js';
 import { el, paperText } from '../home/paper.js';
 import { onTeacher, teacherCall, teacherState } from '../home/teacher.js';
 import { BOARD_TEXT, type BoardText } from './board-text.js';
@@ -614,6 +615,8 @@ class Board {
       // Everything stops. This is a race, so the right answer is never shown: a right
       // press glows, a wrong one shakes, and a pass only dims them all.
       box.classList.add('still');
+      // A pass is a quiet paper tap; an answer chimes or boings, as on the desk.
+      sfx(k < 0 ? 'tap' : correct ? 'right' : 'wrong');
       if (k < 0) box.classList.add('skip');
       else
         for (const b of box.querySelectorAll<HTMLElement>('.tgt')) {
@@ -642,11 +645,15 @@ class Board {
         ? Math.max(...columns.map((x) => x.done!))
         : Math.min(performance.now() - startAt, limit);
       this.podium(columns, elapsed, COUNT);
+      sfx('fanfare');
     };
 
     // Five seconds to get ready, counted in every column, then all start on the same moment.
+    let lastTick = -1;
     const step = () => {
       columns.forEach(draw);
+      // The count in ticks each second, then a chime with GO.
+      sfx(countIn > 0 ? (countIn <= 3 ? 'tickLast' : 'tick') : 'wave');
       if (countIn-- > 0) this.timers.push(window.setTimeout(step, 1000));
       else
         this.timers.push(
@@ -664,7 +671,16 @@ class Board {
                   c.clock.textContent = now;
                   c.clock.classList.toggle('low', rest <= 10_000);
                 }
-              if (rest <= 0) return finish();
+              // The last ten seconds tick, once a second.
+              const s = Math.ceil(rest / 1000);
+              if (s !== lastTick) {
+                lastTick = s;
+                if (s >= 1 && s <= 10 && columns.some((c) => c.done === null)) sfx(s <= 3 ? 'tickLast' : 'tick');
+              }
+              if (rest <= 0) {
+                sfx('timeUp');
+                return finish();
+              }
               this.ticking = requestAnimationFrame(tick);
             };
             tick();

@@ -9,6 +9,7 @@ import {
   WebGLRenderer,
 } from '@iwsdk/core';
 import { getLang, type Lang } from '../settings.js';
+import { sfx } from '../audio.js';
 import { el, paperText } from '../home/paper.js';
 import { online } from '../offline.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
@@ -319,6 +320,7 @@ class TownPage {
         if (obj) {
           this.folding.push({ obj: obj.children[0] as Group, start: 0, ms: 700 });
           this.say(this.t.finished(this.name(it.asset)));
+          sfx('sparkle');
         }
       }
       this.growLandmark();
@@ -448,9 +450,12 @@ class TownPage {
     q.choices.forEach((c, i) => {
       const b = el('button', '', choices);
       b.textContent = c;
+      // The answer chimes or boings instead of a paper tap.
+      b.dataset.quiet = '1';
       b.addEventListener('click', async () => {
         for (const other of choices.querySelectorAll('button')) other.disabled = true;
         tries.set(it.id, { attempt: tried.attempt + 1, next_at: i === q.right ? 0 : Date.now() + RETRY_MS });
+        sfx(i === q.right ? 'right' : 'wrong');
         if (i !== q.right) {
           b.classList.add('no');
           after.textContent = `${t.wrong} ${q.hint}`;
@@ -716,6 +721,7 @@ class TownPage {
     if (!lm || !obj || !unmarked('grown', this.model!.owner, [lm]).length) return;
     this.folding.push({ obj: obj.children[0] as Group, start: 0, ms: 1600 });
     if (!this.sample) this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, this.lang)));
+    sfx('sparkle');
     console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
   }
 
@@ -796,6 +802,7 @@ class TownPage {
     if (m.kind === 'place') {
       const reason = await model.act({ type: 'town_place', asset: m.asset, land: this.land, x, y, rot: m.rot });
       if (reason) return this.say(this.reason(reason));
+      sfx('place');
       this.say(this.t.placed(this.name(m.asset)));
       const a = assetOf(m.asset)!;
       // Roads, trees, people and cars are laid one after another; anything else is placed once.
@@ -804,6 +811,7 @@ class TownPage {
     } else if (m.kind === 'move') {
       const reason = await model.act({ type: 'town_move', place_id: m.id, land: this.land, x, y, rot: m.rot });
       if (reason) return this.say(this.reason(reason));
+      sfx('place');
       this.say(this.t.moved(this.name(m.asset)));
       this.mode = { kind: 'idle' };
       this.selected = m.id;
@@ -816,6 +824,7 @@ class TownPage {
     if (reason) return this.say(this.reason(reason));
     this.readySeen.delete(it.id);
     this.selected = '';
+    sfx('unfold');
     this.say(this.t.removed(this.name(it.asset), it.price));
     this.redraw();
   }

@@ -18,6 +18,7 @@ import { Label } from '../art/label.js';
 import { type PanelLine, textPanel, ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
 import { getLang, getRoom, ROOMS, setRoom } from '../settings.js';
+import { sfx } from '../audio.js';
 import { T } from '../text.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
 import { TownModel } from './town-model.js';
@@ -401,6 +402,7 @@ export class TownDesk {
       if (obj) {
         this.folding.push({ obj: obj.children[0], t: 0, s: FOLD_S });
         this.say(this.t.finished(this.name(it.asset)));
+        sfx('sparkle');
       }
     }
     this.refreshView();
@@ -409,6 +411,7 @@ export class TownDesk {
     if (lm && raised && unmarked('grown', this.model.owner, [lm]).length) {
       this.folding.push({ obj: raised.children[0], t: 0, s: RISE_S });
       this.say(this.t.landmarkRises(this.name(lm.landmark), skillTitle(lm.skill, getLang())), MESSAGE_S * 2);
+      sfx('sparkle');
       console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
     }
   }
@@ -1014,6 +1017,7 @@ export class TownDesk {
     (model as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
     this.root.object3D!.add(model);
     this.carry = { side, asset, placeId, rot, at: performance.now(), tapped: false, over: false, x: NaN, y: NaN, fits: '', grip, model };
+    sfx('grab');
     this.carryAlong();
     const obj = placeId ? this.page?.items.get(placeId) : undefined;
     if (obj) obj.visible = false;
@@ -1111,6 +1115,8 @@ export class TownDesk {
       console.info(`[town] ${c.placeId || c.asset}: ${reason || said}`);
       this.redraw();
       this.say(reason ? this.reason(reason) : said);
+      // Set down on the land, or let go off it and taken away.
+      if (!reason) sfx(c.over ? 'place' : 'unfold');
       if (reason || !c.over) return;
       // Let go on the land, the piece stays chosen with its card.
       const v = this.model.view().items;
@@ -1285,6 +1291,7 @@ export class TownDesk {
     this.closeCard();
     const reason = await this.model.act({ type: 'town_remove', place_id: it.id });
     console.info(`[town] ${it.id} removed: ${reason || 'done'}`);
+    if (!reason) sfx('unfold');
     this.say(reason ? this.reason(reason) : this.t.removed(this.name(it.asset), it.price));
   }
 
@@ -1308,6 +1315,7 @@ export class TownDesk {
     tries.set(c.id, { attempt: c.attempt + 1, next_at: right ? 0 : Date.now() + RETRY_MS });
     const it = this.model.view().items.find((x) => x.id === c.id);
     console.info(`[town] FINISH NOW ${c.q.kind}: ${right ? 'right' : 'wrong'}`);
+    sfx(right ? 'right' : 'wrong');
     if (!it) return this.closeCard();
     if (!right) {
       const hint = c.q.hint;

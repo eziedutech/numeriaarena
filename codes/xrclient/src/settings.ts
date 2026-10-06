@@ -1,10 +1,10 @@
 /**
  * Player settings kept on this device and shared by the home page and the
- * desk: the language, larger numbers and the room around the desk in XR. Changes reach every listener.
+ * desk: the language, larger numbers, sound, music and the room around the desk in XR. Changes reach every listener.
  */
 export type Lang = 'en' | 'id';
 
-const KEY = { lang: 'numeria.lang', big: 'numeria.bigtext', room: 'numeria.room' };
+const KEY = { lang: 'numeria.lang', big: 'numeria.bigtext', room: 'numeria.room', sound: 'numeria.sound', music: 'numeria.music' };
 const listeners = new Set<() => void>();
 
 function read(key: string): string | null {
@@ -25,6 +25,9 @@ function write(key: string, value: string): void {
 
 let lang: Lang = read(KEY.lang) === 'id' ? 'id' : 'en';
 let big = read(KEY.big) === '1';
+// Sound effects and the quiet music are on until the player turns them off.
+let sound = read(KEY.sound) !== '0';
+let music = read(KEY.music) !== '0';
 
 /** The room around the desk in the headset: the real one (passthrough) or a virtual one. */
 export type Room = 'here' | 'classroom' | 'bedroom';
@@ -56,6 +59,28 @@ export function setBigText(on: boolean): void {
   if (on === big) return;
   big = on;
   write(KEY.big, on ? '1' : '0');
+  for (const f of listeners) f();
+}
+
+export function soundOn(): boolean {
+  return sound;
+}
+
+export function setSound(on: boolean): void {
+  if (on === sound) return;
+  sound = on;
+  write(KEY.sound, on ? '1' : '0');
+  for (const f of listeners) f();
+}
+
+export function musicOn(): boolean {
+  return music;
+}
+
+export function setMusic(on: boolean): void {
+  if (on === music) return;
+  music = on;
+  write(KEY.music, on ? '1' : '0');
   for (const f of listeners) f();
 }
 

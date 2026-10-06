@@ -37,6 +37,9 @@ const Games = {
   BigText: 'bigtext',
   /** ROOM, floating over the desk menu in the headset: the room around the desk. */
   Room: 'room',
+  /** SOUND and MUSIC in the desk menu's settings: sound effects and the quiet music on or off. */
+  Sound: 'sound',
+  Music: 'music',
   Town: 'town',
   /** MY FOLD TOWN on the desk: turning with A, B, X or Y, EXIT, the four kinds of a first land, and a building's card. */
   TownTurn: 'town_turn',

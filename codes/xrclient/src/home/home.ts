@@ -1,6 +1,7 @@
 import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 
-import { bigText, getLang, onSettings, setBigText, setLang } from '../settings.js';
+import { bigText, getLang, musicOn, onSettings, setBigText, setLang, setMusic, setSound, soundOn } from '../settings.js';
+import { sfx } from '../audio.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
 import { el, paperText } from './paper.js';
 import { openBoard } from '../board/board.js';
@@ -84,7 +85,8 @@ const CSS = `
 #home .tab.label { cursor: default; }
 #home .tab.on { background: ${COLORS.teal}; }
 #home .tab.off { opacity: 0.45; cursor: not-allowed; }
-#home .chips { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); display: flex; gap: 46px; }
+#home .chips.top { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; width: max-content; gap: 28px; margin-top: 12px; }
+#home .chip.off { opacity: 0.6; }
 #home .chip { padding: 9px 16px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
@@ -189,6 +191,15 @@ const store = {
     }
   },
 };
+
+/** Line icons for SOUND and MUSIC, in the accessibility chip's blue. */
+const ICON = (paths: string[]) =>
+  `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3469c4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths
+    .map((d) => `<path d="${d}"/>`)
+    .join('')}</svg>`;
+const SOUND_ICON = ICON(['M11 5L6 9H2v6h4l5 4z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14']);
+const SOUND_OFF_ICON = ICON(['M11 5L6 9H2v6h4l5 4z', 'M22 9l-6 6', 'M16 9l6 6']);
+const MUSIC_ICON = ICON(['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0']);
 
 export class Home {
   private root: HTMLDivElement;
@@ -378,7 +389,7 @@ export class Home {
         tab.addEventListener('click', () => this.message(t.noXr, t.noXrBody));
       } else tab.addEventListener('click', () => this.setDevice(d));
     }
-    const chips = el('div', 'chips', this.stage);
+    const chips = el('div', 'chips top', this.stage);
     const lang = el('div', 'chip shadow', chips);
     lang.appendChild(paperText(t.language, 17, INK));
     for (const code of ['en', 'id'] as Lang[]) {
@@ -397,6 +408,27 @@ export class Home {
     access.appendChild(paperText(t.accessibility, 17, INK));
     access.setAttribute('aria-label', t.accessibility);
     access.addEventListener('click', () => this.accessibility());
+    // Sound effects and the music, each on or off with one press.
+    const toggles: [string, string, () => boolean, (on: boolean) => void, (on: boolean) => string][] = [
+      [SOUND_ICON, SOUND_OFF_ICON, soundOn, setSound, t.sound],
+      [MUSIC_ICON, MUSIC_ICON, musicOn, setMusic, t.music],
+    ];
+    for (const [icon, offIcon, isOn, set, word] of toggles) {
+      const on = isOn();
+      const b = el('button', `chip shadow${on ? '' : ' off'}`, chips);
+      b.style.border = '0';
+      b.style.cursor = 'pointer';
+      b.innerHTML = on ? icon : offIcon;
+      b.appendChild(paperText(word(on), 17, INK));
+      b.setAttribute('aria-label', word(on));
+      b.setAttribute('aria-pressed', String(on));
+      b.addEventListener('click', () => {
+        set(!isOn());
+        // Sound turned on says so at once (the page's own tap came while it was off).
+        if (set === setSound && soundOn()) sfx('tap');
+        this.render();
+      });
+    }
     el('div', 'hint', this.stage).textContent = this.onHeadset && this.device !== 'smartboard' ? t.hintHeadset[this.device] : t.hint[this.device];
     if (!online()) {
       // No network: the games still play, and say where their results go. A row of its own,
