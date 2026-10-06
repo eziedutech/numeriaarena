@@ -67,6 +67,8 @@ const Games = {
   TownShelfShow: 'town_shelf_show',
   /** The toolbar's ROOM: the room around the desk, as the menu's ROOM card. */
   TownRoom: 'town_room',
+  /** The toolbar's MUSIC: the music on or off, as the menu's MUSIC card. */
+  TownMusic: 'town_music',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

@@ -17,7 +17,7 @@ import {
 import { Label } from '../art/label.js';
 import { type PanelLine, softShadow, textPanel, ToolButton, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
-import { getLang, getRoom, ROOMS, setRoom } from '../settings.js';
+import { getLang, getRoom, musicOn, ROOMS, setMusic, setRoom } from '../settings.js';
 import { sfx } from '../audio.js';
 import { T } from '../text.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
@@ -63,7 +63,8 @@ export type TownChoice =
   | 'town_pan'
   | 'town_shelf_big'
   | 'town_shelf_show'
-  | 'town_room';
+  | 'town_room'
+  | 'town_music';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -124,7 +125,7 @@ const HAND_CARRY_DROP = 0.05;
 const ZOOMS = [1, 1.5, 2, 3];
 /** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
 const PAPER = 0.25;
-/** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, the room and EXIT. */
+/** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, the room, the music and EXIT. */
 const TOOL_W = 0.056;
 const TOOL_H = 0.064;
 /** The space between two chips. */
@@ -303,6 +304,7 @@ export class TownDesk {
   private panButton?: ToolButton;
   private showButton?: ToolButton;
   private roomButton?: ToolButton;
+  private musicButton?: ToolButton;
   private shelfShown = true;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
@@ -640,6 +642,13 @@ export class TownDesk {
       this.roomButton?.set('room', 'plain', T.roomName[next]);
       return;
     }
+    if (choice === 'town_music') {
+      // The desk menu's MUSIC, here too: a long build is often wanted quiet.
+      setMusic(!musicOn());
+      console.info(`[town] music ${musicOn() ? 'on' : 'off'}`);
+      this.musicButton?.set(musicOn() ? 'music' : 'musicOff', musicOn() ? 'plain' : 'off');
+      return;
+    }
     if (choice === 'town_shelf_show') {
       this.showShelf(!this.shelfShown);
       return;
@@ -735,7 +744,7 @@ export class TownDesk {
 
   // ------------------------------------------------------------ zoom and the hand tool
 
-  /** The toolbar: zoom out, zoom in, the hand tool, the shelf shown and enlarged, the room and EXIT, each a tile with its icon and word. */
+  /** The toolbar: zoom out, zoom in, the hand tool, the shelf shown and enlarged, the room, the music and EXIT, each a tile with its icon and word. */
   private viewButtons(): Group {
     const r = townRulesNow();
     const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
@@ -745,6 +754,7 @@ export class TownDesk {
       ['town_shelf_show', 'shown', this.t.xr.shelf, 'on'],
       ['town_shelf_big', 'enlarge', this.t.xr.big, 'plain'],
       ['town_room', 'room', T.roomName[getRoom()], 'plain'],
+      ['town_music', musicOn() ? 'music' : 'musicOff', T.musicCaption, musicOn() ? 'plain' : 'off'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
     const w = this.rowW(tools.length);
@@ -758,6 +768,7 @@ export class TownDesk {
       if (choice === 'town_shelf_show') this.showButton = b;
       if (choice === 'town_shelf_big') this.bigButton = b;
       if (choice === 'town_room') this.roomButton = b;
+      if (choice === 'town_music') this.musicButton = b;
     });
     return row;
   }
