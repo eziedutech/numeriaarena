@@ -1,6 +1,6 @@
 import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 
-import { bigText, getLang, musicOn, onSettings, setBigText, setLang, setMusic, setSound, soundOn } from '../settings.js';
+import { ACCESS, accessOn, bigText, getLang, musicOn, onSettings, setBigText, setAccess, setLang, setMusic, setSound, soundOn } from '../settings.js';
 import { sfx } from '../audio.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
 import { el, paperText } from './paper.js';
@@ -74,6 +74,9 @@ const ICONS: Record<string, string> = {
 };
 
 const CSS = `
+/* HIGH CONTRAST: the paper pages turn dark with light letters; pictures keep their colours. */
+html.contrast :is(#home, #home-back, #home-games, #leaders, #board) { filter: invert(1) hue-rotate(180deg); }
+html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter: invert(1) hue-rotate(180deg); }
 #home { position: fixed; inset: 0; z-index: 5; pointer-events: none; overflow: hidden;
   font-family: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif; color: ${INK}; }
 #home .stage { position: absolute; left: 0; top: 0; width: ${STAGE_W}px; height: ${STAGE_H}px; transform-origin: 0 0; }
@@ -720,6 +723,23 @@ export class Home {
       setBigText(!bigText());
       draw();
     });
+    for (const a of ACCESS) {
+      const b = el('button', 'btn wide shadow', body);
+      const paint = () => {
+        const on = accessOn(a);
+        const word = `${t.access[a]}: ${t.onOff(on)}`;
+        b.innerHTML = '';
+        b.style.background = on ? COLORS.teal : PAPER;
+        b.appendChild(paperText(word, 17, on ? PAPER : INK));
+        b.setAttribute('aria-pressed', String(on));
+        b.setAttribute('aria-label', word);
+      };
+      paint();
+      b.addEventListener('click', () => {
+        setAccess(a, !accessOn(a));
+        paint();
+      });
+    }
     // Shows the paper hand's how-to again on each game's next first creature.
     const again = el('button', 'btn wide shadow', body);
     again.appendChild(paperText(t.howtoAgain, 17, INK));

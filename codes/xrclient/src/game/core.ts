@@ -1,4 +1,5 @@
 import init, { GameSession, RaceGame, coreVersion } from '../wasm/pkg/foldlings_core.js';
+import { accessOn } from '../settings.js';
 
 /** Shapes returned by the Rust core (see backrust/core/src/session.rs). */
 export type GameKind = 'balloon_burst' | 'orb_forge' | 'factory_sort' | 'bridge_builder' | 'balance_gate';
@@ -70,7 +71,7 @@ export class Core {
     const config = JSON.stringify({
       seed,
       grade: null,
-      timed: true,
+      timed: !accessOn('noTimer'),
       player_id: 'guest',
       content_pack_version: 'dev-bundle',
     });
@@ -206,7 +207,7 @@ export class Race {
     const config = JSON.stringify({
       seed,
       grade: null,
-      timed: true,
+      timed: !accessOn('noTimer'),
       player_id: 'guest',
       content_pack_version: 'dev-bundle',
       bot_names: botNames,

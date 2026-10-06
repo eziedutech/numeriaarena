@@ -2,6 +2,7 @@ import { CanvasTexture, DoubleSide, Mesh, MeshBasicMaterial, PlaneGeometry, SRGB
 
 import { drawGlyphs, glyphWidth, hasGlyphs, whenGlyphsLoad } from './glyphs.js';
 import { INK } from './palette.js';
+import { accessOn } from '../settings.js';
 
 export interface LabelOptions {
   /** Height of the label in meters; width follows the text. */
@@ -25,6 +26,9 @@ export interface LabelOptions {
 const PX_PER_M = 1400;
 /** Solid paper (treatment K in the asset set): a touch whiter than the cream letters. */
 const K_PAPER = 0xfffdf8;
+/** High contrast: light letters on a dark card, for cards without a paper of their own. */
+const CONTRAST_PAPER = 0x1d2433;
+const CONTRAST_INK = 0xfff8ec;
 /** Shadow room around a card, as a share of its height. */
 const CARD_SHADOW_ROOM = 0.2;
 /**
@@ -150,6 +154,10 @@ export class Label {
 
   constructor(text: string, opts: LabelOptions = {}) {
     this.opts = { height: 0.05, ink: INK, paper: K_PAPER, card: true, anchor: 'center', question: false, ...opts };
+    if (accessOn('contrast') && this.opts.card && opts.paper === undefined) {
+      this.opts.paper = CONTRAST_PAPER;
+      this.opts.ink = CONTRAST_INK;
+    }
     this.canvas = document.createElement('canvas');
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;

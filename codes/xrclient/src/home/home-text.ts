@@ -1,3 +1,4 @@
+import type { Access } from '../settings.js';
 /**
  * Text of the home page in English (default) and Indonesian. Headings and
  * card titles are capitals, drawn with the paper letters.
@@ -12,6 +13,8 @@ const EN = {
   language: 'LANGUAGE',
   accessibility: 'ACCESSIBILITY',
   bigNumbers: (on: boolean) => `BIG NUMBERS: ${on ? 'ON' : 'OFF'}`,
+  access: { noTimer: 'NO TIMER', contrast: 'HIGH CONTRAST', readAloud: 'READ ALOUD', steadyAim: 'STEADY AIM' } as Record<Access, string>,
+  onOff: (on: boolean): string => (on ? 'ON' : 'OFF'),
   sound: (on: boolean) => `SOUND: ${on ? 'ON' : 'OFF'}`,
   music: (on: boolean) => `MUSIC: ${on ? 'ON' : 'OFF'}`,
   howtoAgain: 'SHOW THE HOW-TO AGAIN',
@@ -175,7 +178,7 @@ const EN = {
   } as Record<string, string>,
   soonBody: {
     accessibility:
-      'Big numbers make questions and answers larger. Coming next: no timer, high contrast, read the question aloud, and steadier aim. Every game can already be played with one hand.',
+      'Big numbers make questions and answers larger. No timer hides the answer clock and the speed bonus (a race keeps its waves). High contrast puts light letters on dark cards and pages. Read aloud speaks each question. Steady aim calms a shaky pointer in the headset. Every game can be played with one hand.',
   },
   pages: {
     'How to play':
@@ -197,6 +200,8 @@ const ID: typeof EN = {
   language: 'BAHASA',
   accessibility: 'AKSESIBILITAS',
   bigNumbers: (on: boolean) => `ANGKA BESAR: ${on ? 'NYALA' : 'MATI'}`,
+  access: { noTimer: 'TANPA WAKTU', contrast: 'KONTRAS TINGGI', readAloud: 'BACAKAN SOAL', steadyAim: 'BIDIKAN STABIL' } as Record<Access, string>,
+  onOff: (on: boolean) => (on ? 'NYALA' : 'MATI'),
   sound: (on: boolean) => `SUARA: ${on ? 'NYALA' : 'MATI'}`,
   music: (on: boolean) => `MUSIK: ${on ? 'NYALA' : 'MATI'}`,
   howtoAgain: 'TAMPILKAN PETUNJUK LAGI',
@@ -357,7 +362,7 @@ const ID: typeof EN = {
   } as Record<string, string>,
   soonBody: {
     accessibility:
-      'Angka besar membuat soal dan jawaban lebih besar. Segera: tanpa waktu, kontras tinggi, soal dibacakan, dan bidikan lebih stabil. Semua game sudah bisa dimainkan dengan satu tangan.',
+      'Angka besar membuat soal dan jawaban lebih besar. Tanpa waktu menyembunyikan jam jawaban dan bonus kecepatan (lomba tetap punya gelombangnya). Kontras tinggi memberi huruf terang di kartu dan halaman gelap. Bacakan soal membacakan tiap soal. Bidikan stabil menenangkan penunjuk yang goyang di headset. Semua game bisa dimainkan dengan satu tangan.',
   },
   pages: {
     'How to play':

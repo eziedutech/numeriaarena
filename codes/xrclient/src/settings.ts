@@ -1,6 +1,7 @@
 /**
  * Player settings kept on this device and shared by the home page and the
- * desk: the language, larger numbers, sound, music and the room around the desk in XR. Changes reach every listener.
+ * desk: the language, larger numbers, sound, music, the room around the desk
+ * in XR and the accessibility choices. Changes reach every listener.
  */
 export type Lang = 'en' | 'id';
 
@@ -94,6 +95,34 @@ export function setRoom(r: Room): void {
   write(KEY.room, r);
   for (const f of listeners) f();
 }
+
+/**
+ * The accessibility choices, each off until the player turns it on: no timer
+ * (no speed bonus and no answer strip), high contrast (dark paper, light
+ * ink), the question read aloud, and a steadier aim for a shaky hand.
+ */
+export type Access = 'noTimer' | 'contrast' | 'readAloud' | 'steadyAim';
+export const ACCESS: readonly Access[] = ['noTimer', 'contrast', 'readAloud', 'steadyAim'];
+const access = new Set<Access>(ACCESS.filter((a) => read(`numeria.${a}`) === '1'));
+
+export function accessOn(a: Access): boolean {
+  return access.has(a);
+}
+
+export function setAccess(a: Access, on: boolean): void {
+  if (on === access.has(a)) return;
+  if (on) access.add(a);
+  else access.delete(a);
+  write(`numeria.${a}`, on ? '1' : '0');
+  showContrast();
+  for (const f of listeners) f();
+}
+
+/** The page's own colours follow high contrast through a class on the root. */
+function showContrast(): void {
+  if (typeof document !== 'undefined') document.documentElement.classList.toggle('contrast', access.has('contrast'));
+}
+showContrast();
 
 /** Runs `f` whenever a setting changes. */
 export function onSettings(f: () => void): void {

@@ -73,8 +73,10 @@ import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore, sharedStore } from './storage.js';
 import { T, useLanguage } from './text.js';
-import { ROOMS, bigText, getLang, getRoom, musicOn, onSettings, setBigText, setLang, setMusic, setRoom, setSound, soundOn, textScale } from './settings.js';
+import { accessOn, ROOMS, bigText, getLang, getRoom, musicOn, onSettings, setBigText, setLang, setMusic, setRoom, setSound, soundOn, textScale } from './settings.js';
 import { setEars, sfx, type Cue, type Spot } from './audio.js';
+import { readAloud, stopReading } from './speech.js';
+import { steadyAim } from './steady-aim.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
@@ -621,6 +623,8 @@ export class GameSystem extends createSystem({
     this.timerBar.name = 'answer-timer';
     this.timerBar.visible = false;
     this.labels.add(this.timerBar);
+    steadyAim(this.player.raySpaces.left);
+    steadyAim(this.player.raySpaces.right);
     // In the headset sounds come from where they happen: the head is the listener.
     setEars((pos, forward, up) => {
       if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return false;
@@ -2378,6 +2382,7 @@ export class GameSystem extends createSystem({
     this.prompt.mesh.position.copy(PROMPT_POS);
     desk.add(this.prompt.mesh);
     this.labels.add(this.prompt.mesh);
+    readAloud(card);
     if (howTo) {
       this.hint = new Label(howTo, { height: 0.022 });
       this.hint.mesh.name = 'hint-label';
@@ -2396,7 +2401,8 @@ export class GameSystem extends createSystem({
       if (this.demo && this.demo.game !== offer.game) this.endDemo(true);
       this.startDemo(offer.game);
       this.shownAt = performance.now();
-      this.timing = true;
+      // NO TIMER: no strip and, in the core, no speed bonus.
+      this.timing = !accessOn('noTimer');
     });
   }
 
@@ -3189,6 +3195,7 @@ export class GameSystem extends createSystem({
   }
 
   private clearPrompt(): void {
+    stopReading();
     this.timing = false;
     this.timerBar.visible = false;
     for (const l of [this.prompt, this.hint]) {
