@@ -200,8 +200,10 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * first-time player what to do.
  */
 const GAME_W = 0.095;
-const GAME_H = 0.08;
-const GAMES_AT = new Vector3(-0.2, 0.048, 0.16);
+/** Lower than wide, so the block reaches less far towards the player; its names keep GAME_WORD_H. */
+const GAME_H = 0.064;
+const GAME_WORD_H = 0.0104;
+const GAMES_AT = new Vector3(-0.235, 0.04, 0.16);
 const SET_W = 0.08;
 const SET_H = 0.07;
 const SETTINGS_AT = new Vector3(0.18, 0.025, 0.2);
@@ -773,7 +775,8 @@ export class GameSystem extends createSystem({
     }
     const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
     if (pressed === 'home') {
-      this.leaveToHome();
+      if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) this.goHome();
+      else this.leaveToHome();
       return;
     }
     if (pressed === 'lang') {
@@ -1058,20 +1061,18 @@ export class GameSystem extends createSystem({
       GAME_W,
       GAME_H,
       games.map((game) => [game, 'envelope', (game === 'race' ? T.race : T.gameName[game]).toUpperCase(), game === 'race' ? 'on' : 'plain', GAME_TINT[game]]),
+      T.gameType,
     );
-    // In the headset the home page cannot show, so the strip's HOME ends the
-    // session and goes back to it; the settings sit beside it, so the
-    // headset never has to come off for them.
-    if (this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
-      this.menuStrip('menu-settings', SETTINGS_AT, 4, 1, SET_W, SET_H, [
-        ['lang', 'language', `${T.langCaption}\n${getLang().toUpperCase()}`, 'plain'],
-        ['bigtext', 'bigText', `${T.bigCaption}\n${T.onOff(bigText())}`, bigText() ? 'on' : 'plain'],
-        ['room', 'room', `${T.roomCaption}\n${T.roomName[getRoom()]}`, getRoom() === 'here' ? 'plain' : 'on'],
-        ['home', 'exit', T.home, 'accent'],
-      ]);
-      this.addTownSticker();
-      this.showHint();
-    }
+    // The settings sit beside the games, so the headset never has to come
+    // off for them; HOME ends the session (or the game in the browser) for the home page.
+    this.menuStrip('menu-settings', SETTINGS_AT, 4, 1, SET_W, SET_H, [
+      ['lang', 'language', `${T.langCaption}\n${getLang().toUpperCase()}`, 'plain'],
+      ['bigtext', 'bigText', `${T.bigCaption}\n${T.onOff(bigText())}`, bigText() ? 'on' : 'plain'],
+      ['room', 'room', `${T.roomCaption}\n${T.roomName[getRoom()]}`, getRoom() === 'here' ? 'plain' : 'on'],
+      ['home', 'exit', T.home, 'accent'],
+    ]);
+    this.addTownSticker();
+    this.showHint();
     this.showBest();
   }
 
@@ -1299,6 +1300,7 @@ export class GameSystem extends createSystem({
     cw: number,
     ch: number,
     cells: [ButtonChoice, ToolIcon, string, ToolLook, string?][],
+    heading?: string,
   ): void {
     const w = cols * cw + MENU_FOLD;
     const h = rows * ch;
@@ -1314,7 +1316,7 @@ export class GameSystem extends createSystem({
       // A thin line to the next cell in its row, none before HOME's own colour.
       const next = cells[i + 1];
       const divider = col < cols - 1 && next !== undefined && next[3] !== 'accent';
-      const b = new ToolButton(icon, word, cw, ch, look, { divider, tint });
+      const b = new ToolButton(icon, word, cw, ch, look, { divider, tint, wordH: name === 'menu-games' ? GAME_WORD_H : undefined });
       const cell = new Group();
       cell.name = `menu-${choice}`;
       cell.add(b.mesh);
@@ -1327,6 +1329,13 @@ export class GameSystem extends createSystem({
       e.addComponent(PokeInteractable);
       e.addComponent(RayInteractable);
     });
+    // A cell left over shows what the block holds; it is no button.
+    if (heading && cells.length < cols * rows) {
+      const i = cells.length;
+      const t = new ToolButton('envelope', heading, cw, ch, 'plain', { title: true, wordH: GAME_WORD_H });
+      t.mesh.position.set(-w / 2 + ((i % cols) + 0.5) * cw, h / 2 - (Math.floor(i / cols) + 0.5) * ch, 0.0015);
+      tray.add(t.mesh);
+    }
   }
 
   private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {

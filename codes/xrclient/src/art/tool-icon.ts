@@ -87,6 +87,10 @@ export interface ToolOptions {
   alone?: boolean;
   /** The icon in this colour instead of the look's ink, its first outline filled with a light wash of it. */
   tint?: string;
+  /** Its letters this many metres tall, however tall the cell. */
+  wordH?: number;
+  /** Not a button but a heading: no icon, its lines larger and centred in the cell. */
+  title?: boolean;
 }
 
 /** A toolbar cell `w` by `h` metres, facing +Z; `set` draws it again with another icon, look or word. */
@@ -144,6 +148,10 @@ export class ToolButton {
     }
     // A word with a line break is two lines under a smaller icon: a caption over its value.
     const lines = this.word === '' ? [] : this.word.split('\n');
+    if (this.opts.title) {
+      this.heading(c, lines, W, H);
+      return;
+    }
     const two = lines.length > 1;
     const size = two ? Math.min(W * 0.6, H * 0.44) : lines.length ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.66;
     const cy = two ? H * 0.31 : lines.length ? H * 0.4 : H / 2;
@@ -164,7 +172,7 @@ export class ToolButton {
     for (const d of ICONS[this.icon]) c.stroke(new Path2D(d));
     c.restore();
     lines.forEach((line, i) => {
-      let px = H * (two ? 0.12 : 0.13);
+      let px = this.opts.wordH ? this.opts.wordH * PX : H * (two ? 0.12 : 0.13);
       c.font = `700 ${px}px ${FONT}`;
       // A long word is made smaller to fit the cell.
       const room = W * 0.86;
@@ -178,6 +186,20 @@ export class ToolButton {
       c.textBaseline = 'middle';
       c.fillText(line, W / 2, two ? H * (0.67 + 0.17 * i) : H * 0.82);
     });
+    this.texture.needsUpdate = true;
+  }
+
+  private heading(c: CanvasRenderingContext2D, lines: string[], W: number, H: number): void {
+    const px = (this.opts.wordH ? this.opts.wordH * PX : H * 0.13) * 1.35;
+    c.font = `700 ${px}px ${FONT}`;
+    const wide = Math.max(...lines.map((l) => c.measureText(l).width));
+    const fit = Math.min(1, (W * 0.86) / wide);
+    c.font = `700 ${px * fit}px ${FONT}`;
+    c.fillStyle = LOOKS.on.ink;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const step = px * fit * 1.2;
+    lines.forEach((l, i) => c.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * step));
     this.texture.needsUpdate = true;
   }
 }

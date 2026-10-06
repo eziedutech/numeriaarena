@@ -85,6 +85,8 @@ export const EN = {
   },
   /** First time on the desk menu: what to do, under the hand that shows it. */
   touchHint: 'TOUCH AN ENVELOPE',
+  /** The heading in the games block's empty cell, over two lines. */
+  gameType: 'GAME\nTYPE',
   language: (lang: string) => `LANG ${lang}`,
   bigText: (_on: boolean) => 'BIG NUMBERS',
   /** The settings cards on the desk: a small caption over a large value. */
@@ -184,6 +186,7 @@ export const ID: Text = {
     balance_gate: 'Balance Gate',
   },
   touchHint: 'SENTUH SEBUAH AMPLOP',
+  gameType: 'JENIS\nGAME',
   language: (lang: string) => `BAHASA ${lang}`,
   bigText: (_on: boolean) => 'ANGKA BESAR',
   langCaption: 'BAHASA',

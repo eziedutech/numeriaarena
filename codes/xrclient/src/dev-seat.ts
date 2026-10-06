@@ -39,13 +39,18 @@ const HANDS_BELOW_EYES_M = 0.1;
 const SEATED_BELOW_DESK_M = 0.45;
 const HANDS_AHEAD_M = 0.4;
 const HANDS_APART_M = 0.25;
-/** In the desk's frame: right of the menu's games and settings (game.ts GAMES_AT, SETTINGS_AT) and past the town's toolbar, standing on the desk, small. */
-const CARD_AT = new Vector3(0.5, 0.04, 0.17);
+/**
+ * In the desk's frame: just right of the menu's settings strip (game.ts
+ * SETTINGS_AT), floating over the desk at the strip's depth and leaning back
+ * a little towards the eyes, so nothing on the desk stands in a ray's way.
+ */
+const CARD_AT = new Vector3(0.415, 0.1, 0.2);
+const CARD_LEAN = -0.35;
 /** A flat tile like the town's toolbar buttons: a chair to sit, a standing person to stand. */
-const CARD_W = 0.07;
-const CARD_H = 0.075;
-/** The card's face, in its own frame, for the controllers' rays. */
-const CARD_BOX = new Box3(new Vector3(-CARD_W / 2, -CARD_H / 2, -0.01), new Vector3(CARD_W / 2, CARD_H / 2, 0.02));
+const CARD_W = 0.08;
+const CARD_H = 0.08;
+/** The card's face, in its own frame, for the controllers' rays: a little thick, so a ray that grazes it still counts. */
+const CARD_BOX = new Box3(new Vector3(-CARD_W / 2, -CARD_H / 2, -0.02), new Vector3(CARD_W / 2, CARD_H / 2, 0.03));
 /** One click can reach the card both ways (the trigger check and IWSDK's press): the second is dropped. */
 const TOGGLE_GAP_MS = 400;
 
@@ -74,6 +79,7 @@ export class DevSeatSystem extends createSystem({
     this.button = new ToolButton('sit', T.devSit, CARD_W, CARD_H, 'plain', { alone: true });
     group.add(this.button.mesh);
     group.position.copy(CARD_AT);
+    group.rotation.x = CARD_LEAN;
     group.visible = false;
     // A hand's ray reaches the card through IWSDK (its pinch presses it); controllers through the check in update.
     group.addEventListener('pointerdown', () => {
