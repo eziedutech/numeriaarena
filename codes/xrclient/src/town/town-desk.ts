@@ -60,7 +60,7 @@ export type TownChoice =
   | 'town_zoom_out'
   | 'town_pan'
   | 'town_shelf_big'
-  | 'town_view_reset';
+  | 'town_shelf_show';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -121,7 +121,7 @@ const HAND_CARRY_DROP = 0.05;
 const ZOOMS = [1, 1.5, 2, 3];
 /** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
 const PAPER = 0.25;
-/** The toolbar past the land's front edge on its right: zoom, the hand, reset and EXIT. */
+/** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, and EXIT. */
 const TOOL_W = 0.056;
 const TOOL_H = 0.064;
 /** The strip's end past EXIT, its top corner folded over. */
@@ -133,7 +133,7 @@ const TOOL_LEAN = -1;
  * player: two rows of tabs at the top, three rows of four pieces each on its
  * own ledge with its price under it, and the page arrows at the bottom.
  */
-const SHELF_AT = new Vector3(0.68, 0, -0.17);
+const SHELF_AT = new Vector3(0.68, 0, -0.08);
 const SHELF_TURN = -0.5;
 const SHELF_COLS = 4;
 const CELL_W = 0.11;
@@ -282,6 +282,8 @@ export class TownDesk {
   private shelfBig = false;
   private bigButton?: ToolButton;
   private panButton?: ToolButton;
+  private showButton?: ToolButton;
+  private shelfShown = true;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
   private note = '';
@@ -591,15 +593,8 @@ export class TownDesk {
       console.info(`[town] zoom ${this.zoom}x`);
       return;
     }
-    if (choice === 'town_view_reset') {
-      this.zoom = 1;
-      this.setPan(false);
-      const r = townRulesNow();
-      this.view = { x: r.cols / 2, z: r.rows / 2 };
-      this.refreshView();
-      this.setShelfBig(false);
-      this.say(this.t.xr.resetDone);
-      console.info('[town] land and shelf back as they were');
+    if (choice === 'town_shelf_show') {
+      this.showShelf(!this.shelfShown);
       return;
     }
     if (choice === 'town_shelf_big') {
@@ -693,14 +688,14 @@ export class TownDesk {
 
   // ------------------------------------------------------------ zoom and the hand tool
 
-  /** The toolbar: zoom out, zoom in, the hand tool, reset and EXIT, each a tile with its icon and word. */
+  /** The toolbar: zoom out, zoom in, the hand tool, the shelf and EXIT, each a tile with its icon and word. */
   private viewButtons(): Group {
     const r = townRulesNow();
     const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
       ['town_zoom_out', 'zoomOut', this.t.xr.zoomOut, 'plain'],
       ['town_zoom_in', 'zoomIn', this.t.xr.zoomIn, 'plain'],
       ['town_pan', 'pan', this.t.xr.pan, 'plain'],
-      ['town_view_reset', 'reset', this.t.xr.reset, 'plain'],
+      ['town_shelf_show', 'shown', this.t.xr.shelf, 'on'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
     const w = tools.length * TOOL_W + TOOL_FOLD;
@@ -717,6 +712,7 @@ export class TownDesk {
       b.mesh.position.set(-w / 2 + (i + 0.5) * TOOL_W, 0, 0.0015);
       row.add(b.mesh);
       if (choice === 'town_pan') this.panButton = b;
+      if (choice === 'town_shelf_show') this.showButton = b;
     });
     return row;
   }
@@ -753,6 +749,17 @@ export class TownDesk {
     g.position.copy(SHELF_AT).add(new Vector3(((k - 1) * SHELF_W) / 2, (-(k - 1) * SHELF_H) / 2, 0).applyAxisAngle(UP, SHELF_TURN));
     this.bigButton?.set(big ? 'shrink' : 'enlarge', big ? 'on' : 'plain');
     console.info(`[town] shelf ${big ? 'twice as big' : 'as it was'}`);
+  }
+
+  /** The shelf on the desk or out of sight and out of the rays, so the land has the room to itself. */
+  private showShelf(on: boolean): void {
+    const g = this.shelf?.object3D as (Object3D & { pointerEvents?: string }) | undefined;
+    if (!g) return;
+    this.shelfShown = on;
+    g.visible = on;
+    g.pointerEvents = on ? undefined : 'none';
+    this.showButton?.set(on ? 'shown' : 'hidden', on ? 'on' : 'plain');
+    console.info(`[town] shelf ${on ? 'shown' : 'hidden'}`);
   }
 
   private setPan(on: boolean): void {
