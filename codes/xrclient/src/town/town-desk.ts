@@ -77,6 +77,8 @@ export interface TownHost {
   grip(side: Side): Object3D;
   /** Controllers in the hands, no tracked hand. */
   controllers(): boolean;
+  /** A controller's A, B, X or Y button went down this frame: the piece turns. */
+  turn(side: Side): boolean;
   /** The emulator's hands: a pinch may take what the other ray is on. */
   emulated(): boolean;
   /** The town is done with; `note` is said on the menu. */
@@ -89,6 +91,8 @@ const TILE = 0.065;
 /** The middle of the land, front to back on the desk. */
 const PAGE_Z = -0.17;
 const LIMIT_S = 120;
+/** The time left is said once this many seconds before the end. */
+const SOON_S = 20;
 /** A pinch let go sooner than this is a tap: the piece stays on the ray until the next pinch. */
 const TAP_MS = 300;
 const MESSAGE_S = 2.6;
@@ -198,6 +202,8 @@ export class TownDesk {
   private folds: Label;
   private status: Label;
   private bar: Mesh;
+  private clock: Label;
+  private shown = -1;
   private land = 0;
   private carry?: Carry;
   private card?: Card;
@@ -248,6 +254,7 @@ export class TownDesk {
     this.bar.position.set(0, -0.018, 0);
     this.bar.scale.set(BAR_W, 0.005, 1);
     header.add(this.bar);
+    this.clock = this.text('', 0.024, header, -0.05);
     this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0.05, 0x3469c4));
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
@@ -501,6 +508,7 @@ export class TownDesk {
         this.carry.model.rotation.y = -(this.carry.rot * Math.PI) / 180;
       } else this.rot = (this.rot + 90) % 360;
       this.say(`${this.t.turn} ${this.carry?.rot ?? this.rot}°`);
+      console.info(`[town] turned to ${this.carry?.rot ?? this.rot}°`);
       return;
     }
     const kind = choice.slice('town_'.length) as LandKind;
@@ -515,7 +523,14 @@ export class TownDesk {
     if (this.gone) return;
     this.left -= delta;
     this.bar.scale.x = BAR_W * Math.max(0, this.left / LIMIT_S);
-    if (this.left <= 0) {
+    const secs = Math.max(0, Math.ceil(this.left));
+    if (secs !== this.shown) {
+      this.shown = secs;
+      this.clock.set(this.t.xr.timeLeft(secs));
+      if (secs === SOON_S) this.say(this.t.xr.soon(SOON_S), 4);
+    }
+    // A piece in the hand is let go first, so the time never takes it away.
+    if (this.left <= 0 && !this.carry) {
       console.info('[town] building time is over');
       this.host.closed(this.t.xr.timeUp);
       return;
@@ -534,6 +549,7 @@ export class TownDesk {
       this.refreshCard();
     }
     if (!this.page) return;
+    for (const side of SIDES) if (this.host.turn(side)) this.press('town_turn');
     for (const side of SIDES) {
       const s = this.host.select(side);
       const g = this.host.squeeze(side);

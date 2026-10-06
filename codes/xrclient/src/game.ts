@@ -101,6 +101,8 @@ const BOOK_SIDE_GAP = 0.008;
 const CRYSTAL_RAY_BOX = new BoxGeometry(0.08, 0.09, 0.07);
 // The grip pulls a crystal under the ray to the controller (see runPull): how fast it follows, how long it flies back.
 const SQUEEZE = 'xr-standard-squeeze';
+/** In the town, any face button of a controller turns the piece. */
+const TURN_BUTTONS = ['a-button', 'b-button', 'x-button', 'y-button'] as const;
 const PULL_RATE = 18;
 const PULL_BACK_S = 0.35;
 /** A crystal a hand's pinch took is carried this far under the hand's ray origin, clear of the ray. */
@@ -1908,6 +1910,10 @@ export class GameSystem extends createSystem({
       },
       grip: (side) => this.player.gripSpaces[side],
       controllers: () => this.controllersOnly(),
+      turn: (side) => {
+        const pad = this.controllersOnly() ? this.input.xr.gamepads[side] : undefined;
+        return !!pad && TURN_BUTTONS.some((b) => pad.getButtonDown(b));
+      },
       emulated: emulatedHands,
       closed: (note) => this.closeTown(note),
     };
