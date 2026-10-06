@@ -149,8 +149,6 @@ const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
 /** The shelf's enlarge button, standing on its top right corner; pressed, the shelf stands twice as big about its middle, its left edge where it was. */
-const BIG_AT = new Vector3(SHELF_W / 2 - 0.022 - 0.01, SHELF_H + 0.022, -0.04);
-const BIG_W = 0.044;
 const UP = new Vector3(0, 1, 0);
 /** The box a shelf piece fits in as it stands turned and leaning, so none reaches past its ledge, its neighbours or the board. */
 const FIT_W = CELL_W - 0.016;
@@ -168,12 +166,6 @@ const CARD_CHARS = 32;
 const ANSWER_X = [-0.74, -0.62, -0.5];
 const ANSWER_Z = -0.17;
 const CLOSE_AT = [-0.65, -0.06] as const;
-/** A chosen piece's row of buttons floats this far above its top, in metres; each button is OPT_W square. */
-const OPT_RISE = 0.05;
-const OPT_W = 0.034;
-const OPT_GAP = 0.006;
-/** The row leans back to face the player looking down at the desk. */
-const OPT_LEAN = -0.5;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
 const TEAL = 0x3fb6a0;
@@ -191,12 +183,6 @@ const barGeo = new PlaneGeometry(1, 1);
 const barMat = new MeshBasicMaterial({ color: TEAL });
 const spareMat = new MeshBasicMaterial();
 const markGeo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-const optGeo = new BoxGeometry(OPT_W, OPT_W, 0.006);
-const optMats = {
-  turn: new MeshStandardMaterial({ color: 0xe8b64c, roughness: 1 }),
-  remove: new MeshStandardMaterial({ color: ORANGE, roughness: 1 }),
-  close: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
-};
 const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
 /** The window's four sides in the world; the land's pieces and its mark are cut there, the shelf's are not. */
 const clipPlanes = [new Plane(), new Plane(), new Plane(), new Plane()];
@@ -212,7 +198,6 @@ const SHARED = new Set<Material>([
   ledgeMat,
   barMat,
   markMat,
-  ...Object.values(optMats),
 ]);
 const fitBox = new Box3();
 const fitSize = new Vector3();
@@ -274,7 +259,10 @@ export class TownDesk {
   /** The placed piece whose card is open, its tiles marked on the land. */
   private selected = '';
   private mark?: Mesh;
-  private options?: Group;
+  /** The chosen piece's own toolbar, at the land's front left: its name, turn left and right, remove and done. */
+  private pieceRow?: Entity;
+  private pieceName?: Label;
+  private removeButton?: ToolButton;
   /** How near the land is drawn, and the tile at the middle of its window. */
   private zoom = 1;
   private view = { x: 0, z: 0 };
@@ -377,6 +365,7 @@ export class TownDesk {
       this.holder = this.host.add(h, true);
       this.view = { x: r.cols / 2, z: r.rows / 2 };
       this.viewRow = this.host.add(this.viewButtons(), true);
+      this.pieceRow = this.host.add(this.pieceButtons(), true);
     }
     const h = this.holder.object3D!;
     if (this.page) h.remove(this.page.root);
@@ -416,7 +405,6 @@ export class TownDesk {
       const board = new Mesh(boardGeo, plateMat);
       board.position.set(0, SHELF_H / 2, -0.04);
       g.add(board);
-      g.add(this.bigIcon());
       this.shelf = this.host.add(g, true);
     }
     const g = this.shelf.object3D!;
@@ -718,7 +706,7 @@ export class TownDesk {
 
   // ------------------------------------------------------------ zoom and the hand tool
 
-  /** The toolbar: zoom out, zoom in, the hand tool, the shelf, the room and EXIT, each a tile with its icon and word. */
+  /** The toolbar: zoom out, zoom in, the hand tool, the shelf shown and enlarged, the room and EXIT, each a tile with its icon and word. */
   private viewButtons(): Group {
     const r = townRulesNow();
     const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
@@ -726,6 +714,7 @@ export class TownDesk {
       ['town_zoom_in', 'zoomIn', this.t.xr.zoomIn, 'plain'],
       ['town_pan', 'pan', this.t.xr.pan, 'plain'],
       ['town_shelf_show', 'shown', this.t.xr.shelf, 'on'],
+      ['town_shelf_big', 'enlarge', this.t.xr.big, 'plain'],
       ['town_room', 'room', T.roomName[getRoom()], 'plain'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
@@ -744,6 +733,7 @@ export class TownDesk {
       row.add(b.mesh);
       if (choice === 'town_pan') this.panButton = b;
       if (choice === 'town_shelf_show') this.showButton = b;
+      if (choice === 'town_shelf_big') this.bigButton = b;
       if (choice === 'town_room') this.roomButton = b;
     });
     return row;
@@ -761,14 +751,45 @@ export class TownDesk {
     }, 120);
   }
 
-  /** The shelf's enlarge button, the same flat tile as the toolbar's. */
-  private bigIcon(): Mesh {
-    const b = new ToolButton('enlarge', '', BIG_W, BIG_W, 'plain', { alone: true });
-    b.mesh.name = 'town-shelf-big';
-    b.mesh.userData.townOpt = 'town_shelf_big';
-    b.mesh.position.copy(BIG_AT);
-    this.bigButton = b;
-    return b.mesh;
+  /**
+   * The chosen piece's toolbar, the same strip as the view's, at the land's
+   * front left where a hand reaches it as easily: hidden until a piece is chosen.
+   */
+  private pieceButtons(): Group {
+    const r = townRulesNow();
+    const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
+      ['town_left', 'turnLeft', this.t.xr.turnLeft, 'plain'],
+      ['town_right', 'turnRight', this.t.xr.turnRight, 'plain'],
+      ['town_remove', 'trash', this.t.remove, 'plain'],
+      ['town_card', 'check', this.t.xr.ok, 'accent'],
+    ];
+    const w = tools.length * TOOL_W + TOOL_FOLD;
+    const row = new Group();
+    row.name = 'town-piece';
+    row.position.set(-(r.cols / 2 + PAPER) * TILE + w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
+    row.rotation.x = TOOL_LEAN;
+    row.add(toolTray(w, TOOL_H, TOOL_FOLD));
+    tools.forEach(([choice, icon, word, look], i) => {
+      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { divider: i < tools.length - 2 });
+      b.mesh.name = `town-piece-${choice}`;
+      b.mesh.userData.townOpt = choice;
+      b.mesh.position.set(-w / 2 + (i + 0.5) * TOOL_W, 0, 0.0015);
+      row.add(b.mesh);
+      if (choice === 'town_remove') this.removeButton = b;
+    });
+    this.pieceName = new Label(' ', { height: 0.016 });
+    this.pieceName.mesh.position.set(0, TOOL_H / 2 + 0.014, 0.0015);
+    // Only the buttons meet the ray.
+    (this.pieceName.mesh as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    row.add(this.pieceName.mesh);
+    this.showPieceRow(row, false);
+    return row;
+  }
+
+  private showPieceRow(row: Object3D | undefined, on: boolean): void {
+    if (!row) return;
+    row.visible = on;
+    (row as Object3D & { pointerEvents?: string }).pointerEvents = on ? undefined : 'none';
   }
 
   /** The shelf twice as big or back as it was, grown about its middle and to the right so it stays clear of the land and no higher than it must. */
@@ -1189,16 +1210,18 @@ export class TownDesk {
     this.placeMark();
   }
 
-  /** The chosen piece's tiles in teal under it and its row of buttons above it, or neither. */
+  /** The chosen piece's tiles in teal under it and its toolbar shown, or neither. */
   private placeMark(): void {
     const h = this.holder?.object3D;
     const it = this.selected ? this.model.view().items.find((i) => i.id === this.selected && i.land === this.land) : undefined;
-    if (this.options) this.drop3D(this.options);
-    this.options = undefined;
-    if (!h || !it || it.id === this.carry?.placeId) {
+    const chosen = !!h && !!it && it.id !== this.carry?.placeId;
+    this.showPieceRow(this.pieceRow?.object3D, chosen);
+    if (!h || !it || !chosen) {
       if (this.mark) this.mark.visible = false;
       return;
     }
+    this.pieceName?.set(this.name(it.asset).toUpperCase());
+    this.removeButton?.set('trash', 'plain', `${this.t.remove} +${it.price}`);
     if (!this.mark) {
       this.mark = new Mesh(markGeo, markMat);
       this.mark.name = 'town-chosen';
@@ -1209,45 +1232,6 @@ export class TownDesk {
     this.mark.scale.set(w + 0.15, 1, d + 0.15);
     this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
     this.mark.visible = true;
-    if (!this.inView(it.x, it.y, w, d)) return;
-    this.options = this.optionRow(it);
-    this.options.position.set(it.x + w / 2, (pieceInfo(it.asset)?.top ?? 1) + OPT_RISE / (TILE * this.zoom), it.y + d / 2);
-    h.add(this.options);
-  }
-
-  /** Turn left, turn right, remove (its Folds back shown under it) and done, as icons in metres. */
-  private optionRow(it: Placed): Group {
-    const row = new Group();
-    row.name = 'town-options';
-    row.scale.setScalar(1 / (TILE * this.zoom));
-    row.rotation.x = OPT_LEAN;
-    const icons: [TownChoice, string, MeshStandardMaterial][] = [
-      ['town_left', '↺', optMats.turn],
-      ['town_right', '↻', optMats.turn],
-      ['town_remove', '✕', optMats.remove],
-      ['town_card', '✓', optMats.close],
-    ];
-    icons.forEach(([choice, icon, mat], i) => {
-      const b = new Mesh(optGeo, mat);
-      b.name = `town-opt-${choice}`;
-      b.userData.townOpt = choice;
-      b.position.x = (i - (icons.length - 1) / 2) * (OPT_W + OPT_GAP);
-      const l = new Label(icon, { height: 0.024, card: false });
-      l.mesh.position.z = 0.0035;
-      b.add(l.mesh);
-      if (choice === 'town_remove') {
-        const back = new Label(`+${it.price}`, { height: 0.015 });
-        back.mesh.position.set(0, -OPT_W / 2 - 0.011, 0.0035);
-        b.add(back.mesh);
-      }
-      row.add(b);
-    });
-    const name = new Label(this.name(it.asset), { height: 0.018 });
-    name.mesh.position.set(0, OPT_W / 2 + 0.015, 0);
-    // Only the buttons meet the ray; the name never takes the piece under it.
-    (name.mesh as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
-    row.add(name.mesh);
-    return row;
   }
 
   /** Turns the chosen piece where it stands, a quarter round left (270) or right (90); it stays chosen. */
@@ -1331,7 +1315,8 @@ export class TownDesk {
     this.spare(this.holder?.object3D);
     this.spare(this.shelf?.object3D);
     this.spare(this.viewRow?.object3D);
-    for (const e of [this.root, this.holder, this.shelf, this.viewRow, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
+    this.spare(this.pieceRow?.object3D);
+    for (const e of [this.root, this.holder, this.shelf, this.viewRow, this.pieceRow, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
     this.restoreDesk();
   }
 }
