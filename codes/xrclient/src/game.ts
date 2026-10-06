@@ -203,10 +203,10 @@ const GAME_W = 0.095;
 /** Lower than wide, so the block reaches less far towards the player; its names keep GAME_WORD_H. */
 const GAME_H = 0.064;
 const GAME_WORD_H = 0.0104;
-const GAMES_AT = new Vector3(-0.235, 0.04, 0.16);
+const GAMES_AT = new Vector3(-0.235, 0.04, 0.11);
 const SET_W = 0.08;
 const SET_H = 0.07;
-const SETTINGS_AT = new Vector3(0.18, 0.025, 0.2);
+const SETTINGS_AT = new Vector3(0.18, 0.025, 0.15);
 const MENU_FOLD = 0.026;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
@@ -220,7 +220,7 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.18, 0.075, 0.16);
+const BEST_AT = new Vector3(0.18, 0.075, 0.11);
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
