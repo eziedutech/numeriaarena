@@ -194,16 +194,17 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * The desk menu, drawn as the town's toolbar is: the games are one paper
  * block of flat cells, three across and two deep, each an envelope in its
  * game's colour over its name, leaning back in front of the book; the
- * settings and HOME are one toolbar strip nearer the player; the best score
- * stands right of the block, the Fold Town sticker beside the book, and a
- * paper hand shows a first-time player what to do.
+ * settings and HOME are one toolbar strip beside it on the right, side by
+ * side so neither hides the other; the best score stands over the strip,
+ * the Fold Town sticker beside the book, and a paper hand shows a
+ * first-time player what to do.
  */
 const GAME_W = 0.095;
 const GAME_H = 0.08;
-const GAMES_AT = new Vector3(0, 0.048, 0.16);
+const GAMES_AT = new Vector3(-0.2, 0.048, 0.16);
 const SET_W = 0.08;
 const SET_H = 0.07;
-const SETTINGS_AT = new Vector3(0, 0.025, 0.275);
+const SETTINGS_AT = new Vector3(0.18, 0.025, 0.2);
 const MENU_FOLD = 0.026;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
@@ -217,7 +218,7 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.24, 0.06, 0.16);
+const BEST_AT = new Vector3(0.18, 0.075, 0.16);
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
