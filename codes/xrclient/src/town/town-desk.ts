@@ -34,8 +34,9 @@ import { TOWN_TEXT, waitText } from './town-text.js';
  * is carried with its ray over a tile, which shows a green or orange shadow,
  * and let go to place it. Let go off the land, a placed piece is removed and
  * its Folds come back. A piece let go on the land stays chosen, marked under
- * it, with its card on the left and buttons to turn or remove it. The town is
- * saved with every change, so building has no time limit.
+ * it, with a small row of buttons above it to turn it, remove it or let it be,
+ * and its card on the left. The town is saved with every change, so building
+ * has no time limit.
  */
 
 export type Side = 'left' | 'right';
@@ -119,7 +120,9 @@ const CELL_W = 0.11;
 const SHELF_W = SHELF_COLS * CELL_W + 0.02;
 const SHELF_H = 0.56;
 const TAB_Y = [0.525, 0.478];
-const TAB_TEXT = 0.016;
+/** A tab's name; a name of two parts joined by & is said on two smaller lines so it stays inside its tab. */
+const TAB_TEXT = 0.022;
+const TAB_TEXT_TWO = 0.016;
 const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
@@ -137,12 +140,12 @@ const CARD_CHARS = 32;
 const ANSWER_X = [-0.74, -0.62, -0.5];
 const ANSWER_Z = -0.17;
 const CLOSE_AT = [-0.65, -0.06] as const;
-/** A chosen piece's buttons under its card: turn left, turn right, and remove beside CLOSE. */
-const TURN_AT = [
-  [-0.76, 0.05],
-  [-0.65, 0.05],
-] as const;
-const REMOVE_AT = [-0.76, -0.06] as const;
+/** A chosen piece's row of buttons floats this far above its top, in metres; each button is OPT_W square. */
+const OPT_RISE = 0.05;
+const OPT_W = 0.034;
+const OPT_GAP = 0.006;
+/** The row leans back to face the player looking down at the desk. */
+const OPT_LEAN = -0.5;
 const BUTTON_X = -0.45;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
@@ -161,9 +164,15 @@ const barGeo = new PlaneGeometry(1, 1);
 const barMat = new MeshBasicMaterial({ color: TEAL });
 const spareMat = new MeshBasicMaterial();
 const markGeo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const optGeo = new BoxGeometry(OPT_W, OPT_W, 0.006);
+const optMats = {
+  turn: new MeshStandardMaterial({ color: 0xe8b64c, roughness: 1 }),
+  remove: new MeshStandardMaterial({ color: ORANGE, roughness: 1 }),
+  close: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
+};
 const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
 /** Materials every page and the shelf share, never freed with one of them. */
-const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat, markMat]);
+const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat, markMat, ...Object.values(optMats)]);
 const fitBox = new Box3();
 const fitSize = new Vector3();
 const fitMid = new Vector3();
@@ -224,6 +233,7 @@ export class TownDesk {
   /** The placed piece whose card is open, its tiles marked on the land. */
   private selected = '';
   private mark?: Mesh;
+  private options?: Group;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
   private note = '';
@@ -370,9 +380,15 @@ export class TownDesk {
         mark.position.set(0, -0.017, 0.006);
         tab.add(mark);
       }
-      const l = new Label(lang === 'id' ? id : en, on ? { height: TAB_TEXT, ink: TEAL } : { height: TAB_TEXT, ink: 0x6b6f7a });
-      l.mesh.position.z = 0.006;
-      tab.add(l.mesh);
+      const name = lang === 'id' ? id : en;
+      const parts = name.split(' & ');
+      const lines = parts.length > 1 ? [`${parts[0]} &`, parts[1]] : parts;
+      const height = lines.length > 1 ? TAB_TEXT_TWO : TAB_TEXT;
+      lines.forEach((line, k) => {
+        const l = new Label(line, { height, ink: on ? TEAL : 0x6b6f7a });
+        l.mesh.position.set(0, ((lines.length - 1) / 2 - k) * height * 1.05, 0.006 + k * 0.001);
+        tab.add(l.mesh);
+      });
       content.add(tab);
     });
     const here = r.catalog.filter((a) => pieceInfo(a.id)?.shelf === this.shelfOn);
@@ -396,8 +412,8 @@ export class TownDesk {
       slot.add(piece);
       const text = locked ? this.t.xr.lockedShort(a.unlock_at) : this.t.price(a.price);
       const ink = locked ? 0x8a8f9c : a.price > balance ? ORANGE : undefined;
-      const price = new Label(text, ink === undefined ? { height: 0.014 } : { height: 0.014, ink });
-      price.mesh.position.set(0, -0.015, 0.032);
+      const price = new Label(text, ink === undefined ? { height: 0.018 } : { height: 0.018, ink });
+      price.mesh.position.set(0, -0.017, 0.032);
       slot.add(price.mesh);
       content.add(slot);
     });
@@ -408,12 +424,12 @@ export class TownDesk {
         b.userData.townStep = step;
         b.position.set(step * 0.12, PAGER_Y, -0.02);
         b.add(new Mesh(stepGeo, slotMat));
-        const l = new Label(step < 0 ? '<' : '>', { height: 0.026 });
+        const l = new Label(step < 0 ? '<' : '>', { height: 0.032 });
         l.mesh.position.z = 0.012;
         b.add(l.mesh);
         content.add(b);
       }
-      const n = new Label(this.t.xr.page(this.shelfPage + 1, pages), { height: 0.018, card: false });
+      const n = new Label(this.t.xr.page(this.shelfPage + 1, pages), { height: 0.024, card: false });
       n.mesh.position.set(0, PAGER_Y, -0.02);
       content.add(n.mesh);
     }
@@ -620,6 +636,11 @@ export class TownDesk {
           }
           return this.take(from, id, '', this.rot, grip);
         }
+        const opt = o.userData.townOpt as TownChoice | undefined;
+        if (opt) {
+          this.press(opt);
+          return true;
+        }
         const placeId = o.userData.placeId as string | undefined;
         const it = placeId && v.items.find((i) => i.id === placeId);
         if (it) return this.take(from, it.asset, it.id, it.rot, grip);
@@ -796,10 +817,6 @@ export class TownDesk {
     }
     const group = this.cardGroup(lines);
     if (q) q.choices.forEach((c, i) => this.cardButtons.push(this.host.button(`town_a${i}` as TownChoice, c, ANSWER_X[i], ANSWER_Z, 0xe8b64c)));
-    this.cardButtons.push(this.host.button('town_card', t.close, CLOSE_AT[0], CLOSE_AT[1], 0x8a8f9c));
-    this.cardButtons.push(this.host.button('town_left', `↺ ${t.turn}`, TURN_AT[0][0], TURN_AT[0][1], 0xe8b64c));
-    this.cardButtons.push(this.host.button('town_right', `${t.turn} ↻`, TURN_AT[1][0], TURN_AT[1][1], 0xe8b64c));
-    this.cardButtons.push(this.host.button('town_remove', t.refund(it.price), REMOVE_AT[0], REMOVE_AT[1], ORANGE));
     this.card = { id: it.id, group, q, attempt: tried.attempt, answered: false, ready: it.ready };
     this.selected = it.id;
     this.placeMark();
@@ -861,10 +878,12 @@ export class TownDesk {
     this.placeMark();
   }
 
-  /** The chosen piece's tiles in teal under it, or no mark. */
+  /** The chosen piece's tiles in teal under it and its row of buttons above it, or neither. */
   private placeMark(): void {
     const h = this.holder?.object3D;
     const it = this.selected ? this.model.view().items.find((i) => i.id === this.selected && i.land === this.land) : undefined;
+    if (this.options) this.drop3D(this.options);
+    this.options = undefined;
     if (!h || !it || it.id === this.carry?.placeId) {
       if (this.mark) this.mark.visible = false;
       return;
@@ -879,6 +898,44 @@ export class TownDesk {
     this.mark.scale.set(w + 0.15, 1, d + 0.15);
     this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
     this.mark.visible = true;
+    this.options = this.optionRow(it);
+    this.options.position.set(it.x + w / 2, (pieceInfo(it.asset)?.top ?? 1) + OPT_RISE / TILE, it.y + d / 2);
+    h.add(this.options);
+  }
+
+  /** Turn left, turn right, remove (its Folds back shown under it) and done, as icons in metres. */
+  private optionRow(it: Placed): Group {
+    const row = new Group();
+    row.name = 'town-options';
+    row.scale.setScalar(1 / TILE);
+    row.rotation.x = OPT_LEAN;
+    const icons: [TownChoice, string, MeshStandardMaterial][] = [
+      ['town_left', '↺', optMats.turn],
+      ['town_right', '↻', optMats.turn],
+      ['town_remove', '✕', optMats.remove],
+      ['town_card', '✓', optMats.close],
+    ];
+    icons.forEach(([choice, icon, mat], i) => {
+      const b = new Mesh(optGeo, mat);
+      b.name = `town-opt-${choice}`;
+      b.userData.townOpt = choice;
+      b.position.x = (i - (icons.length - 1) / 2) * (OPT_W + OPT_GAP);
+      const l = new Label(icon, { height: 0.024, card: false });
+      l.mesh.position.z = 0.0035;
+      b.add(l.mesh);
+      if (choice === 'town_remove') {
+        const back = new Label(`+${it.price}`, { height: 0.015 });
+        back.mesh.position.set(0, -OPT_W / 2 - 0.011, 0.0035);
+        b.add(back.mesh);
+      }
+      row.add(b);
+    });
+    const name = new Label(this.name(it.asset), { height: 0.018 });
+    name.mesh.position.set(0, OPT_W / 2 + 0.015, 0);
+    // Only the buttons meet the ray; the name never takes the piece under it.
+    (name.mesh as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    row.add(name.mesh);
+    return row;
   }
 
   /** Turns the chosen piece where it stands, a quarter round left (270) or right (90); it stays chosen. */

@@ -101,7 +101,7 @@ const EN = {
   landmarkNews: (name: string, skill: string) => `NEW LANDMARK: ${name.toUpperCase()}, FOR ${skill.toUpperCase()}`,
   landmarkWaits: (n: number) => `It stands on land ${n} once you open it.`,
   xr: {
-    hint: 'Point at a piece on the shelf and hold the grip, or pinch. A, B, X, Y or TURN turns it. Let go over the land to place it, off the land to remove it, or where it stood for its card.',
+    hint: 'Hold the grip or pinch on a shelf piece, let go on the land.',
     done: 'DONE',
     carry: (name: string) => `${name}: let go over a tile.`,
     dropRemove: (n: number) => `Let go here to remove it (+${n} Folds back).`,
@@ -211,7 +211,7 @@ const ID: typeof EN = {
   landmarkNews: (name: string, skill: string) => `LANDMARK BARU: ${name.toUpperCase()}, DARI ${skill.toUpperCase()}`,
   landmarkWaits: (n: number) => `Berdiri di lahan ${n} setelah kamu membukanya.`,
   xr: {
-    hint: 'Tunjuk satu potongan di rak lalu tahan grip, atau cubit. A, B, X, Y atau PUTAR memutarnya. Lepaskan di atas lahan untuk menaruh, di luar lahan untuk menghapus, atau di tempatnya untuk melihat kartunya.',
+    hint: 'Tahan grip atau cubit potongan di rak, lepas di atas lahan.',
     done: 'SELESAI',
     carry: (name: string) => `${name}: lepaskan di atas petak.`,
     dropRemove: (n: number) => `Lepaskan di sini untuk menghapusnya (+${n} Folds kembali).`,
