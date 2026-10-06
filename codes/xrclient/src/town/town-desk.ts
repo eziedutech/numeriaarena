@@ -2,7 +2,6 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
-  CircleGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -10,13 +9,13 @@ import {
   Plane,
   PlaneGeometry,
   Quaternion,
-  RingGeometry,
   Vector3,
   type Entity,
   type Material,
   type Object3D,
 } from '@iwsdk/core';
 import { Label } from '../art/label.js';
+import { ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
 import { getLang } from '../settings.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
@@ -122,9 +121,14 @@ const HAND_CARRY_DROP = 0.05;
 const ZOOMS = [1, 1.5, 2, 3];
 /** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
 const PAPER = 0.25;
-/** The zoom and hand buttons, in a row past the land's front edge on its right. */
-const VIEW_W = 0.042;
-const VIEW_LEAN = -1;
+/** The toolbar past the land's front edge on its right: zoom, the hand, reset and EXIT. */
+const TOOL_W = 0.05;
+const TOOL_H = 0.058;
+const TOOL_GAP = 0.006;
+/** Extra room before EXIT, so leaving stands apart from the view's tools. */
+const TOOL_PART = 0.012;
+const TOOL_PAD = 0.008;
+const TOOL_LEAN = -1;
 
 /**
  * The shelf stands on the right of the land and leans its face to the
@@ -168,7 +172,6 @@ const OPT_W = 0.034;
 const OPT_GAP = 0.006;
 /** The row leans back to face the player looking down at the desk. */
 const OPT_LEAN = -0.5;
-const BUTTON_X = -0.45;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
 const TEAL = 0x3fb6a0;
@@ -193,22 +196,6 @@ const optMats = {
   close: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
 };
 const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
-const viewGeo = new BoxGeometry(VIEW_W, VIEW_W, 0.008);
-const faceGeo = new BoxGeometry(VIEW_W - 0.006, VIEW_W - 0.006, 0.002);
-const trayGeo = new BoxGeometry(1, 1, 0.004);
-/** The drawn icons: a magnifier's lens and a turning arrow with its head. */
-const lensGeo = new RingGeometry(0.0075, 0.0105, 32);
-const backGeo = new RingGeometry(0.0085, 0.0115, 32, 1, Math.PI * 0.55, Math.PI * 1.55);
-const headGeo = new CircleGeometry(0.0062, 3);
-const viewMats = {
-  zoom: new MeshStandardMaterial({ color: 0xe8b64c, roughness: 1 }),
-  face: new MeshStandardMaterial({ color: 0xf7d77e, roughness: 1 }),
-  tray: new MeshStandardMaterial({ color: 0xf4efe4, roughness: 1 }),
-  off: new MeshStandardMaterial({ color: 0xc9ccd3, roughness: 1 }),
-  on: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
-};
-const bigGeo = new BoxGeometry(BIG_W, BIG_W, 0.008);
-const inkMat = new MeshBasicMaterial({ color: 0x30343c });
 /** The window's four sides in the world; the land's pieces and its mark are cut there, the shelf's are not. */
 const clipPlanes = [new Plane(), new Plane(), new Plane(), new Plane()];
 const clipMat = townMaterial().clone();
@@ -223,9 +210,7 @@ const SHARED = new Set<Material>([
   ledgeMat,
   barMat,
   markMat,
-  inkMat,
   ...Object.values(optMats),
-  ...Object.values(viewMats),
 ]);
 const fitBox = new Box3();
 const fitSize = new Vector3();
@@ -297,8 +282,8 @@ export class TownDesk {
   private panFrom = new Vector3();
   private viewRow?: Entity;
   private shelfBig = false;
-  private bigButton?: Mesh;
-  private panButton?: Mesh;
+  private bigButton?: ToolButton;
+  private panButton?: ToolButton;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
   private note = '';
@@ -339,7 +324,6 @@ export class TownDesk {
     this.text(this.t.title, 0.034, header, 0.092);
     this.folds = this.text('', 0.026, header, 0.05);
     this.status = this.text('', 0.02, header, 0.012);
-    this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0, 0x3469c4));
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
     this.redraw();
@@ -711,111 +695,57 @@ export class TownDesk {
 
   // ------------------------------------------------------------ zoom and the hand tool
 
-  /** The zoom out, zoom in and hand buttons, each with its word under it. */
+  /** The toolbar: zoom out, zoom in, the hand tool, reset and EXIT, each a tile with its icon and word. */
   private viewButtons(): Group {
     const r = townRulesNow();
+    const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
+      ['town_zoom_out', 'zoomOut', this.t.xr.zoomOut, 'plain'],
+      ['town_zoom_in', 'zoomIn', this.t.xr.zoomIn, 'plain'],
+      ['town_pan', 'pan', this.t.xr.pan, 'plain'],
+      ['town_view_reset', 'reset', this.t.xr.reset, 'plain'],
+      ['town_done', 'exit', this.t.xr.done, 'accent'],
+    ];
+    const inner = tools.length * TOOL_W + (tools.length - 1) * TOOL_GAP + TOOL_PART;
+    const w = inner + 2 * TOOL_PAD;
     const row = new Group();
     row.name = 'town-view';
-    row.position.set((r.cols / 2) * TILE - 0.09, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.045);
-    row.rotation.x = VIEW_LEAN;
-    const icons: [TownChoice, string][] = [
-      ['town_zoom_out', this.t.xr.zoomOut],
-      ['town_zoom_in', this.t.xr.zoomIn],
-      ['town_pan', this.t.xr.pan],
-      ['town_view_reset', this.t.xr.reset],
-    ];
-    const step = VIEW_W + 0.012;
-    // A paper tray under the row, so the buttons read as one panel.
-    const tray = new Mesh(trayGeo, viewMats.tray);
-    tray.scale.set(icons.length * step + 0.008, VIEW_W + 0.034, 1);
-    tray.position.set(0, -0.0085, -0.006);
-    row.add(tray);
-    icons.forEach(([choice, word], i) => {
-      const b = new Mesh(viewGeo, choice === 'town_pan' ? viewMats.off : viewMats.zoom);
-      b.name = `town-view-${choice}`;
-      b.userData.townOpt = choice;
-      b.position.x = (i - (icons.length - 1) / 2) * step;
-      // A lighter face on the body, a little in from its edges.
-      const face = new Mesh(faceGeo, choice === 'town_pan' ? viewMats.tray : viewMats.face);
-      face.position.z = 0.0045;
-      b.add(face);
-      const icon = this.viewIcon(choice);
-      icon.position.z = 0.0058;
-      b.add(icon);
-      const w = new Label(word, { height: 0.012, card: false });
-      w.mesh.position.set(0, -VIEW_W / 2 - 0.009, 0.0045);
-      b.add(w.mesh);
+    row.position.set((r.cols / 2 + PAPER) * TILE - w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
+    row.rotation.x = TOOL_LEAN;
+    row.add(toolTray(w, TOOL_H + 2 * TOOL_PAD));
+    let x = -inner / 2 + TOOL_W / 2;
+    for (const [choice, icon, word, look] of tools) {
+      if (choice === 'town_done') x += TOOL_PART;
+      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look);
+      b.mesh.name = `town-view-${choice}`;
+      b.mesh.userData.townOpt = choice;
+      b.mesh.position.set(x, 0, 0.0015);
+      row.add(b.mesh);
       if (choice === 'town_pan') this.panButton = b;
-      row.add(b);
-    });
+      x += TOOL_W + TOOL_GAP;
+    }
     return row;
   }
 
-  /** Each view button's picture: a magnifier with minus or plus, a hand, or an arrow turning back. */
-  private viewIcon(choice: TownChoice): Object3D {
-    const g = new Group();
-    const bar = (w: number, h: number, x: number, y: number, turn = 0): void => {
-      const m = new Mesh(barGeo, inkMat);
-      m.scale.set(w, h, 1);
-      m.position.set(x, y, 0);
-      m.rotation.z = turn;
-      g.add(m);
-    };
-    if (choice === 'town_zoom_in' || choice === 'town_zoom_out') {
-      const lens = new Mesh(lensGeo, inkMat);
-      lens.position.set(-0.003, 0.003, 0);
-      g.add(lens);
-      bar(0.0105, 0.0034, 0.0083, -0.0083, -Math.PI / 4);
-      bar(0.009, 0.0024, -0.003, 0.003);
-      if (choice === 'town_zoom_in') bar(0.0024, 0.009, -0.003, 0.003);
-    } else if (choice === 'town_view_reset') {
-      g.add(new Mesh(backGeo, inkMat));
-      const head = new Mesh(headGeo, inkMat);
-      // At the arrow's open end, pointing on round the circle.
-      const a = Math.PI * 0.55;
-      head.position.set(Math.cos(a) * 0.01, Math.sin(a) * 0.01, 0);
-      head.rotation.z = a - Math.PI / 2;
-      g.add(head);
-    } else {
-      const l = new Label('✋', { height: 0.03, card: false });
-      g.add(l.mesh);
-    }
-    return g;
-  }
-
-  /** A pressed icon sinks a moment and comes back, so one shot shows it was taken. */
+  /** A pressed icon shrinks a moment and comes back, so one shot shows it was taken. */
   private dip(o: Object3D): void {
     if (o.userData.dipping) return;
     o.userData.dipping = true;
-    o.translateZ(-0.004);
+    const was = o.scale.x;
+    o.scale.setScalar(was * 0.88);
     setTimeout(() => {
-      o.translateZ(0.004);
+      o.scale.setScalar(was);
       o.userData.dipping = false;
     }, 120);
   }
 
-  /** The enlarge button: a square with its four corners drawn on it. */
+  /** The shelf's enlarge button, the same flat tile as the toolbar's. */
   private bigIcon(): Mesh {
-    const b = new Mesh(bigGeo, viewMats.off);
-    b.name = 'town-shelf-big';
-    b.userData.townOpt = 'town_shelf_big';
-    b.position.copy(BIG_AT);
-    const arm = BIG_W * 0.28;
-    const thick = BIG_W * 0.08;
-    const reach = BIG_W * 0.32;
-    for (const sx of [-1, 1]) {
-      for (const sy of [-1, 1]) {
-        const across = new Mesh(barGeo, inkMat);
-        across.scale.set(arm, thick, 1);
-        across.position.set(sx * (reach - arm / 2 + thick / 2), sy * reach, 0.0045);
-        const down = new Mesh(barGeo, inkMat);
-        down.scale.set(thick, arm, 1);
-        down.position.set(sx * reach, sy * (reach - arm / 2 + thick / 2), 0.0045);
-        b.add(across, down);
-      }
-    }
+    const b = new ToolButton('enlarge', '', BIG_W, BIG_W);
+    b.mesh.name = 'town-shelf-big';
+    b.mesh.userData.townOpt = 'town_shelf_big';
+    b.mesh.position.copy(BIG_AT);
     this.bigButton = b;
-    return b;
+    return b.mesh;
   }
 
   /** The shelf twice as big or back as it was, grown about its middle and to the right so it stays clear of the land and no higher than it must. */
@@ -826,13 +756,13 @@ export class TownDesk {
     const k = big ? 2 : 1;
     g.scale.setScalar(k);
     g.position.copy(SHELF_AT).add(new Vector3(((k - 1) * SHELF_W) / 2, (-(k - 1) * SHELF_H) / 2, 0).applyAxisAngle(UP, SHELF_TURN));
-    if (this.bigButton) this.bigButton.material = big ? viewMats.on : viewMats.off;
+    this.bigButton?.set(big ? 'shrink' : 'enlarge', big ? 'on' : 'plain');
     console.info(`[town] shelf ${big ? 'twice as big' : 'as it was'}`);
   }
 
   private setPan(on: boolean): void {
     this.panMode = on;
-    if (this.panButton) this.panButton.material = on ? viewMats.on : viewMats.off;
+    this.panButton?.set('pan', on ? 'on' : 'plain');
   }
 
   /** Half the window, in tiles of the land as it is zoomed. */

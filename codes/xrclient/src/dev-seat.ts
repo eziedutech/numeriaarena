@@ -1,7 +1,6 @@
 import { Box3, type Entity, Group, Matrix4, Ray, RayInteractable, Vector3, VisibilityState, createSystem } from '@iwsdk/core';
 
-import { Label } from './art/label.js';
-import { Builder, chair } from './art/rooms.js';
+import { ToolButton } from './art/tool-icon.js';
 import { DeskRoot } from './game-components.js';
 import { T } from './text.js';
 
@@ -41,10 +40,12 @@ const SEATED_BELOW_DESK_M = 0.45;
 const HANDS_AHEAD_M = 0.4;
 const HANDS_APART_M = 0.25;
 /** In the desk's frame: right of HOME (game.ts HOME_CARD_X, ENVELOPE_Z), standing on the desk, small. */
-const CARD_AT = new Vector3(0.375, 0.032, 0.11);
-const CARD_SCALE = 0.32;
+const CARD_AT = new Vector3(0.375, 0.04, 0.11);
+/** A flat tile like the town's toolbar buttons: a chair to sit, a standing person to stand. */
+const CARD_W = 0.07;
+const CARD_H = 0.075;
 /** The card's face, in its own frame, for the controllers' rays. */
-const CARD_BOX = new Box3(new Vector3(-0.15, -0.1, -0.01), new Vector3(0.15, 0.1, 0.02));
+const CARD_BOX = new Box3(new Vector3(-CARD_W / 2, -CARD_H / 2, -0.01), new Vector3(CARD_W / 2, CARD_H / 2, 0.02));
 /** One click can reach the card both ways (the trigger check and IWSDK's press): the second is dropped. */
 const TOGGLE_GAP_MS = 400;
 
@@ -57,7 +58,7 @@ export class DevSeatSystem extends createSystem({
   desks: { required: [DeskRoot] },
 }) {
   private card?: Group;
-  private label?: Label;
+  private button?: ToolButton;
   private shown = '';
   /** Play mode's mouse lock to take back on the next frame, after the pose went to the panel. */
   private relock?: Element;
@@ -70,22 +71,9 @@ export class DevSeatSystem extends createSystem({
   private build(desk: Entity): void {
     const group = new Group();
     group.name = 'dev-seat-card';
-    const b = new Builder(5);
-    b.box(0x3fb6a0, 0.3, 0.2, 0.012, 0, 0, 0);
-    b.box(0xfff8ec, 0.27, 0.17, 0.004, 0, 0, 0.008);
-    group.add(b.build('dev-seat-paper'));
-    // A school chair seen from the side, on the left of the word.
-    const c = new Builder(6);
-    chair(c, 0, 0, Math.PI / 2, 0x3469c4);
-    const icon = c.build('dev-seat-chair');
-    icon.scale.setScalar(0.17);
-    icon.position.set(-0.085, -0.065, 0.012);
-    group.add(icon);
-    this.label = new Label(T.devSit, { height: 0.045, card: false });
-    this.label.mesh.position.set(0.045, 0, 0.012);
-    group.add(this.label.mesh);
+    this.button = new ToolButton('sit', T.devSit, CARD_W, CARD_H);
+    group.add(this.button.mesh);
     group.position.copy(CARD_AT);
-    group.scale.setScalar(CARD_SCALE);
     group.visible = false;
     // A hand's ray reaches the card through IWSDK (its pinch presses it); controllers through the check in update.
     group.addEventListener('pointerdown', () => {
@@ -131,10 +119,11 @@ export class DevSeatSystem extends createSystem({
       }
     }
     // Says what a click does now, also after the arrows moved the headset or the language changed.
-    const text = this.seated(device, desk) ? T.devStand : T.devSit;
+    const seated = this.seated(device, desk);
+    const text = seated ? T.devStand : T.devSit;
     if (text !== this.shown) {
       this.shown = text;
-      this.label?.set(text);
+      this.button?.set(seated ? 'stand' : 'sit', 'plain', text);
     }
   }
 
