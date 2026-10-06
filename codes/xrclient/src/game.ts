@@ -201,7 +201,7 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * first-time player what to do.
  */
 const GAME_W = 0.095;
-/** Lower than wide, so the block reaches less far towards the player; its names keep GAME_WORD_H. */
+/** Lower than wide, so the block reaches less far towards the player; its heading keeps GAME_WORD_H. */
 const GAME_H = 0.064;
 const GAME_WORD_H = 0.0104;
 const GAMES_AT = new Vector3(-0.235, 0.04, 0.11);
@@ -212,6 +212,21 @@ const MENU_FOLD = 0.026;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
 const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
+/** Up a leaning strip's face, towards its far edge. */
+const MENU_UP = new Vector3(0, Math.cos(MENU_LEAN), Math.sin(MENU_LEAN));
+/** The name shown over a menu cell pointed at or touched, the cells having only pictures. */
+const TIP_H = 0.016;
+/** Each game's picture. */
+const GAME_ICON: Record<MenuChoice, ToolIcon> = {
+  race: 'flag',
+  balloon_burst: 'balloon',
+  orb_forge: 'orb',
+  factory_sort: 'factory',
+  bridge_builder: 'bridge',
+  balance_gate: 'balance',
+};
+/** A desk menu cell: what it does, its picture, its name when hovered, its look, its tint. */
+type MenuCell = [ButtonChoice, ToolIcon, string, ToolLook, string?];
 /** Each game's colour, for its envelope. */
 const GAME_TINT: Record<MenuChoice, string> = {
   race: '#3fb6a0',
@@ -505,6 +520,8 @@ export class GameSystem extends createSystem({
   private bestCard?: Label;
   private hintHand?: Group;
   private hintLabel?: Label;
+  /** The hovered menu cell's name, made once and moved to whichever cell is hovered. */
+  private tip?: Label;
   private hintT = 0;
   /** The how-to on a game's first creature: which game, how long it has run, and the hand. */
   private demo?: { game: GameKind; t: number; hand: Group };
@@ -729,6 +746,11 @@ export class GameSystem extends createSystem({
       this.world.visibilityState.subscribe((state) => {
         // The headset town has no page on a computer screen: back to the home page.
         if (this.phase === 'town' && state === VisibilityState.NonImmersive) this.closeTown();
+        // The desk menu has the room setting in the headset only.
+        if (this.phase === 'menu' && this.queries.buttons.entities.size > 0) {
+          this.clearMenu();
+          this.showMenu(this.menuOnly);
+        }
         this.pauseWhileAway();
         for (const e of [...this.queries.crystals.entities, ...this.queries.balloons.entities]) {
           if (e.hasComponent(Balloon) && !e.hasComponent(PokeInteractable)) continue;
@@ -1101,17 +1123,20 @@ export class GameSystem extends createSystem({
       2,
       GAME_W,
       GAME_H,
-      games.map((game) => [game, 'envelope', (game === 'race' ? T.race : T.gameName[game]).toUpperCase(), game === 'race' ? 'on' : 'plain', GAME_TINT[game]]),
+      games.map((game) => [game, GAME_ICON[game], game === 'race' ? T.race : T.gameName[game], 'plain', GAME_TINT[game]]),
       T.gameType,
     );
     // The settings sit beside the games, so the headset never has to come
     // off for them; HOME ends the session (or the game in the browser) for the home page.
+    // The room is the headset's only: in the browser its place stays empty.
+    const tip = (caption: string, value: string) => `${caption}: ${value}`;
+    const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
     this.menuStrip('menu-settings', SETTINGS_AT, 3, 2, SET_W, SET_H, [
-      ['lang', 'language', `${T.langCaption}\n${getLang().toUpperCase()}`, 'plain'],
-      ['bigtext', 'bigText', `${T.bigCaption}\n${T.onOff(bigText())}`, bigText() ? 'on' : 'plain'],
-      ['room', 'room', `${T.roomCaption}\n${T.roomName[getRoom()]}`, getRoom() === 'here' ? 'plain' : 'on'],
-      ['sound', soundOn() ? 'sound' : 'soundOff', `${T.soundCaption}\n${T.onOff(soundOn())}`, soundOn() ? 'on' : 'plain'],
-      ['music', 'music', `${T.musicCaption}\n${T.onOff(musicOn())}`, musicOn() ? 'on' : 'plain'],
+      ['lang', 'language', tip(T.langCaption, getLang().toUpperCase()), 'plain'],
+      ['bigtext', 'bigText', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
+      browser ? null : ['room', 'room', tip(T.roomCaption, T.roomName[getRoom()]), getRoom() === 'here' ? 'plain' : 'on'],
+      ['sound', soundOn() ? 'sound' : 'soundOff', tip(T.soundCaption, T.onOff(soundOn())), soundOn() ? 'on' : 'plain'],
+      ['music', 'music', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'on' : 'plain'],
       ['home', 'exit', T.home, 'accent'],
     ]);
     this.addTownSticker();
@@ -1127,6 +1152,7 @@ export class GameSystem extends createSystem({
     this.bestCard?.mesh.removeFromParent();
     this.bestCard = undefined;
     this.hideHint(false);
+    this.tip?.mesh.removeFromParent();
   }
 
   /** The best score kept on this device, as a small card above HOME. */
@@ -1342,7 +1368,7 @@ export class GameSystem extends createSystem({
     rows: number,
     cw: number,
     ch: number,
-    cells: [ButtonChoice, ToolIcon, string, ToolLook, string?][],
+    cells: (MenuCell | null)[],
     heading?: string,
   ): void {
     const w = cols * cw + MENU_FOLD;
@@ -1351,17 +1377,22 @@ export class GameSystem extends createSystem({
     tray.name = name;
     tray.position.copy(at);
     tray.rotation.x = MENU_LEAN;
-    tray.add(toolTray(w, h, MENU_FOLD));
+    tray.add(toolTray(w, h, MENU_FOLD, 'home'));
     this.menuTrays.push(this.add(tray));
-    cells.forEach(([choice, icon, word, look, tint], i) => {
+    cells.forEach((c, i) => {
+      if (!c) return;
+      const [choice, icon, word, look, tint] = c;
       const col = i % cols;
       const row = Math.floor(i / cols);
       // A thin line to the next cell in its row, none before HOME's own colour.
       const next = cells[i + 1];
-      const divider = col < cols - 1 && next !== undefined && next[3] !== 'accent';
-      const b = new ToolButton(icon, word, cw, ch, look, { divider, tint, wordH: name === 'menu-games' ? GAME_WORD_H : undefined });
+      const divider = col < cols - 1 && next !== undefined && next !== null && next[3] !== 'accent';
+      // Only a picture; its name shows over it while it is pointed at or touched.
+      const b = new ToolButton(icon, '', cw, ch, look, { divider, tint, theme: 'home' });
       const cell = new Group();
       cell.name = `menu-${choice}`;
+      cell.userData.tip = word;
+      cell.userData.tipH = ch;
       cell.add(b.mesh);
       // Laid on the strip a hair in front of its paper, placed in the desk's frame.
       cell.position.set(-w / 2 + (col + 0.5) * cw, h / 2 - (row + 0.5) * ch, 0.0015).applyEuler(tray.rotation).add(at);
@@ -1375,7 +1406,7 @@ export class GameSystem extends createSystem({
     // A cell left over shows what the block holds; it is no button.
     if (heading && cells.length < cols * rows) {
       const i = cells.length;
-      const t = new ToolButton('envelope', heading, cw, ch, 'plain', { title: true, wordH: GAME_WORD_H });
+      const t = new ToolButton('envelope', heading, cw, ch, 'plain', { title: true, wordH: GAME_WORD_H, theme: 'home' });
       t.mesh.position.set(-w / 2 + ((i % cols) + 0.5) * cw, h / 2 - (Math.floor(i / cols) + 0.5) * ch, 0.0015);
       tray.add(t.mesh);
     }
@@ -2880,6 +2911,33 @@ export class GameSystem extends createSystem({
    * or within reach of a fingertip. Envelopes, the Done card and crystals
    * grow a little; balloons grow and hold still (in `floatBalloons`).
    */
+  /** Names the desk menu cell under the pointer or a fingertip, over the cell. */
+  private showTip(): void {
+    let over: Object3D | undefined;
+    if (this.phase === 'menu') {
+      for (const e of this.queries.buttons.entities) {
+        const obj = e.object3D;
+        if (obj?.userData.hovered && typeof obj.userData.tip === 'string') {
+          over = obj;
+          break;
+        }
+      }
+    }
+    const desk = this.deskEntity()?.object3D;
+    if (!over || !desk) {
+      this.tip?.mesh.removeFromParent();
+      return;
+    }
+    const text = over.userData.tip as string;
+    if (!this.tip) {
+      this.tip = new Label(text, { height: TIP_H, anchor: 'bottom' });
+      this.labels.add(this.tip.mesh);
+    } else this.tip.set(text);
+    if (this.tip.mesh.parent !== desk) desk.add(this.tip.mesh);
+    const lift = (over.userData.tipH as number) / 2 + 0.006;
+    this.tip.mesh.position.copy(over.position).addScaledVector(MENU_UP, lift).addScaledVector(MENU_FACING, 0.012);
+  }
+
   private hoverTargets(delta: number): void {
     const step = Math.min(1, delta * HOVER_RATE);
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
@@ -2937,6 +2995,7 @@ export class GameSystem extends createSystem({
     };
     for (const e of this.queries.balloons.entities) ease(e, false);
     for (const e of this.queries.buttons.entities) ease(e, true);
+    this.showTip();
     this.crystalFocus = immersive && !controllers ? this.handCrystal() : undefined;
     for (const e of this.queries.crystals.entities) ease(e, !e.hasComponent(Grabbed) && e !== this.pulled?.e);
   }

@@ -46,19 +46,67 @@ const ICONS = {
   sound: ['M11 5L6 9H2v6h4l5 4z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14'],
   soundOff: ['M11 5L6 9H2v6h4l5 4z', 'M22 9l-6 6', 'M16 9l6 6'],
   music: ['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0'],
+  // The games, one picture each: a race flag, a balloon, an orb on its stand,
+  // a factory, an arched bridge and a balance.
+  flag: ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'],
+  balloon: ['M12 16c3.3 0 6-3.1 6-7a6 6 0 0 0-12 0c0 3.9 2.7 7 6 7z', 'M11 16l-1 2h4l-1-2z', 'M12 18c0 2-2 2-1 4', 'M9 7.5a3.5 3.5 0 0 1 2-2'],
+  orb: ['M19 11a7 7 0 1 0-14 0a7 7 0 1 0 14 0', 'M8.5 9.5a4 4 0 0 1 2.5-3', 'M7 21h10', 'M9 17.2L8 21', 'M15 17.2l1 3.8'],
+  factory: [
+    'M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z',
+    'M17 18h1',
+    'M12 18h1',
+    'M7 18h1',
+  ],
+  bridge: ['M2 8h20v12h-3v-2a7 7 0 0 0-14 0v2H2z', 'M2 12h20', 'M7 8v4', 'M12 8v4', 'M17 8v4'],
+  balance: [
+    'M16 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z',
+    'M2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z',
+    'M7 21h10',
+    'M12 3v18',
+    'M3 7h2c2 0 5-1 7-2c2 1 5 2 7 2h2',
+  ],
 } as const;
 export type ToolIcon = keyof typeof ICONS;
 
 /** plain: on the strip's tint; on: a tool that is on; accent: a button that leaves. */
 export type ToolLook = 'plain' | 'on' | 'accent';
-const PAPER = '#fbe4d7';
-const LINE = '#f0b796';
-const FOLD = '#f5c3a6';
-const LOOKS: Record<ToolLook, { bg: string; ink: string }> = {
-  plain: { bg: '', ink: '#e8672b' },
-  on: { bg: '#f6c4a7', ink: '#c94f17' },
-  accent: { bg: '#e8672b', ink: '#ffffff' },
+/**
+ * peach: Fold Town's tools. home: the desk menu, in the home page's colours:
+ * cream paper, blue icons, teal for what is on, coral for HOME.
+ */
+export type ToolTheme = 'peach' | 'home';
+interface Palette {
+  paper: string;
+  line: string;
+  fold: string;
+  title: string;
+  looks: Record<ToolLook, { bg: string; ink: string }>;
+}
+const PALETTES: Record<ToolTheme, Palette> = {
+  peach: {
+    paper: '#fbe4d7',
+    line: '#f0b796',
+    fold: '#f5c3a6',
+    title: '#c94f17',
+    looks: {
+      plain: { bg: '', ink: '#e8672b' },
+      on: { bg: '#f6c4a7', ink: '#c94f17' },
+      accent: { bg: '#e8672b', ink: '#ffffff' },
+    },
+  },
+  home: {
+    paper: '#fff8ec',
+    line: '#e6d5b8',
+    fold: '#efe1c8',
+    title: '#3a3f4b',
+    looks: {
+      plain: { bg: '', ink: '#3469c4' },
+      on: { bg: '#3fb6a0', ink: '#fff8ec' },
+      accent: { bg: '#f2716b', ink: '#ffffff' },
+    },
+  },
 };
+const { paper: PAPER, fold: FOLD } = PALETTES.peach;
 const FONT = '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif';
 /** Canvas pixels per metre. */
 const PX = 5120;
@@ -94,6 +142,8 @@ export interface ToolOptions {
   wordH?: number;
   /** Not a button but a heading: no icon, its lines larger and centred in the cell. */
   title?: boolean;
+  /** Its colours; peach unless given. */
+  theme?: ToolTheme;
 }
 
 /** A toolbar cell `w` by `h` metres, facing +Z; `set` draws it again with another icon, look or word. */
@@ -129,11 +179,12 @@ export class ToolButton {
   private paint(): void {
     const c = this.canvas.getContext('2d')!;
     const { width: W, height: H } = this.canvas;
-    const s = LOOKS[this.look];
+    const p = PALETTES[this.opts.theme ?? 'peach'];
+    const s = p.looks[this.look];
     const hair = Math.max(1.5, W * 0.008);
     c.clearRect(0, 0, W, H);
     if (this.opts.alone) {
-      c.fillStyle = PAPER;
+      c.fillStyle = p.paper;
       c.fillRect(0, 0, W, H);
     }
     if (s.bg) {
@@ -142,17 +193,17 @@ export class ToolButton {
     }
     if (this.opts.alone) {
       c.lineWidth = hair;
-      c.strokeStyle = LINE;
+      c.strokeStyle = p.line;
       c.strokeRect(hair / 2, hair / 2, W - hair, H - hair);
     }
     if (this.opts.divider) {
-      c.fillStyle = LINE;
+      c.fillStyle = p.line;
       c.fillRect(W - hair, H * 0.1, hair, H * 0.8);
     }
     // A word with a line break is two lines under a smaller icon: a caption over its value.
     const lines = this.word === '' ? [] : this.word.split('\n');
     if (this.opts.title) {
-      this.heading(c, lines, W, H);
+      this.heading(c, lines, W, H, p.title);
       return;
     }
     const two = lines.length > 1;
@@ -192,13 +243,13 @@ export class ToolButton {
     this.texture.needsUpdate = true;
   }
 
-  private heading(c: CanvasRenderingContext2D, lines: string[], W: number, H: number): void {
+  private heading(c: CanvasRenderingContext2D, lines: string[], W: number, H: number, ink: string): void {
     const px = (this.opts.wordH ? this.opts.wordH * PX : H * 0.13) * 1.35;
     c.font = `700 ${px}px ${FONT}`;
     const wide = Math.max(...lines.map((l) => c.measureText(l).width));
     const fit = Math.min(1, (W * 0.86) / wide);
     c.font = `700 ${px * fit}px ${FONT}`;
-    c.fillStyle = LOOKS.on.ink;
+    c.fillStyle = ink;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     const step = px * fit * 1.2;
@@ -208,7 +259,8 @@ export class ToolButton {
 }
 
 /** The square paper strip a row of cells lies on, its right end's top corner folded over by `fold` metres. */
-export function toolTray(w: number, h: number, fold: number): Mesh {
+export function toolTray(w: number, h: number, fold: number, theme: ToolTheme = 'peach'): Mesh {
+  const p = PALETTES[theme];
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * PX);
   canvas.height = Math.round(h * PX);
@@ -216,7 +268,7 @@ export function toolTray(w: number, h: number, fold: number): Mesh {
   const W = canvas.width;
   const H = canvas.height;
   const f = fold * PX;
-  c.fillStyle = PAPER;
+  c.fillStyle = p.paper;
   c.beginPath();
   c.moveTo(0, 0);
   c.lineTo(W - f, 0);
@@ -226,7 +278,7 @@ export function toolTray(w: number, h: number, fold: number): Mesh {
   c.closePath();
   c.fill();
   // The folded corner, lying on the strip.
-  c.fillStyle = FOLD;
+  c.fillStyle = p.fold;
   c.beginPath();
   c.moveTo(W - f, 0);
   c.lineTo(W, f);

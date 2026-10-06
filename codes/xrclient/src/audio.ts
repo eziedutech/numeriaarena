@@ -1,11 +1,11 @@
 import { musicOn, onSettings, soundOn } from './settings.js';
 
 /**
- * Every sound of the game, made here with Web Audio, no sound files: paper
+ * Every sound of the game, made here with Web Audio: paper
  * (taps, folds, a soft thud) from filtered noise, a soft marimba and bell
  * from a few sine partials, a paper "boing" for a wrong answer, a balloon
- * pop, clock ticks, a small fanfare, and quiet marimba music made up as it
- * plays. One module for the desk in XR, the browser game, the home page,
+ * pop, clock ticks, a small fanfare, and the background music, the one
+ * sound file. One module for the desk in XR, the browser game, the home page,
  * the smartboard and Fold Town.
  *
  * The browser lets sound start only after the player has touched the page,
@@ -357,66 +357,66 @@ function boing(dest: AudioNode, t: number, peak: number): void {
 // ------------------------------------------------------------ music
 
 /**
- * Quiet marimba music, made up as it plays: four chords round and round
- * (C, A minor, F, G), a low note on the first and third beat of a bar, and
- * the chord's notes picked now and then on the eighths, with rests between
- * so it stays in the background. The low notes stay above 170 Hz, which
- * laptop and headset speakers still play. Notes are planned a little ahead
- * on a timer, not on the frame loop.
+ * The background music: "Gone Fishin'" by memoraphile (CC0), one short
+ * piece played round and round. It is fetched and decoded once the
+ * AudioContext opens, and the loop skips the silence at either end of the
+ * file so it goes round without a gap.
  */
-const BEAT_S = 60 / 72;
-const CHORDS = [
-  [261.63, 329.63, 392.0, 523.25, 659.25],
-  [220.0, 261.63, 329.63, 440.0, 523.25],
-  [174.61, 220.0, 261.63, 349.23, 440.0],
-  [196.0, 246.94, 293.66, 392.0, 493.88],
-];
-const AHEAD_S = 0.4;
-let musicTimer = 0;
-/** The next eighth note to plan, and when it sounds. */
-let step = 0;
-let stepAt = 0;
-let lastNote = -1;
+const MUSIC_URL = `${import.meta.env.BASE_URL}audio/gone-fishin.mp3`;
+let track: AudioBuffer | null = null;
+let loading = false;
+let playing: AudioBufferSourceNode | null = null;
+let stopTimer = 0;
+
+function loadMusic(c: AudioContext): void {
+  if (loading) return;
+  loading = true;
+  fetch(MUSIC_URL)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`music ${r.status}`))))
+    .then((b) => c.decodeAudioData(b))
+    .then((b) => {
+      track = b;
+      syncMusic();
+    })
+    .catch((err) => console.warn('[audio] music not loaded', err));
+}
+
+/** The first and last moments of the track that are not silence, in seconds. */
+function heard(b: AudioBuffer): [number, number] {
+  const d = b.getChannelData(0);
+  let a = 0;
+  let z = d.length - 1;
+  while (a < z && Math.abs(d[a]) < 1e-3) a++;
+  while (z > a && Math.abs(d[z]) < 1e-3) z--;
+  return [a / b.sampleRate, (z + 1) / b.sampleRate];
+}
 
 function syncMusic(): void {
   if (!ctx) return;
   const on = musicOn();
   musicBus.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, ctx.currentTime, 0.4);
-  if (on && !musicTimer) {
+  if (on) {
+    window.clearTimeout(stopTimer);
+    stopTimer = 0;
+    if (!track) return loadMusic(ctx);
+    if (playing) return;
     console.info('[audio] music on');
-    stepAt = ctx.currentTime + 0.3;
-    musicTimer = window.setInterval(planMusic, 120);
-  } else if (!on && musicTimer) {
-    // Once faded out it stops planning notes.
-    window.setTimeout(() => {
-      if (!musicOn() && musicTimer) {
-        window.clearInterval(musicTimer);
-        musicTimer = 0;
-      }
+    const [from, to] = heard(track);
+    playing = ctx.createBufferSource();
+    playing.buffer = track;
+    playing.loop = true;
+    playing.loopStart = from;
+    playing.loopEnd = to;
+    playing.connect(musicBus);
+    playing.start(ctx.currentTime + 0.05, from);
+  } else if (playing && !stopTimer) {
+    // Once faded out it stops.
+    stopTimer = window.setTimeout(() => {
+      stopTimer = 0;
+      if (musicOn() || !playing) return;
+      playing.stop();
+      playing.disconnect();
+      playing = null;
     }, 2000);
-  }
-}
-
-function planMusic(): void {
-  const c = ctx;
-  if (!c || c.state !== 'running') return;
-  // Back from a pause: start again from now instead of catching up.
-  if (stepAt < c.currentTime) stepAt = c.currentTime + 0.05;
-  while (stepAt < c.currentTime + AHEAD_S) {
-    const bar = Math.floor(step / 8);
-    const chord = CHORDS[Math.floor(bar / 2) % CHORDS.length];
-    const inBar = step % 8;
-    if (inBar === 0) marimba(musicBus, chord[0], stepAt, 0.5);
-    if (inBar === 4) marimba(musicBus, chord[1], stepAt, 0.38);
-    // A melody note on about two eighths in five, never the same twice running.
-    const odds = inBar % 2 === 0 ? 0.55 : 0.28;
-    if (Math.random() < odds) {
-      let n = 1 + Math.floor(Math.random() * (chord.length - 1));
-      if (n === lastNote) n = n === chord.length - 1 ? 1 : n + 1;
-      lastNote = n;
-      marimba(musicBus, chord[n], stepAt, 0.32 + Math.random() * 0.12);
-    }
-    step = (step + 1) % (8 * 2 * CHORDS.length);
-    stepAt += BEAT_S / 2;
   }
 }
