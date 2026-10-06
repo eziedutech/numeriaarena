@@ -58,7 +58,8 @@ export type TownChoice =
   | 'town_zoom_in'
   | 'town_zoom_out'
   | 'town_pan'
-  | 'town_shelf_big';
+  | 'town_shelf_big'
+  | 'town_view_reset';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -141,7 +142,7 @@ const TAB_TEXT_TWO = 0.016;
 const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
-/** The shelf's enlarge button, past its top right corner; pressed, the shelf stands twice as big, its left edge where it was. */
+/** The shelf's enlarge button, past its top right corner; pressed, the shelf stands twice as big about its middle, its left edge where it was. */
 const BIG_AT = new Vector3(SHELF_W / 2 + 0.032, SHELF_H - 0.026, -0.03);
 const BIG_W = 0.044;
 const UP = new Vector3(0, 1, 0);
@@ -598,6 +599,17 @@ export class TownDesk {
       console.info(`[town] zoom ${this.zoom}x`);
       return;
     }
+    if (choice === 'town_view_reset') {
+      this.zoom = 1;
+      this.setPan(false);
+      const r = townRulesNow();
+      this.view = { x: r.cols / 2, z: r.rows / 2 };
+      this.refreshView();
+      this.setShelfBig(false);
+      this.say(this.t.xr.resetDone);
+      console.info('[town] land and shelf back as they were');
+      return;
+    }
     if (choice === 'town_shelf_big') {
       this.setShelfBig(!this.shelfBig);
       return;
@@ -700,6 +712,7 @@ export class TownDesk {
       ['town_zoom_out', '−', this.t.xr.zoomOut],
       ['town_zoom_in', '+', this.t.xr.zoomIn],
       ['town_pan', '✋', this.t.xr.pan],
+      ['town_view_reset', '1x', this.t.xr.reset],
     ];
     icons.forEach(([choice, icon, word], i) => {
       const b = new Mesh(viewGeo, choice === 'town_pan' ? viewMats.off : viewMats.zoom);
@@ -716,6 +729,17 @@ export class TownDesk {
       row.add(b);
     });
     return row;
+  }
+
+  /** A pressed icon sinks a moment and comes back, so one shot shows it was taken. */
+  private dip(o: Object3D): void {
+    if (o.userData.dipping) return;
+    o.userData.dipping = true;
+    o.translateZ(-0.004);
+    setTimeout(() => {
+      o.translateZ(0.004);
+      o.userData.dipping = false;
+    }, 120);
   }
 
   /** The enlarge button: a square with its four corners drawn on it. */
@@ -742,14 +766,14 @@ export class TownDesk {
     return b;
   }
 
-  /** The shelf twice as big or back as it was, grown to the right and up so it stays clear of the land. */
+  /** The shelf twice as big or back as it was, grown about its middle and to the right so it stays clear of the land and no higher than it must. */
   private setShelfBig(big: boolean): void {
     const g = this.shelf?.object3D;
     if (!g) return;
     this.shelfBig = big;
     const k = big ? 2 : 1;
     g.scale.setScalar(k);
-    g.position.copy(SHELF_AT).add(new Vector3(((k - 1) * SHELF_W) / 2, 0, 0).applyAxisAngle(UP, SHELF_TURN));
+    g.position.copy(SHELF_AT).add(new Vector3(((k - 1) * SHELF_W) / 2, (-(k - 1) * SHELF_H) / 2, 0).applyAxisAngle(UP, SHELF_TURN));
     if (this.bigButton) this.bigButton.material = big ? viewMats.on : viewMats.off;
     console.info(`[town] shelf ${big ? 'twice as big' : 'as it was'}`);
   }
@@ -860,7 +884,11 @@ export class TownDesk {
     const sides = this.host.emulated() && !this.host.controllers() ? [side, ...SIDES.filter((s) => s !== side)] : [side];
     for (const from of sides) {
       if (this.panMode) {
-        for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) if (o === this.holder?.object3D) return this.startPan(from, grip);
+        // A piece's own buttons still take a press with the hand tool on.
+        for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) {
+          if (o.userData.townOpt) break;
+          if (o === this.holder?.object3D) return this.startPan(from, grip);
+        }
       }
       for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) {
         const tab = o.userData.townTab as string | undefined;
@@ -889,6 +917,7 @@ export class TownDesk {
         }
         const opt = o.userData.townOpt as TownChoice | undefined;
         if (opt) {
+          this.dip(o);
           this.press(opt);
           return true;
         }

@@ -60,6 +60,8 @@ const Games = {
   TownPan: 'town_pan',
   /** The shelf's enlarge button: the shelf twice as big, or back. */
   TownShelfBig: 'town_shelf_big',
+  /** Back to zoom 1x, the land in the middle and the shelf as it was. */
+  TownViewReset: 'town_view_reset',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */
