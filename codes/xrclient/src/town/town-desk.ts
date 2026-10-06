@@ -15,7 +15,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import { Label } from '../art/label.js';
-import { type PanelLine, textPanel, ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
+import { type PanelLine, softShadow, textPanel, ToolButton, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
 import { getLang, getRoom, ROOMS, setRoom } from '../settings.js';
 import { sfx } from '../audio.js';
@@ -127,9 +127,14 @@ const PAPER = 0.25;
 /** The toolbar past the land's front edge on its right: zoom, the hand, the shelf shown or hidden, the room and EXIT. */
 const TOOL_W = 0.056;
 const TOOL_H = 0.064;
-/** The strip's end past EXIT, its top corner folded over. */
-const TOOL_FOLD = 0.026;
+/** The space between two chips. */
+const TOOL_GAP = 0.006;
 const TOOL_LEAN = -1;
+/** The chips' icon line, bolder than a web icon's as the desk menu's are. */
+const TOOL_STROKE = 1.9;
+/** Each chip's soft shadow: how far it spreads and where it falls, down and to the right as the home page's. */
+const TOOL_BLUR = 0.007;
+const TOOL_SHADOW = new Vector3(0.0018, -0.0035, -0.001);
 
 /**
  * The shelf stands on the right of the land and leans its face to the
@@ -742,25 +747,44 @@ export class TownDesk {
       ['town_room', 'room', T.roomName[getRoom()], 'plain'],
       ['town_done', 'exit', this.t.xr.done, 'accent'],
     ];
-    const w = tools.length * TOOL_W + TOOL_FOLD;
+    const w = this.rowW(tools.length);
     const row = new Group();
     row.name = 'town-view';
     row.position.set((r.cols / 2 + PAPER) * TILE - w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
     row.rotation.x = TOOL_LEAN;
-    row.add(toolTray(w, TOOL_H, TOOL_FOLD));
-    tools.forEach(([choice, icon, word, look], i) => {
-      // A thin line between the view's tools; EXIT's own colour parts it from them.
-      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { divider: i < tools.length - 2 });
-      b.mesh.name = `town-view-${choice}`;
-      b.mesh.userData.townOpt = choice;
-      b.mesh.position.set(-w / 2 + (i + 0.5) * TOOL_W, 0, 0.0015);
-      row.add(b.mesh);
+    this.chips(row, 'town-view', tools).forEach((b, i) => {
+      const choice = tools[i][0];
       if (choice === 'town_pan') this.panButton = b;
       if (choice === 'town_shelf_show') this.showButton = b;
       if (choice === 'town_shelf_big') this.bigButton = b;
       if (choice === 'town_room') this.roomButton = b;
     });
     return row;
+  }
+
+  /** A toolbar of `n` chips, end to end. */
+  private rowW(n: number): number {
+    return n * TOOL_W + (n - 1) * TOOL_GAP;
+  }
+
+  /**
+   * The tools as one line of separate paper chips in the desk menu's colours,
+   * each with its icon over its word and a soft shadow under it, centred on `row`.
+   */
+  private chips(row: Group, prefix: string, tools: [TownChoice, ToolIcon, string, ToolLook][]): ToolButton[] {
+    const w = this.rowW(tools.length);
+    return tools.map(([choice, icon, word, look], i) => {
+      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { alone: true, bare: true, theme: 'home', stroke: TOOL_STROKE });
+      b.mesh.name = `${prefix}-${choice}`;
+      b.mesh.userData.townOpt = choice;
+      b.mesh.position.set(-w / 2 + TOOL_W / 2 + i * (TOOL_W + TOOL_GAP), 0, 0.0015);
+      // The shadow rides on its chip, so it dips with it and a ray on it still finds the chip.
+      const shade = softShadow(TOOL_W, TOOL_H, TOOL_BLUR);
+      shade.position.copy(TOOL_SHADOW);
+      b.mesh.add(shade);
+      row.add(b.mesh);
+      return b;
+    });
   }
 
   /** A pressed icon shrinks a moment and comes back, so one shot shows it was taken. */
@@ -776,7 +800,7 @@ export class TownDesk {
   }
 
   /**
-   * The chosen piece's toolbar, the same strip as the view's, at the land's
+   * The chosen piece's toolbar, the same chips as the view's, at the land's
    * front left where a hand reaches it as easily: hidden until a piece is chosen.
    */
   private pieceButtons(): Group {
@@ -787,19 +811,13 @@ export class TownDesk {
       ['town_remove', 'trash', this.t.remove, 'plain'],
       ['town_card', 'check', this.t.xr.ok, 'accent'],
     ];
-    const w = tools.length * TOOL_W + TOOL_FOLD;
+    const w = this.rowW(tools.length);
     const row = new Group();
     row.name = 'town-piece';
     row.position.set(-(r.cols / 2 + PAPER) * TILE + w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
     row.rotation.x = TOOL_LEAN;
-    row.add(toolTray(w, TOOL_H, TOOL_FOLD));
-    tools.forEach(([choice, icon, word, look], i) => {
-      const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { divider: i < tools.length - 2 });
-      b.mesh.name = `town-piece-${choice}`;
-      b.mesh.userData.townOpt = choice;
-      b.mesh.position.set(-w / 2 + (i + 0.5) * TOOL_W, 0, 0.0015);
-      row.add(b.mesh);
-      if (choice === 'town_remove') this.removeButton = b;
+    this.chips(row, 'town-piece', tools).forEach((b, i) => {
+      if (tools[i][0] === 'town_remove') this.removeButton = b;
     });
     this.pieceName = new Label(' ', { height: 0.016 });
     this.pieceName.mesh.position.set(0, TOOL_H / 2 + 0.014, 0.0015);

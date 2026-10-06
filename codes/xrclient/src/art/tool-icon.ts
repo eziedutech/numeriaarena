@@ -297,36 +297,6 @@ export class ToolButton {
   }
 }
 
-/** The square paper strip a row of cells lies on, its right end's top corner folded over by `fold` metres. */
-export function toolTray(w: number, h: number, fold: number, theme: ToolTheme = 'peach'): Mesh {
-  const p = PALETTES[theme];
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * PX);
-  canvas.height = Math.round(h * PX);
-  const c = canvas.getContext('2d')!;
-  const W = canvas.width;
-  const H = canvas.height;
-  const f = fold * PX;
-  c.fillStyle = p.paper;
-  c.beginPath();
-  c.moveTo(0, 0);
-  c.lineTo(W - f, 0);
-  c.lineTo(W, f);
-  c.lineTo(W, H);
-  c.lineTo(0, H);
-  c.closePath();
-  c.fill();
-  // The folded corner, lying on the strip.
-  c.fillStyle = p.fold;
-  c.beginPath();
-  c.moveTo(W - f, 0);
-  c.lineTo(W, f);
-  c.lineTo(W - f, f);
-  c.closePath();
-  c.fill();
-  return plane(w, h, canvas, true).mesh;
-}
-
 /** A soft shadow's canvas pixels per metre: it is blurred, so few are needed. */
 const SHADOW_PX = 1500;
 
