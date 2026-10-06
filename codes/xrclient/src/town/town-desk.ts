@@ -2,6 +2,7 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -9,6 +10,7 @@ import {
   Plane,
   PlaneGeometry,
   Quaternion,
+  RingGeometry,
   Vector3,
   type Entity,
   type Material,
@@ -192,8 +194,16 @@ const optMats = {
 };
 const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
 const viewGeo = new BoxGeometry(VIEW_W, VIEW_W, 0.008);
+const faceGeo = new BoxGeometry(VIEW_W - 0.006, VIEW_W - 0.006, 0.002);
+const trayGeo = new BoxGeometry(1, 1, 0.004);
+/** The drawn icons: a magnifier's lens and a turning arrow with its head. */
+const lensGeo = new RingGeometry(0.0075, 0.0105, 32);
+const backGeo = new RingGeometry(0.0085, 0.0115, 32, 1, Math.PI * 0.55, Math.PI * 1.55);
+const headGeo = new CircleGeometry(0.0062, 3);
 const viewMats = {
   zoom: new MeshStandardMaterial({ color: 0xe8b64c, roughness: 1 }),
+  face: new MeshStandardMaterial({ color: 0xf7d77e, roughness: 1 }),
+  tray: new MeshStandardMaterial({ color: 0xf4efe4, roughness: 1 }),
   off: new MeshStandardMaterial({ color: 0xc9ccd3, roughness: 1 }),
   on: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
 };
@@ -708,27 +718,69 @@ export class TownDesk {
     row.name = 'town-view';
     row.position.set((r.cols / 2) * TILE - 0.09, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.045);
     row.rotation.x = VIEW_LEAN;
-    const icons: [TownChoice, string, string][] = [
-      ['town_zoom_out', '−', this.t.xr.zoomOut],
-      ['town_zoom_in', '+', this.t.xr.zoomIn],
-      ['town_pan', '✋', this.t.xr.pan],
-      ['town_view_reset', '1x', this.t.xr.reset],
+    const icons: [TownChoice, string][] = [
+      ['town_zoom_out', this.t.xr.zoomOut],
+      ['town_zoom_in', this.t.xr.zoomIn],
+      ['town_pan', this.t.xr.pan],
+      ['town_view_reset', this.t.xr.reset],
     ];
-    icons.forEach(([choice, icon, word], i) => {
+    const step = VIEW_W + 0.012;
+    // A paper tray under the row, so the buttons read as one panel.
+    const tray = new Mesh(trayGeo, viewMats.tray);
+    tray.scale.set(icons.length * step + 0.008, VIEW_W + 0.034, 1);
+    tray.position.set(0, -0.0085, -0.006);
+    row.add(tray);
+    icons.forEach(([choice, word], i) => {
       const b = new Mesh(viewGeo, choice === 'town_pan' ? viewMats.off : viewMats.zoom);
       b.name = `town-view-${choice}`;
       b.userData.townOpt = choice;
-      b.position.x = (i - (icons.length - 1) / 2) * (VIEW_W + 0.012);
-      const l = new Label(icon, { height: 0.032, card: false });
-      l.mesh.position.z = 0.0045;
-      b.add(l.mesh);
-      const w = new Label(word, { height: 0.013 });
-      w.mesh.position.set(0, -VIEW_W / 2 - 0.011, 0.0045);
+      b.position.x = (i - (icons.length - 1) / 2) * step;
+      // A lighter face on the body, a little in from its edges.
+      const face = new Mesh(faceGeo, choice === 'town_pan' ? viewMats.tray : viewMats.face);
+      face.position.z = 0.0045;
+      b.add(face);
+      const icon = this.viewIcon(choice);
+      icon.position.z = 0.0058;
+      b.add(icon);
+      const w = new Label(word, { height: 0.012, card: false });
+      w.mesh.position.set(0, -VIEW_W / 2 - 0.009, 0.0045);
       b.add(w.mesh);
       if (choice === 'town_pan') this.panButton = b;
       row.add(b);
     });
     return row;
+  }
+
+  /** Each view button's picture: a magnifier with minus or plus, a hand, or an arrow turning back. */
+  private viewIcon(choice: TownChoice): Object3D {
+    const g = new Group();
+    const bar = (w: number, h: number, x: number, y: number, turn = 0): void => {
+      const m = new Mesh(barGeo, inkMat);
+      m.scale.set(w, h, 1);
+      m.position.set(x, y, 0);
+      m.rotation.z = turn;
+      g.add(m);
+    };
+    if (choice === 'town_zoom_in' || choice === 'town_zoom_out') {
+      const lens = new Mesh(lensGeo, inkMat);
+      lens.position.set(-0.003, 0.003, 0);
+      g.add(lens);
+      bar(0.0105, 0.0034, 0.0083, -0.0083, -Math.PI / 4);
+      bar(0.009, 0.0024, -0.003, 0.003);
+      if (choice === 'town_zoom_in') bar(0.0024, 0.009, -0.003, 0.003);
+    } else if (choice === 'town_view_reset') {
+      g.add(new Mesh(backGeo, inkMat));
+      const head = new Mesh(headGeo, inkMat);
+      // At the arrow's open end, pointing on round the circle.
+      const a = Math.PI * 0.55;
+      head.position.set(Math.cos(a) * 0.01, Math.sin(a) * 0.01, 0);
+      head.rotation.z = a - Math.PI / 2;
+      g.add(head);
+    } else {
+      const l = new Label('✋', { height: 0.03, card: false });
+      g.add(l.mesh);
+    }
+    return g;
   }
 
   /** A pressed icon sinks a moment and comes back, so one shot shows it was taken. */

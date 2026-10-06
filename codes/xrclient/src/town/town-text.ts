@@ -103,8 +103,8 @@ const EN = {
   xr: {
     hint: 'Hold the grip or pinch on a shelf piece, let go on the land.',
     done: 'EXIT',
-    zoomIn: 'ZOOM',
-    zoomOut: 'ZOOM',
+    zoomIn: 'ZOOM IN',
+    zoomOut: 'ZOOM OUT',
     pan: 'MOVE',
     reset: 'RESET',
     resetDone: 'The land and the shelf are back as they were.',
@@ -221,8 +221,8 @@ const ID: typeof EN = {
   xr: {
     hint: 'Tahan grip atau cubit potongan di rak, lepas di atas lahan.',
     done: 'KELUAR',
-    zoomIn: 'ZOOM',
-    zoomOut: 'ZOOM',
+    zoomIn: 'PERBESAR',
+    zoomOut: 'PERKECIL',
     pan: 'GESER',
     reset: 'ULANG',
     resetDone: 'Lahan dan rak kembali seperti semula.',
