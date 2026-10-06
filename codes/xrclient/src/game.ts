@@ -195,8 +195,9 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * The desk menu, drawn as the town's toolbar is: the games are one paper
  * block of flat cells, three across and two deep, each an envelope in its
  * game's colour over its name, leaning back in front of the book; the
- * settings and HOME are one toolbar strip beside it on the right, side by
- * side so neither hides the other; the best score stands over the strip,
+ * settings and HOME are one line of paper chips beside it on the right, as
+ * the home page's header has them, each a thin card leaning back as the
+ * block does; the best score stands over them,
  * the Fold Town sticker beside the book, and a paper hand shows a
  * first-time player what to do.
  */
@@ -205,9 +206,17 @@ const GAME_W = 0.058;
 const GAME_H = 0.042;
 const GAME_WORD_H = 0.0104;
 const GAMES_AT = new Vector3(-0.177, 0.04, 0.11);
-const SET_W = 0.045;
-const SET_H = 0.045;
-const SETTINGS_AT = new Vector3(0.125, 0.04, 0.13);
+/** A settings chip: square, the language one wider for both languages; CHIP_D thick, CHIP_GAP apart. */
+const CHIP_W = 0.042;
+const CHIP_H = 0.042;
+const CHIP_LANG_W = 0.1;
+const CHIP_D = 0.004;
+const CHIP_GAP = 0.007;
+/** The home page header's line, on the icon's 24 unit grid. */
+const CHIP_STROKE = 2.2;
+const CHIP_EDGE = 0xe6d5b8;
+/** The middle of the chips' line, its front edge level with the games block's. */
+const SETTINGS_AT = new Vector3(0.107, 0.029, 0.127);
 const MENU_FOLD = 0.02;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
@@ -236,10 +245,10 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.125, 0.102, 0.086);
+const BEST_AT = new Vector3(0.107, 0.08, 0.09);
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
+const TOWN_AT = new Vector3(-0.34, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
@@ -296,6 +305,16 @@ const LINE_Z = -0.245;
 /** Space between two animals in the line. */
 const LINE_SPACE = 0.014;
 const LINE_SCALE = 0.85;
+/**
+ * On the desk menu the book is LOBBY_BOOK times its size, grown from its
+ * front edge, and the animals LOBBY_LINE_SCALE behind it at LOBBY_LINE_Z;
+ * a game starting eases them back to the size its layout is made for.
+ */
+const LOBBY_BOOK = 1.3;
+const LOBBY_LINE_SCALE = 1.2;
+const LOBBY_LINE_Z = -0.35;
+/** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
+const BOOK_MID_Z = -0.12;
 const LINE_PAPER = 0xfbf6ec;
 /** Where an animal goes after its turn: off the back right of the table. */
 const EXIT = new Vector3(0.38, 0.023, LINE_Z);
@@ -1099,6 +1118,7 @@ export class GameSystem extends createSystem({
     this.menuShownAt = performance.now();
     this.menuOnly = only;
     this.syncLine(this.lineFrom);
+    this.sizeLobby(true);
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
     if (!this.title && !this.titleAsked) {
@@ -1131,14 +1151,15 @@ export class GameSystem extends createSystem({
     // The room is the headset's only: in the browser its place stays empty.
     const tip = (caption: string, value: string) => `${caption}: ${value}`;
     const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
-    this.menuStrip('menu-settings', SETTINGS_AT, 3, 2, SET_W, SET_H, [
+    const settings: (MenuCell | null)[] = [
       ['lang', 'language', tip(T.langCaption, getLang().toUpperCase()), 'plain'],
-      ['bigtext', 'bigText', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
+      ['bigtext', 'access', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
       browser ? null : ['room', 'room', tip(T.roomCaption, T.roomName[getRoom()]), getRoom() === 'here' ? 'plain' : 'on'],
-      ['sound', soundOn() ? 'sound' : 'soundOff', tip(T.soundCaption, T.onOff(soundOn())), soundOn() ? 'on' : 'plain'],
-      ['music', 'music', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'on' : 'plain'],
+      ['sound', soundOn() ? 'sound' : 'soundOff', tip(T.soundCaption, T.onOff(soundOn())), soundOn() ? 'plain' : 'off'],
+      ['music', musicOn() ? 'music' : 'musicOff', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'plain' : 'off'],
       ['home', 'exit', T.home, 'accent'],
-    ]);
+    ];
+    this.menuChips(settings.filter((c): c is MenuCell => c !== null));
     this.addTownSticker();
     this.showHint();
     this.showBest();
@@ -1344,6 +1365,73 @@ export class GameSystem extends createSystem({
   }
 
   /** Touching an animal in the line: it hops and its name shows above it. */
+  /**
+   * The settings and HOME as the home page's header has them: one line of
+   * separate paper chips centred on SETTINGS_AT, each a thin card with its
+   * edge showing, leaning back as the games block does. Each is a button
+   * named `menu-<choice>`, its name shown over it while pointed at.
+   */
+  private menuChips(cells: MenuCell[]): void {
+    const widths = cells.map(([choice]) => (choice === 'lang' ? CHIP_LANG_W : CHIP_W));
+    const total = widths.reduce((a, w) => a + w, 0) + CHIP_GAP * (cells.length - 1);
+    let x = SETTINGS_AT.x - total / 2;
+    cells.forEach(([choice, icon, word, look], i) => {
+      const w = widths[i];
+      const segments = choice === 'lang' ? { labels: ['EN', 'ID'], on: getLang() === 'en' ? 0 : 1 } : undefined;
+      const b = new ToolButton(icon, '', w, CHIP_H, look, { alone: true, theme: 'home', stroke: CHIP_STROKE, segments });
+      b.mesh.position.z = 0.0005;
+      // The card's thickness, its edge a shade darker than its face.
+      const slab = new Mesh(new BoxGeometry(w, CHIP_H, CHIP_D), new MeshBasicMaterial({ color: CHIP_EDGE, toneMapped: false }));
+      slab.position.z = -CHIP_D / 2;
+      const cell = new Group();
+      cell.name = `menu-${choice}`;
+      cell.userData.tip = word;
+      cell.userData.tipH = CHIP_H;
+      cell.add(slab, b.mesh);
+      cell.position.set(x + w / 2, SETTINGS_AT.y, SETTINGS_AT.z);
+      cell.rotation.x = MENU_LEAN;
+      x += w + CHIP_GAP;
+      const e = this.add(cell);
+      e.addComponent(MenuButton, { game: choice });
+      e.addComponent(PokeInteractable);
+      e.addComponent(RayInteractable);
+    });
+  }
+
+  /** The book on the desk (see desk.ts). */
+  private book(): Object3D | undefined {
+    return this.deskEntity()?.object3D?.getObjectByName('desk-book');
+  }
+
+  /** Whether the book and the line are at their desk menu size. */
+  private lobby = false;
+
+  /**
+   * Grows the book and the line of animals for the desk menu, or eases them
+   * back for a game; the line keeps its order and only moves.
+   */
+  private sizeLobby(on: boolean): void {
+    if (on === this.lobby) return;
+    this.lobby = on;
+    const book = this.book();
+    if (book) {
+      const s = on ? LOBBY_BOOK : 1;
+      this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
+    }
+    const places = this.linePlaces(this.line.map((a) => a.width));
+    this.line.forEach((a, k) => {
+      const obj = a.entity.object3D;
+      if (!obj) return;
+      for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === obj) this.tweens.splice(i, 1);
+      this.tween(obj, places[k], 0.5, 0.008, this.lineScale());
+    });
+  }
+
+  /** The line's animals' size: larger on the desk menu. */
+  private lineScale(): number {
+    return this.lobby ? LOBBY_LINE_SCALE : LINE_SCALE;
+  }
+
   private greet(e: Entity): void {
     if (this.phase !== 'menu') return;
     const a = this.line.find((l) => l.entity === e);
@@ -1351,7 +1439,7 @@ export class GameSystem extends createSystem({
     if (!a || !obj || this.tweens.some((t) => t.obj === obj)) return;
     console.info(`[menu] hello ${a.species}`);
     const at = obj.position.clone();
-    this.tween(obj, at, 0.45, 0.03, LINE_SCALE);
+    this.tween(obj, at, 0.45, 0.03, this.lineScale());
     this.pop(T.animal[a.species] ?? a.species.toUpperCase(), INK, undefined, at.clone().add(new Vector3(0, 0.1, 0.02)), 0.022);
   }
 
@@ -2218,11 +2306,13 @@ export class GameSystem extends createSystem({
    * each one beside the next with a small gap, the whole line centred.
    */
   private linePlaces(widths: number[]): Vector3[] {
-    const total = widths.reduce((sum, w) => sum + w, 0) + LINE_SPACE * (widths.length - 1);
+    // The widths are at size 1; the line is spaced at its size now.
+    const s = this.lineScale();
+    const total = widths.reduce((sum, w) => sum + w * s, 0) + LINE_SPACE * s * (widths.length - 1);
     let right = total / 2;
     return widths.map((w) => {
-      const at = new Vector3(right - w / 2, 0.023, LINE_Z);
-      right -= w + LINE_SPACE;
+      const at = new Vector3(right - (w * s) / 2, 0.023, this.lobby ? LOBBY_LINE_Z : LINE_Z);
+      right -= w * s + LINE_SPACE * s;
       return at;
     });
   }
@@ -2247,9 +2337,9 @@ export class GameSystem extends createSystem({
     for (const c of fig.root.getObjectByName('flag_anchor')?.children ?? []) c.visible = false;
     fig.root.name = `line-${species}`;
     fig.root.rotation.y = 0;
-    fig.root.scale.setScalar(LINE_SCALE);
+    fig.root.scale.setScalar(this.lineScale());
     fig.root.updateMatrixWorld(true);
-    const size = new Box3().setFromObject(fig.root).getSize(new Vector3());
+    const size = new Box3().setFromObject(fig.root).getSize(new Vector3()).divideScalar(this.lineScale());
     const entity = this.add(fig.root);
     entity.addComponent(LineTap);
     entity.addComponent(PokeInteractable);
@@ -2263,6 +2353,7 @@ export class GameSystem extends createSystem({
    * start the creature.
    */
   private callFromLine(offerId: number): Vector3 {
+    this.sizeLobby(false);
     this.syncLine(offerId);
     const front = this.line.shift()!;
     const from = front.entity.object3D!.position.clone();
@@ -2272,10 +2363,10 @@ export class GameSystem extends createSystem({
     this.line.push(joiner);
     const places = this.linePlaces(this.line.map((a) => a.width));
     const obj = joiner.entity.object3D!;
-    obj.position.copy(places[LINE_SIZE - 1]).add(new Vector3(-joiner.width, 0, 0));
+    obj.position.copy(places[LINE_SIZE - 1]).add(new Vector3(-joiner.width * this.lineScale(), 0, 0));
     obj.scale.setScalar(0.001);
     this.line.forEach((a, k) => {
-      if (a.entity.object3D) this.tween(a.entity.object3D, places[k], 0.6, 0.012, LINE_SCALE);
+      if (a.entity.object3D) this.tween(a.entity.object3D, places[k], 0.6, 0.012, this.lineScale());
     });
     this.lineFrom = offerId + 1;
     return from;

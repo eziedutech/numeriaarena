@@ -46,6 +46,9 @@ const ICONS = {
   sound: ['M11 5L6 9H2v6h4l5 4z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14'],
   soundOff: ['M11 5L6 9H2v6h4l5 4z', 'M22 9l-6 6', 'M16 9l6 6'],
   music: ['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0'],
+  musicOff: ['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M3 3l18 18'],
+  // The home page's accessibility figure, filled, not stroked.
+  access: ['M15.2 5a3.2 3.2 0 1 0-6.4 0a3.2 3.2 0 1 0 6.4 0', 'M3 9h18v3h-6v10h-3v-6h0v6H9V12H3z'],
   // The games, one picture each: a race flag, a balloon, an orb on its stand,
   // a factory, an arched bridge and a balance.
   flag: ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'],
@@ -67,9 +70,11 @@ const ICONS = {
   ],
 } as const;
 export type ToolIcon = keyof typeof ICONS;
+/** Icons drawn as filled shapes. */
+const FILLED = new Set<ToolIcon>(['access']);
 
-/** plain: on the strip's tint; on: a tool that is on; accent: a button that leaves. */
-export type ToolLook = 'plain' | 'on' | 'accent';
+/** plain: on the strip's tint; on: a tool that is on; off: a sound that is off, faded; accent: a button that leaves. */
+export type ToolLook = 'plain' | 'on' | 'off' | 'accent';
 /**
  * peach: Fold Town's tools. home: the desk menu, in the home page's colours:
  * cream paper, blue icons, teal for what is on, coral for HOME.
@@ -91,6 +96,7 @@ const PALETTES: Record<ToolTheme, Palette> = {
     looks: {
       plain: { bg: '', ink: '#e8672b' },
       on: { bg: '#f6c4a7', ink: '#c94f17' },
+      off: { bg: '', ink: '#f0b796' },
       accent: { bg: '#e8672b', ink: '#ffffff' },
     },
   },
@@ -102,6 +108,7 @@ const PALETTES: Record<ToolTheme, Palette> = {
     looks: {
       plain: { bg: '', ink: '#3469c4' },
       on: { bg: '#3fb6a0', ink: '#fff8ec' },
+      off: { bg: '', ink: '#a3b9e0' },
       accent: { bg: '#f2716b', ink: '#ffffff' },
     },
   },
@@ -144,6 +151,10 @@ export interface ToolOptions {
   title?: boolean;
   /** Its colours; peach unless given. */
   theme?: ToolTheme;
+  /** The icon's line on its 24 unit grid, thin unless given. */
+  stroke?: number;
+  /** Choices written beside the icon, the one at `on` filled in blue, as the home page's language chip. */
+  segments?: { labels: string[]; on: number };
 }
 
 /** A toolbar cell `w` by `h` metres, facing +Z; `set` draws it again with another icon, look or word. */
@@ -207,11 +218,14 @@ export class ToolButton {
       return;
     }
     const two = lines.length > 1;
+    const seg = this.opts.segments;
     const size = two ? Math.min(W * 0.6, H * 0.44) : lines.length ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.65;
     const cy = two ? H * 0.31 : lines.length ? H * 0.4 : H / 2;
+    // With choices beside it the icon keeps to the left end, a square cell's width.
+    const cx = seg ? H / 2 : W / 2;
     const ink = this.opts.tint ?? s.ink;
     c.save();
-    c.translate(W / 2 - size / 2, cy - size / 2);
+    c.translate(cx - size / 2, cy - size / 2);
     c.scale(size / 24, size / 24);
     if (this.opts.tint) {
       c.fillStyle = this.opts.tint;
@@ -219,12 +233,16 @@ export class ToolButton {
       c.fill(new Path2D(ICONS[this.icon][0]));
       c.globalAlpha = 1;
     }
-    c.strokeStyle = ink;
-    c.lineWidth = this.opts.tint ? STROKE * 1.4 : STROKE;
+    c.strokeStyle = c.fillStyle = ink;
+    c.lineWidth = this.opts.stroke ?? (this.opts.tint ? STROKE * 1.4 : STROKE);
     c.lineCap = 'round';
     c.lineJoin = 'round';
-    for (const d of ICONS[this.icon]) c.stroke(new Path2D(d));
+    for (const d of ICONS[this.icon]) {
+      if (FILLED.has(this.icon)) c.fill(new Path2D(d));
+      else c.stroke(new Path2D(d));
+    }
     c.restore();
+    if (seg) this.segments(c, seg, W, H, p);
     lines.forEach((line, i) => {
       let px = this.opts.wordH ? this.opts.wordH * PX : H * (two ? 0.12 : 0.13);
       c.font = `700 ${px}px ${FONT}`;
@@ -241,6 +259,23 @@ export class ToolButton {
       c.fillText(line, W / 2, two ? H * (0.67 + 0.17 * i) : H * 0.82);
     });
     this.texture.needsUpdate = true;
+  }
+
+  private segments(c: CanvasRenderingContext2D, seg: { labels: string[]; on: number }, W: number, H: number, p: Palette): void {
+    const x0 = H * 0.92;
+    const sw = (W - x0 - H * 0.12) / seg.labels.length;
+    c.font = `700 ${H * 0.36}px ${FONT}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    seg.labels.forEach((l, i) => {
+      const x = x0 + i * sw;
+      if (i === seg.on) {
+        c.fillStyle = p.looks.plain.ink;
+        c.fillRect(x + sw * 0.06, H * 0.2, sw * 0.88, H * 0.6);
+      }
+      c.fillStyle = i === seg.on ? p.paper : p.title;
+      c.fillText(l, x + sw / 2, H / 2);
+    });
   }
 
   private heading(c: CanvasRenderingContext2D, lines: string[], W: number, H: number, ink: string): void {

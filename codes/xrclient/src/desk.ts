@@ -183,6 +183,7 @@ export class DeskSystem extends createSystem({
     this.root = new Group();
     this.root.name = 'desk-root';
     const book = makeBook();
+    book.name = 'desk-book';
     book.position.z = BOOK_Z;
     this.root.add(book);
     this.root.visible = false;
