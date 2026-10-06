@@ -1894,9 +1894,7 @@ export class GameSystem extends createSystem({
         };
       },
       button: (choice, title, x, z, color) => {
-        // An answer of FINISH NOW, read beside the card's question, is drawn larger.
-        const answer = /^town_a\d$/.test(choice);
-        const b = answer ? this.addButton(choice, title, x, color, 1.3, 0.026) : this.addButton(choice, title, x, color, 1, 0.018);
+        const b = this.addButton(choice, title, x, color, 1, 0.018);
         b.position.z = z;
         for (const e of this.queries.buttons.entities) if (e.object3D === b) return e;
         throw new Error(`no entity for ${b.name}`);
