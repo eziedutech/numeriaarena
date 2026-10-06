@@ -147,6 +147,8 @@ export interface ToolOptions {
   bare?: boolean;
   /** The icon in this colour instead of the look's ink, its first outline filled with a light wash of it. */
   tint?: string;
+  /** False: the tinted icon is only lines, without the wash. */
+  wash?: boolean;
   /** Its letters this many metres tall, however tall the cell. */
   wordH?: number;
   /** Not a button but a heading: no icon, its lines larger and centred in the cell. */
@@ -229,7 +231,7 @@ export class ToolButton {
     c.save();
     c.translate(cx - size / 2, cy - size / 2);
     c.scale(size / 24, size / 24);
-    if (this.opts.tint) {
+    if (this.opts.tint && this.opts.wash !== false) {
       c.fillStyle = this.opts.tint;
       c.globalAlpha = 0.22;
       c.fill(new Path2D(ICONS[this.icon][0]));

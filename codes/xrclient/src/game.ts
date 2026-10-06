@@ -26,7 +26,7 @@ import {
 } from '@iwsdk/core';
 
 import { Label, type LabelOptions } from './art/label.js';
-import { softShadow, ToolButton, toolTray, type ToolIcon, type ToolLook } from './art/tool-icon.js';
+import { softShadow, ToolButton, type ToolIcon, type ToolLook } from './art/tool-icon.js';
 import {
   forgetMixers,
   makeBalloon,
@@ -192,21 +192,18 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * They are plain white paper until called, then take the question's colour.
  */
 /**
- * The desk menu, drawn as the town's toolbar is: the games are one paper
- * block of flat cells, three across and two deep, each an envelope in its
- * game's colour over its name, leaning back in front of the book; the
- * settings and HOME are one line of paper chips beside it on the right, as
- * the home page's header has them, each with a soft shadow, leaning back as
- * the block does; the best score stands over them,
- * the Fold Town sticker beside the book, and a paper hand shows a
- * first-time player what to do.
+ * The desk menu, drawn as the home page's header is: paper chips with a
+ * soft shadow, each a picture, leaning back in front of the book. The games
+ * are three across and two deep on the left, each picture in its game's
+ * colour; the settings and HOME are one line of them on the right. The best
+ * score stands on the desk right of the book, as the Fold Town sticker does
+ * on its left, and a paper hand shows a first-time player what to do.
  */
-const GAME_W = 0.058;
-/** Lower than wide, so the block reaches less far towards the player; its heading keeps GAME_WORD_H. */
-const GAME_H = 0.042;
-const GAME_WORD_H = 0.0104;
-const GAMES_AT = new Vector3(-0.177, 0.04, 0.11);
-/** A settings chip: square, the language one wider for both languages, CHIP_GAP apart. */
+/** The games' heading's letters, in a chip's place left over. */
+const GAME_WORD_H = 0.009;
+/** The middle of the games' chips: their front row level with the settings, CHIP_GROUP clear of them. */
+const GAMES_AT = new Vector3(-0.163, 0.042, 0.106);
+/** A chip: square, the language one wider for both languages, CHIP_GAP apart. */
 const CHIP_W = 0.042;
 const CHIP_H = 0.042;
 const CHIP_LANG_W = 0.1;
@@ -218,7 +215,6 @@ const CHIP_BLUR = 0.006;
 const CHIP_SHADOW = new Vector3(0.0015, -0.003, -0.001);
 /** The middle of the chips' line, its front edge level with the games block's. */
 const SETTINGS_AT = new Vector3(0.107, 0.029, 0.127);
-const MENU_FOLD = 0.02;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
 const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
@@ -246,7 +242,9 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.107, 0.08, 0.09);
+/** Right of the book on the desk, facing the player like the Fold Town sticker on its left. */
+const BEST_AT = new Vector3(0.32, 0.03, -0.05);
+const BEST_H = 0.024;
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
 const TOWN_AT = new Vector3(-0.34, 0.0, -0.08);
@@ -1137,14 +1135,10 @@ export class GameSystem extends createSystem({
     this.showTitle();
     // The race first; a practice has no race, and its five games fill the block from the front left.
     const games = MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race');
-    this.menuStrip(
-      'menu-games',
+    this.menuChips(
+      games.map((game) => [game, GAME_ICON[game], game === 'race' ? T.race : T.gameName[game], 'plain', GAME_TINT[game]]),
       GAMES_AT,
       3,
-      2,
-      GAME_W,
-      GAME_H,
-      games.map((game) => [game, GAME_ICON[game], game === 'race' ? T.race : T.gameName[game], 'plain', GAME_TINT[game]]),
       T.gameType,
     );
     // The settings sit beside the games, so the headset never has to come
@@ -1160,7 +1154,8 @@ export class GameSystem extends createSystem({
       ['music', musicOn() ? 'music' : 'musicOff', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'plain' : 'off'],
       ['home', 'exit', T.home, 'accent'],
     ];
-    this.menuChips(settings.filter((c): c is MenuCell => c !== null));
+    const set = settings.filter((c): c is MenuCell => c !== null);
+    this.menuChips(set, SETTINGS_AT, set.length);
     this.addTownSticker();
     this.showHint();
     this.showBest();
@@ -1183,7 +1178,7 @@ export class GameSystem extends createSystem({
     this.bestCard = undefined;
     const best = this.readBest();
     if (!best) return;
-    const card = new Label(T.best(best.points, best.stars), { height: 0.017 });
+    const card = new Label(T.best(best.points, best.stars), { height: BEST_H });
     card.mesh.name = 'best-card';
     card.mesh.position.copy(BEST_AT);
     this.deskEntity()?.object3D?.add(card.mesh);
@@ -1367,34 +1362,59 @@ export class GameSystem extends createSystem({
 
   /** Touching an animal in the line: it hops and its name shows above it. */
   /**
-   * The settings and HOME as the home page's header has them: one line of
-   * separate paper chips centred on SETTINGS_AT, each a card with a soft
-   * black shadow, leaning back as the games block does. Each is a button
-   * named `menu-<choice>`, its name shown over it while pointed at.
+   * Menu chips as the home page's header has them: separate paper cards with
+   * a soft black shadow, `cols` across in rows centred on `at`, leaning back
+   * as the menu does, the language one wider. A place left over in the last
+   * row shows `heading`. Each chip is a button named `menu-<choice>`, its
+   * name shown over it while pointed at or touched.
    */
-  private menuChips(cells: MenuCell[]): void {
-    const widths = cells.map(([choice]) => (choice === 'lang' ? CHIP_LANG_W : CHIP_W));
-    const total = widths.reduce((a, w) => a + w, 0) + CHIP_GAP * (cells.length - 1);
-    let x = SETTINGS_AT.x - total / 2;
-    cells.forEach(([choice, icon, word, look], i) => {
-      const w = widths[i];
-      const segments = choice === 'lang' ? { labels: ['EN', 'ID'], on: getLang() === 'en' ? 0 : 1 } : undefined;
-      const b = new ToolButton(icon, '', w, CHIP_H, look, { alone: true, bare: true, theme: 'home', stroke: CHIP_STROKE, segments });
-      const shadow = softShadow(w, CHIP_H, CHIP_BLUR);
-      shadow.position.copy(CHIP_SHADOW);
-      const cell = new Group();
-      cell.name = `menu-${choice}`;
-      cell.userData.tip = word;
-      cell.userData.tipH = CHIP_H;
-      cell.add(shadow, b.mesh);
-      cell.position.set(x + w / 2, SETTINGS_AT.y, SETTINGS_AT.z);
-      cell.rotation.x = MENU_LEAN;
-      x += w + CHIP_GAP;
-      const e = this.add(cell);
-      e.addComponent(MenuButton, { game: choice });
-      e.addComponent(PokeInteractable);
-      e.addComponent(RayInteractable);
-    });
+  private menuChips(cells: MenuCell[], at: Vector3, cols: number, heading?: string): void {
+    const width = (c: MenuCell | undefined) => (c?.[0] === 'lang' ? CHIP_LANG_W : CHIP_W);
+    const rows = Math.ceil(cells.length / cols);
+    const slots: (MenuCell | undefined)[] = Array.from({ length: rows * cols }, (_, i) => cells[i]);
+    const games = cells.some(([choice]) => (MENU_GAMES as readonly string[]).includes(choice));
+    for (let r = 0; r < rows; r += 1) {
+      const row = slots.slice(r * cols, (r + 1) * cols);
+      const total = row.reduce((sum, c) => sum + width(c), 0) + CHIP_GAP * (cols - 1);
+      // Up the lean from the middle: the first row at the back, the last at the front.
+      const up = ((rows - 1) / 2 - r) * (CHIP_H + CHIP_GAP);
+      let x = -total / 2;
+      row.forEach((c, k) => {
+        const w = width(c);
+        const place = new Vector3(at.x + x + w / 2, at.y, at.z).addScaledVector(MENU_UP, up);
+        x += w + CHIP_GAP;
+        if (!c) {
+          if (!heading) return;
+          // What the chips hold, written on the desk menu in the place left over; no button.
+          const t = new ToolButton('envelope', heading, w, CHIP_H, 'plain', { title: true, wordH: GAME_WORD_H, theme: 'home' });
+          const g = new Group();
+          g.name = 'menu-heading';
+          g.add(t.mesh);
+          g.position.copy(place);
+          g.rotation.x = MENU_LEAN;
+          this.menuTrays.push(this.add(g));
+          heading = undefined;
+          return;
+        }
+        const [choice, icon, word, look, tint] = c;
+        const segments = choice === 'lang' ? { labels: ['EN', 'ID'], on: getLang() === 'en' ? 0 : 1 } : undefined;
+        const b = new ToolButton(icon, '', w, CHIP_H, look, { alone: true, bare: true, theme: 'home', stroke: CHIP_STROKE, tint, wash: false, segments });
+        const shadow = softShadow(w, CHIP_H, CHIP_BLUR);
+        shadow.position.copy(CHIP_SHADOW);
+        const cell = new Group();
+        cell.name = `menu-${choice}`;
+        cell.userData.tip = word;
+        cell.userData.tipH = CHIP_H;
+        cell.add(shadow, b.mesh);
+        cell.position.copy(place);
+        cell.rotation.x = MENU_LEAN;
+        if (games && r === 0 && k === 0) this.hintAt.copy(place);
+        const e = this.add(cell);
+        e.addComponent(MenuButton, { game: choice });
+        e.addComponent(PokeInteractable);
+        e.addComponent(RayInteractable);
+      });
+    }
   }
 
   /** The book on the desk (see desk.ts). */
@@ -1440,63 +1460,6 @@ export class GameSystem extends createSystem({
     const at = obj.position.clone();
     this.tween(obj, at, 0.45, 0.03, this.lineScale());
     this.pop(T.animal[a.species] ?? a.species.toUpperCase(), INK, undefined, at.clone().add(new Vector3(0, 0.1, 0.02)), 0.022);
-  }
-
-  /**
-   * A paper strip of `cols` by `rows` cells on the desk, leaning back as the
-   * town's toolbar does, its right end's top corner folded over. Each cell is
-   * a button of its own (touch it, or point at it and pinch; a click in the
-   * browser), named `menu-<choice>`.
-   */
-  private menuStrip(
-    name: string,
-    at: Vector3,
-    cols: number,
-    rows: number,
-    cw: number,
-    ch: number,
-    cells: (MenuCell | null)[],
-    heading?: string,
-  ): void {
-    const w = cols * cw + MENU_FOLD;
-    const h = rows * ch;
-    const tray = new Group();
-    tray.name = name;
-    tray.position.copy(at);
-    tray.rotation.x = MENU_LEAN;
-    tray.add(toolTray(w, h, MENU_FOLD, 'home'));
-    this.menuTrays.push(this.add(tray));
-    cells.forEach((c, i) => {
-      if (!c) return;
-      const [choice, icon, word, look, tint] = c;
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      // A thin line to the next cell in its row, none before HOME's own colour.
-      const next = cells[i + 1];
-      const divider = col < cols - 1 && next !== undefined && next !== null && next[3] !== 'accent';
-      // Only a picture; its name shows over it while it is pointed at or touched.
-      const b = new ToolButton(icon, '', cw, ch, look, { divider, tint, theme: 'home' });
-      const cell = new Group();
-      cell.name = `menu-${choice}`;
-      cell.userData.tip = word;
-      cell.userData.tipH = ch;
-      cell.add(b.mesh);
-      // Laid on the strip a hair in front of its paper, placed in the desk's frame.
-      cell.position.set(-w / 2 + (col + 0.5) * cw, h / 2 - (row + 0.5) * ch, 0.0015).applyEuler(tray.rotation).add(at);
-      cell.rotation.x = MENU_LEAN;
-      if (i === 0 && name === 'menu-games') this.hintAt.copy(cell.position);
-      const e = this.add(cell);
-      e.addComponent(MenuButton, { game: choice });
-      e.addComponent(PokeInteractable);
-      e.addComponent(RayInteractable);
-    });
-    // A cell left over shows what the block holds; it is no button.
-    if (heading && cells.length < cols * rows) {
-      const i = cells.length;
-      const t = new ToolButton('envelope', heading, cw, ch, 'plain', { title: true, wordH: GAME_WORD_H, theme: 'home' });
-      t.mesh.position.set(-w / 2 + ((i % cols) + 0.5) * cw, h / 2 - (Math.floor(i / cols) + 0.5) * ch, 0.0015);
-      tray.add(t.mesh);
-    }
   }
 
   private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {
