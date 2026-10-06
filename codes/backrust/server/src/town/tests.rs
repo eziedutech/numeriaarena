@@ -3,6 +3,7 @@
 use super::*;
 use crate::classes::{allowance, create_class};
 use crate::rooms::random_hex;
+use foldlings_core::town::{COLS, ROWS};
 
 async fn db() -> Option<PgPool> {
     let url = std::env::var("TEST_DATABASE_URL").ok()?;
@@ -227,7 +228,7 @@ fn place(id: &str, asset: &str, land: u16, x: u8, y: u8) -> Value {
     ev(
         "town_place",
         id,
-        json!({ "asset": asset, "land": land, "x": x, "y": y, "rot": 0 }),
+        json!({ "asset": asset, "land": land, "x": x, "y": y, "rot": 0, "cols": COLS }),
     )
 }
 
@@ -367,10 +368,10 @@ async fn a_later_land_joins_the_class_map_beside_the_first() {
         .await
         .unwrap();
     let mut batch = vec![ev("town_land", "l0", json!({ "kind": "river" }))];
-    let free = (0..7u8)
-        .flat_map(|y| (0..10u8).map(move |x| (x, y)))
+    let free = (0..ROWS)
+        .flat_map(|y| (0..COLS).map(move |x| (x, y)))
         .filter(|&(x, y)| LandKind::River.tile(x, y) == foldlings_core::town::Tile::Free)
-        .take(42);
+        .take(51);
     for (n, (x, y)) in free.enumerate() {
         batch.push(place(&format!("r{n}"), "road_cross", 0, x, y));
     }

@@ -99,8 +99,8 @@ export interface TownHost {
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
-/** One tile of the land on the desk, in metres: the land is 75 cm wide. */
-const TILE = 0.075;
+/** One tile of the land on the desk, in metres: its 12 columns are 84 cm wide. */
+const TILE = 0.07;
 /** The middle of the land, front to back on the desk. */
 const PAGE_Z = -0.17;
 /** A pinch let go sooner than this is a tap: the piece stays on the ray until the next pinch. */
@@ -133,7 +133,7 @@ const TOOL_LEAN = -1;
  * player: two rows of tabs at the top, three rows of four pieces each on its
  * own ledge with its price under it, and the page arrows at the bottom.
  */
-const SHELF_AT = new Vector3(0.68, 0, -0.08);
+const SHELF_AT = new Vector3(0.72, 0, -0.08);
 const SHELF_TURN = -0.5;
 const SHELF_COLS = 4;
 const CELL_W = 0.11;

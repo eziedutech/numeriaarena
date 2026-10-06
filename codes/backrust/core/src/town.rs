@@ -90,8 +90,21 @@ pub fn earnings(plays: &[Play]) -> Earnings {
 // ---------------------------------------------------------------- the shop
 
 /// A page of the book is one district of COLS x ROWS tiles.
-pub const COLS: u8 = 10;
+pub const COLS: u8 = 12;
 pub const ROWS: u8 = 7;
+/// A page was 10 tiles wide before it grew a column on each side. A place or
+/// move that does not say it counts COLS columns is from then, and its tiles
+/// stand one column further right now.
+const OLD_SHIFT: u8 = 1;
+
+/// The column an event's `x` means on the page as it is now.
+fn page_x(x: u8, cols: Option<u8>) -> u8 {
+    if cols == Some(COLS) {
+        x
+    } else {
+        x.saturating_add(OLD_SHIFT)
+    }
+}
 /// A new page opens once the last one is this full (tenths of its free tiles).
 pub const FULL_TENTHS: u32 = 7;
 pub const MAX_LANDS: usize = 24;
@@ -161,10 +174,10 @@ impl LandKind {
     /// The landmark plot of a page of this kind: this tile and the one to its right.
     pub fn plot(self) -> (u8, u8) {
         match self {
-            LandKind::Plain => (8, 1),
-            LandKind::River => (5, 3),
-            LandKind::Hills => (8, 0),
-            LandKind::Beach => (8, 5),
+            LandKind::Plain => (9, 1),
+            LandKind::River => (6, 3),
+            LandKind::Hills => (9, 0),
+            LandKind::Beach => (9, 5),
         }
     }
 
@@ -175,7 +188,7 @@ impl LandKind {
         }
         match self {
             LandKind::River if y == 3 => Tile::Water,
-            LandKind::Hills if (x >= 7 && y <= 1) || (x, y) == (9, 2) => Tile::Hill,
+            LandKind::Hills if (x >= 8 && y <= 1) || (x >= 10 && y == 2) => Tile::Hill,
             LandKind::Beach if y == ROWS - 1 => Tile::Sand,
             _ => Tile::Free,
         }
@@ -335,6 +348,9 @@ pub enum TownEvent {
         x: u8,
         y: u8,
         rot: u16,
+        /// COLS when `x` counts on the page as wide as it is now; none from before.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cols: Option<u8>,
     },
     /// Moves a building; a frame keeps building where it goes.
     TownMove {
@@ -345,6 +361,8 @@ pub enum TownEvent {
         x: u8,
         y: u8,
         rot: u16,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cols: Option<u8>,
     },
     /// Takes a building away and gives back every Fold it cost.
     TownRemove {
@@ -627,12 +645,14 @@ impl Town {
                 x,
                 y,
                 rot,
+                cols,
             } => {
                 let a = asset_by_id(asset).ok_or(Refusal::UnknownAsset)?;
                 if !self.is_unlocked(a) {
                     return Err(Refusal::Locked);
                 }
-                self.fits(a, *land, *x, *y, *rot, None)?;
+                let x = page_x(*x, *cols);
+                self.fits(a, *land, x, *y, *rot, None)?;
                 if self.balance(earned) < i64::from(a.price) {
                     return Err(Refusal::NotEnoughFolds);
                 }
@@ -641,7 +661,7 @@ impl Town {
                     asset: a.id.to_string(),
                     price: a.price,
                     land: *land,
-                    x: *x,
+                    x,
                     y: *y,
                     rot: *rot,
                     placed_at_ms: *at_ms,
@@ -654,17 +674,19 @@ impl Town {
                 x,
                 y,
                 rot,
+                cols,
                 ..
             } => {
                 let a = self.item(place_id).ok_or(Refusal::UnknownPlace)?.spec();
-                self.fits(a, *land, *x, *y, *rot, Some(place_id))?;
+                let x = page_x(*x, *cols);
+                self.fits(a, *land, x, *y, *rot, Some(place_id))?;
                 let item = self
                     .items
                     .iter_mut()
                     .find(|i| i.id == *place_id)
                     .expect("found above");
                 item.land = *land;
-                item.x = *x;
+                item.x = x;
                 item.y = *y;
                 item.rot = *rot;
             }
@@ -786,6 +808,7 @@ mod tests {
             x,
             y,
             rot,
+            cols: Some(COLS),
         }
     }
 
@@ -895,12 +918,12 @@ mod tests {
             Err(Refusal::Taken)
         );
         assert_eq!(
-            t.apply(&place("c", "house_duplex", 0, 9, 4, 0), 1000),
+            t.apply(&place("c", "house_duplex", 0, 11, 4, 0), 1000),
             Err(Refusal::OffLand)
         );
-        t.apply(&place("c", "house_duplex", 0, 9, 4, 270), 1000)
+        t.apply(&place("c", "house_duplex", 0, 11, 4, 270), 1000)
             .unwrap();
-        assert_eq!(t.at(0, 9, 5).map(|i| i.id.as_str()), Some("c"));
+        assert_eq!(t.at(0, 11, 5).map(|i| i.id.as_str()), Some("c"));
         assert_eq!(
             t.apply(&place("d", "house_hut", 0, 0, 0, 45), 1000),
             Err(Refusal::BadRotation)
@@ -946,7 +969,7 @@ mod tests {
         t.apply(&place("br", "bridge_road", 0, 0, 3, 90), 1000)
             .unwrap();
         assert_eq!(
-            t.apply(&place("b2", "bridge_road", 0, 5, 3, 0), 1000),
+            t.apply(&place("b2", "bridge_road", 0, 6, 3, 0), 1000),
             Err(Refusal::LandmarkPlot)
         );
         assert_eq!(Refusal::NeedsWater.code(), "needs_water");
@@ -967,6 +990,7 @@ mod tests {
             x: 5,
             y: 5,
             rot: 90,
+            cols: Some(COLS),
         };
         t.apply(&mv, 100).unwrap();
         assert_eq!(t.item("h").unwrap().ready_at_ms(), 1_000 + 120_000);
@@ -1011,11 +1035,11 @@ mod tests {
         let mut t = Town::default();
         t.apply(&land("l0"), 10_000).unwrap();
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        // 47 roads cover 47 of the 68 free tiles: not yet 70%.
+        // 57 roads cover 57 of the 82 free tiles: not yet 70%.
         let mut n = 0;
         for y in 0..ROWS {
             for x in 0..COLS {
-                if n < 47 && LandKind::Plain.tile(x, y) == Tile::Free {
+                if n < 57 && LandKind::Plain.tile(x, y) == Tile::Free {
                     t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)
                         .unwrap();
                     n += 1;
@@ -1024,7 +1048,7 @@ mod tests {
         }
         assert!(!t.is_full(0));
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        t.apply(&place("r47", "road_cross", 0, 9, 4, 0), 10_000)
+        t.apply(&place("r57", "road_cross", 0, 11, 4, 0), 10_000)
             .unwrap();
         assert!(t.is_full(0));
         t.apply(&land("l1"), 10_000).unwrap();
@@ -1088,16 +1112,32 @@ mod tests {
     }
 
     #[test]
+    fn a_place_from_the_narrow_page_stands_a_column_further_right() {
+        let old = r#"{"type":"town_place","event_id":"h","at_ms":1,"asset":"house_hut","land":0,"x":7,"y":1,"rot":0}"#;
+        let old: TownEvent = serde_json::from_str(old).unwrap();
+        let (town, refused) = Town::replay(&[land("l0"), old], 40);
+        assert!(refused.is_empty());
+        assert_eq!((town.items[0].x, town.items[0].y), (8, 1));
+        // On the narrow page its plot was (8, 1) and (9, 1); now it is a column right.
+        let old = r#"{"type":"town_move","event_id":"m","at_ms":2,"place_id":"h","land":0,"x":8,"y":1,"rot":0}"#;
+        let old: TownEvent = serde_json::from_str(old).unwrap();
+        let mut t = town;
+        assert_eq!(t.apply(&old, 40), Err(Refusal::LandmarkPlot));
+        let new = place("n", "road_straight", 0, 8, 1, 0);
+        assert!(serde_json::to_string(&new).unwrap().contains("\"cols\":12"));
+    }
+
+    #[test]
     fn nature_and_the_landmark_plot_cannot_be_built_on() {
         let mut t = Town::default();
         t.apply(&land_of("l0", LandKind::River), 1000).unwrap();
-        assert_eq!(t.free_tiles(0), 60);
+        assert_eq!(t.free_tiles(0), 72);
         assert_eq!(
             t.apply(&place("w", "road_straight", 0, 0, 3, 0), 1000),
             Err(Refusal::Nature)
         );
         assert_eq!(
-            t.apply(&place("p", "road_straight", 0, 5, 3, 0), 1000),
+            t.apply(&place("p", "road_straight", 0, 6, 3, 0), 1000),
             Err(Refusal::LandmarkPlot)
         );
         // A turned house of two tiles would reach into the river.
@@ -1111,13 +1151,14 @@ mod tests {
         );
         t.apply(&place("h", "house_duplex", 0, 4, 1, 90), 1000)
             .unwrap();
-        assert_eq!(LandKind::Plain.free_tiles(), 68);
-        assert_eq!(LandKind::Hills.free_tiles(), 63);
-        assert_eq!(LandKind::Beach.free_tiles(), 58);
-        assert_eq!(LandKind::Beach.layout()[6], "::::::::::");
-        assert_eq!(LandKind::Beach.layout()[5], "........**");
-        assert_eq!(LandKind::Hills.layout()[0], ".......^**");
-        assert_eq!(LandKind::River.layout()[3], "~~~~~**~~~");
+        assert_eq!(LandKind::Plain.free_tiles(), 82);
+        assert_eq!(LandKind::Hills.free_tiles(), 74);
+        assert_eq!(LandKind::Beach.free_tiles(), 70);
+        assert_eq!(LandKind::Beach.layout()[6], "::::::::::::");
+        assert_eq!(LandKind::Beach.layout()[5], ".........**.");
+        assert_eq!(LandKind::Hills.layout()[0], "........^**^");
+        assert_eq!(LandKind::Hills.layout()[2], "..........^^");
+        assert_eq!(LandKind::River.layout()[3], "~~~~~~**~~~~");
         for k in LAND_KINDS {
             assert_eq!(LandKind::of_code(k.code()), Some(k));
             assert_eq!(serde_json::to_value(k).unwrap(), k.code());
@@ -1128,11 +1169,11 @@ mod tests {
     fn later_lands_may_be_of_another_kind() {
         let mut t = Town::default();
         t.apply(&land_of("l0", LandKind::Beach), 10_000).unwrap();
-        // 41 of the 58 free tiles is just past 70%.
+        // 49 of the 70 free tiles is 70%.
         let free: Vec<(u8, u8)> = (0..ROWS)
             .flat_map(|y| (0..COLS).map(move |x| (x, y)))
             .filter(|&(x, y)| LandKind::Beach.tile(x, y) == Tile::Free)
-            .take(41)
+            .take(49)
             .collect();
         for (n, (x, y)) in free.into_iter().enumerate() {
             t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)

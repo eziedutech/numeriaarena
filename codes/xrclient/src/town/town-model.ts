@@ -1,7 +1,7 @@
 import { sharedStore, type LocalStore } from '../storage.js';
 import { online } from '../offline.js';
 import { seatKey, studentState, type Student } from '../home/student.js';
-import { Book, earningsOf, loadTownCore, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
+import { Book, earningsOf, loadTownCore, townRulesNow, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
 import { guestLandmarks } from './town-landmarks.js';
 import { sampleTown } from './town-sample.js';
 
@@ -145,7 +145,9 @@ export class TownModel {
   /** Tries a change; "" when it is made (and saved), else why not. */
   async act(change: DistributiveOmit<TownEvent, 'event_id' | 'at_ms'>): Promise<string> {
     if (this.fixed) return 'look_only';
-    const ev = { ...change, event_id: newId(this.store), at_ms: this.now() } as TownEvent;
+    // A place or a move says how wide the page it counts on is: one from a narrower page stands a column further right.
+    const wide = change.type === 'town_place' || change.type === 'town_move' ? { cols: townRulesNow().cols } : {};
+    const ev = { ...change, ...wide, event_id: newId(this.store), at_ms: this.now() } as TownEvent;
     const reason = this.book!.apply(ev);
     if (reason) return reason;
     if (this.seat) this.doc.pending.push(ev);

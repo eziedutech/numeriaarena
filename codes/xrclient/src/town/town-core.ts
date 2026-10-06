@@ -56,8 +56,8 @@ export interface Play {
 
 export type TownEvent =
   | { type: 'town_land'; event_id: string; at_ms: number; kind: LandKind }
-  | { type: 'town_place'; event_id: string; at_ms: number; asset: string; land: number; x: number; y: number; rot: number }
-  | { type: 'town_move'; event_id: string; at_ms: number; place_id: string; land: number; x: number; y: number; rot: number }
+  | { type: 'town_place'; event_id: string; at_ms: number; asset: string; land: number; x: number; y: number; rot: number; cols?: number }
+  | { type: 'town_move'; event_id: string; at_ms: number; place_id: string; land: number; x: number; y: number; rot: number; cols?: number }
   | { type: 'town_remove'; event_id: string; at_ms: number; place_id: string }
   | { type: 'town_finish'; event_id: string; at_ms: number; place_id: string };
 
