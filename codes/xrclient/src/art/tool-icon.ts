@@ -196,3 +196,86 @@ export function toolTray(w: number, h: number, fold: number): Mesh {
   c.fill();
   return plane(w, h, canvas, true).mesh;
 }
+
+/** A text panel's canvas pixels per metre: sharp letters, and light enough to draw again each second. */
+const PANEL_PX = 3000;
+
+/** A line of a text panel: its words, its letters' size in metres, its ink. */
+export interface PanelLine {
+  text: string;
+  size: number;
+  ink: string;
+}
+
+/**
+ * A paper panel in the strip's tint with lines of text written on it, left
+ * aligned and cut to fit `maxW` metres, sharp at the toolbar's resolution;
+ * `foot` metres are left clear under the text for cells laid on it. The panel
+ * is no narrower than `minW`. Returns the solid mesh with its origin at the
+ * middle of its foot, and its size.
+ */
+export function textPanel(lines: PanelLine[], maxW: number, minW: number, pad: number, foot: number, fold: number): { mesh: Mesh; w: number; h: number } {
+  const c = document.createElement('canvas').getContext('2d')!;
+  const font = (size: number) => `700 ${size * PANEL_PX}px ${FONT}`;
+  const rows: { text: string; size: number; ink: string }[] = [];
+  let wide = 0;
+  for (const l of lines) {
+    if (!l.text) {
+      rows.push({ text: '', size: l.size, ink: l.ink });
+      continue;
+    }
+    c.font = font(l.size);
+    const room = (maxW - 2 * pad) * PANEL_PX;
+    let line = '';
+    for (const word of l.text.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && c.measureText(next).width > room) {
+        rows.push({ text: line, size: l.size, ink: l.ink });
+        wide = Math.max(wide, c.measureText(line).width);
+        line = word;
+      } else line = next;
+    }
+    rows.push({ text: line, size: l.size, ink: l.ink });
+    wide = Math.max(wide, c.measureText(line).width);
+  }
+  const w = Math.max(minW, Math.min(maxW, wide / PANEL_PX + 2 * pad));
+  const textH = rows.reduce((a, r) => a + r.size * 1.3, 0);
+  const h = textH + 2 * pad + foot;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * PANEL_PX);
+  canvas.height = Math.round(h * PANEL_PX);
+  const g = canvas.getContext('2d')!;
+  const W = canvas.width;
+  const f = fold * PANEL_PX;
+  g.fillStyle = PAPER;
+  g.beginPath();
+  g.moveTo(0, 0);
+  g.lineTo(W - f, 0);
+  g.lineTo(W, f);
+  g.lineTo(W, canvas.height);
+  g.lineTo(0, canvas.height);
+  g.closePath();
+  g.fill();
+  g.fillStyle = FOLD;
+  g.beginPath();
+  g.moveTo(W - f, 0);
+  g.lineTo(W, f);
+  g.lineTo(W - f, f);
+  g.closePath();
+  g.fill();
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  let y = pad * PANEL_PX;
+  for (const r of rows) {
+    const step = r.size * 1.3 * PANEL_PX;
+    if (r.text) {
+      g.font = font(r.size);
+      g.fillStyle = r.ink;
+      g.fillText(r.text, pad * PANEL_PX, y + step / 2);
+    }
+    y += step;
+  }
+  const mesh = plane(w, h, canvas, true).mesh;
+  mesh.geometry.translate(0, h / 2, 0);
+  return { mesh, w, h };
+}

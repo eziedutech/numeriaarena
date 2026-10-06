@@ -15,7 +15,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import { Label } from '../art/label.js';
-import { ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
+import { type PanelLine, textPanel, ToolButton, toolTray, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
 import { getLang, getRoom, ROOMS, setRoom } from '../settings.js';
 import { T } from '../text.js';
@@ -168,12 +168,13 @@ const HEADER_SCALE = 1.5;
 const CARD = new Vector3(-0.64, 0.07, -0.06);
 const CARD_TURN = 0.55;
 const CARD_LEAN = -0.12;
-/** Every line drawn this much taller than it is written, to be read from the chair. */
-const CARD_TEXT = 1.4;
-const CARD_CHARS = 30;
+/** A line's letters are this many times the height it is written with, in metres, to be read from the chair. */
+const CARD_TEXT = 1.85;
+const CARD_MAX_W = 0.4;
+const CARD_MIN_W = 0.24;
 const CARD_PAD = 0.022;
 const CARD_FOLD = 0.03;
-const CELL_H = 0.052;
+const CELL_H = 0.06;
 const CELL_GAP = 0.01;
 const CARD_INK = 0x5b3a26;
 const CARD_HEAD = 0xc94f17;
@@ -1189,54 +1190,27 @@ export class TownDesk {
     console.info(`[town] card of the landmark ${lm.landmark}`);
   }
 
-  /** Words cut to lines short enough to read beside the land. */
+  /** A line of body text; the panel cuts it to its width. */
   private wrap(text: string, into: Line[], height = 0.012): void {
-    let line = '';
-    for (const word of text.split(' ')) {
-      if (line && line.length + 1 + word.length > CARD_CHARS) {
-        into.push([line, height]);
-        line = word;
-      } else line = line ? `${line} ${word}` : word;
-    }
-    if (line) into.push([line, height]);
+    into.push([text, height]);
   }
 
   /** The card's lines on one paper panel, left aligned, with its cells in a row along the foot. */
   private cardPanel(lines: Line[], cells: Cell[]): Entity {
     const g = new Group();
     g.name = 'town-card';
-    const words: { l: Label; h: number; step: number }[] = [];
-    let textW = 0;
-    let textH = 0;
-    for (const [text, height, ink] of lines) {
-      const h = height * CARD_TEXT;
-      const step = h * 1.45;
-      textH += step;
-      if (!text) continue;
-      const l = new Label(text, { height: h, card: false, ink: ink ?? (words.length ? CARD_INK : CARD_HEAD) });
-      words.push({ l, h, step });
-      textW = Math.max(textW, l.width);
-    }
-    const marks = cells.map(([, word, look]) => new Label(word, { height: 0.024, card: false, ink: look === 'on' ? CARD_HEAD : 0xffffff }));
-    const cellW = marks.map((m) => Math.max(0.07, m.width + 0.024));
+    const ink = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+    const rows: PanelLine[] = lines.map(([text, height, color], i) => ({
+      text,
+      size: height * CARD_TEXT,
+      ink: ink(color ?? (i === 0 ? CARD_HEAD : CARD_INK)),
+    }));
+    const marks = cells.map(([, word, look]) => new Label(word, { height: 0.034, card: false, ink: look === 'on' ? CARD_HEAD : 0xffffff }));
+    const cellW = marks.map((m) => Math.max(0.08, m.width + 0.024));
     const rowW = cellW.reduce((a, b) => a + b, 0) + CELL_GAP * Math.max(0, cells.length - 1);
-    const w = Math.max(textW, rowW, 0.22) + 2 * CARD_PAD;
-    const rowH = cells.length ? CELL_H + CARD_PAD : 0;
-    const h = textH + rowH + 2 * CARD_PAD;
-    const paper = toolTray(w, h, CARD_FOLD);
-    paper.position.y = h / 2;
-    g.add(paper);
-    let y = h - CARD_PAD;
-    let k = 0;
-    for (const [text, height] of lines) {
-      const step = height * CARD_TEXT * 1.45;
-      if (text) {
-        const { l, h: lh } = words[k++];
-        l.mesh.position.set(-w / 2 + CARD_PAD + l.width / 2, y - lh / 2, 0.002);
-        g.add(l.mesh);
-      }
-      y -= step;
-    }
+    const foot = cells.length ? CELL_H + CARD_PAD : 0;
+    const { mesh } = textPanel(rows, Math.max(CARD_MAX_W, rowW + 2 * CARD_PAD), rowW + 2 * CARD_PAD, CARD_PAD, foot, CARD_FOLD);
+    g.add(mesh);
     let x = -rowW / 2;
     cells.forEach(([choice, , look], i) => {
       const cell = new Mesh(cellGeo, CELL_MATS[look]);
