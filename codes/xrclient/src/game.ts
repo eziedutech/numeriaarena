@@ -1865,6 +1865,8 @@ export class GameSystem extends createSystem({
   }
 
   private townHost(): TownHost {
+    // The land's window cuts the pieces past its sides when it is zoomed in.
+    this.world.renderer.localClippingEnabled = true;
     return {
       add: (obj, ray) => {
         const e = this.add(obj);

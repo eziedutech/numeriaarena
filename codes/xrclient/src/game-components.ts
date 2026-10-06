@@ -54,6 +54,10 @@ const Games = {
   TownTurnLeft: 'town_left',
   TownTurnRight: 'town_right',
   TownRemove: 'town_remove',
+  /** Zooming the land on the desk in and out, and the hand tool that drags it about. */
+  TownZoomIn: 'town_zoom_in',
+  TownZoomOut: 'town_zoom_out',
+  TownPan: 'town_pan',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

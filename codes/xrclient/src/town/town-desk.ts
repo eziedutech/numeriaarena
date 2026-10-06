@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Plane,
   PlaneGeometry,
   Quaternion,
   Vector3,
@@ -53,7 +54,10 @@ export type TownChoice =
   | 'town_card'
   | 'town_left'
   | 'town_right'
-  | 'town_remove';
+  | 'town_remove'
+  | 'town_zoom_in'
+  | 'town_zoom_out'
+  | 'town_pan';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -107,6 +111,16 @@ const PAGE_MARGIN = 0.6;
 /** A piece in the hand is a little smaller than on the land, and a hand carries it under its ray. */
 const CARRY_SCALE = 0.8;
 const HAND_CARRY_DROP = 0.05;
+/**
+ * Zoom steps of the land. Zoomed in, the land shows only through a window the
+ * size of the whole land on the desk, and the hand tool drags it about.
+ */
+const ZOOMS = [1, 1.5, 2, 3];
+/** The paper reaches this far past the tiles, so the window shows it whole unzoomed. */
+const PAPER = 0.25;
+/** The zoom and hand buttons, in a row past the land's front edge on its right. */
+const VIEW_W = 0.042;
+const VIEW_LEAN = -1;
 
 /**
  * The shelf stands on the right of the land and leans its face to the
@@ -171,8 +185,29 @@ const optMats = {
   close: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
 };
 const markMat = new MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0.45, depthWrite: false });
+const viewGeo = new BoxGeometry(VIEW_W, VIEW_W, 0.008);
+const viewMats = {
+  zoom: new MeshStandardMaterial({ color: 0xe8b64c, roughness: 1 }),
+  off: new MeshStandardMaterial({ color: 0xc9ccd3, roughness: 1 }),
+  on: new MeshStandardMaterial({ color: TEAL, roughness: 1 }),
+};
+/** The window's four sides in the world; the land's pieces and its mark are cut there, the shelf's are not. */
+const clipPlanes = [new Plane(), new Plane(), new Plane(), new Plane()];
+const clipMat = townMaterial().clone();
+clipMat.clippingPlanes = clipPlanes;
+markMat.clippingPlanes = clipPlanes;
 /** Materials every page and the shelf share, never freed with one of them. */
-const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat, markMat, ...Object.values(optMats)]);
+const SHARED = new Set<Material>([
+  townMaterial(),
+  clipMat,
+  slotMat,
+  plateMat,
+  ledgeMat,
+  barMat,
+  markMat,
+  ...Object.values(optMats),
+  ...Object.values(viewMats),
+]);
 const fitBox = new Box3();
 const fitSize = new Vector3();
 const fitMid = new Vector3();
@@ -234,6 +269,15 @@ export class TownDesk {
   private selected = '';
   private mark?: Mesh;
   private options?: Group;
+  /** How near the land is drawn, and the tile at the middle of its window. */
+  private zoom = 1;
+  private view = { x: 0, z: 0 };
+  /** The hand tool: a pinch or grip on the land drags it instead of taking a piece. */
+  private panMode = false;
+  private panning?: { side: Side; grip: boolean; x: number; z: number };
+  private panFrom = new Vector3();
+  private viewRow?: Entity;
+  private panButton?: Mesh;
   private message = '';
   /** What letting go of the carried piece would do, shown again after a message. */
   private note = '';
@@ -319,10 +363,13 @@ export class TownDesk {
       h.scale.setScalar(TILE);
       h.add(this.ghost.root);
       this.holder = this.host.add(h, true);
+      this.view = { x: r.cols / 2, z: r.rows / 2 };
+      this.viewRow = this.host.add(this.viewButtons(), true);
     }
     const h = this.holder.object3D!;
     if (this.page) h.remove(this.page.root);
     this.page = buildPage(kind, this.land, items, this.model.doc.landmarks[this.land]);
+    this.page.root.traverse(this.toClip);
     h.add(this.page.root);
     for (const it of items) {
       const obj = this.page.items.get(it.id);
@@ -334,7 +381,7 @@ export class TownDesk {
         this.say(this.t.finished(this.name(it.asset)));
       }
     }
-    this.placeMark();
+    this.refreshView();
     const lm = this.model.doc.landmarks[this.land];
     const raised = this.page.root.getObjectByName('landmark');
     if (lm && raised && unmarked('grown', this.model.owner, [lm]).length) {
@@ -530,6 +577,21 @@ export class TownDesk {
       this.closeCard();
       return;
     }
+    if (choice === 'town_zoom_in' || choice === 'town_zoom_out') {
+      const i = ZOOMS.indexOf(this.zoom) + (choice === 'town_zoom_in' ? 1 : -1);
+      if (i < 0 || i >= ZOOMS.length) return;
+      this.zoom = ZOOMS[i];
+      if (this.zoom === 1) this.setPan(false);
+      this.refreshView();
+      this.say(this.t.xr.zoomed(this.zoom));
+      console.info(`[town] zoom ${this.zoom}x`);
+      return;
+    }
+    if (choice === 'town_pan') {
+      this.setPan(!this.panMode);
+      this.say(this.panMode ? this.t.xr.panOn : this.t.xr.panOff);
+      return;
+    }
     if (choice === 'town_left' || choice === 'town_right') {
       void this.turnPlaced(choice === 'town_left' ? 270 : 90);
       return;
@@ -579,10 +641,19 @@ export class TownDesk {
       this.refreshCard();
     }
     if (!this.page) return;
+    this.placeClip();
     for (const side of SIDES) if (this.host.turn(side)) this.press('town_turn');
     for (const side of SIDES) {
       const s = this.host.select(side);
       const g = this.host.squeeze(side);
+      const pn = this.panning;
+      if (pn) {
+        if (side === pn.side && (pn.grip ? g.end : s.end)) {
+          this.panning = undefined;
+          this.refreshView();
+        }
+        continue;
+      }
       const c = this.carry;
       if (c?.grip) {
         if (g.end && side === c.side) {
@@ -597,7 +668,134 @@ export class TownDesk {
         }
       } else if ((g.start && this.pick(side, true)) || (s.start && this.pick(side, false))) break;
     }
+    if (this.panning) this.panAlong();
     if (this.carry) this.track();
+  }
+
+  // ------------------------------------------------------------ zoom and the hand tool
+
+  /** The zoom out, zoom in and hand buttons, each with its word under it. */
+  private viewButtons(): Group {
+    const r = townRulesNow();
+    const row = new Group();
+    row.name = 'town-view';
+    row.position.set((r.cols / 2) * TILE - 0.09, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.045);
+    row.rotation.x = VIEW_LEAN;
+    const icons: [TownChoice, string, string][] = [
+      ['town_zoom_out', '−', this.t.xr.zoomOut],
+      ['town_zoom_in', '+', this.t.xr.zoomIn],
+      ['town_pan', '✋', this.t.xr.pan],
+    ];
+    icons.forEach(([choice, icon, word], i) => {
+      const b = new Mesh(viewGeo, choice === 'town_pan' ? viewMats.off : viewMats.zoom);
+      b.name = `town-view-${choice}`;
+      b.userData.townOpt = choice;
+      b.position.x = (i - (icons.length - 1) / 2) * (VIEW_W + 0.012);
+      const l = new Label(icon, { height: 0.032, card: false });
+      l.mesh.position.z = 0.0045;
+      b.add(l.mesh);
+      const w = new Label(word, { height: 0.013 });
+      w.mesh.position.set(0, -VIEW_W / 2 - 0.011, 0.0045);
+      b.add(w.mesh);
+      if (choice === 'town_pan') this.panButton = b;
+      row.add(b);
+    });
+    return row;
+  }
+
+  private setPan(on: boolean): void {
+    this.panMode = on;
+    if (this.panButton) this.panButton.material = on ? viewMats.on : viewMats.off;
+  }
+
+  /** Half the window, in tiles of the land as it is zoomed. */
+  private windowHalf(): [number, number] {
+    const r = townRulesNow();
+    return [(r.cols / 2 + PAPER) / this.zoom, (r.rows / 2 + PAPER) / this.zoom];
+  }
+
+  /** Scales and moves the land so the tile at the middle of the view sits at the middle of the window. */
+  private applyView(): void {
+    const h = this.holder?.object3D;
+    if (!h) return;
+    const r = townRulesNow();
+    const [hw, hd] = this.windowHalf();
+    this.view.x = Math.min(Math.max(this.view.x, hw - PAPER), r.cols + PAPER - hw);
+    this.view.z = Math.min(Math.max(this.view.z, hd - PAPER), r.rows + PAPER - hd);
+    const k = TILE * this.zoom;
+    h.scale.setScalar(k);
+    h.position.set(-this.view.x * k, 0.002, PAGE_Z - this.view.z * k);
+  }
+
+  /** Whether tiles from (x, y), `w` by `d`, reach into the window. */
+  private inView(x: number, y: number, w: number, d: number): boolean {
+    const [hw, hd] = this.windowHalf();
+    return x + w > this.view.x - hw && x < this.view.x + hw && y + d > this.view.z - hd && y < this.view.z + hd;
+  }
+
+  /** The view as it is, and the pieces wholly outside the window hidden and out of the rays. */
+  private refreshView(): void {
+    this.applyView();
+    const page = this.page;
+    if (!page) return;
+    type Pointed = Object3D & { pointerEvents?: string };
+    for (const it of this.model.view().items) {
+      const g = page.items.get(it.id) as Pointed | undefined;
+      if (!g || it.land !== this.land) continue;
+      const [w, d] = footprint(assetOf(it.asset)!, it.rot);
+      const seen = this.inView(it.x, it.y, w, d);
+      g.visible = seen && it.id !== this.carry?.placeId;
+      g.pointerEvents = seen ? undefined : 'none';
+    }
+    const raised = page.root.getObjectByName('landmark') as Pointed | undefined;
+    const plot = townRulesNow().lands.find((l) => l.kind === this.model.view().lands[this.land])?.plot;
+    if (raised && plot) {
+      const seen = this.inView(plot[0], plot[1], 2, 1);
+      raised.visible = seen;
+      raised.pointerEvents = seen ? undefined : 'none';
+    }
+    this.placeMark();
+  }
+
+  /** The window's sides, from where the desk stands this frame. */
+  private placeClip(): void {
+    const r = townRulesNow();
+    const hw = (r.cols / 2 + PAPER) * TILE + 0.002;
+    const hd = (r.rows / 2 + PAPER) * TILE + 0.002;
+    const m = this.root.object3D!.matrixWorld;
+    clipPlanes[0].normal.set(1, 0, 0);
+    clipPlanes[0].constant = hw;
+    clipPlanes[1].normal.set(-1, 0, 0);
+    clipPlanes[1].constant = hw;
+    clipPlanes[2].normal.set(0, 0, 1);
+    clipPlanes[2].constant = hd - PAGE_Z;
+    clipPlanes[3].normal.set(0, 0, -1);
+    clipPlanes[3].constant = hd + PAGE_Z;
+    for (const p of clipPlanes) p.applyMatrix4(m);
+  }
+
+  /** The land's own pieces are drawn with the material the window cuts. */
+  private toClip = (o: Object3D): void => {
+    const m = o as Mesh;
+    if (m.isMesh && m.material === townMaterial()) m.material = clipMat;
+  };
+
+  /** The hand tool takes hold of the land where `side`'s ray meets it. */
+  private startPan(side: Side, grip: boolean): boolean {
+    if (!this.hit(side, this.root.object3D!)) return false;
+    this.panFrom.copy(this.p);
+    this.panning = { side, grip, x: this.view.x, z: this.view.z };
+    return true;
+  }
+
+  /** The land follows the hand's ray, the tile taken staying under it. */
+  private panAlong(): void {
+    const pn = this.panning!;
+    if (!this.hit(pn.side, this.root.object3D!)) return;
+    const k = TILE * this.zoom;
+    this.view.x = pn.x - (this.p.x - this.panFrom.x) / k;
+    this.view.z = pn.z - (this.p.z - this.panFrom.z) / k;
+    this.applyView();
   }
 
   private onButton(side: Side): boolean {
@@ -610,6 +808,9 @@ export class TownDesk {
     const v = this.model.view();
     const sides = this.host.emulated() && !this.host.controllers() ? [side, ...SIDES.filter((s) => s !== side)] : [side];
     for (const from of sides) {
+      if (this.panMode) {
+        for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) if (o === this.holder?.object3D) return this.startPan(from, grip);
+      }
       for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) {
         const tab = o.userData.townTab as string | undefined;
         if (tab) {
@@ -692,22 +893,36 @@ export class TownDesk {
     c.model.position.copy(this.hold);
   }
 
-  /** Where `side`'s ray meets the page's plane, in tiles, into `this.p`; false when it does not come down onto it. */
+  /** Where `side`'s ray meets the page's plane, in tiles, into `this.p`; false when it does not come down onto it or meets it outside the window. */
   private onPage(side: Side): boolean {
     const h = this.holder?.object3D;
-    if (!h) return false;
+    if (!h || !this.hit(side, h)) return false;
+    const r = townRulesNow();
+    const [hw, hd] = this.windowHalf();
+    const m = PAGE_MARGIN / this.zoom;
+    return (
+      this.p.x > -PAGE_MARGIN &&
+      this.p.x < r.cols + PAGE_MARGIN &&
+      this.p.z > -PAGE_MARGIN &&
+      this.p.z < r.rows + PAGE_MARGIN &&
+      Math.abs(this.p.x - this.view.x) < hw + m &&
+      Math.abs(this.p.z - this.view.z) < hd + m
+    );
+  }
+
+  /** Where `side`'s ray meets the plane y = 0 of `space`, in its own units, into `this.p`; false when it does not come down onto it. */
+  private hit(side: Side, space: Object3D): boolean {
     const ray = this.host.ray(side);
     ray.getWorldPosition(this.o);
     ray.getWorldQuaternion(this.q);
     this.d.set(0, 0, -1).applyQuaternion(this.q).add(this.o);
-    h.worldToLocal(this.o);
-    h.worldToLocal(this.d);
+    space.worldToLocal(this.o);
+    space.worldToLocal(this.d);
     this.d.sub(this.o);
     if (this.d.y > -1e-6) return false;
     const k = -this.o.y / this.d.y;
     this.p.copy(this.o).addScaledVector(this.d, k);
-    const r = townRulesNow();
-    return this.p.x > -PAGE_MARGIN && this.p.x < r.cols + PAGE_MARGIN && this.p.z > -PAGE_MARGIN && this.p.z < r.rows + PAGE_MARGIN;
+    return true;
   }
 
   /** The carried piece follows its ray: a shadow on the page, or a word on what letting go does. */
@@ -734,6 +949,7 @@ export class TownDesk {
     c.y = y;
     c.fits = this.model.fits(c.asset, this.land, x, y, c.rot, c.placeId);
     this.ghost.show(c.asset, x, y, c.rot, !c.fits);
+    this.ghost.root.traverse(this.toClip);
     this.carryNote(c.fits ? this.reason(c.fits) : this.t.xr.carry(this.name(c.asset)));
   }
 
@@ -897,8 +1113,9 @@ export class TownDesk {
     this.mark.scale.set(w + 0.15, 1, d + 0.15);
     this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
     this.mark.visible = true;
+    if (!this.inView(it.x, it.y, w, d)) return;
     this.options = this.optionRow(it);
-    this.options.position.set(it.x + w / 2, (pieceInfo(it.asset)?.top ?? 1) + OPT_RISE / TILE, it.y + d / 2);
+    this.options.position.set(it.x + w / 2, (pieceInfo(it.asset)?.top ?? 1) + OPT_RISE / (TILE * this.zoom), it.y + d / 2);
     h.add(this.options);
   }
 
@@ -906,7 +1123,7 @@ export class TownDesk {
   private optionRow(it: Placed): Group {
     const row = new Group();
     row.name = 'town-options';
-    row.scale.setScalar(1 / TILE);
+    row.scale.setScalar(1 / (TILE * this.zoom));
     row.rotation.x = OPT_LEAN;
     const icons: [TownChoice, string, MeshStandardMaterial][] = [
       ['town_left', '↺', optMats.turn],
@@ -1017,7 +1234,8 @@ export class TownDesk {
     this.model.dispose();
     this.spare(this.holder?.object3D);
     this.spare(this.shelf?.object3D);
-    for (const e of [this.root, this.holder, this.shelf, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
+    this.spare(this.viewRow?.object3D);
+    for (const e of [this.root, this.holder, this.shelf, this.viewRow, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
     this.restoreDesk();
   }
 }
