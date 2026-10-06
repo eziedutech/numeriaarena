@@ -200,15 +200,15 @@ const HOME = new Vector3(0, 0.023, -0.215);
  * the Fold Town sticker beside the book, and a paper hand shows a
  * first-time player what to do.
  */
-const GAME_W = 0.095;
+const GAME_W = 0.058;
 /** Lower than wide, so the block reaches less far towards the player; its heading keeps GAME_WORD_H. */
-const GAME_H = 0.064;
+const GAME_H = 0.042;
 const GAME_WORD_H = 0.0104;
-const GAMES_AT = new Vector3(-0.235, 0.04, 0.11);
-const SET_W = 0.08;
-const SET_H = 0.07;
-const SETTINGS_AT = new Vector3(0.18, 0.04, 0.13);
-const MENU_FOLD = 0.026;
+const GAMES_AT = new Vector3(-0.177, 0.04, 0.11);
+const SET_W = 0.045;
+const SET_H = 0.045;
+const SETTINGS_AT = new Vector3(0.125, 0.04, 0.13);
+const MENU_FOLD = 0.02;
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
 const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
@@ -236,7 +236,7 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-const BEST_AT = new Vector3(0.18, 0.115, 0.065);
+const BEST_AT = new Vector3(0.125, 0.102, 0.086);
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);

@@ -55,7 +55,7 @@ export interface SfxOptions {
 }
 
 const SFX_LEVEL = 0.8;
-const MUSIC_LEVEL = 0.32;
+const MUSIC_LEVEL = 0.38;
 
 let ctx: AudioContext | null = null;
 let sfxBus: GainNode;
@@ -357,12 +357,12 @@ function boing(dest: AudioNode, t: number, peak: number): void {
 // ------------------------------------------------------------ music
 
 /**
- * The background music: "Gone Fishin'" by memoraphile (CC0), one short
- * piece played round and round. It is fetched and decoded once the
+ * The background music: "Echo", a short piece the project owner made with an
+ * AI music tool, played round and round. It is fetched and decoded once the
  * AudioContext opens, and the loop skips the silence at either end of the
  * file so it goes round without a gap.
  */
-const MUSIC_URL = `${import.meta.env.BASE_URL}audio/gone-fishin.mp3`;
+const MUSIC_URL = `${import.meta.env.BASE_URL}audio/echo.mp3`;
 let track: AudioBuffer | null = null;
 let loading = false;
 let playing: AudioBufferSourceNode | null = null;

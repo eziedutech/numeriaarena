@@ -185,7 +185,7 @@ const EN = {
     Privacy:
       'We keep as little as we can. Without a class, nothing leaves this device. With a class, the server keeps a made-up player name (like BLUE CRANE 07) and the answers given, never a real name, email, photo, voice, or what the headset cameras see. Teachers who sign in share their name and email so we can run their classes.',
     'Credits and licenses':
-      'Built with the Immersive Web SDK (MIT) and three.js (MIT). Paper animals, letters and pictures are made by the project owner. The background music is “Gone Fishin’” by memoraphile (CC0). Every third-party part is listed with its license in the source repository.',
+      'Built with the Immersive Web SDK (MIT) and three.js (MIT). Paper animals, letters and pictures are made by the project owner. The background music was made by the project owner with an AI music tool. Every third-party part is listed with its license in the source repository.',
     About: 'Numeria Arena is a mixed reality maths game for children aged 10 to 12: a pop-up book opens on your real desk and paper animals bring you questions.',
   },
 };
@@ -367,7 +367,7 @@ const ID: typeof EN = {
     Privacy:
       'Kami menyimpan sesedikit mungkin. Tanpa kelas, tidak ada data yang keluar dari perangkat ini. Dengan kelas, server menyimpan nama pemain samaran (misalnya BLUE CRANE 07) dan jawaban, tidak pernah nama asli, email, foto, suara, atau apa yang dilihat kamera headset. Guru yang masuk memberikan nama dan email agar kami bisa menjalankan kelasnya.',
     'Credits and licenses':
-      'Dibangun dengan Immersive Web SDK (MIT) dan three.js (MIT). Hewan kertas, huruf, dan gambar dibuat oleh pemilik proyek. Musik latarnya “Gone Fishin’” karya memoraphile (CC0). Setiap bagian pihak ketiga tercatat bersama lisensinya di repositori sumber.',
+      'Dibangun dengan Immersive Web SDK (MIT) dan three.js (MIT). Hewan kertas, huruf, dan gambar dibuat oleh pemilik proyek. Musik latarnya dibuat oleh pemilik proyek dengan alat musik AI. Setiap bagian pihak ketiga tercatat bersama lisensinya di repositori sumber.',
     About: 'Numeria Arena adalah game matematika mixed reality untuk anak 10 sampai 12 tahun: buku pop-up terbuka di mejamu dan hewan kertas membawakan soal.',
   },
 };

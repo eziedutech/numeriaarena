@@ -207,7 +207,7 @@ export class ToolButton {
       return;
     }
     const two = lines.length > 1;
-    const size = two ? Math.min(W * 0.6, H * 0.44) : lines.length ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.42;
+    const size = two ? Math.min(W * 0.6, H * 0.44) : lines.length ? Math.min(W * 0.66, H * 0.56) : Math.min(W, H) * 0.65;
     const cy = two ? H * 0.31 : lines.length ? H * 0.4 : H / 2;
     const ink = this.opts.tint ?? s.ink;
     c.save();
