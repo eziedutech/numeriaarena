@@ -29,7 +29,13 @@ pub const CLASS_INSIGHT: Task = Task {
     student_data: true,
 };
 
-pub const TASKS: [&Task; 1] = [&CLASS_INSIGHT];
+/// One student's practice plan; asks the class insight's chain until bound its own.
+pub const PRACTICE_PLAN: Task = Task {
+    code: "practice_plan",
+    student_data: true,
+};
+
+pub const TASKS: [&Task; 2] = [&CLASS_INSIGHT, &PRACTICE_PLAN];
 
 pub fn task(code: &str) -> Option<&'static Task> {
     TASKS.into_iter().find(|t| t.code == code)

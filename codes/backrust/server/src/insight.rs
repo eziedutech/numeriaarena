@@ -23,7 +23,7 @@ use crate::rooms::Content;
 const VERSION: &str = "insight-2026-10-05";
 
 /// First tries the class (or seat) needs before a model is asked.
-const ENOUGH: i64 = 5;
+pub(crate) const ENOUGH: i64 = 5;
 /// A seat with this many first tries in a skill and under half right needs help there.
 const SEAT_ENOUGH: i64 = 3;
 /// Insights made for sample teachers in an hour, all together.
@@ -156,7 +156,7 @@ fn percent(right: i64, total: i64) -> i64 {
     }
 }
 
-fn first_tries(input: &Value) -> i64 {
+pub(crate) fn first_tries(input: &Value) -> i64 {
     input["skills"]
         .as_array()
         .into_iter()
@@ -209,31 +209,43 @@ fn texts(side: &Value) -> Result<Vec<&str>, String> {
     Ok(all)
 }
 
+/// The whole numbers a model may write about `input`.
+pub(crate) fn allowed_numbers(input: &Value) -> BTreeSet<u64> {
+    let mut allowed = BTreeSet::new();
+    numbers_in(input, &mut allowed);
+    allowed
+}
+
+/// One line of an answer: no dashes, links or codes, and no number over 10 the input does not have.
+pub(crate) fn check_line(s: &str, allowed: &BTreeSet<u64>) -> Result<(), String> {
+    if s.contains(['\u{2014}', '\u{2013}']) {
+        return Err("dash".into());
+    }
+    let lower = s.to_lowercase();
+    if lower.contains("http") || lower.contains("www.") || s.contains("](") {
+        return Err("link".into());
+    }
+    if s.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|w| w.contains('_'))
+    {
+        return Err("code".into());
+    }
+    if let Some(n) = numbers_of(s)
+        .into_iter()
+        .find(|n| *n > 10 && !allowed.contains(n))
+    {
+        return Err(format!("number {n}"));
+    }
+    Ok(())
+}
+
 /// Whether an answer may be shown: both languages in the shape asked for,
 /// no links or codes, and no number the input does not have.
 pub(crate) fn check_insight(input: &Value, out: &Value) -> Result<(), String> {
-    let mut allowed = BTreeSet::new();
-    numbers_in(input, &mut allowed);
+    let allowed = allowed_numbers(input);
     for lang in ["en", "id"] {
         for s in texts(&out[lang])? {
-            if s.contains(['\u{2014}', '\u{2013}']) {
-                return Err("dash".into());
-            }
-            let lower = s.to_lowercase();
-            if lower.contains("http") || lower.contains("www.") || s.contains("](") {
-                return Err("link".into());
-            }
-            if s.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                .any(|w| w.contains('_'))
-            {
-                return Err("code".into());
-            }
-            if let Some(n) = numbers_of(s)
-                .into_iter()
-                .find(|n| *n > 10 && !allowed.contains(n))
-            {
-                return Err(format!("number {n}"));
-            }
+            check_line(s, &allowed)?;
         }
     }
     Ok(())

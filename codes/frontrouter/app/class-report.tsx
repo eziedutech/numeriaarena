@@ -4,6 +4,7 @@ import type { User } from "firebase/auth";
 import { api, errorCode } from "./auth";
 import { ClassAi } from "./class-ai";
 import { ClassStudents } from "./class-students";
+import { ClassPractice } from "./class-practice";
 import { ClassInsight, type MistakeRow, type MistakeWords, words } from "./class-insight";
 import type { Lang } from "./legal";
 import { LessonLink } from "./lesson-link";
@@ -166,6 +167,8 @@ export function ClassReport({
     const s = seats.find((x) => x.number === n);
     return `${two(n)} ${names[n] || s?.pseudonym || ""}`.trim();
   };
+  // Who the report shows, at the top of a saved PDF.
+  const shown = pick === 0 ? t.whole : t.seat(two(pick), names[pick] || seats.find((s) => s.number === pick)?.pseudonym || "");
 
   const download = () => {
     if (!report) return;
@@ -220,7 +223,8 @@ export function ClassReport({
       {report && (
         <ClassInsight lang={lang} rows={rows} mistakes={mistakes} whole={pick === 0} skillTitle={skillTitle} mistake={mistake} seatName={seatName} />
       )}
-      {report && <ClassAi lang={lang} user={user} base={base} seat={pick} seatName={seatName} heading={`${heading}, ${pick === 0 ? t.whole : t.seat(two(pick), names[pick] || seats.find((s) => s.number === pick)?.pseudonym || "")}`} />}
+      {report && <ClassAi lang={lang} user={user} base={base} seat={pick} seatName={seatName} heading={`${heading}, ${shown}`} />}
+      {report && pick !== 0 && <ClassPractice lang={lang} user={user} base={base} seat={pick} skillTitle={skillTitle} heading={`${heading}, ${shown}`} />}
       {report && (
         <div className="report-sources">
           {(["class", "own"] as const).map((source) => {

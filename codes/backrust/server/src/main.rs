@@ -10,6 +10,7 @@ mod demo_teacher;
 mod insight;
 mod leaderboard;
 mod organizer;
+mod practice;
 mod rooms;
 mod town;
 
@@ -98,6 +99,7 @@ pub fn router(state: State) -> Router {
         .route("/api/classes/{id}/report", get(answers::report))
         .route("/api/classes/{id}/board", post(answers::board))
         .route("/api/classes/{id}/insight", post(insight::insight))
+        .route("/api/classes/{id}/practice", post(practice::practice))
         .route("/api/classes/{id}/leaderboard", get(leaderboard::for_class))
         .route(
             "/api/classes/{id}/global",
