@@ -1,4 +1,4 @@
-import { getLang, musicOn, onSettings, soundOn } from './settings.js';
+import { musicOn, onSettings, soundOn } from './settings.js';
 
 /**
  * Every sound of the game, made here with Web Audio, no sound files: paper
@@ -10,8 +10,7 @@ import { getLang, musicOn, onSettings, soundOn } from './settings.js';
  *
  * The browser lets sound start only after the player has touched the page,
  * so the AudioContext opens on the first press or key (entering XR is one).
- * Sounds asked for before then are simply not heard. The important ones
- * also show as a caption, sound on or off.
+ * Sounds asked for before then are simply not heard.
  */
 export type Cue =
   /** A paper button pressed. */
@@ -55,21 +54,8 @@ export interface SfxOptions {
   step?: number;
 }
 
-/** What the important sounds say on screen. */
-const CAPTIONS: Partial<Record<Cue, { en: string; id: string }>> = {
-  right: { en: 'soft chime', id: 'denting lembut' },
-  wrong: { en: 'paper boing', id: 'boing kertas' },
-  tick: { en: 'clock ticking', id: 'jam berdetak' },
-  timeUp: { en: "time's up bell", id: 'lonceng waktu habis' },
-  wave: { en: 'start chime', id: 'denting mulai' },
-  fanfare: { en: 'little fanfare', id: 'fanfare kecil' },
-  sparkle: { en: 'sparkle', id: 'kilau' },
-};
-/** A caption stays up this long; the same one again only keeps it up. */
-const CAPTION_MS = 1600;
-
 const SFX_LEVEL = 0.8;
-const MUSIC_LEVEL = 0.06;
+const MUSIC_LEVEL = 0.32;
 
 let ctx: AudioContext | null = null;
 let sfxBus: GainNode;
@@ -80,7 +66,6 @@ let ears: ((pos: Float32Array, forward: Float32Array, up: Float32Array) => boole
 const earPos = new Float32Array(3);
 const earFwd = new Float32Array(3);
 const earUp = new Float32Array(3);
-const captionListeners = new Set<(text: string) => void>();
 
 /** Opens the AudioContext (or wakes it) on a press, a touch or a key. */
 function unlock(): void {
@@ -143,15 +128,8 @@ export function setEars(f: typeof ears): void {
   ears = f;
 }
 
-/** Runs `f` with the text of every caption shown. */
-export function onCaption(f: (text: string) => void): () => void {
-  captionListeners.add(f);
-  return () => captionListeners.delete(f);
-}
-
 /** Plays a sound now; with `at`, from that place when the listener's head is known. */
 export function sfx(cue: Cue, opts?: SfxOptions): void {
-  caption(cue);
   if (!ctx || ctx.state !== 'running' || !soundOn()) return;
   const t = ctx.currentTime + 0.005;
   const out = placed(opts?.at);
@@ -237,53 +215,6 @@ const FANFARE = [523.25, 659.25, 783.99, 1046.5];
 const FANFARE_CHORD = [1046.5, 1318.51, 1567.98];
 const STARS = [1046.5, 1318.51, 1567.98];
 const SPARKLE = [1567.98, 2093, 2637.02];
-
-let lastCaption = '';
-let lastCaptionAt = 0;
-
-function caption(cue: Cue): void {
-  const words = CAPTIONS[cue];
-  if (!words) return;
-  const text = `[${words[getLang()]}]`;
-  const now = performance.now();
-  // A clock that ticks every second says so once, not ten times.
-  if (text === lastCaption && now - lastCaptionAt < CAPTION_MS * 2) {
-    lastCaptionAt = now;
-    showCaption(text, false);
-    return;
-  }
-  lastCaption = text;
-  lastCaptionAt = now;
-  showCaption(text, true);
-  for (const f of captionListeners) f(text);
-}
-
-// ------------------------------------------------------------ captions on the page
-
-let chip: HTMLDivElement | null = null;
-let chipTimer = 0;
-
-/** A small paper chip low in the middle of the page, read out by screen readers. */
-function showCaption(text: string, fresh: boolean): void {
-  if (typeof document === 'undefined') return;
-  if (!chip) {
-    chip = document.createElement('div');
-    chip.id = 'sound-caption';
-    chip.setAttribute('role', 'status');
-    chip.setAttribute('aria-live', 'polite');
-    chip.style.cssText =
-      'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;pointer-events:none;' +
-      'padding:6px 14px;background:#fff8ec;color:#3a2a1e;font:700 16px "Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;' +
-      'box-shadow:3px 4px 10px rgba(120,70,30,0.22);opacity:0;transition:opacity 0.2s';
-    document.body.appendChild(chip);
-  }
-  if (fresh) chip.textContent = text;
-  chip.style.opacity = '1';
-  window.clearTimeout(chipTimer);
-  chipTimer = window.setTimeout(() => {
-    if (chip) chip.style.opacity = '0';
-  }, CAPTION_MS);
-}
 
 // ------------------------------------------------------------ building blocks
 
@@ -427,9 +358,10 @@ function boing(dest: AudioNode, t: number, peak: number): void {
 
 /**
  * Quiet marimba music, made up as it plays: four chords round and round
- * (C, A minor, F, G), a low note on each beat that starts a bar, and the
- * chord's notes picked now and then on the eighths, with a rest more often
- * than not so it stays in the background. Notes are planned a little ahead
+ * (C, A minor, F, G), a low note on the first and third beat of a bar, and
+ * the chord's notes picked now and then on the eighths, with rests between
+ * so it stays in the background. The low notes stay above 170 Hz, which
+ * laptop and headset speakers still play. Notes are planned a little ahead
  * on a timer, not on the frame loop.
  */
 const BEAT_S = 60 / 72;
@@ -451,6 +383,7 @@ function syncMusic(): void {
   const on = musicOn();
   musicBus.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, ctx.currentTime, 0.4);
   if (on && !musicTimer) {
+    console.info('[audio] music on');
     stepAt = ctx.currentTime + 0.3;
     musicTimer = window.setInterval(planMusic, 120);
   } else if (!on && musicTimer) {
@@ -473,10 +406,10 @@ function planMusic(): void {
     const bar = Math.floor(step / 8);
     const chord = CHORDS[Math.floor(bar / 2) % CHORDS.length];
     const inBar = step % 8;
-    if (inBar === 0) marimba(musicBus, chord[0] / 2, stepAt, 0.55);
-    if (inBar === 4) marimba(musicBus, chord[2] / 2, stepAt, 0.4);
-    // A melody note on about a third of the eighths, never the same twice running.
-    const odds = inBar % 2 === 0 ? 0.45 : 0.22;
+    if (inBar === 0) marimba(musicBus, chord[0], stepAt, 0.5);
+    if (inBar === 4) marimba(musicBus, chord[1], stepAt, 0.38);
+    // A melody note on about two eighths in five, never the same twice running.
+    const odds = inBar % 2 === 0 ? 0.55 : 0.28;
     if (Math.random() < odds) {
       let n = 1 + Math.floor(Math.random() * (chord.length - 1));
       if (n === lastNote) n = n === chord.length - 1 ? 1 : n + 1;

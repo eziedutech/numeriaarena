@@ -81,13 +81,12 @@ const CSS = `
 #home .title { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: 430px; }
 #home .shadow { box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); }
 #home .tabs { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; }
-#home .tab { padding: 10px 18px; background: ${PAPER}; display: flex; align-items: center; cursor: pointer; border: 0; }
-#home .tab.label { cursor: default; }
-#home .tab.on { background: ${COLORS.teal}; }
+#home .tab { padding: 8px 16px; background: ${PAPER}; color: #3469c4; display: flex; align-items: center; cursor: pointer; border: 0; }
+#home .tab.on { background: ${COLORS.teal}; color: ${PAPER}; }
 #home .tab.off { opacity: 0.45; cursor: not-allowed; }
-#home .chips.top { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; width: max-content; gap: 28px; margin-top: 12px; }
+#home .chips.top { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; width: max-content; gap: 18px; margin-top: 12px; }
 #home .chip.off { opacity: 0.6; }
-#home .chip { padding: 9px 16px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
+#home .chip { padding: 8px 12px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
 #home .offline { position: absolute; left: 50%; top: 304px; transform: translateX(-50%); }
@@ -192,14 +191,23 @@ const store = {
   },
 };
 
-/** Line icons for SOUND and MUSIC, in the accessibility chip's blue. */
-const ICON = (paths: string[]) =>
-  `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3469c4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths
+/** Line icons for the header's buttons, in the accessibility chip's blue (or the text colour). */
+const ICON = (paths: string[], size = 22, color = '#3469c4') =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths
     .map((d) => `<path d="${d}"/>`)
     .join('')}</svg>`;
 const SOUND_ICON = ICON(['M11 5L6 9H2v6h4l5 4z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14']);
 const SOUND_OFF_ICON = ICON(['M11 5L6 9H2v6h4l5 4z', 'M22 9l-6 6', 'M16 9l6 6']);
-const MUSIC_ICON = ICON(['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0']);
+const MUSIC_PATHS = ['M9 18V5l12-2v13', 'M9 18a3 3 0 1 0-6 0a3 3 0 1 0 6 0', 'M21 16a3 3 0 1 0-6 0a3 3 0 1 0 6 0'];
+const MUSIC_ICON = ICON(MUSIC_PATHS);
+const MUSIC_OFF_ICON = ICON([...MUSIC_PATHS, 'M3 3l18 18']);
+const GLOBE_ICON = ICON(['M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20']);
+/** Where to play: a computer, a headset, a classroom board on its stand. */
+const DEVICE_ICON: Record<Device, string> = {
+  computer: ICON(['M3 4h18v12H3z', 'M8 20h8', 'M12 16v4'], 28, 'currentColor'),
+  xr: ICON(['M2 8.5A1.5 1.5 0 0 1 3.5 7h17A1.5 1.5 0 0 1 22 8.5v7a1.5 1.5 0 0 1-1.5 1.5H16l-2-3h-4l-2 3H3.5A1.5 1.5 0 0 1 2 15.5z'], 28, 'currentColor'),
+  smartboard: ICON(['M3 3h18v12H3z', 'M7 8h6', 'M7 11h9', 'M12 15v3', 'M8 21l4-3 4 3'], 28, 'currentColor'),
+};
 
 export class Home {
   private root: HTMLDivElement;
@@ -372,14 +380,15 @@ export class Home {
     title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.webp`;
     title.alt = 'Numeria Arena';
 
-    // Where to play: one of three, or on a headset XR or this window.
+    // Where to play: one of three, or on a headset XR or this window. Icons
+    // only, named on hover and to screen readers; the hint below says more.
     const tabs = el('div', 'tabs shadow', this.stage);
-    el('div', 'tab label', tabs).appendChild(paperText(t.playOn, 20, INK));
     for (const d of (this.onHeadset ? ['xr', 'computer'] : ['computer', 'xr', 'smartboard']) as Device[]) {
       const off = d === 'xr' && !this.xrAvailable;
       const name = this.onHeadset && d === 'computer' ? t.window : t.device[d];
       const tab = el('button', `tab${this.device === d ? ' on' : ''}${off ? ' off' : ''}`, tabs);
-      tab.appendChild(paperText(name, 20, this.device === d ? PAPER : INK));
+      tab.innerHTML = DEVICE_ICON[d];
+      tab.title = `${t.playOn} ${name}`;
       tab.setAttribute('aria-label', `${t.playOn} ${name}`);
       tab.setAttribute('aria-pressed', String(this.device === d));
       // Without a headset the tab stays, and says where the game opens on one.
@@ -391,7 +400,8 @@ export class Home {
     }
     const chips = el('div', 'chips top', this.stage);
     const lang = el('div', 'chip shadow', chips);
-    lang.appendChild(paperText(t.language, 17, INK));
+    lang.innerHTML = GLOBE_ICON;
+    lang.title = t.language;
     for (const code of ['en', 'id'] as Lang[]) {
       const seg = el('button', `seg${this.lang === code ? ' on' : ''}`, lang);
       seg.style.border = '0';
@@ -405,13 +415,13 @@ export class Home {
     access.style.cursor = 'pointer';
     access.innerHTML =
       '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="4" r="3.2" fill="#3469c4"/><path d="M2 8h18v3h-6v10h-3v-6h0v6H8V11H2z" fill="#3469c4"/></svg>';
-    access.appendChild(paperText(t.accessibility, 17, INK));
+    access.title = t.accessibility;
     access.setAttribute('aria-label', t.accessibility);
     access.addEventListener('click', () => this.accessibility());
     // Sound effects and the music, each on or off with one press.
     const toggles: [string, string, () => boolean, (on: boolean) => void, (on: boolean) => string][] = [
       [SOUND_ICON, SOUND_OFF_ICON, soundOn, setSound, t.sound],
-      [MUSIC_ICON, MUSIC_ICON, musicOn, setMusic, t.music],
+      [MUSIC_ICON, MUSIC_OFF_ICON, musicOn, setMusic, t.music],
     ];
     for (const [icon, offIcon, isOn, set, word] of toggles) {
       const on = isOn();
@@ -419,7 +429,7 @@ export class Home {
       b.style.border = '0';
       b.style.cursor = 'pointer';
       b.innerHTML = on ? icon : offIcon;
-      b.appendChild(paperText(word(on), 17, INK));
+      b.title = word(on);
       b.setAttribute('aria-label', word(on));
       b.setAttribute('aria-pressed', String(on));
       b.addEventListener('click', () => {

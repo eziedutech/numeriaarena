@@ -74,7 +74,7 @@ import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } 
 import { LocalStore, sharedStore } from './storage.js';
 import { T, useLanguage } from './text.js';
 import { ROOMS, bigText, getLang, getRoom, musicOn, onSettings, setBigText, setLang, setMusic, setRoom, setSound, soundOn, textScale } from './settings.js';
-import { onCaption, setEars, sfx, type Cue, type Spot } from './audio.js';
+import { setEars, sfx, type Cue, type Spot } from './audio.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
@@ -222,9 +222,6 @@ const GAME_TINT: Record<MenuChoice, string> = {
   balance_gate: '#5aa469',
 };
 const BEST_AT = new Vector3(0.18, 0.115, 0.065);
-/** A caption for an important sound, low in the view in the headset, and how long it stays. */
-const CAPTION_AT = new Vector3(0, -0.17, -0.6);
-const CAPTION_S = 1.6;
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
 const TOWN_AT = new Vector3(-0.29, 0.0, -0.08);
@@ -577,8 +574,6 @@ export class GameSystem extends createSystem({
   private spotAt: Spot = { x: 0, y: 0, z: 0 };
   private earV = new Vector3();
   private earQ = new Quaternion();
-  private caption?: Label;
-  private captionLeft = 0;
   /** The round clock's last whole second ticked, so each second ticks once. */
   private lastTick = -1;
 
@@ -609,8 +604,6 @@ export class GameSystem extends createSystem({
       up[2] = this.earV.z;
       return true;
     });
-    // The page shows captions itself; in the headset they float low in the view.
-    this.cleanupFuncs.push(onCaption((text) => this.showCaption(text)));
     this.stage = {
       add: (obj) => this.add(obj),
       remove: (e) => this.remove(e),
@@ -3201,25 +3194,7 @@ export class GameSystem extends createSystem({
     if (s >= 1 && s <= TICK_FROM_S) sfx(s <= 3 ? 'tickLast' : 'tick');
   }
 
-  /** A sound's caption in the headset, low in the view; the page shows its own. */
-  private showCaption(text: string): void {
-    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
-    if (!this.caption) {
-      this.caption = new Label(text, { height: 0.022 });
-      this.caption.mesh.name = 'sound-caption';
-      this.caption.mesh.position.copy(CAPTION_AT);
-      this.camera.add(this.caption.mesh);
-    }
-    this.caption.set(text);
-    this.caption.mesh.visible = true;
-    this.captionLeft = CAPTION_S;
-  }
-
   update(delta: number): void {
-    if (this.captionLeft > 0) {
-      this.captionLeft -= delta;
-      if (this.captionLeft <= 0 && this.caption) this.caption.mesh.visible = false;
-    }
     // The classroom's board shows the player's question as on its card.
     classroom.question = this.race ? (this.prompt?.value ?? '') : '';
     if (this.pausedAt !== undefined) return;
