@@ -8,14 +8,17 @@ import { T } from './text.js';
  * A small card beside HOME, only in the browser's XR emulator (IWER), that
  * seats the emulated headset or stands it up again with one trigger click:
  * the eyes, controllers and hands go down to a seated child's height over
- * the desk, or back to IWER's standing rest. The desk never moves, as a
+ * the desk, or back to IWER's standing rest; once left, each goes back to
+ * just where it was, controllers' tilt and all. The desk never moves, as a
  * real one does not when a child sits down. A real headset follows the
  * body, so the card never shows there (or in a build).
  */
 interface EmulatedPose {
-  position: { y: number; set(x: number, y: number, z: number): void };
-  quaternion: { set(x: number, y: number, z: number, w: number): void };
+  position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void };
+  quaternion: { x: number; y: number; z: number; w: number; set(x: number, y: number, z: number, w: number): void };
 }
+/** A pose copied out, as [x, y, z] and [x, y, z, w]. */
+type Kept = { p: [number, number, number]; q: [number, number, number, number] };
 interface EmulatedDevice extends EmulatedPose {
   /**
    * IWER's panel keeps its own copy of the pose and writes it back every frame
@@ -71,6 +74,13 @@ export class DevSeatSystem extends createSystem({
   private inverse = new Matrix4();
   private dir = new Vector3();
   private toggledAt = -Infinity;
+  /**
+   * The eyes, controllers and hands as they were when last left seated or
+   * standing, each keyed by name: going back puts them there again, so the
+   * card is in reach just as it was (IWER's standing rest has its
+   * controllers lower and tilted, not where the made up pose puts them).
+   */
+  private kept: Record<'seated' | 'standing', Map<string, Kept> | undefined> = { seated: undefined, standing: undefined };
 
   /** Made once the emulator and the desk are up, as a child of the desk. */
   private build(desk: Entity): void {
@@ -142,6 +152,8 @@ export class DevSeatSystem extends createSystem({
     if (!device || performance.now() - this.toggledAt < TOGGLE_GAP_MS) return;
     this.toggledAt = performance.now();
     const sit = !this.seated(device, desk);
+    this.kept[sit ? 'standing' : 'seated'] = this.keep(device);
+    const back = this.kept[sit ? 'seated' : 'standing'];
     const head = sit ? (desk.object3D?.position.y ?? 0) + SEATED_EYES_ABOVE_DESK_M : STAND_HEAD_M;
     const hands = head - HANDS_BELOW_EYES_M;
     const z = sit ? -SEATED_FORWARD_M : 0;
@@ -156,6 +168,7 @@ export class DevSeatSystem extends createSystem({
         pose?.quaternion.set(0, 0, 0, 1);
       }
     }
+    if (back) for (const [name, pose] of this.poses(device)) this.put(pose, back.get(name));
     // Hand the new pose to the panel, as the CLI's set-transform does, then give the mouse and keys back.
     const mode = device.controlMode;
     const locked = document.pointerLockElement ?? undefined;
@@ -165,6 +178,32 @@ export class DevSeatSystem extends createSystem({
       device.controlMode = mode;
     }
     this.relock = locked;
-    console.info(`[dev] headset ${sit ? 'seated' : 'standing'}: eyes ${head.toFixed(2)} m`);
+    console.info(`[dev] headset ${sit ? 'seated' : 'standing'}: eyes ${device.position.y.toFixed(2)} m`);
+  }
+
+  private poses(device: EmulatedDevice): [string, EmulatedPose | undefined][] {
+    return [
+      ['head', device],
+      ['controller-left', device.controllers.left],
+      ['controller-right', device.controllers.right],
+      ['hand-left', device.hands.left],
+      ['hand-right', device.hands.right],
+    ];
+  }
+
+  private keep(device: EmulatedDevice): Map<string, Kept> {
+    const kept = new Map<string, Kept>();
+    for (const [name, pose] of this.poses(device)) {
+      if (!pose) continue;
+      const { position: p, quaternion: q } = pose;
+      kept.set(name, { p: [p.x, p.y, p.z], q: [q.x, q.y, q.z, q.w] });
+    }
+    return kept;
+  }
+
+  private put(pose: EmulatedPose | undefined, kept: Kept | undefined): void {
+    if (!pose || !kept) return;
+    pose.position.set(...kept.p);
+    pose.quaternion.set(...kept.q);
   }
 }
