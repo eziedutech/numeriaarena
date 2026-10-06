@@ -1899,8 +1899,15 @@ export class GameSystem extends createSystem({
       aimed: (side) => this.input.xr.multiPointers[side].getPointer('ray').getIntersection()?.object,
       select: (side) => {
         const state = (this.input.xr as unknown as { handSelectFrameState?: Record<string, { start: boolean; end: boolean }> }).handSelectFrameState;
-        return { start: !!state?.[side]?.start, end: !!state?.[side]?.end };
+        const pad = this.controllersOnly() ? this.input.xr.gamepads[side] : undefined;
+        return { start: !!state?.[side]?.start || !!pad?.getSelectStart(), end: !!state?.[side]?.end || !!pad?.getSelectEnd() };
       },
+      squeeze: (side) => {
+        const pad = this.controllersOnly() ? this.input.xr.gamepads[side] : undefined;
+        return { start: !!pad?.getButtonDown(SQUEEZE), end: !!pad?.getButtonUp(SQUEEZE) };
+      },
+      grip: (side) => this.player.gripSpaces[side],
+      controllers: () => this.controllersOnly(),
       emulated: emulatedHands,
       closed: (note) => this.closeTown(note),
     };

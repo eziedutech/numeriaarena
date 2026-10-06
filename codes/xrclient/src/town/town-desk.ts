@@ -27,10 +27,12 @@ import { TOWN_TEXT, waitText } from './town-text.js';
 
 /**
  * MY FOLD TOWN in the headset: the desk is cleared and the town's newest land
- * lies on it alone, the shop's shelf on its right. A piece is pinched from the
- * shelf (or from the land), carried over a tile with its green or orange
- * shadow and let go to place it. Let go off the land, a placed piece is
- * removed and its Folds come back. A building session lasts two minutes; the town is saved
+ * lies on it alone, the shop's shelf standing on its right like a screen. As
+ * with the game's crystals, a controller's grip held on a piece (on the shelf
+ * or the land) takes it into the hand, and a hand's pinch does the same; it
+ * is carried with its ray over a tile, which shows a green or orange shadow,
+ * and let go to place it. Let go off the land, a placed piece is removed and
+ * its Folds come back. A building session lasts two minutes; the town is saved
  * with every change.
  */
 
@@ -69,6 +71,12 @@ export interface TownHost {
   aimed(side: Side): Object3D | undefined;
   /** This frame's select (pinch or trigger) edges. */
   select(side: Side): { start: boolean; end: boolean };
+  /** This frame's grip edges of a controller (never for a hand). */
+  squeeze(side: Side): { start: boolean; end: boolean };
+  /** Where a controller is held. */
+  grip(side: Side): Object3D;
+  /** Controllers in the hands, no tracked hand. */
+  controllers(): boolean;
   /** The emulator's hands: a pinch may take what the other ray is on. */
   emulated(): boolean;
   /** The town is done with; `note` is said on the menu. */
@@ -76,10 +84,10 @@ export interface TownHost {
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
-/** One tile of the land on the desk, in metres. */
-const TILE = 0.03;
+/** One tile of the land on the desk, in metres: the land is 65 cm wide. */
+const TILE = 0.065;
 /** The middle of the land, front to back on the desk. */
-const PAGE_Z = -0.07;
+const PAGE_Z = -0.17;
 const LIMIT_S = 120;
 /** A pinch let go sooner than this is a tap: the piece stays on the ray until the next pinch. */
 const TAP_MS = 300;
@@ -89,47 +97,57 @@ const FOLD_S = 0.7;
 const RISE_S = 1.6;
 /** How far off the page, in tiles, still counts as over it. */
 const PAGE_MARGIN = 0.6;
+/** A piece in the hand is a little smaller than on the land, and a hand carries it under its ray. */
+const CARRY_SCALE = 0.8;
+const HAND_CARRY_DROP = 0.05;
 
 /**
- * The shelf on the right of the land: two rows of tabs at the back, then
- * three rows of four pieces, and the page arrows at the front.
+ * The shelf stands on the right of the land and leans its face to the
+ * player: two rows of tabs at the top, three rows of four pieces each on its
+ * own ledge with its price under it, and the page arrows at the bottom.
  */
-const SHELF_X = 0.215;
-const SHELF_STEP = 0.068;
+const SHELF_AT = new Vector3(0.68, 0, -0.17);
+const SHELF_TURN = -0.5;
 const SHELF_COLS = 4;
-const SHELF_MID_X = SHELF_X + ((SHELF_COLS - 1) * SHELF_STEP) / 2;
-const SHELF_MID_Z = -0.0625;
-const TAB_Z = -0.19;
-const TAB_STEP = 0.03;
-const TAB_TEXT = 0.0085;
-const SLOT_Z = -0.115;
-const SLOT_STEP = 0.065;
+const CELL_W = 0.11;
+const SHELF_W = SHELF_COLS * CELL_W + 0.02;
+const SHELF_H = 0.56;
+const TAB_Y = [0.525, 0.478];
+const TAB_TEXT = 0.016;
+const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
-const PAGER_Z = 0.065;
-const SLOT = 0.046;
-/** Shelf pieces are turned a little, so they show a side as well as the front. */
+const PAGER_Y = 0.035;
+const SLOT = 0.075;
+/** Shelf pieces are turned a little and lean back, so they show a side and their top as well as the front. */
 const MINI_TURN = 0.45;
-const HEADER = new Vector3(0, 0.17, -0.14);
-/** A building's card stands left of the book, its answers on the desk below it. */
-const CARD = new Vector3(-0.45, 0.3, -0.12);
+const MINI_TILT = 0.3;
+const BAR_W = 0.32;
+const HEADER = new Vector3(0, 0.28, -0.44);
+/** A building's card stands left of the land, its answers on the desk below it. */
+const CARD = new Vector3(-0.62, 0.34, -0.25);
 const CARD_CHARS = 32;
-const ANSWER_X = [-0.56, -0.45, -0.34];
-const ANSWER_Z = -0.03;
-const CLOSE_AT = [-0.47, 0.06] as const;
+const ANSWER_X = [-0.74, -0.62, -0.5];
+const ANSWER_Z = -0.17;
+const CLOSE_AT = [-0.64, -0.06] as const;
+const BUTTON_X = -0.45;
 const KIND_COLOR: Record<LandKind, number> = { plain: 0x5aa469, river: 0x3469c4, hills: 0x9b6bc2, beach: 0xe0a33c };
 const ORANGE = 0xf28c38;
 const TEAL = 0x3fb6a0;
 
-const slotGeo = new BoxGeometry(SLOT + 0.012, SLOT + 0.02, SLOT + 0.012);
+const col = (i: number) => (i - (SHELF_COLS - 1) / 2) * CELL_W;
+const slotGeo = new BoxGeometry(CELL_W - 0.006, 0.105, 0.07);
 const slotMat = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-const tabGeo = new BoxGeometry(SHELF_STEP - 0.006, 0.012, TAB_STEP - 0.004);
-const plateGeo = new BoxGeometry(SHELF_COLS * SHELF_STEP + 0.013, 0.002, 0.305);
+const tabGeo = new BoxGeometry(CELL_W - 0.008, 0.04, 0.01);
+const stepGeo = new BoxGeometry(0.08, 0.05, 0.02);
+const boardGeo = new BoxGeometry(SHELF_W, SHELF_H, 0.012);
+const ledgeGeo = new BoxGeometry(CELL_W - 0.012, 0.005, 0.06);
 const plateMat = new MeshStandardMaterial({ color: 0xf6ead0, roughness: 1 });
+const ledgeMat = new MeshStandardMaterial({ color: 0xe6d3ad, roughness: 1 });
 const barGeo = new PlaneGeometry(1, 1);
 const barMat = new MeshBasicMaterial({ color: TEAL });
 const spareMat = new MeshBasicMaterial();
 /** Materials every page and the shelf share, never freed with one of them. */
-const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, barMat]);
+const SHARED = new Set<Material>([townMaterial(), slotMat, plateMat, ledgeMat, barMat]);
 
 type Line = [text: string, height: number, ink?: number];
 
@@ -156,6 +174,10 @@ interface Carry {
   x: number;
   y: number;
   fits: string;
+  /** Taken by a controller's grip: let go when the grip opens. */
+  grip: boolean;
+  /** The piece itself, in the hand. */
+  model: Group;
 }
 
 export class TownDesk {
@@ -195,6 +217,7 @@ export class TownDesk {
   private o = new Vector3();
   private d = new Vector3();
   private p = new Vector3();
+  private hold = new Vector3();
   private q = new Quaternion();
 
   static async open(host: TownHost): Promise<TownDesk> {
@@ -218,14 +241,14 @@ export class TownDesk {
     const header = new Group();
     header.position.copy(HEADER);
     g.add(header);
-    this.text(this.t.title, 0.026, header, 0.07);
-    this.folds = this.text('', 0.02, header, 0.038);
-    this.status = this.text('', 0.016, header, 0.008);
+    this.text(this.t.title, 0.034, header, 0.092);
+    this.folds = this.text('', 0.026, header, 0.05);
+    this.status = this.text('', 0.02, header, 0.012);
     this.bar = new Mesh(barGeo, barMat);
-    this.bar.position.set(0, -0.014, 0);
-    this.bar.scale.set(0.22, 0.004, 1);
+    this.bar.position.set(0, -0.018, 0);
+    this.bar.scale.set(BAR_W, 0.005, 1);
     header.add(this.bar);
-    this.buttons.set('town_done', host.button('town_done', this.t.xr.done, -0.355, 0.06, 0x3469c4));
+    this.buttons.set('town_done', host.button('town_done', this.t.xr.done, BUTTON_X, 0.05, 0x3469c4));
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
     this.redraw();
@@ -254,7 +277,7 @@ export class TownDesk {
       this.say(this.t.xr.pickLandXr, 0);
       return;
     }
-    if (!this.buttons.has('town_turn')) this.buttons.set('town_turn', this.host.button('town_turn', this.t.turn, -0.24, 0.06, 0xe8b64c));
+    if (!this.buttons.has('town_turn')) this.buttons.set('town_turn', this.host.button('town_turn', this.t.turn, BUTTON_X, -0.05, 0xe8b64c));
     this.drawPage(kind, v.items);
     const key = `${v.balance}|${v.buildings}`;
     if (key !== this.shelfKey) this.drawShelf(v.balance, v.buildings);
@@ -296,16 +319,18 @@ export class TownDesk {
   }
 
   /**
-   * The shop's shelf on the right of the land: its parts as tabs, then one
-   * page of that part's pieces, open ones first, each with its price.
+   * The shop's shelf standing on the right of the land: its parts as tabs,
+   * then one page of that part's pieces, open ones first, each with its price.
    */
   private drawShelf(balance: number, buildings: number): void {
     if (!this.shelf) {
       const g = new Group();
       g.name = 'town-shelf';
-      const plate = new Mesh(plateGeo, plateMat);
-      plate.position.set(SHELF_MID_X, 0.001, SHELF_MID_Z);
-      g.add(plate);
+      g.position.copy(SHELF_AT);
+      g.rotation.y = SHELF_TURN;
+      const board = new Mesh(boardGeo, plateMat);
+      board.position.set(0, SHELF_H / 2, -0.04);
+      g.add(board);
       this.shelf = this.host.add(g, true);
     }
     const g = this.shelf.object3D!;
@@ -320,20 +345,17 @@ export class TownDesk {
       const tab = new Group();
       tab.name = `town-tab-${shelf}`;
       tab.userData.townTab = shelf;
-      tab.position.set(SHELF_X + (i % SHELF_COLS) * SHELF_STEP, 0, TAB_Z + Math.floor(i / SHELF_COLS) * TAB_STEP);
-      const hit = new Mesh(tabGeo, slotMat);
-      hit.position.y = 0.006;
-      tab.add(hit);
+      tab.position.set(col(i % SHELF_COLS), TAB_Y[Math.floor(i / SHELF_COLS)], -0.028);
+      tab.add(new Mesh(tabGeo, slotMat));
       if (on) {
-        const mark = new Mesh(tabGeo, barMat);
-        mark.scale.y = 0.15;
-        mark.position.y = 0.0015;
+        const mark = new Mesh(barGeo, barMat);
+        mark.scale.set(CELL_W - 0.016, 0.004, 1);
+        mark.position.set(0, -0.017, 0.006);
         tab.add(mark);
       }
       const l = new Label(lang === 'id' ? id : en, on ? { height: TAB_TEXT, ink: TEAL } : { height: TAB_TEXT, ink: 0x6b6f7a });
-      l.mesh.position.set(0, 0.012, 0);
+      l.mesh.position.z = 0.006;
       tab.add(l.mesh);
-      this.host.billboard(l.mesh);
       content.add(tab);
     });
     const here = r.catalog.filter((a) => pieceInfo(a.id)?.shelf === this.shelfOn);
@@ -345,43 +367,38 @@ export class TownDesk {
       const slot = new Group();
       slot.name = `town-shelf-${a.id}`;
       slot.userData.townShelf = a.id;
-      slot.position.set(SHELF_X + (i % SHELF_COLS) * SHELF_STEP, 0, SLOT_Z + Math.floor(i / SHELF_COLS) * SLOT_STEP);
+      slot.position.set(col(i % SHELF_COLS), LEDGE_Y[Math.floor(i / SHELF_COLS)], 0);
       const hit = new Mesh(slotGeo, slotMat);
-      hit.position.y = (SLOT + 0.02) / 2;
+      hit.position.y = 0.03;
       slot.add(hit);
+      const ledge = new Mesh(ledgeGeo, ledgeMat);
+      ledge.position.y = -0.0025;
+      slot.add(ledge);
       const piece = this.miniature(a);
       if (locked) piece.scale.multiplyScalar(0.7);
       slot.add(piece);
       const text = locked ? this.t.xr.lockedShort(a.unlock_at) : this.t.price(a.price);
       const ink = locked ? 0x8a8f9c : a.price > balance ? ORANGE : undefined;
-      const price = new Label(text, ink === undefined ? { height: 0.0095 } : { height: 0.0095, ink });
-      price.mesh.position.set(0, SLOT + 0.016, 0);
+      const price = new Label(text, ink === undefined ? { height: 0.014 } : { height: 0.014, ink });
+      price.mesh.position.set(0, -0.015, 0.032);
       slot.add(price.mesh);
-      this.host.billboard(price.mesh);
       content.add(slot);
     });
     if (pages > 1) {
-      for (const [step, x] of [
-        [-1, SHELF_MID_X - 0.07],
-        [1, SHELF_MID_X + 0.07],
-      ] as const) {
+      for (const step of [-1, 1] as const) {
         const b = new Group();
         b.name = `town-step-${step}`;
         b.userData.townStep = step;
-        b.position.set(x, 0, PAGER_Z);
-        const hit = new Mesh(tabGeo, slotMat);
-        hit.position.y = 0.006;
-        b.add(hit);
-        const l = new Label(step < 0 ? '<' : '>', { height: 0.016 });
-        l.mesh.position.set(0, 0.012, 0);
+        b.position.set(step * 0.12, PAGER_Y, -0.02);
+        b.add(new Mesh(stepGeo, slotMat));
+        const l = new Label(step < 0 ? '<' : '>', { height: 0.026 });
+        l.mesh.position.z = 0.012;
         b.add(l.mesh);
-        this.host.billboard(l.mesh);
         content.add(b);
       }
-      const n = new Label(this.t.xr.page(this.shelfPage + 1, pages), { height: 0.011, card: false });
-      n.mesh.position.set(SHELF_MID_X, 0.012, PAGER_Z);
+      const n = new Label(this.t.xr.page(this.shelfPage + 1, pages), { height: 0.018, card: false });
+      n.mesh.position.set(0, PAGER_Y, -0.02);
       content.add(n.mesh);
-      this.host.billboard(n.mesh);
     }
   }
 
@@ -396,13 +413,16 @@ export class TownDesk {
     void loadShelf(shelf).catch((error: unknown) => console.warn(`[town] shelf ${shelf}: ${String(error)}`));
   }
 
-  /** A shelf piece as a small model, its whole size inside one slot. */
+  /** A shelf piece as a small model on its ledge, its whole size inside one slot. */
   private miniature(a: Asset): Group {
     const piece = pieceObject(a.id);
     const top = pieceInfo(a.id)?.top ?? 1;
     piece.scale.setScalar(SLOT / Math.max(a.w, a.h, top));
     piece.rotation.y = MINI_TURN;
-    return piece;
+    const lean = new Group();
+    lean.rotation.x = MINI_TILT;
+    lean.add(piece);
+    return lean;
   }
 
   /**
@@ -443,9 +463,9 @@ export class TownDesk {
     this.kindCaption = undefined;
     if (!on) return;
     LAND_KINDS.forEach((k, i) => {
-      this.kindRow.push(this.host.button(`town_${k}` as TownChoice, this.t.kinds[k][0], -0.18 + i * 0.12, 0.13, KIND_COLOR[k]));
+      this.kindRow.push(this.host.button(`town_${k}` as TownChoice, this.t.kinds[k][0], -0.27 + i * 0.18, 0.13, KIND_COLOR[k]));
     });
-    const caption = new Label(this.model.view().lands.length ? this.t.newLand : this.t.pickLand, { height: 0.016 });
+    const caption = new Label(this.model.view().lands.length ? this.t.newLand : this.t.pickLand, { height: 0.022 });
     caption.mesh.position.set(0, 0.1, 0.13);
     this.root.object3D!.add(caption.mesh);
     this.host.billboard(caption.mesh);
@@ -478,6 +498,7 @@ export class TownDesk {
       if (this.carry) {
         this.carry.rot = (this.carry.rot + 90) % 360;
         this.carry.x = NaN;
+        this.carry.model.rotation.y = -(this.carry.rot * Math.PI) / 180;
       } else this.rot = (this.rot + 90) % 360;
       this.say(`${this.t.turn} ${this.carry?.rot ?? this.rot}°`);
       return;
@@ -493,7 +514,7 @@ export class TownDesk {
   update(delta: number): void {
     if (this.gone) return;
     this.left -= delta;
-    this.bar.scale.x = 0.22 * Math.max(0, this.left / LIMIT_S);
+    this.bar.scale.x = BAR_W * Math.max(0, this.left / LIMIT_S);
     if (this.left <= 0) {
       console.info('[town] building time is over');
       this.host.closed(this.t.xr.timeUp);
@@ -515,14 +536,20 @@ export class TownDesk {
     if (!this.page) return;
     for (const side of SIDES) {
       const s = this.host.select(side);
+      const g = this.host.squeeze(side);
       const c = this.carry;
-      if (c) {
+      if (c?.grip) {
+        if (g.end && side === c.side) {
+          this.drop();
+          return;
+        }
+      } else if (c) {
         if (s.end && side === c.side && !c.tapped && performance.now() - c.at < TAP_MS) c.tapped = true;
         else if ((s.end && side === c.side && !c.tapped) || (s.start && c.tapped && !this.onButton(side))) {
           this.drop();
           return;
         }
-      } else if (s.start && this.pick(side)) break;
+      } else if ((g.start && this.pick(side, true)) || (s.start && this.pick(side, false))) break;
     }
     if (this.carry) this.track();
   }
@@ -532,10 +559,10 @@ export class TownDesk {
     return false;
   }
 
-  /** Takes up what `side`'s ray is on: a shelf piece or a placed item. */
-  private pick(side: Side): boolean {
+  /** Takes up what `side`'s ray is on: a shelf piece or a placed item; `grip` when the controller's grip took it. */
+  private pick(side: Side, grip: boolean): boolean {
     const v = this.model.view();
-    const sides = this.host.emulated() ? [side, ...SIDES.filter((s) => s !== side)] : [side];
+    const sides = this.host.emulated() && !this.host.controllers() ? [side, ...SIDES.filter((s) => s !== side)] : [side];
     for (const from of sides) {
       for (let o = this.host.aimed(from); o; o = o.parent ?? undefined) {
         const tab = o.userData.townTab as string | undefined;
@@ -560,11 +587,11 @@ export class TownDesk {
             console.info(`[town] ${id} costs ${a.price}, ${v.balance} Folds kept`);
             return true;
           }
-          return this.take(from, id, '', this.rot);
+          return this.take(from, id, '', this.rot, grip);
         }
         const placeId = o.userData.placeId as string | undefined;
         const it = placeId && v.items.find((i) => i.id === placeId);
-        if (it) return this.take(from, it.asset, it.id, it.rot);
+        if (it) return this.take(from, it.asset, it.id, it.rot, grip);
         if (o.name === 'landmark' && this.model.doc.landmarks[this.land]) {
           this.showLandmark();
           return true;
@@ -579,20 +606,39 @@ export class TownDesk {
             const [w, h] = footprint(assetOf(i.asset)!, i.rot);
             return x >= i.x && x < i.x + w && y >= i.y && y < i.y + h;
           });
-          return under ? this.take(from, under.asset, under.id, under.rot) : false;
+          return under ? this.take(from, under.asset, under.id, under.rot, grip) : false;
         }
       }
     }
     return false;
   }
 
-  private take(side: Side, asset: string, placeId: string, rot: number): boolean {
+  private take(side: Side, asset: string, placeId: string, rot: number, grip: boolean): boolean {
     this.closeCard();
-    this.carry = { side, asset, placeId, rot, at: performance.now(), tapped: false, over: false, x: NaN, y: NaN, fits: '' };
+    const model = new Group();
+    model.name = 'town-carried';
+    model.add(pieceObject(asset));
+    model.scale.setScalar(TILE * CARRY_SCALE);
+    model.rotation.y = -(rot * Math.PI) / 180;
+    // It goes with the ray and must not stop it.
+    (model as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    this.root.object3D!.add(model);
+    this.carry = { side, asset, placeId, rot, at: performance.now(), tapped: false, over: false, x: NaN, y: NaN, fits: '', grip, model };
+    this.carryAlong();
     const obj = placeId ? this.page?.items.get(placeId) : undefined;
     if (obj) obj.visible = false;
-    console.info(`[town] ${placeId ? `took ${placeId}` : `took ${asset} from the shelf`} with the ${side} hand`);
+    console.info(`[town] ${placeId ? `took ${placeId}` : `took ${asset} from the shelf`} with the ${side} ${grip ? 'grip' : 'hand'}`);
     return true;
+  }
+
+  /** The carried piece in the hand: at a controller's grip, under a hand's ray. */
+  private carryAlong(): void {
+    const c = this.carry!;
+    const held = c.grip || this.host.controllers();
+    (held ? this.host.grip(c.side) : this.host.ray(c.side)).getWorldPosition(this.hold);
+    if (!held) this.hold.y -= HAND_CARRY_DROP;
+    this.root.object3D!.worldToLocal(this.hold);
+    c.model.position.copy(this.hold);
   }
 
   /** Where `side`'s ray meets the page's plane, in tiles, into `this.p`; false when it does not come down onto it. */
@@ -616,6 +662,7 @@ export class TownDesk {
   /** The carried piece follows its ray: a shadow on the page, or a word on what letting go does. */
   private track(): void {
     const c = this.carry!;
+    this.carryAlong();
     const a = assetOf(c.asset)!;
     const over = this.onPage(c.side);
     if (!over) {
@@ -651,6 +698,7 @@ export class TownDesk {
   private drop(): void {
     const c = this.carry!;
     this.carry = undefined;
+    this.drop3D(c.model);
     this.ghost.hide();
     this.message = '';
     const name = this.name(c.asset);
@@ -731,7 +779,7 @@ export class TownDesk {
     console.info(`[town] card of the landmark ${lm.landmark}`);
   }
 
-  /** Words cut to lines short enough to read beside the book. */
+  /** Words cut to lines short enough to read beside the land. */
   private wrap(text: string, into: Line[], height = 0.012): void {
     let line = '';
     for (const word of text.split(' ')) {
@@ -820,6 +868,7 @@ export class TownDesk {
     if (this.gone) return;
     this.gone = true;
     this.closeCard();
+    this.carry?.model.removeFromParent();
     this.unlisten();
     this.model.dispose();
     this.spare(this.holder?.object3D);
