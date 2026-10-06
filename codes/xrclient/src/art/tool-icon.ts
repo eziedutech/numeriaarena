@@ -45,12 +45,21 @@ const PX = 5120;
 /** The icon's stroke on its 24 unit grid: thin, as a web icon's. */
 const STROKE = 1.3;
 
-function plane(w: number, h: number, canvas: HTMLCanvasElement): { mesh: Mesh; texture: CanvasTexture } {
+/**
+ * The strip is drawn solid, its folded off corner cut by alphaTest, and the
+ * cells over it see through without writing depth: two see-through planes so
+ * close are sorted again as the view moves, and the strip would sometimes be
+ * drawn after the cells and hidden by their clear parts.
+ */
+function plane(w: number, h: number, canvas: HTMLCanvasElement, solid: boolean): { mesh: Mesh; texture: CanvasTexture } {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 4;
-  const material = new MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false });
+  const material = solid
+    ? new MeshBasicMaterial({ map: texture, alphaTest: 0.5, toneMapped: false })
+    : new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false });
   const mesh = new Mesh(new PlaneGeometry(w, h), material);
+  if (!solid) mesh.renderOrder = 10;
   return { mesh, texture };
 }
 
@@ -77,7 +86,7 @@ export class ToolButton {
   ) {
     this.canvas.width = Math.round(w * PX);
     this.canvas.height = Math.round(h * PX);
-    ({ mesh: this.mesh, texture: this.texture } = plane(w, h, this.canvas));
+    ({ mesh: this.mesh, texture: this.texture } = plane(w, h, this.canvas, false));
     this.paint();
     // Drawn again once the web font is in, should it not have been yet.
     void document.fonts?.ready.then(() => this.paint());
@@ -171,5 +180,5 @@ export function toolTray(w: number, h: number, fold: number): Mesh {
   c.lineTo(W - f, f);
   c.closePath();
   c.fill();
-  return plane(w, h, canvas).mesh;
+  return plane(w, h, canvas, true).mesh;
 }
