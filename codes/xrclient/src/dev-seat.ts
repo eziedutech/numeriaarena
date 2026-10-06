@@ -39,8 +39,8 @@ const HANDS_BELOW_EYES_M = 0.1;
 const SEATED_BELOW_DESK_M = 0.45;
 const HANDS_AHEAD_M = 0.4;
 const HANDS_APART_M = 0.25;
-/** In the desk's frame: right of HOME (game.ts HOME_CARD_X, ENVELOPE_Z), standing on the desk, small. */
-const CARD_AT = new Vector3(0.375, 0.04, 0.11);
+/** In the desk's frame: right of HOME (game.ts HOME_CARD_X, ENVELOPE_Z) and past the town's toolbar, standing on the desk, small. */
+const CARD_AT = new Vector3(0.5, 0.04, 0.17);
 /** A flat tile like the town's toolbar buttons: a chair to sit, a standing person to stand. */
 const CARD_W = 0.07;
 const CARD_H = 0.075;

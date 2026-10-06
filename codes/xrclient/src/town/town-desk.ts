@@ -99,8 +99,8 @@ export interface TownHost {
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
-/** One tile of the land on the desk, in metres: the land is 65 cm wide. */
-const TILE = 0.065;
+/** One tile of the land on the desk, in metres: the land is 75 cm wide. */
+const TILE = 0.075;
 /** The middle of the land, front to back on the desk. */
 const PAGE_Z = -0.17;
 /** A pinch let go sooner than this is a tap: the piece stays on the ray until the next pinch. */
@@ -146,8 +146,8 @@ const TAB_TEXT_TWO = 0.016;
 const LEDGE_Y = [0.33, 0.215, 0.1];
 const PER_PAGE = 12;
 const PAGER_Y = 0.035;
-/** The shelf's enlarge button, past its top right corner; pressed, the shelf stands twice as big about its middle, its left edge where it was. */
-const BIG_AT = new Vector3(SHELF_W / 2 + 0.032, SHELF_H - 0.026, -0.03);
+/** The shelf's enlarge button, standing on its top right corner; pressed, the shelf stands twice as big about its middle, its left edge where it was. */
+const BIG_AT = new Vector3(SHELF_W / 2 - 0.022 - 0.01, SHELF_H + 0.022, -0.04);
 const BIG_W = 0.044;
 const UP = new Vector3(0, 1, 0);
 /** The box a shelf piece fits in as it stands turned and leaning, so none reaches past its ledge, its neighbours or the board. */
@@ -157,7 +157,9 @@ const FIT_D = 0.055;
 /** Shelf pieces are turned a little and lean back, so they show a side and their top as well as the front. */
 const MINI_TURN = 0.45;
 const MINI_TILT = 0.3;
-const HEADER = new Vector3(0, 0.28, -0.44);
+/** The title, the Folds and the hint stand over the land's far edge, large enough to read from the chair. */
+const HEADER = new Vector3(0, 0.3, -0.5);
+const HEADER_SCALE = 1.5;
 /** A building's card stands left of the land, its answers on the desk below it. */
 const CARD = new Vector3(-0.62, 0.34, -0.25);
 const CARD_CHARS = 32;
@@ -320,6 +322,7 @@ export class TownDesk {
     this.root = host.add(g, false);
     const header = new Group();
     header.position.copy(HEADER);
+    header.scale.setScalar(HEADER_SCALE);
     g.add(header);
     this.text(this.t.title, 0.034, header, 0.092);
     this.folds = this.text('', 0.026, header, 0.05);
@@ -327,6 +330,7 @@ export class TownDesk {
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
     this.unlisten = model.onChange(() => this.redraw());
     this.redraw();
+    this.fillShelf(this.shelfOn);
     if (model.seat) void model.sync();
     console.info(`[town] opened in the headset: ${model.view().lands.length} land(s), ${model.view().balance} Folds`);
   }
@@ -495,7 +499,22 @@ export class TownDesk {
     this.drawShelf(v.balance, v.buildings);
     this.shelfKey = `${v.balance}|${v.buildings}`;
     // The part's models come in one pack; they fill the slots as it arrives.
-    void loadShelf(shelf).catch((error: unknown) => console.warn(`[town] shelf ${shelf}: ${String(error)}`));
+    this.fillShelf(shelf);
+  }
+
+  /**
+   * A shelf piece is fitted to its slot by its size when drawn, so a part
+   * whose models were not here yet is drawn again once they are.
+   */
+  private fillShelf(shelf: string): void {
+    loadShelf(shelf).then(
+      () => {
+        if (this.gone || shelf !== this.shelfOn) return;
+        const v = this.model.view();
+        this.drawShelf(v.balance, v.buildings);
+      },
+      (error: unknown) => console.warn(`[town] shelf ${shelf}: ${String(error)}`),
+    );
   }
 
   /** A shelf piece as a small model on its ledge, its whole size inside one slot. */
