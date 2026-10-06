@@ -38,9 +38,6 @@ export const TOWN = {
   ink: 0x3a3f4b,
 };
 
-/** Walls a house may be folded from, picked by its seed. */
-export const WALLS = [TOWN.cream, TOWN.coral, TOWN.sun, TOWN.teal, TOWN.violet, TOWN.cobalt];
-
 const LIGHT = new Vector3(-0.4, 0.7, 0.6).normalize();
 
 /** Tone of a fold facing `n`: between a darker and a lighter shade of `color`. */
@@ -73,13 +70,6 @@ export function rand(seed: number): () => number {
     s ^= s << 5;
     return (s >>> 0) / 4294967296;
   };
-}
-
-/** A seed from a building's id. */
-export function seedOf(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
-  return h >>> 0;
 }
 
 const va = new Vector3();

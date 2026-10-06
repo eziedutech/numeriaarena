@@ -158,7 +158,7 @@ impl LandKind {
         LAND_KINDS.into_iter().find(|k| k.code() == code)
     }
 
-    /// The landmark plot of a page of this kind.
+    /// The landmark plot of a page of this kind: this tile and the one to its right.
     pub fn plot(self) -> (u8, u8) {
         match self {
             LandKind::Plain => (8, 1),
@@ -169,7 +169,8 @@ impl LandKind {
     }
 
     pub fn tile(self, x: u8, y: u8) -> Tile {
-        if (x, y) == self.plot() {
+        let (px, py) = self.plot();
+        if y == py && (x == px || x == px + 1) {
             return Tile::Plot;
         }
         match self {
@@ -229,8 +230,10 @@ pub fn next_cell(own: &[(u8, u8)], taken: impl Fn((u8, u8)) -> bool) -> Option<(
 #[serde(rename_all = "snake_case")]
 pub enum Group {
     Road,
-    /// Trees, benches, lamps.
+    /// Trees, plants, benches, lamps, signs.
     Nature,
+    /// People, vehicles and animals: they may stand on a road.
+    Decor,
     SmallHouse,
     /// Two-storey houses and parks.
     MediumHouse,
@@ -243,7 +246,7 @@ impl Group {
     /// How long a building stands as a paper frame before it is done.
     pub fn build_seconds(self) -> u32 {
         match self {
-            Group::Road | Group::Nature => 0,
+            Group::Road | Group::Nature | Group::Decor => 0,
             Group::SmallHouse => 2 * 60,
             Group::MediumHouse => 5 * 60,
             Group::Public => 15 * 60,
@@ -268,7 +271,7 @@ pub struct Asset {
     pub floors: u8,
 }
 
-const fn asset(
+pub(crate) const fn asset(
     id: &'static str,
     group: Group,
     price: u32,
@@ -289,36 +292,17 @@ const fn asset(
     }
 }
 
-/// Everything the shop sells, in the order it is shown.
-pub const CATALOG: [Asset; 17] = [
-    asset("road_straight", Group::Road, 5, [1, 1], 0, [0, 0], 0),
-    asset("road_corner", Group::Road, 5, [1, 1], 0, [0, 0], 0),
-    asset("road_cross", Group::Road, 5, [1, 1], 0, [0, 0], 0),
-    asset("tree_round", Group::Nature, 10, [1, 1], 0, [0, 0], 0),
-    asset("tree_pine", Group::Nature, 10, [1, 1], 0, [0, 0], 0),
-    asset("house_hut", Group::SmallHouse, 20, [1, 1], 0, [1, 2], 1),
-    asset("house_cottage", Group::SmallHouse, 30, [1, 1], 0, [1, 3], 1),
-    asset("bench", Group::Nature, 10, [1, 1], 2, [0, 0], 0),
-    asset("lamp", Group::Nature, 15, [1, 1], 2, [0, 0], 0),
-    asset("house_basic", Group::SmallHouse, 40, [1, 1], 2, [2, 2], 2),
-    asset(
-        "house_two_storey",
-        Group::MediumHouse,
-        60,
-        [2, 1],
-        2,
-        [2, 4],
-        2,
-    ),
-    asset("fountain", Group::Nature, 20, [1, 1], 5, [0, 0], 0),
-    asset("park_flower", Group::MediumHouse, 50, [2, 2], 5, [0, 0], 0),
-    asset("shophouse", Group::Public, 90, [2, 1], 5, [3, 4], 3),
-    asset("school", Group::Public, 120, [3, 2], 5, [2, 6], 2),
-    asset("office_tower", Group::Large, 250, [2, 2], 9, [6, 4], 6),
-    asset("stadium", Group::Large, 350, [3, 3], 9, [0, 0], 1),
-];
+pub use crate::town_catalog::{ALIASES, CATALOG};
 
+/// The only piece that stands on water.
+pub const BRIDGE: &str = "bridge_road";
+
+/// A piece by its id, or by an id the town once used for it.
 pub fn asset_by_id(id: &str) -> Option<&'static Asset> {
+    let id = ALIASES
+        .iter()
+        .find(|(old, _)| *old == id)
+        .map_or(id, |(_, now)| now);
     CATALOG.iter().find(|a| a.id == id)
 }
 
@@ -427,6 +411,8 @@ pub enum Refusal {
     Nature,
     /// Kept for a landmark.
     LandmarkPlot,
+    /// A bridge stands only on water.
+    NeedsWater,
     NotEnoughFolds,
     UnknownPlace,
     /// A new page opens only once the last one is full enough.
@@ -447,6 +433,7 @@ impl Refusal {
             Refusal::Taken => "taken",
             Refusal::Nature => "nature",
             Refusal::LandmarkPlot => "landmark_plot",
+            Refusal::NeedsWater => "needs_water",
             Refusal::NotEnoughFolds => "not_enough_folds",
             Refusal::UnknownPlace => "unknown_place",
             Refusal::LandNotFull => "land_not_full",
@@ -513,11 +500,12 @@ impl Town {
         i64::from(earned) - i64::from(self.spent())
     }
 
-    /// Buildings standing, roads not counted: what opens the shop's shelves.
+    /// Buildings standing, roads, people, vehicles and animals not counted:
+    /// what opens the shop's shelves.
     pub fn buildings(&self) -> u32 {
         self.items
             .iter()
-            .filter(|i| i.spec().group != Group::Road)
+            .filter(|i| !matches!(i.spec().group, Group::Road | Group::Decor))
             .count() as u32
     }
 
@@ -541,15 +529,18 @@ impl Town {
             .map_or(0, |k| k.free_tiles())
     }
 
+    /// Tiles with something on them; a car on a road is one tile.
     pub fn used_tiles(&self, land: u16) -> u32 {
-        self.items
-            .iter()
-            .filter(|i| i.land == land)
-            .map(|i| {
-                let (w, h) = footprint(i.spec(), i.rot);
-                u32::from(w) * u32::from(h)
-            })
-            .sum()
+        let mut tiles = BTreeSet::new();
+        for i in self.items.iter().filter(|i| i.land == land) {
+            let (w, h) = footprint(i.spec(), i.rot);
+            for y in i.y..i.y + h {
+                for x in i.x..i.x + w {
+                    tiles.insert((x, y));
+                }
+            }
+        }
+        tiles.len() as u32
     }
 
     pub fn is_full(&self, land: u16) -> bool {
@@ -590,18 +581,26 @@ impl Town {
         {
             return Err(Refusal::OffLand);
         }
+        let bridge = a.id == BRIDGE;
         for ty in y..y + h {
             for tx in x..x + w {
                 match kind.tile(tx, ty) {
-                    Tile::Free => {}
+                    Tile::Water if bridge => {}
+                    Tile::Free if !bridge => {}
+                    Tile::Free => return Err(Refusal::NeedsWater),
                     Tile::Plot => return Err(Refusal::LandmarkPlot),
                     _ => return Err(Refusal::Nature),
                 }
-                if self
-                    .items
-                    .iter()
-                    .any(|i| Some(i.id.as_str()) != ignore && i.covers(land, tx, ty))
-                {
+                // One road and one person, vehicle or animal may share a tile.
+                let shares = |b: &Asset| {
+                    matches!(
+                        (a.group, b.group),
+                        (Group::Decor, Group::Road) | (Group::Road, Group::Decor)
+                    )
+                };
+                if self.items.iter().any(|i| {
+                    Some(i.id.as_str()) != ignore && i.covers(land, tx, ty) && !shares(i.spec())
+                }) {
                     return Err(Refusal::Taken);
                 }
             }
@@ -877,29 +876,29 @@ mod tests {
             t.apply(&place("x", "house_hut", 1, 0, 0, 0), 1000),
             Err(Refusal::NoLand)
         );
-        t.apply(&place("a", "house_two_storey", 0, 2, 2, 0), 1000)
+        t.apply(&place("a", "house_duplex", 0, 2, 2, 0), 1000)
             .unwrap_err();
-        // Two-storey houses wait for two buildings.
-        t.apply(&place("t1", "tree_round", 0, 0, 6, 0), 1000)
-            .unwrap();
-        t.apply(&place("t2", "tree_round", 0, 1, 6, 0), 1000)
-            .unwrap();
-        t.apply(&place("a", "house_two_storey", 0, 2, 2, 0), 1000)
+        // Semi-detached houses wait for nine buildings.
+        for i in 0..9u8 {
+            t.apply(&place(&format!("t{i}"), "tree_round", 0, i, 6, 0), 1000)
+                .unwrap();
+        }
+        t.apply(&place("a", "house_duplex", 0, 2, 2, 0), 1000)
             .unwrap();
         assert_eq!(
             t.apply(&place("b", "house_hut", 0, 3, 2, 0), 1000),
             Err(Refusal::Taken)
         );
-        // Turned, it covers (2, 2) and (2, 3).
+        // Turned, it covers (2, 1) and (2, 2).
         assert_eq!(
-            t.apply(&place("c", "house_two_storey", 0, 2, 1, 90), 1000),
+            t.apply(&place("c", "house_duplex", 0, 2, 1, 90), 1000),
             Err(Refusal::Taken)
         );
         assert_eq!(
-            t.apply(&place("c", "house_two_storey", 0, 9, 4, 0), 1000),
+            t.apply(&place("c", "house_duplex", 0, 9, 4, 0), 1000),
             Err(Refusal::OffLand)
         );
-        t.apply(&place("c", "house_two_storey", 0, 9, 4, 90), 1000)
+        t.apply(&place("c", "house_duplex", 0, 9, 4, 270), 1000)
             .unwrap();
         assert_eq!(t.at(0, 9, 5).map(|i| i.id.as_str()), Some("c"));
         assert_eq!(
@@ -910,6 +909,47 @@ mod tests {
             t.apply(&place("a", "house_hut", 0, 0, 0, 0), 1000),
             Err(Refusal::Duplicate)
         );
+    }
+
+    #[test]
+    fn people_and_cars_may_stand_on_a_road_and_bridges_only_on_water() {
+        let mut t = Town::default();
+        t.apply(&land_of("l0", LandKind::River), 1000).unwrap();
+        t.apply(&place("r", "road_straight", 0, 0, 2, 0), 1000)
+            .unwrap();
+        t.apply(&place("m", "people_man", 0, 0, 2, 0), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place("w", "people_woman", 0, 0, 2, 0), 1000),
+            Err(Refusal::Taken)
+        );
+        assert_eq!(
+            t.apply(&place("h", "house_hut", 0, 0, 2, 0), 1000),
+            Err(Refusal::Taken)
+        );
+        // A car first, then the road under it.
+        t.apply(&place("c", "vehicle_bicycle", 0, 1, 2, 0), 1000)
+            .unwrap();
+        t.apply(&place("r2", "road_straight", 0, 1, 2, 0), 1000)
+            .unwrap();
+        assert_eq!(t.used_tiles(0), 2);
+        // People, cars and roads open no shelves.
+        assert_eq!(t.buildings(), 0);
+        t.apply(&place("a", "tree_round", 0, 0, 0, 0), 1000)
+            .unwrap();
+        t.apply(&place("b", "tree_round", 0, 1, 0, 0), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place("br", "bridge_road", 0, 2, 2, 0), 1000),
+            Err(Refusal::NeedsWater)
+        );
+        t.apply(&place("br", "bridge_road", 0, 0, 3, 90), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place("b2", "bridge_road", 0, 5, 3, 0), 1000),
+            Err(Refusal::LandmarkPlot)
+        );
+        assert_eq!(Refusal::NeedsWater.code(), "needs_water");
     }
 
     #[test]
@@ -971,11 +1011,11 @@ mod tests {
         let mut t = Town::default();
         t.apply(&land("l0"), 10_000).unwrap();
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        // 48 roads cover 48 of the 69 free tiles: not yet 70%.
+        // 47 roads cover 47 of the 68 free tiles: not yet 70%.
         let mut n = 0;
         for y in 0..ROWS {
             for x in 0..COLS {
-                if n < 48 && (x, y) != LandKind::Plain.plot() {
+                if n < 47 && LandKind::Plain.tile(x, y) == Tile::Free {
                     t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)
                         .unwrap();
                     n += 1;
@@ -984,7 +1024,7 @@ mod tests {
         }
         assert!(!t.is_full(0));
         assert_eq!(t.apply(&land("l1"), 10_000), Err(Refusal::LandNotFull));
-        t.apply(&place("r48", "road_cross", 0, 9, 4, 0), 10_000)
+        t.apply(&place("r47", "road_cross", 0, 9, 4, 0), 10_000)
             .unwrap();
         assert!(t.is_full(0));
         t.apply(&land("l1"), 10_000).unwrap();
@@ -997,23 +1037,31 @@ mod tests {
     fn the_shop_opens_shelves_as_buildings_go_up() {
         let mut t = Town::default();
         t.apply(&land("l0"), 10_000).unwrap();
+        // An id the town once used still names its piece.
         let tower = asset_by_id("office_tower").unwrap();
+        assert_eq!(tower.id, "office_glass_tower");
         assert!(!t.is_unlocked(tower));
-        for i in 0..8u8 {
-            t.apply(&place(&format!("t{i}"), "tree_pine", 0, i, 0, 0), 10_000)
-                .unwrap();
+        for i in 0..19u8 {
+            t.apply(
+                &place(&format!("t{i}"), "tree_pine", 0, i % 10, 2 * (i / 10), 0),
+                10_000,
+            )
+            .unwrap();
         }
-        // Roads do not count as buildings.
-        t.apply(&place("r", "road_corner", 0, 0, 1, 0), 10_000)
+        // Roads and people do not count as buildings.
+        t.apply(&place("r", "road_corner", 0, 0, 4, 0), 10_000)
+            .unwrap();
+        t.apply(&place("m", "people_man", 0, 1, 4, 0), 10_000)
             .unwrap();
         assert_eq!(
-            t.apply(&place("o", "office_tower", 0, 0, 3, 0), 10_000),
+            t.apply(&place("o", "office_tower", 0, 0, 5, 0), 10_000),
             Err(Refusal::Locked)
         );
-        t.apply(&place("t8", "tree_pine", 0, 8, 0, 0), 10_000)
+        t.apply(&place("t19", "tree_pine", 0, 9, 2, 0), 10_000)
             .unwrap();
-        t.apply(&place("o", "office_tower", 0, 0, 3, 0), 10_000)
+        t.apply(&place("o", "office_tower", 0, 0, 5, 0), 10_000)
             .unwrap();
+        assert_eq!(t.item("o").unwrap().asset, "office_glass_tower");
     }
 
     #[test]
@@ -1052,24 +1100,24 @@ mod tests {
             t.apply(&place("p", "road_straight", 0, 5, 3, 0), 1000),
             Err(Refusal::LandmarkPlot)
         );
-        // A turned two-storey house would reach into the river.
-        t.apply(&place("a", "tree_round", 0, 0, 0, 0), 1000)
-            .unwrap();
-        t.apply(&place("b", "tree_round", 0, 1, 0, 0), 1000)
-            .unwrap();
+        // A turned house of two tiles would reach into the river.
+        for i in 0..9u8 {
+            t.apply(&place(&format!("t{i}"), "tree_round", 0, i, 0, 0), 1000)
+                .unwrap();
+        }
         assert_eq!(
-            t.apply(&place("h", "house_two_storey", 0, 4, 2, 90), 1000),
+            t.apply(&place("h", "house_duplex", 0, 4, 2, 90), 1000),
             Err(Refusal::Nature)
         );
-        t.apply(&place("h", "house_two_storey", 0, 4, 1, 90), 1000)
+        t.apply(&place("h", "house_duplex", 0, 4, 1, 90), 1000)
             .unwrap();
-        assert_eq!(LandKind::Plain.free_tiles(), 69);
+        assert_eq!(LandKind::Plain.free_tiles(), 68);
         assert_eq!(LandKind::Hills.free_tiles(), 63);
-        assert_eq!(LandKind::Beach.free_tiles(), 59);
+        assert_eq!(LandKind::Beach.free_tiles(), 58);
         assert_eq!(LandKind::Beach.layout()[6], "::::::::::");
-        assert_eq!(LandKind::Beach.layout()[5], "........*.");
-        assert_eq!(LandKind::Hills.layout()[0], ".......^*^");
-        assert_eq!(LandKind::River.layout()[3], "~~~~~*~~~~");
+        assert_eq!(LandKind::Beach.layout()[5], "........**");
+        assert_eq!(LandKind::Hills.layout()[0], ".......^**");
+        assert_eq!(LandKind::River.layout()[3], "~~~~~**~~~");
         for k in LAND_KINDS {
             assert_eq!(LandKind::of_code(k.code()), Some(k));
             assert_eq!(serde_json::to_value(k).unwrap(), k.code());
@@ -1080,11 +1128,11 @@ mod tests {
     fn later_lands_may_be_of_another_kind() {
         let mut t = Town::default();
         t.apply(&land_of("l0", LandKind::Beach), 10_000).unwrap();
-        // 42 of the 59 free tiles is just past 70%.
+        // 41 of the 58 free tiles is just past 70%.
         let free: Vec<(u8, u8)> = (0..ROWS)
             .flat_map(|y| (0..COLS).map(move |x| (x, y)))
             .filter(|&(x, y)| LandKind::Beach.tile(x, y) == Tile::Free)
-            .take(42)
+            .take(41)
             .collect();
         for (n, (x, y)) in free.into_iter().enumerate() {
             t.apply(&place(&format!("r{n}"), "road_cross", 0, x, y, 0), 10_000)
@@ -1127,7 +1175,7 @@ mod tests {
                 "{}",
                 a.id
             );
-            assert!(a.price > 0 && a.price % 5 == 0, "{}", a.id);
+            assert!(a.price > 0 && a.price <= 500, "{}", a.id);
         }
         // The first shelf is open from the start.
         assert!(

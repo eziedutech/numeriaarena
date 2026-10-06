@@ -311,7 +311,8 @@ impl RaceGame {
 pub fn town_rules() -> String {
     use crate::town::*;
     serde_json::json!({
-        "catalog": CATALOG,
+        "catalog": &CATALOG[..],
+        "aliases": &ALIASES[..],
         "cols": COLS,
         "rows": ROWS,
         "full_tenths": FULL_TENTHS,

@@ -72,13 +72,14 @@ export function pageTiles(model: TownModel, land: number): Page {
   for (const it of v.items) {
     if (it.land !== land) continue;
     const a = assetOf(it.asset);
-    if (a) used += a.w * a.h;
+    // People and cars stand on a road's tile, a bridge on the water.
+    if (a && a.group !== 'decor' && a.id !== 'bridge_road') used += a.w * a.h;
   }
   return { free, used };
 }
 
-/** Roads and nature have no maths card. */
+/** Roads, nature, people and cars have no maths card. */
 export function hasFacts(asset: string): boolean {
   const a = assetOf(asset);
-  return !!a && a.group !== 'road' && a.group !== 'nature';
+  return !!a && a.group !== 'road' && a.group !== 'nature' && a.group !== 'decor';
 }

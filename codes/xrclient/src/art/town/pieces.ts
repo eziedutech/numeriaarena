@@ -1,75 +1,11 @@
 import type { BufferGeometry, Object3D } from '@iwsdk/core';
 import { Kit, TOWN } from './kit.js';
-import { roadCorner, roadCross, roadStraight } from './roads.js';
-import { bench, fountain, hill, lamp, plot, sand, treePine, treeRound, water } from './nature.js';
-import { houseBasic, houseCottage, houseHut, houseTwoStorey, shophouse } from './houses.js';
-import { officeTower, parkFlower, school, stadium } from './civic.js';
-import { clockTower, decimalMarket, fractionBridge, numberHall, timesTower } from './landmarks.js';
 
 /**
- * Every piece Fold Town can draw, by the id the shop and the server use,
- * with its footprint in tiles and the triangles it may spend.
+ * The paper frame of a building still going up, and the fold that raises a
+ * finished piece off the page. The pieces themselves are the town's models
+ * (src/town/town-pieces.ts).
  */
-
-export interface Piece {
-  w: number;
-  h: number;
-  budget: number;
-  build: (seed: number) => Kit;
-}
-
-const BUILDING = 300;
-const SMALL = 60;
-
-const piece = (w: number, h: number, budget: number, build: (seed: number) => Kit): Piece => ({ w, h, budget, build });
-
-export const PIECES: Record<string, Piece> = {
-  road_straight: piece(1, 1, SMALL, roadStraight),
-  road_corner: piece(1, 1, SMALL, roadCorner),
-  road_cross: piece(1, 1, SMALL, roadCross),
-  tree_round: piece(1, 1, SMALL, treeRound),
-  tree_pine: piece(1, 1, SMALL, treePine),
-  bench: piece(1, 1, SMALL, bench),
-  lamp: piece(1, 1, SMALL, lamp),
-  fountain: piece(1, 1, SMALL, fountain),
-  house_hut: piece(1, 1, BUILDING, houseHut),
-  house_cottage: piece(1, 1, BUILDING, houseCottage),
-  house_basic: piece(1, 1, BUILDING, houseBasic),
-  house_two_storey: piece(2, 1, BUILDING, houseTwoStorey),
-  park_flower: piece(2, 2, BUILDING, parkFlower),
-  shophouse: piece(2, 1, BUILDING, shophouse),
-  school: piece(3, 2, BUILDING, school),
-  office_tower: piece(2, 2, BUILDING, officeTower),
-  stadium: piece(3, 3, BUILDING, stadium),
-  landmark_fraction_bridge: piece(1, 1, BUILDING, fractionBridge),
-  landmark_times_tower: piece(1, 1, BUILDING, timesTower),
-  landmark_number_hall: piece(1, 1, BUILDING, numberHall),
-  landmark_decimal_market: piece(1, 1, BUILDING, decimalMarket),
-  landmark_clock_tower: piece(1, 1, BUILDING, clockTower),
-  land_water: piece(1, 1, SMALL, water),
-  land_sand: piece(1, 1, SMALL, sand),
-  land_hill: piece(1, 1, SMALL, hill),
-  land_plot: piece(1, 1, SMALL, plot),
-};
-
-/** Looks a piece may take; a building's seed picks one, so a town shares few geometries. */
-export const VARIANTS = 4;
-
-const cache = new Map<string, BufferGeometry>();
-
-/** The geometry of `id` for a seed, built once per look. */
-export function pieceGeometry(id: string, seed: number): BufferGeometry {
-  const look = (seed >>> 0) % VARIANTS;
-  const key = `${id}#${look}`;
-  let g = cache.get(key);
-  if (!g) {
-    const p = PIECES[id];
-    if (!p) throw new Error(`unknown town piece ${id}`);
-    g = p.build(look * 7919 + 1).geometry();
-    cache.set(key, g);
-  }
-  return g;
-}
 
 /** Paper scaffolding over a footprint while a building is still going up. */
 export function scaffold(w: number, h: number, height: number): Kit {

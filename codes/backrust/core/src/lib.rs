@@ -16,6 +16,7 @@ pub mod sim;
 pub mod stars;
 pub mod template;
 pub mod town;
+mod town_catalog;
 pub mod validate;
 
 #[cfg(feature = "wasm")]

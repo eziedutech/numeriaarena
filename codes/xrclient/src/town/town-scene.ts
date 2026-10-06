@@ -1,16 +1,20 @@
-import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D } from '@iwsdk/core';
-import { Kit, TOWN, seedOf, townMaterial } from '../art/town/kit.js';
-import { PIECES, foldUp, pieceGeometry, scaffoldGeometry } from '../art/town/pieces.js';
+import { BufferGeometry, Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D } from '@iwsdk/core';
+import { Kit, TOWN, townMaterial } from '../art/town/kit.js';
+import { hill, plot, sand, water } from '../art/town/land.js';
+import { foldUp, scaffoldGeometry } from '../art/town/pieces.js';
 import { assetOf, footprint, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
+import { loadPieces, pieceGeometry, pieceGeometryAsync, pieceInfo } from './town-pieces.js';
 
 /**
  * A page of the town as a scene: the paper page with its own nature and
  * landmark plot, and every building on it, a paper frame while it is still
  * being built. Shared by the computer and the headset. One tile is one unit;
  * the page lies from (0, 0, 0) to (cols, 0, rows), its rows towards +z.
+ *
+ * Every piece is a holder at the middle of its footprint, turned there, with
+ * one child, its hinge on the back edge of the footprint, which the fold up
+ * turns; the model hangs from the hinge.
  */
-
-const LAND_TILE: Record<string, string> = { '~': 'land_water', '^': 'land_hill', ':': 'land_sand', '*': 'land_plot' };
 
 /** The paper page and its grass, a little larger than its tiles. */
 function pageKit(cols: number, rows: number): Kit {
@@ -24,23 +28,60 @@ function pageKit(cols: number, rows: number): Kit {
 }
 
 let page: Mesh | undefined;
+const LOOKS = 4;
+const landGeo = new Map<string, BufferGeometry>();
 
-/** Puts a piece built on its own footprint where a placed item stands, turned. */
-export function standAt(obj: Object3D, w: number, h: number, x: number, y: number, rot: number): void {
-  const [fw, fh] = footprint({ w, h }, rot);
-  const child = obj.children[0];
-  obj.position.set(x + fw / 2, 0, y + fh / 2);
-  obj.rotation.y = -(rot * Math.PI) / 180;
-  child?.position.set(-w / 2, 0, -h / 2);
+function landGeometry(mark: string, seed: number): BufferGeometry | undefined {
+  const look = mark === '*' ? 0 : seed % LOOKS;
+  const key = `${mark}${look}`;
+  let g = landGeo.get(key);
+  if (!g) {
+    const s = look * 7919 + 1;
+    const k = mark === '~' ? water(s) : mark === '^' ? hill(s) : mark === ':' ? sand(s) : mark === '*' ? plot() : undefined;
+    if (!k) return undefined;
+    g = k.geometry();
+    landGeo.set(key, g);
+  }
+  return g;
 }
 
-/** A piece in a holder that turns it about its footprint's middle. */
-export function pieceObject(id: string, seed: number): Group {
+/** Puts a piece where a placed item stands, turned about its footprint's middle. */
+export function standAt(obj: Object3D, w: number, h: number, x: number, y: number, rot: number): void {
+  const [fw, fh] = footprint({ w, h }, rot);
+  obj.position.set(x + fw / 2, 0, y + fh / 2);
+  obj.rotation.y = -(rot * Math.PI) / 180;
+}
+
+/** A holder with its hinge, for a model `w` by `h` tiles. */
+function holderOf(name: string, h: number): { holder: Group; hinge: Group } {
   const holder = new Group();
-  const mesh = new Mesh(pieceGeometry(id, seed), townMaterial());
-  mesh.castShadow = false;
-  holder.add(mesh);
-  holder.name = id;
+  holder.name = name;
+  const hinge = new Group();
+  hinge.position.z = -h / 2;
+  holder.add(hinge);
+  return { holder, hinge };
+}
+
+const EMPTY = new BufferGeometry();
+
+/**
+ * A piece by its id. Its model is drawn at once if its pack is here, else
+ * as soon as the pack arrives.
+ */
+export function pieceObject(id: string): Group {
+  const info = pieceInfo(id);
+  const h = info?.h ?? assetOf(id)?.h ?? 1;
+  const { holder, hinge } = holderOf(id, h);
+  const mesh = new Mesh(pieceGeometry(id) ?? EMPTY, townMaterial());
+  mesh.position.z = h / 2;
+  hinge.add(mesh);
+  if (mesh.geometry === EMPTY) {
+    void pieceGeometryAsync(id)
+      .then((g) => {
+        if (g) mesh.geometry = g;
+      })
+      .catch((error: unknown) => console.warn(`[town] ${id} not drawn: ${String(error)}`));
+  }
   return holder;
 }
 
@@ -48,6 +89,18 @@ export interface PageScene {
   root: Group;
   /** Holders of the items by their id, for picking and animating. */
   items: Map<string, Group>;
+}
+
+/** The model of a landmark's tier. */
+export function landmarkPiece(l: Pick<Landmark, 'landmark' | 'tier'>): string {
+  return `${l.landmark}_t${Math.min(3, Math.max(1, l.tier))}`;
+}
+
+/** Fetches what a page will draw, so it draws whole at once. */
+export function loadPage(land: number, items: Placed[], landmark?: Landmark): Promise<void> {
+  const ids = items.filter((i) => i.land === land).map((i) => i.asset);
+  if (landmark) ids.push(landmarkPiece(landmark));
+  return loadPieces(ids);
 }
 
 /**
@@ -64,23 +117,27 @@ export function buildPage(kind: LandKind, land: number, items: Placed[], landmar
   const info = rules.lands.find((l) => l.kind === kind) ?? rules.lands[0];
   info.layout.forEach((row, y) => {
     [...row].forEach((mark, x) => {
-      const id = LAND_TILE[mark];
-      if (!id) return;
-      const seed = x * 31 + y * 7 + land;
-      if (mark !== '*') return void addAt(root, id, seed, x, y);
-      // The plot on a river is on the water; the landmark stands there once raised.
-      if (kind === 'river') addAt(root, 'land_water', seed, x, y);
-      if (landmark && PIECES[landmark.landmark]) addAt(root, landmark.landmark, 1, x, y).name = 'landmark';
-      else addAt(root, id, seed, x, y);
+      // The plot on a river is on the water.
+      const under = mark === '*' && kind === 'river' ? '~' : mark;
+      if (under !== '*') addLand(root, under, x * 31 + y * 7 + land, x, y);
     });
   });
+  const [px, py] = info.plot;
+  if (landmark) {
+    const g = pieceObject(landmarkPiece(landmark));
+    standAt(g, 2, 1, px, py, 0);
+    g.name = 'landmark';
+    root.add(g);
+  } else {
+    addLand(root, '*', 0, px, py);
+  }
 
   const map = new Map<string, Group>();
   for (const it of items) {
     if (it.land !== land) continue;
     const a = assetOf(it.asset);
     if (!a) continue;
-    const g = it.ready ? pieceObject(it.asset, seedOf(it.id)) : frameObject(a.w, a.h);
+    const g = it.ready ? pieceObject(a.id) : frameObject(a.w, a.h, frameHeight(a.id));
     standAt(g, a.w, a.h, it.x, it.y, it.rot);
     g.userData.placeId = it.id;
     root.add(g);
@@ -89,19 +146,26 @@ export function buildPage(kind: LandKind, land: number, items: Placed[], landmar
   return { root, items: map };
 }
 
-function addAt(root: Group, id: string, seed: number, x: number, y: number): Group {
-  const g = pieceObject(id, seed);
-  g.position.set(x + 0.5, 0, y + 0.5);
-  g.children[0].position.set(-0.5, 0, -0.5);
-  root.add(g);
-  return g;
+function addLand(root: Group, mark: string, seed: number, x: number, y: number): void {
+  const g = landGeometry(mark, seed);
+  if (!g) return;
+  const m = new Mesh(g, townMaterial());
+  m.position.set(x, 0, y);
+  root.add(m);
+}
+
+/** How tall a frame stands: a little under the building it will be. */
+export function frameHeight(id: string): number {
+  const top = pieceInfo(id)?.top ?? 0.4;
+  return Math.min(0.9, Math.max(0.18, top * 0.85));
 }
 
 /** The paper frame of a building still going up. */
-export function frameObject(w: number, h: number): Group {
-  const holder = new Group();
-  holder.add(new Mesh(scaffoldGeometry(w, h), townMaterial()));
-  holder.name = 'frame';
+export function frameObject(w: number, h: number, height = 0.4): Group {
+  const { holder, hinge } = holderOf('frame', h);
+  const mesh = new Mesh(scaffoldGeometry(w, h, height), townMaterial());
+  mesh.position.x = -w / 2;
+  hinge.add(mesh);
   return holder;
 }
 
@@ -131,7 +195,7 @@ export class Ghost {
     if (!a) return;
     if (asset !== this.id) {
       if (this.piece) this.root.remove(this.piece);
-      this.piece = pieceObject(asset, 1);
+      this.piece = pieceObject(a.id);
       this.root.add(this.piece);
       this.id = asset;
     }

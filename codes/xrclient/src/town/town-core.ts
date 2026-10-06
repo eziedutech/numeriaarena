@@ -9,7 +9,7 @@ import init, { TownBook, townEarnings, townRules } from '../wasm/pkg/foldlings_c
 export type LandKind = 'plain' | 'river' | 'hills' | 'beach';
 export const LAND_KINDS: readonly LandKind[] = ['plain', 'river', 'hills', 'beach'];
 
-export type Group = 'road' | 'nature' | 'small_house' | 'medium_house' | 'public' | 'large';
+export type Group = 'road' | 'nature' | 'decor' | 'small_house' | 'medium_house' | 'public' | 'large';
 
 export interface Asset {
   id: string;
@@ -24,6 +24,8 @@ export interface Asset {
 
 export interface Rules {
   catalog: Asset[];
+  /** Ids the town once used, with the piece each names now. */
+  aliases: [string, string][];
   cols: number;
   rows: number;
   full_tenths: number;
@@ -106,7 +108,9 @@ export function townRulesNow(): Rules {
 }
 
 export function assetOf(id: string): Asset | undefined {
-  return townRulesNow().catalog.find((a) => a.id === id);
+  const r = townRulesNow();
+  const now = r.aliases.find(([old]) => old === id)?.[1] ?? id;
+  return r.catalog.find((a) => a.id === now);
 }
 
 /** Tiles covered when turned by `rot` degrees. */

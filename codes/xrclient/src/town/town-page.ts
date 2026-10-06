@@ -13,8 +13,9 @@ import { el, paperText } from '../home/paper.js';
 import { online } from '../offline.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
 import { classMap, takeCell, TownModel, type ClassMap } from './town-model.js';
-import { buildPage, foldUp, Ghost, type PageScene } from './town-scene.js';
-import { shelfPictures } from './town-thumbs.js';
+import { buildPage, foldUp, Ghost, loadPage, type PageScene } from './town-scene.js';
+import { loadPieceIndex, loadShelf, pieceInfo } from './town-pieces.js';
+import { SHELF_NAMES } from './town-names.js';
 import { skillTitle, unmarked } from './town-landmarks.js';
 import { factsOf, finishQuestion, GRADES, type Grade } from './town-facts.js';
 import { gradeOf, GRADE_KEY, hasFacts, pageTiles, RETRY_MS, shapeOf, tries } from './town-maths.js';
@@ -61,14 +62,23 @@ const CSS = `
 #town .btn { padding: 10px 14px; min-height: 44px; background: #f1e3c4; font-weight: 700; }
 #town .btn.go { background: ${TEAL}; color: #fff; }
 #town .btn.warn { background: ${ORANGE}; color: #fff; }
-#town .shelf { display: flex; gap: 10px; padding: 10px 14px; background: ${PAPER}; overflow-x: auto; box-shadow: 0 -3px 8px rgba(70, 50, 25, 0.2); }
-#town .shelf .label { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: 700; letter-spacing: 2px; }
-#town .item { flex: 0 0 auto; width: 120px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; background: #f8efdc; }
-#town .item img { width: 108px; height: 84px; object-fit: contain; }
-#town .item .name { font-size: 14px; font-weight: 700; text-align: center; line-height: 1.15; }
-#town .item .price { font-size: 13px; }
+#town .shelf { display: flex; flex-direction: column; background: ${PAPER}; box-shadow: 0 -3px 8px rgba(70, 50, 25, 0.2); }
+#town .shelves { display: flex; gap: 4px; padding: 8px 14px 0; overflow-x: auto; }
+#town .shelves button { padding: 6px 12px; min-height: 40px; background: #f1e3c4; font-weight: 700; font-size: 14px; white-space: nowrap; }
+#town .shelves button.on { background: ${INK}; color: ${PAPER}; }
+#town .shelves button .count { font-weight: 400; opacity: 0.75; }
+#town .items { display: flex; gap: 8px; padding: 8px 14px 10px; overflow-x: auto; scroll-snap-type: x proximity; }
+#town .item { flex: 0 0 auto; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px;
+  background: #f8efdc; scroll-snap-align: start; transition: transform 0.12s; }
+#town .item:hover { transform: translateY(-2px); }
+#town .item img { width: 88px; height: 88px; object-fit: contain; }
+#town .item .name { font-size: 13px; font-weight: 700; text-align: center; line-height: 1.15; min-height: 30px; display: flex; align-items: center; }
+#town .item .price { font-size: 12px; }
 #town .item.on { background: ${TEAL}; color: #fff; }
-#town .item.off { opacity: 0.5; }
+#town .item.off img { filter: grayscale(0.8); opacity: 0.55; }
+#town .item.off .name, #town .item.off .price { opacity: 0.6; }
+#town .tools { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 8px; }
+#town .tools .btn { box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
 #town .keys { font-size: 13px; color: #7a6f5c; padding: 4px 16px 8px; background: ${PAPER}; }
 #town .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: ${INK}; color: ${PAPER}; padding: 10px 16px;
   font-size: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
@@ -139,6 +149,9 @@ class TownPage {
   private note!: HTMLDivElement;
   private card!: HTMLDivElement;
   private shelf!: HTMLDivElement;
+  private tools!: HTMLDivElement;
+  /** The shop's shelf on show. */
+  private shelfOn = SHELF_NAMES[0][0];
   private toast!: HTMLDivElement;
   private toastTimer = 0;
   private cover: HTMLDivElement | null = null;
@@ -162,8 +175,14 @@ class TownPage {
     const wait = el('p', 'note', this.root);
     wait.textContent = this.t.loading;
     window.addEventListener('keydown', this.onKey);
-    (sample ? TownModel.sample() : TownModel.open())
-      .then((model) => this.start(model))
+    Promise.all([sample ? TownModel.sample() : TownModel.open(), loadPieceIndex()])
+      .then(async ([model]) => {
+        // The last page is drawn whole at once; other pages fill in as their pieces arrive.
+        const v = model.view();
+        const last = Math.max(0, v.lands.length - 1);
+        await loadPage(last, v.items, model.doc.landmarks[last]).catch((error: unknown) => console.warn(`[town] pieces: ${String(error)}`));
+        this.start(model);
+      })
       .catch((error) => {
         console.warn(`[town] not opened: ${String(error)}`);
         wait.textContent = this.t.failed;
@@ -188,6 +207,7 @@ class TownPage {
     this.card.hidden = true;
     this.toast = el('div', 'toast', this.stage);
     this.toast.setAttribute('aria-live', 'polite');
+    this.tools = el('div', 'tools', this.stage);
     this.shelf = el('div', 'shelf', this.root);
     el('div', 'keys', this.root).textContent = this.sample ? this.t.sampleKeys : this.t.keys;
 
@@ -306,6 +326,7 @@ class TownPage {
     if (this.selected === LANDMARK && !this.landmarkHere()) this.selected = '';
     this.drawCard(v.items);
     this.drawNote();
+    this.drawTools();
     this.showGhost();
   }
 
@@ -452,21 +473,42 @@ class TownPage {
       el('p', 'sample', this.shelf).textContent = t.sampleNote;
       return;
     }
-    const label = el('div', 'label', this.shelf);
-    label.textContent = t.shop;
     const r = townRulesNow();
-    const pictures = shelfPictures(r.catalog);
-    for (const a of r.catalog) {
+    const tabs = el('div', 'shelves', this.shelf);
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', t.shop);
+    for (const [shelf, en, id] of SHELF_NAMES) {
+      const all = r.catalog.filter((a) => pieceInfo(a.id)?.shelf === shelf);
+      const open = all.filter((a) => buildings >= a.unlock_at).length;
+      const on = shelf === this.shelfOn;
+      const b = el('button', on ? 'on' : '', tabs);
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(on));
+      b.textContent = this.lang === 'id' ? id : en;
+      el('span', 'count', b).textContent = ` ${open}/${all.length}`;
+      b.addEventListener('click', () => {
+        this.shelfOn = shelf;
+        void loadShelf(shelf).catch(() => undefined);
+        const v = this.model!.view();
+        this.drawShelf(v.balance, v.buildings);
+      });
+    }
+    const row = el('div', 'items', this.shelf);
+    row.setAttribute('role', 'tabpanel');
+    // Open pieces first, each part in the shop's own order.
+    const here = r.catalog.filter((a) => pieceInfo(a.id)?.shelf === this.shelfOn);
+    const sorted = [...here.filter((a) => buildings >= a.unlock_at), ...here.filter((a) => buildings < a.unlock_at)];
+    for (const a of sorted) {
       const locked = buildings < a.unlock_at;
       const short = a.price - balance;
       const on = this.mode.kind === 'place' && this.mode.asset === a.id;
-      const b = el('button', `item${on ? ' on' : ''}${locked || short > 0 ? ' off' : ''}`, this.shelf);
-      const pic = pictures.get(a.id);
-      if (pic) {
-        const img = el('img', '', b);
-        img.src = pic;
-        img.alt = '';
-      }
+      const b = el('button', `item${on ? ' on' : ''}${locked || short > 0 ? ' off' : ''}`, row);
+      const img = el('img', '', b);
+      img.src = `${import.meta.env.BASE_URL}town/thumbs/${a.id}.webp`;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.width = 88;
+      img.height = 88;
       el('span', 'name', b).textContent = this.name(a.id);
       const price = el('span', 'price', b);
       price.textContent = locked ? t.lockedAfter(a.unlock_at) : short > 0 ? t.needFolds(short) : t.price(a.price);
@@ -480,6 +522,44 @@ class TownPage {
         this.canvas.focus();
       });
     }
+  }
+
+  /** TURN and CANCEL over the page while a piece is being placed or moved. */
+  private drawTools(): void {
+    this.tools.innerHTML = '';
+    if (this.mode.kind === 'idle') return;
+    const turn = el('button', 'btn go', this.tools);
+    turn.textContent = `↻ ${this.t.turn}`;
+    turn.title = 'R';
+    turn.addEventListener('click', () => {
+      this.turnHeld();
+      this.canvas.focus();
+    });
+    const cancel = el('button', 'btn', this.tools);
+    cancel.textContent = this.t.cancel;
+    cancel.title = 'Esc';
+    cancel.addEventListener('click', () => {
+      this.mode = { kind: 'idle' };
+      this.redraw();
+    });
+  }
+
+  /** Turns the piece being placed or moved a quarter round. */
+  private turnHeld(): void {
+    const m = this.mode;
+    if (m.kind === 'idle') return;
+    m.rot = (m.rot + 90) % 360;
+    this.aim(this.cursor);
+    this.showGhost();
+  }
+
+  /** Turns a standing piece a quarter round where it is. */
+  private async turnPlaced(it: Placed): Promise<void> {
+    const rot = (it.rot + 90) % 360;
+    const reason = await this.model!.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot });
+    if (reason) return this.say(this.reason(reason));
+    this.selected = it.id;
+    this.redraw();
   }
 
   private drawCard(items: Placed[]): void {
@@ -512,6 +592,9 @@ class TownPage {
     }
     if (this.sample) return;
     const row = el('div', 'row', this.card);
+    const turn = el('button', 'btn', row);
+    turn.textContent = `↻ ${t.turn}`;
+    turn.addEventListener('click', () => void this.turnPlaced(it));
     const move = el('button', 'btn', row);
     move.textContent = t.move;
     move.addEventListener('click', () => {
@@ -622,7 +705,7 @@ class TownPage {
   private onPlot(x: number, y: number): boolean {
     const kind = this.model?.view().lands[this.land];
     const plot = townRulesNow().lands.find((l) => l.kind === kind)?.plot;
-    return !!plot && plot[0] === x && plot[1] === y;
+    return !!plot && (plot[0] === x || plot[0] + 1 === x) && plot[1] === y;
   }
 
   /** A landmark seen for the first time folds up slowly, naming the skill that raised it. */
@@ -676,9 +759,12 @@ class TownPage {
       return;
     }
     if ((e.key === 'r' || e.key === 'R') && m.kind !== 'idle') {
-      m.rot = (m.rot + 90) % 360;
-      this.aim(this.cursor);
-      this.showGhost();
+      this.turnHeld();
+      return;
+    }
+    if ((e.key === 'r' || e.key === 'R') && onCanvas && this.selected && this.selected !== LANDMARK && !this.sample) {
+      const it = this.model.view().items.find((i) => i.id === this.selected);
+      if (it) void this.turnPlaced(it);
       return;
     }
     if (e.key === 'Enter' && onCanvas && m.kind !== 'idle') {
@@ -711,8 +797,8 @@ class TownPage {
       if (reason) return this.say(this.reason(reason));
       this.say(this.t.placed(this.name(m.asset)));
       const a = assetOf(m.asset)!;
-      // Roads and trees are laid one after another; anything else is placed once.
-      if (a.price > model.view().balance || (a.group !== 'road' && a.group !== 'nature')) this.mode = { kind: 'idle' };
+      // Roads, trees, people and cars are laid one after another; anything else is placed once.
+      if (a.price > model.view().balance || !['road', 'nature', 'decor'].includes(a.group)) this.mode = { kind: 'idle' };
       this.redraw();
     } else if (m.kind === 'move') {
       const reason = await model.act({ type: 'town_move', place_id: m.id, land: this.land, x, y, rot: m.rot });

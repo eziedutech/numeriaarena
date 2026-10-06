@@ -29,7 +29,7 @@ check(v.lands.join() === 'plain,river,beach', `three pages (${v.lands.join()})`)
 check(s.landmarks.length === v.lands.length, 'a landmark on each page');
 check(v.items.every((i) => i.ready), 'every building finished');
 check(v.balance === 35, `35 Folds spare (${v.balance})`);
-for (const big of ['school', 'office_tower', 'stadium', 'park_flower', 'shophouse']) check(v.items.some((i) => i.asset === big), `the sample shows a ${big}`);
+for (const big of ['public_school', 'office_glass_tower', 'sport_stadium', 'park_flower', 'office_shophouse', 'bridge_road', 'vehicle_bus']) check(v.items.some((i) => i.asset === big), `the sample shows a ${big}`);
 book.free();
 console.log(`${v.items.length} pieces on ${v.lands.length} pages, ${v.value} Folds of buildings${failed ? `, ${failed} failed` : ', all passed'}`);
 process.exit(failed ? 1 : 0);

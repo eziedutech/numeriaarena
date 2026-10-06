@@ -1871,6 +1871,24 @@ export class GameSystem extends createSystem({
       },
       remove: (e) => this.remove(e),
       billboard: (mesh) => this.labels.add(mesh),
+      unbillboard: (mesh) => this.labels.delete(mesh),
+      clearDesk: () => {
+        // Only the town stands on the desk while it is open.
+        // A hidden object still meets the rays, so it is also taken out of them.
+        type Pointed = Object3D & { pointerEvents?: string };
+        const hidden = ((this.deskEntity()?.object3D?.children ?? []) as Pointed[]).filter((c) => c.visible);
+        const was = hidden.map((c) => c.pointerEvents);
+        for (const c of hidden) {
+          c.visible = false;
+          c.pointerEvents = 'none';
+        }
+        return () => {
+          hidden.forEach((c, i) => {
+            c.visible = true;
+            c.pointerEvents = was[i];
+          });
+        };
+      },
       button: (choice, title, x, z, color) => {
         const b = this.addButton(choice, title, x, color, 1, 0.018);
         b.position.z = z;
