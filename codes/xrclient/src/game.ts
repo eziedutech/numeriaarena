@@ -254,6 +254,8 @@ const TICK_FROM_S = 10;
 const TOWN_W = 0.145;
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
+/** Its buildings drawn leaning left this much, so from the player's seat they stand straight. */
+const TOWN_SLANT = 0.2;
 const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
@@ -1305,7 +1307,7 @@ export class GameSystem extends createSystem({
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
       tex.needsUpdate = true;
     };
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(townSticker(600))}`;
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(townSticker(600, TOWN_SLANT))}`;
     const h = TOWN_H;
     const plane = new Mesh(
       new PlaneGeometry(TOWN_W, h),

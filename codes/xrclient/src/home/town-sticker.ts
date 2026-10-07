@@ -23,7 +23,10 @@ const OY = 164;
 
 type Pt = [number, number];
 
-const iso = (x: number, y: number, z = 0): Pt => [OX + (x - y) * 0.866 * K, OY + (x + y) * 0.5 * K - z * K];
+/** How far up the town leans left, a step left for every step up (see townSticker). */
+let lean = 0;
+
+const iso = (x: number, y: number, z = 0): Pt => [OX + (x - y) * 0.866 * K - z * K * lean, OY + (x + y) * 0.5 * K - z * K];
 const pts = (p: Pt[]) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
 const poly = (p: Pt[], fill: string) => `<polygon points="${pts(p)}" fill="${fill}"/>`;
 
@@ -91,8 +94,8 @@ function tree(x: number, y: number, h = 2.2): string {
   const t = h * K;
   return (
     `<rect x="${bx - 1.2}" y="${by - 5}" width="2.4" height="5" fill="#8a6a3e"/>` +
-    poly([[bx - 6, by - 4], [bx, by - 4 - t], [bx, by - 2]], '#4fbf8f') +
-    poly([[bx, by - 2], [bx, by - 4 - t], [bx + 6, by - 4]], '#3a9c72')
+    poly([[bx - 6, by - 4], [bx - t * lean, by - 4 - t], [bx, by - 2]], '#4fbf8f') +
+    poly([[bx, by - 2], [bx - t * lean, by - 4 - t], [bx + 6, by - 4]], '#3a9c72')
   );
 }
 
@@ -153,8 +156,14 @@ function buildings(): string {
   return s;
 }
 
-/** The sticker as an SVG string, `width` pixels wide. */
-export function townSticker(width = W): string {
+/**
+ * The sticker as an SVG string, `width` pixels wide. `slant` leans its
+ * buildings left by that much for each step up, its ground staying as it
+ * is: on the desk menu the sticker lies back left of the player, who would
+ * otherwise see them lean right.
+ */
+export function townSticker(width = W, slant = 0): string {
+  lean = slant;
   const h = (width * H) / W;
   return `<svg viewBox="0 0 ${W} ${H}" width="${width}" height="${h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
