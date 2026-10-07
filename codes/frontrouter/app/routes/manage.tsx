@@ -68,7 +68,7 @@ const TEXT = {
     sampleMaking: "Making your sample class...",
     sampleHere: "This is a sample teacher. Everything here is made up and gone after 24 hours. Sign out to start again or to sign in as yourself.",
     toGame: "TO THE GAME",
-    status: { pending: "Waiting for approval", approved: "Approved", suspended: "Suspended" } as Record<Status, string>,
+    status: { pending: "Waiting for approval", approved: "Verified", suspended: "Suspended" } as Record<Status, string>,
     pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
     suspendedBody: "This account is suspended. Write to numeria@eziedutech.dev if you think this is a mistake.",
     admin: "Admin",
@@ -183,7 +183,7 @@ const TEXT = {
     sampleMaking: "Membuat kelas contoh Anda...",
     sampleHere: "Ini guru contoh. Semua isinya buatan dan hilang setelah 24 jam. Keluar untuk mulai lagi atau masuk dengan akun Anda sendiri.",
     toGame: "KE GAME",
-    status: { pending: "Menunggu persetujuan", approved: "Disetujui", suspended: "Ditangguhkan" } as Record<Status, string>,
+    status: { pending: "Menunggu persetujuan", approved: "Terverifikasi", suspended: "Ditangguhkan" } as Record<Status, string>,
     pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
     suspendedBody: "Akun ini ditangguhkan. Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     admin: "Admin",
@@ -518,7 +518,7 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
   const [setup, setSetup] = useState<RoomSetup>(USUAL);
-  useEffect(() => setSetup(readSetup()), []);
+  useEffect(() => setSetup(readSetup(me.email)), [me.email]);
   const working = me.organizer && me.organizer.status !== "suspended";
   const show = (next: Tab) => {
     setTab(next);
@@ -580,12 +580,12 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
       )}
       {working && tab === "classes" && (
         <div role="tabpanel" id="panel-classes" aria-labelledby="tab-classes">
-          <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} onRace={openRoom} />
+          <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} onRace={openRoom} raceLine={describe(lang, setup)} />
         </div>
       )}
       {me.organizer && (!working || tab === "rooms") && (
         <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms">
-          {working && <RaceRooms t={t} lang={lang} setup={setup} onSetup={setSetup} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
+          {working && <RaceRooms t={t} lang={lang} owner={me.email} setup={setup} onSetup={setSetup} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
           <RoomHistory t={t} user={user} version={rooms} />
         </div>
       )}
@@ -618,6 +618,7 @@ interface ClassChoice {
 function RaceRooms({
   t,
   lang,
+  owner,
   setup,
   onSetup,
   user,
@@ -629,6 +630,7 @@ function RaceRooms({
 }: {
   t: Text;
   lang: Lang;
+  owner: string;
   setup: RoomSetup;
   onSetup: (s: RoomSetup) => void;
   user: User;
@@ -672,7 +674,7 @@ function RaceRooms({
     <>
       <section className="paper-sheet">
         <h2 className="sheet-title">{t.raceTitle}</h2>
-        <RaceSetup lang={lang} setup={setup} onChange={onSetup} />
+        <RaceSetup lang={lang} owner={owner} setup={setup} onChange={onSetup} />
         <p>{t.raceFor}</p>
         <div className="row race-for">
           {classes?.map((c) => (

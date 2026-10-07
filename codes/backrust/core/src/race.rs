@@ -717,7 +717,7 @@ impl RaceMatch {
         );
         let correct = outcome == Outcome::Correct;
         let boss = self.phase == Phase::Boss;
-        let ratio = w.answer_ms / self.cfg.session.expected_answer_ms;
+        let ratio = w.answer_ms / (self.cfg.session.expected_answer_ms * game.time_factor());
         let bot = &mut self.bots[d];
         let pts = points(
             w.p,

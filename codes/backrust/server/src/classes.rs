@@ -7,7 +7,9 @@
 //! A picture password has only 729 values, so it holds because of the locks,
 //! not the hash: five wrong pictures lock a seat for five minutes, ten
 //! without a right one lock it until the teacher opens it, and thirty wrong
-//! in one class within ten minutes pause that class's sign-in.
+//! in one class within ten minutes pause that class's sign-in. Codes that
+//! find no class or seat are counted per address too, so codes cannot be
+//! tried one after another, with room for a whole school behind one address.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
@@ -22,11 +24,11 @@ use sha2::{Digest, Sha256};
 use sqlx::{PgConnection, PgPool};
 
 use crate::State;
-use crate::organizer::{ApiError, bearer, signed_in};
+use crate::organizer::{ApiError, User, bearer, signed_in};
 use crate::rooms::{pseudonym, random_code, random_hex, random_u64};
 
 /// Seats in one class.
-const MAX_SEATS: i16 = 40;
+const MAX_SEATS: i16 = 100;
 /// Seats in a pending organizer's one trial class.
 const TRIAL_SEATS: i16 = 5;
 /// Active classes per teacher.
@@ -44,11 +46,14 @@ const SESSION_DAYS: i32 = 30;
 /// Wrong pictures in one class within `CLASS_WINDOW` that pause its sign-in.
 const CLASS_WRONG: usize = 30;
 const CLASS_WINDOW: Duration = Duration::from_secs(600);
+/// Codes that find no class or seat, from one address within `CLASS_WINDOW`,
+/// before that address waits.
+const ADDRESS_MISSES: usize = 100;
 /// A room for a class has this many desks, so its seats race in groups of
 /// this many by number (01 to 06 group A), unless the teacher moves a seat.
 pub(crate) const GROUP_SIZE: i16 = 6;
-/// Groups A to H.
-pub(crate) const MAX_GROUPS: i16 = 8;
+/// Groups A to Q: a full class of 100 seats by number.
+pub(crate) const MAX_GROUPS: i16 = 17;
 
 /// The group seat `number` races in (0 is A): the teacher's choice, or by number.
 pub(crate) fn race_group(number: i16, chosen: Option<i16>) -> u8 {
@@ -61,37 +66,59 @@ fn err(status: StatusCode, why: &'static str) -> ApiError {
     ApiError(status, why)
 }
 
-/// Wrong pictures per class, kept in memory: a restart forgets them, while
-/// the seat locks in the database stay.
+type Times = Mutex<HashMap<String, VecDeque<Instant>>>;
+
+/// Wrong pictures per class, and misses per address, kept in memory: a
+/// restart forgets them, while the seat locks in the database stay.
 #[derive(Default)]
-pub struct Guard(Mutex<HashMap<String, VecDeque<Instant>>>);
+pub struct Guard {
+    classes: Times,
+    addresses: Times,
+}
+
+/// Whether `key` has `limit` times within `CLASS_WINDOW` of `now`.
+fn over(times: &Times, key: &str, limit: usize, now: Instant) -> bool {
+    let mut map = times.lock().unwrap();
+    let Some(q) = map.get_mut(key) else {
+        return false;
+    };
+    while q
+        .front()
+        .is_some_and(|t| now.duration_since(*t) > CLASS_WINDOW)
+    {
+        q.pop_front();
+    }
+    if q.is_empty() {
+        map.remove(key);
+        return false;
+    }
+    q.len() >= limit
+}
+
+fn note(times: &Times, key: &str, limit: usize, now: Instant) {
+    let mut map = times.lock().unwrap();
+    let q = map.entry(key.to_owned()).or_default();
+    q.push_back(now);
+    if q.len() > limit {
+        q.pop_front();
+    }
+}
 
 impl Guard {
     fn paused(&self, class: &str, now: Instant) -> bool {
-        let mut map = self.0.lock().unwrap();
-        let Some(q) = map.get_mut(class) else {
-            return false;
-        };
-        while q
-            .front()
-            .is_some_and(|t| now.duration_since(*t) > CLASS_WINDOW)
-        {
-            q.pop_front();
-        }
-        if q.is_empty() {
-            map.remove(class);
-            return false;
-        }
-        q.len() >= CLASS_WRONG
+        over(&self.classes, class, CLASS_WRONG, now)
     }
 
     fn wrong(&self, class: &str, now: Instant) {
-        let mut map = self.0.lock().unwrap();
-        let q = map.entry(class.to_owned()).or_default();
-        q.push_back(now);
-        if q.len() > CLASS_WRONG {
-            q.pop_front();
-        }
+        note(&self.classes, class, CLASS_WRONG, now);
+    }
+
+    fn address_paused(&self, address: &str, now: Instant) -> bool {
+        over(&self.addresses, address, ADDRESS_MISSES, now)
+    }
+
+    fn missed(&self, address: &str, now: Instant) {
+        note(&self.addresses, address, ADDRESS_MISSES, now);
     }
 }
 
@@ -174,6 +201,14 @@ pub(crate) async fn allowance(db: &PgPool, user: i64, admin: bool) -> Result<All
         Some(_) => Err(err(StatusCode::FORBIDDEN, "suspended")),
         None => Err(err(StatusCode::FORBIDDEN, "not_organizer")),
     }
+}
+
+/// A signed-in adult who may keep classes: an admin, an approved organizer,
+/// or a pending one with their trial class. A suspended one may not.
+pub(crate) async fn teacher(state: &State, headers: &HeaderMap) -> Result<(User, Allowance), ApiError> {
+    let user = signed_in(state, headers).await?;
+    let a = allowance(&state.db, user.id, user.admin).await?;
+    Ok((user, a))
 }
 
 impl Allowance {
@@ -341,11 +376,14 @@ pub(crate) async fn create_class(
         .bind(owner)
         .execute(&mut *tx)
         .await?;
-    let active: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM classes WHERE owner = $1 AND status = 'active'")
-            .bind(owner)
-            .fetch_one(&mut *tx)
-            .await?;
+    // A trial is one class: archiving it does not make room for another.
+    let active: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM classes WHERE owner = $1 AND (status = 'active' OR $2)",
+    )
+    .bind(owner)
+    .bind(allowance == Allowance::Trial)
+    .fetch_one(&mut *tx)
+    .await?;
     if active >= allowance.classes() {
         return Err(err(StatusCode::FORBIDDEN, "classes_limit"));
     }
@@ -673,8 +711,8 @@ pub(crate) async fn archive(db: &PgPool, owner: i64, id: &str) -> Result<Value, 
 }
 
 /// Deletes the class for good, active or archived: its seats and everything
-/// they hold go with it, and so do the races in its rooms. Only a line that it
-/// was deleted stays in the audit log.
+/// they hold go with it, and so do the races in its rooms. The audit log
+/// keeps what was done to it, which names no student.
 pub(crate) async fn delete_class(db: &PgPool, owner: i64, id: &str) -> Result<Value, ApiError> {
     let mut tx = db.begin().await?;
     let found: Option<String> =
@@ -700,10 +738,6 @@ pub(crate) async fn delete_class(db: &PgPool, owner: i64, id: &str) -> Result<Va
         .rows_affected();
     sqlx::query("DELETE FROM classes WHERE id = $1")
         .bind(id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("DELETE FROM audit_log WHERE target = $1")
-        .bind(format!("class:{id}"))
         .execute(&mut *tx)
         .await?;
     audit(
@@ -737,13 +771,18 @@ pub(crate) async fn sign_in(db: &PgPool, guard: &Guard, body: &SignIn) -> Result
         .ok_or(err(StatusCode::UNPROCESSABLE_ENTITY, "picture"))?;
     let code = body.class_code.trim().to_uppercase();
     let mut tx = db.begin().await?;
-    let class: Option<(String, String, i16)> = sqlx::query_as(
-        "SELECT id, label, grade FROM classes WHERE join_code = $1 AND status = 'active'",
-    )
+    let class: Option<(String, String, i16, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT id, label, grade, {OWNER_SUSPENDED} FROM classes c
+         WHERE join_code = $1 AND status = 'active'"
+    )))
     .bind(&code)
     .fetch_optional(&mut *tx)
     .await?;
-    let (class, label, grade) = class.ok_or(err(StatusCode::NOT_FOUND, "class_not_found"))?;
+    let (class, label, grade, frozen) =
+        class.ok_or(err(StatusCode::NOT_FOUND, "class_not_found"))?;
+    if frozen {
+        return Err(err(StatusCode::FORBIDDEN, "class_frozen"));
+    }
     if guard.paused(&class, Instant::now()) {
         return Err(err(StatusCode::TOO_MANY_REQUESTS, "class_paused"));
     }
@@ -838,15 +877,21 @@ pub(crate) struct Student {
 /// Seat id, class id, number, pseudonym, class label, grade, chosen group.
 type StudentRow = (i64, String, i16, String, String, i16, Option<i16>);
 
+/// True when the teacher of class `c` is suspended: the class waits, its
+/// devices signed out, until the account is back.
+const OWNER_SUSPENDED: &str = "EXISTS (SELECT 1 FROM organizer_approvals a
+    WHERE a.user_id = c.owner AND a.status = 'suspended')";
+
 /// The student a token belongs to, while it is fresh and the class active.
 pub(crate) async fn student(db: &PgPool, token: &str) -> Result<Option<Student>, sqlx::Error> {
-    let row: Option<StudentRow> = sqlx::query_as(
+    let row: Option<StudentRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT s.id, c.id, s.number, s.pseudonym, c.label, c.grade, s.race_group
          FROM seat_sessions t
          JOIN class_seats s ON s.id = t.seat_id
          JOIN classes c ON c.id = s.class_id
-         WHERE t.token_hash = $1 AND t.expires_at > now() AND c.status = 'active'",
-    )
+         WHERE t.token_hash = $1 AND t.expires_at > now() AND c.status = 'active'
+           AND NOT {OWNER_SUSPENDED}"
+    )))
     .bind(token_hash(token))
     .fetch_optional(db)
     .await?;
@@ -878,8 +923,7 @@ pub async fn list(
     Extract(state): Extract<State>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
-    allowance(&state.db, user.id, user.admin).await?;
+    let (user, _) = teacher(&state, &headers).await?;
     Ok(Json(list_classes(&state.db, user.id).await?))
 }
 
@@ -889,8 +933,7 @@ pub async fn create(
     headers: HeaderMap,
     Json(body): Json<NewClass>,
 ) -> Result<(StatusCode, Json<Value>), ApiError> {
-    let user = signed_in(&state, &headers).await?;
-    let a = allowance(&state.db, user.id, user.admin).await?;
+    let (user, a) = teacher(&state, &headers).await?;
     let made = create_class(&state.db, user.id, a, &body).await?;
     tracing::info!("class made by {}", user.id);
     Ok((StatusCode::CREATED, Json(made)))
@@ -902,7 +945,7 @@ pub async fn detail(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = teacher(&state, &headers).await?;
     Ok(Json(class_detail(&state.db, user.id, &id).await?))
 }
 
@@ -918,8 +961,7 @@ pub async fn add(
     headers: HeaderMap,
     Json(body): Json<MoreSeats>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
-    let a = allowance(&state.db, user.id, user.admin).await?;
+    let (user, a) = teacher(&state, &headers).await?;
     Ok(Json(
         more_seats(&state.db, user.id, a, &id, body.count).await?,
     ))
@@ -931,10 +973,21 @@ async fn seat_change(
     (id, number): (String, i16),
     change: SeatChange,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
-    Ok(Json(
-        change_seat(&state.db, user.id, &id, number, change).await?,
-    ))
+    let (user, _) = teacher(&state, &headers).await?;
+    let done = change_seat(&state.db, user.id, &id, number, change).await?;
+    // A new picture or a new student: whoever sat down with the seat leaves its room.
+    if change != SeatChange::Unlock {
+        let seat: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM class_seats WHERE class_id = $1 AND number = $2")
+                .bind(&id)
+                .bind(number)
+                .fetch_optional(&state.db)
+                .await?;
+        if let Some(seat) = seat {
+            state.rooms.unseat(&id, seat).await;
+        }
+    }
+    Ok(Json(done))
 }
 
 /// `POST /api/classes/{id}/seats/{n}/picture`: a new picture for a lost card.
@@ -977,7 +1030,7 @@ pub async fn group(
     headers: HeaderMap,
     Json(body): Json<Group>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = teacher(&state, &headers).await?;
     Ok(Json(
         set_group(&state.db, user.id, &id, number, body.group).await?,
     ))
@@ -989,18 +1042,21 @@ pub async fn ungroup(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = teacher(&state, &headers).await?;
     Ok(Json(groups_by_number(&state.db, user.id, &id).await?))
 }
 
-/// `DELETE /api/classes/{id}`: archives the class.
+/// `DELETE /api/classes/{id}`: archives the class, and closes any room still
+/// open for it.
 pub async fn remove(
     Extract(state): Extract<State>,
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
-    Ok(Json(archive(&state.db, user.id, &id).await?))
+    let (user, _) = teacher(&state, &headers).await?;
+    let done = archive(&state.db, user.id, &id).await?;
+    state.rooms.close_class(&id).await;
+    Ok(Json(done))
 }
 
 /// `POST /api/classes/{id}/delete`: deletes the class and all it holds, for
@@ -1016,12 +1072,29 @@ pub async fn erase(
     Ok(Json(done))
 }
 
+/// The address a request came from, as the proxy in front of the server
+/// tells it; None when there is no proxy, as in local tests.
+fn address(headers: &HeaderMap) -> Option<String> {
+    let first = headers.get("x-forwarded-for")?.to_str().ok()?.split(',').next()?;
+    Some(first.trim().to_owned()).filter(|a| !a.is_empty())
+}
+
 /// `POST /api/student/sign-in`: class code, seat number and picture.
 pub async fn student_sign_in(
     Extract(state): Extract<State>,
+    headers: HeaderMap,
     Json(body): Json<SignIn>,
 ) -> Result<Json<Value>, ApiError> {
-    Ok(Json(sign_in(&state.db, &state.classes, &body).await?))
+    let from = address(&headers);
+    let now = Instant::now();
+    if from.as_deref().is_some_and(|a| state.classes.address_paused(a, now)) {
+        return Err(err(StatusCode::TOO_MANY_REQUESTS, "too_many_tries"));
+    }
+    let signed = sign_in(&state.db, &state.classes, &body).await;
+    if let (Err(ApiError(_, "class_not_found" | "seat_not_found")), Some(a)) = (&signed, &from) {
+        state.classes.missed(a, now);
+    }
+    Ok(Json(signed?))
 }
 
 /// `GET /api/student/me`: who this device is signed in as.

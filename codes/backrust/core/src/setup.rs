@@ -19,8 +19,8 @@ pub const ROOM_GAMES: [GameType; 5] = [
 ];
 pub const MIN_ROUNDS: u8 = 1;
 pub const MAX_ROUNDS: u8 = 8;
-pub const MIN_SECONDS: u16 = 30;
-pub const MAX_SECONDS: u16 = 180;
+/// The lengths a round may have, as the room page offers them.
+pub const ROUND_SECONDS: [u16; 6] = [30, 45, 60, 90, 120, 180];
 /// Longest race, counting every round but not the final one.
 pub const MAX_TOTAL_SECONDS: u32 = 15 * 60;
 
@@ -72,7 +72,7 @@ impl RoomSetup {
             return Some("setup_games");
         }
         if !(MIN_ROUNDS..=MAX_ROUNDS).contains(&self.rounds)
-            || !(MIN_SECONDS..=MAX_SECONDS).contains(&self.seconds)
+            || !ROUND_SECONDS.contains(&self.seconds)
         {
             return Some("setup_time");
         }
@@ -80,6 +80,16 @@ impl RoomSetup {
             return Some("setup_time");
         }
         None
+    }
+
+    /// The usual race, whose results count for Global's High Strike.
+    pub fn is_usual(&self) -> bool {
+        *self == RoomSetup::default()
+    }
+
+    /// The final round races the first chosen game.
+    pub fn final_game(&self) -> GameType {
+        self.games.first().copied().unwrap_or(GameType::BalloonBurst)
     }
 
     /// The rounds, the chosen games taking turns.
@@ -148,6 +158,7 @@ mod tests {
         );
         assert_eq!(bad(|s| s.rounds = 0), Some("setup_time"));
         assert_eq!(bad(|s| s.seconds = 10), Some("setup_time"));
+        assert_eq!(bad(|s| s.seconds = 61), Some("setup_time"));
         assert_eq!(
             bad(|s| {
                 s.rounds = 8;

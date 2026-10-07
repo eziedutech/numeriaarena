@@ -739,7 +739,7 @@ impl SoloSession {
             Outcome::Wrong
         };
         let ratio = if self.cfg.timed {
-            Some(time_ms / self.cfg.expected_answer_ms)
+            Some(time_ms / (self.cfg.expected_answer_ms * open.offer.game.time_factor()))
         } else {
             None
         };

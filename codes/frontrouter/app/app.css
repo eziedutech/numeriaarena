@@ -1116,10 +1116,22 @@ button.tool {
 }
 
 .seat-actions {
+  width: 1%;
+}
+
+/* A seat's buttons side by side in their own cell, so the row keeps its columns. */
+.seat-actions > div {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.seat-actions .btn {
+  white-space: nowrap;
+}
+
+.table-scroll {
+  overflow-x: auto;
 }
 
 .past-state.lock {
@@ -1187,6 +1199,17 @@ button.tool {
 
 .past-table.report tr.weak td {
   background: #fde8c4;
+}
+
+.report-source {
+  min-width: 0;
+}
+
+/* The lesson for the weakest skill on a line of its own under the skill, so the numbers keep their column. */
+.past-table.report .lesson-link {
+  display: block;
+  margin: 4px 0 0;
+  white-space: normal;
 }
 
 .past-state.weak-tag {
@@ -1473,6 +1496,19 @@ button.tool {
   border-top-color: var(--cobalt);
   box-shadow: var(--shadow);
   transform: translateY(-4px);
+}
+
+/* The teacher's pages hold wide tables, so their sheets run wider than the reading pages. */
+.manage > .paper-nav,
+.manage > .folder,
+.manage > .paper-sheet:not(.narrow),
+.manage > [role="tabpanel"] {
+  width: 100%;
+  max-width: 1040px;
+}
+
+.manage > [role="tabpanel"] > .paper-sheet:not(.narrow) {
+  max-width: none;
 }
 
 .manage .paper-sheet {

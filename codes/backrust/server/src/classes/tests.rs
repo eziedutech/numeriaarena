@@ -47,6 +47,22 @@ fn a_class_pauses_after_thirty_wrong_then_recovers() {
 }
 
 #[test]
+fn an_address_waits_after_many_codes_that_find_nothing() {
+    let g = Guard::default();
+    let t = Instant::now();
+    for _ in 0..ADDRESS_MISSES - 1 {
+        g.missed("1.2.3.4", t);
+    }
+    assert!(!g.address_paused("1.2.3.4", t));
+    g.missed("1.2.3.4", t);
+    assert!(g.address_paused("1.2.3.4", t));
+    assert!(!g.address_paused("5.6.7.8", t));
+    // Misses are not wrong pictures of a class.
+    assert!(!g.paused("1.2.3.4", t));
+    assert!(!g.address_paused("1.2.3.4", t + CLASS_WINDOW + Duration::from_secs(1)));
+}
+
+#[test]
 fn a_new_class_is_checked() {
     let ok = NewClass {
         label: " 5B ".into(),
@@ -255,10 +271,26 @@ async fn a_class_from_creation_to_archive() {
             "wrong_picture"
         );
     }
+    let back = sign_in(&db, &guard, &signing(&code, 1, new_p1.clone()))
+        .await
+        .unwrap();
+    let back = back["token"].as_str().unwrap().to_owned();
+
+    // A suspended teacher's class waits: its devices are out and nobody signs in.
+    let suspend = |status: &'static str| {
+        sqlx::query("UPDATE organizer_approvals SET status = $2 WHERE user_id = $1")
+            .bind(owner)
+            .bind(status)
+            .execute(&db)
+    };
+    suspend("suspended").await.unwrap();
+    assert!(student(&db, &back).await.unwrap().is_none());
     assert_eq!(
-        why(sign_in(&db, &guard, &signing(&code, 1, new_p1)).await),
-        "ok"
+        why(sign_in(&db, &guard, &signing(&code, 1, new_p1.clone())).await),
+        "class_frozen"
     );
+    suspend("approved").await.unwrap();
+    assert!(student(&db, &back).await.unwrap().is_some());
 
     // A reset seat gets a name no other seat has.
     let card = change_seat(&db, owner, &id, 3, SeatChange::Reset)
@@ -337,7 +369,7 @@ async fn seats_race_in_groups_of_six_unless_the_teacher_moves_one() {
     assert_eq!(page["seats"][13]["group"], 2);
     assert_eq!(page["seats"][13]["group_chosen"], false);
     assert_eq!(seat_groups(&db, &id).await.unwrap()[12], (13, 1));
-    assert_eq!(why(set_group(&db, owner, &id, 13, Some(8)).await), "group");
+    assert_eq!(why(set_group(&db, owner, &id, 13, Some(17)).await), "group");
     assert_eq!(
         why(set_group(&db, owner, &id, 40, Some(1)).await),
         "seat_not_found"
@@ -369,6 +401,12 @@ async fn pending_teachers_get_one_small_class_and_others_none() {
     );
     let id = made["class"]["id"].as_str().unwrap();
     assert_eq!(why(more_seats(&db, pending, a, id, 1).await), "seats_limit");
+    // Archiving the trial class does not make room for another.
+    archive(&db, pending, id).await.unwrap();
+    assert_eq!(
+        why(create_class(&db, pending, a, &new_class(1)).await),
+        "classes_limit"
+    );
 
     let nobody = teacher(&db, None).await;
     assert!(matches!(
@@ -599,7 +637,7 @@ async fn deleting_a_class_takes_everything_it_holds() {
     );
     assert_eq!(
         count(
-            "SELECT count(*) FROM audit_log WHERE target = $1",
+            "SELECT count(*) FROM audit_log WHERE target = $1 AND action = 'class.delete'",
             format!("class:{id}")
         )
         .await,

@@ -57,7 +57,7 @@ const TEXT = {
     signIn: 'Sign in to your class to join the leaderboards.',
     teacher: 'TEACHER',
     status: 'ACCOUNT',
-    statuses: { pending: 'Waiting for approval', approved: 'Approved', suspended: 'Suspended' } as Record<TeacherStatus, string>,
+    statuses: { pending: 'Waiting for approval', approved: 'Verified', suspended: 'Suspended' } as Record<TeacherStatus, string>,
     finishSignUp: 'Finish signing up',
   },
   id: {
@@ -83,7 +83,7 @@ const TEXT = {
     signIn: 'Masuk ke kelasmu untuk ikut papan peringkat.',
     teacher: 'GURU',
     status: 'AKUN',
-    statuses: { pending: 'Menunggu persetujuan', approved: 'Disetujui', suspended: 'Ditangguhkan' } as Record<TeacherStatus, string>,
+    statuses: { pending: 'Menunggu persetujuan', approved: 'Terverifikasi', suspended: 'Ditangguhkan' } as Record<TeacherStatus, string>,
     finishSignUp: 'Selesaikan pendaftaran',
   },
 };

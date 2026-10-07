@@ -79,6 +79,8 @@ type ServerMsg =
   | { type: 'error'; code: string };
 
 /** Errors that end the join; others are answers to one action. */
+/** Errors that end the match for this seat. */
+const SHUT = ['room_closed', 'turn_over', 'seat_given', 'seat_changed'];
 const JOIN_ERRORS = ['room_not_found', 'room_full', 'match_started', 'hello_first', 'class_only', 'wrong_class', 'not_your_turn', 'students_only'];
 /** After a `wait` (between rounds, the last seconds of one), ask again this much later. */
 const ASK_AGAIN_MS = 800;
@@ -103,8 +105,12 @@ export class ClassRace {
   onChange?: () => void;
   /** Its teacher closed the room: the match is over for this seat. */
   shut = false;
-  /** The room is still open, but the class screen called another group to the desks. */
-  turnOver = false;
+  /**
+   * Why the match is over for this seat: room_closed, turn_over (another
+   * group was called), seat_given (a classmate who had not raced took the
+   * desk) or seat_changed (the teacher gave the seat a new picture).
+   */
+  why = '';
 
   private ws?: WebSocket;
   private token: string | null = null;
@@ -287,6 +293,14 @@ export class ClassRace {
         this.fresh = true;
         if (first) {
           this.rivals = msg.seats.map((_, i) => i).filter((i) => i !== this.seat).slice(0, 2);
+          // Joined again in the middle of a round: its start was missed, so it begins here.
+          const at = this.clock() + this.offset;
+          const ends = this.local(msg.ends_at_ms ?? at);
+          if (msg.phase === 'wave' && msg.wave !== undefined && msg.plan[msg.wave]) {
+            this.events.push({ type: 'wave_start', at_ms: at, wave: msg.wave, game: msg.plan[msg.wave].game, ends_at_ms: ends });
+          } else if (msg.phase === 'boss') {
+            this.events.push({ type: 'boss_start', at_ms: at, ends_at_ms: ends });
+          }
           this.onChange?.();
         }
         break;
@@ -309,9 +323,9 @@ export class ClassRace {
         this.recapMsg = msg;
         break;
       case 'error':
-        if (msg.code === 'room_closed' || msg.code === 'turn_over') {
+        if (SHUT.includes(msg.code)) {
           this.shut = true;
-          this.turnOver = msg.code === 'turn_over';
+          this.why = msg.code;
           this.closed = true;
           this.judging?.reject(new Error(msg.code));
           this.judging = undefined;

@@ -459,6 +459,7 @@ fn seated(seat_id: i64, pseudonym: &str, class_id: &str) -> Seated {
         pseudonym: pseudonym.into(),
         class_id: class_id.into(),
         group: 0,
+        grade: 5,
     }
 }
 
@@ -469,6 +470,7 @@ fn classmate(number: i16) -> Option<Seated> {
         pseudonym: format!("Seat {number:02}"),
         class_id: "c1".into(),
         group: crate::classes::race_group(number, None),
+        grade: 5,
     })
 }
 
@@ -884,4 +886,82 @@ async fn the_demo_room_races_bots_for_watchers() {
         _ => None,
     })
     .await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn in_a_big_group_who_has_not_raced_takes_a_desk_of_who_has() {
+    let rooms = rooms();
+    let mut class = class_of(8);
+    for s in &mut class.seats {
+        s.1 = 0;
+    }
+    let opened = rooms
+        .open_for(6, Some(7), RoomKind::Class, Some(class), RoomSetup::default())
+        .await
+        .unwrap();
+    let code = opened.play_code.clone();
+    let seat = |n: i16| classmate(n).map(|s| Seated { group: 0, ..s });
+    let mut first = Vec::new();
+    for n in 1..=6 {
+        first.push(join_with(&rooms, &code, None, None, seat(n)).await.unwrap());
+    }
+    assert_eq!(
+        join_with(&rooms, &code, None, None, seat(7)).await.err(),
+        Some("room_full")
+    );
+    let mut screen = start(&rooms, &opened).await;
+    screen
+        .until(|m| matches!(m, ServerMsg::Recap(_)).then_some(()))
+        .await;
+    // The same group again: the six who raced come back first.
+    screen.send(ClientMsg::Turn { group: 0 }).await;
+    first[0]
+        .until(|m| matches!(m, ServerMsg::Error { code: "turn_over" }).then_some(()))
+        .await;
+    let mut again = Vec::new();
+    for n in 1..=6 {
+        again.push(join_with(&rooms, &code, None, None, seat(n)).await.unwrap());
+    }
+    // Seats 07 and 08 have not raced: each takes the desk of one who has.
+    let mut seven = join_with(&rooms, &code, None, None, seat(7)).await.unwrap();
+    again[0]
+        .until(|m| matches!(m, ServerMsg::Error { code: "seat_given" }).then_some(()))
+        .await;
+    join_with(&rooms, &code, None, None, seat(8)).await.unwrap();
+    let names = seven
+        .until(|m| match m {
+            ServerMsg::Lobby(l) if l.names.len() == 6 && l.names.contains(&"Seat 08".to_string()) => {
+                Some(l.names.clone())
+            }
+            _ => None,
+        })
+        .await;
+    assert!(names.contains(&"Seat 07".to_string()));
+    // One who raced already waits now.
+    assert_eq!(
+        join_with(&rooms, &code, None, None, seat(1)).await.err(),
+        Some("room_full")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_seat_with_a_new_picture_leaves_the_room() {
+    let rooms = rooms();
+    let opened = rooms
+        .open_for(6, Some(7), RoomKind::Class, Some(class_of(6)), RoomSetup::default())
+        .await
+        .unwrap();
+    let code = opened.play_code.clone();
+    let mut one = join_with(&rooms, &code, None, None, classmate(1)).await.unwrap();
+    let mut two = join_with(&rooms, &code, None, None, classmate(2)).await.unwrap();
+    rooms.unseat("c1", 1).await;
+    one.until(|m| matches!(m, ServerMsg::Error { code: "seat_changed" }).then_some(()))
+        .await;
+    let names = two
+        .until(|m| match m {
+            ServerMsg::Lobby(l) if l.names.len() == 1 => Some(l.names.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(names, vec!["Seat 02".to_string()]);
 }

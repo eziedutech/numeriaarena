@@ -93,6 +93,7 @@ const TEXT = {
     eduHint: "Paper lessons to show on the smartboard or share with the class",
     allClasses: "ALL CLASSES",
     race: "NEW RACE ROOM FOR THIS CLASS",
+    raceLine: (s: string) => `A new race room: ${s}. Change it under RACE ROOMS.`,
     board: "SMARTBOARD RACE",
     boardTitle: "A race on the smartboard",
     boardBody: "Three students race side by side on the classroom's big screen, each touching their own column. Pick who plays; the game opens with them.",
@@ -118,7 +119,8 @@ const TEXT = {
     groupsNote:
       "A race room has 6 desks, so the class races in groups, one group a match: seats 01 to 06 are group A, 07 to 12 group B, and so on. Pick another group for a seat here; the class screen calls the groups in turn.",
     byNumber: "GROUPS BY SEAT NUMBER",
-    tooBig: (g: string, n: number) => `Group ${g} has ${n} seats, but a room has 6 desks: the last to come wait for another turn.`,
+    tooBig: (g: string, n: number) =>
+      `Group ${g} has ${n} seats and a room has 6 desks: the rest wait, and after each race those who have not raced yet take the desks.`,
     official: (n: number, stars: number) => [`${n} ${n === 1 ? "race" : "races"}`, `${stars}★`],
     lastOfficial: (place: number, points: number) => `last: ${place}${place === 1 ? "st" : place === 2 ? "nd" : place === 3 ? "rd" : "th"}, ${points} pts`,
     own: (races: number, practices: number) => [`${races} with robots`, `${practices} ${practices === 1 ? "practice" : "practices"}`],
@@ -155,7 +157,9 @@ const TEXT = {
     importNames: "LOAD NAMES (CSV)",
     namesNote:
       "Names are kept only in this browser and are never sent to Numeria. Save them as a CSV file to keep a copy or to use another computer.",
-    namesLoaded: (n: number) => `${n} ${n === 1 ? "name" : "names"} loaded.`,
+    namesLoaded: (n: number, stale: number) =>
+      `${n} ${n === 1 ? "name" : "names"} loaded.` +
+      (stale ? ` ${stale} ${stale === 1 ? "line was" : "lines were"} skipped: that seat has a new student now.` : ""),
     cardsReady: (n: number) =>
       `${n} ${n === 1 ? "card is" : "cards are"} ready. Print ${n === 1 ? "it" : "them"} now: the pictures show only once, and leaving this page loses them.`,
     print: "PRINT THE CARDS",
@@ -179,7 +183,7 @@ const TEXT = {
       label: "Write a class name of 1 to 30 letters.",
       grade: "Pick a grade.",
       school_year: "The school year is too long.",
-      seats: "A class has 1 to 40 seats.",
+      seats: "A class has 1 to 100 seats.",
       seats_limit: "That is more seats than this account may have.",
       classes_limit: "This account cannot make another class now.",
       not_organizer: "Sign up as an organiser first.",
@@ -187,7 +191,8 @@ const TEXT = {
       class_not_found: "That class is gone.",
       archived: "This class is archived.",
       seat_not_found: "That seat is gone.",
-      group: "Pick a group from A to H.",
+      class_frozen: "This account is suspended, so its classes wait.",
+      group: "Pick a group from A to Q.",
       names_file: "That file has no seat numbers in its first column.",
       names_store: "This browser cannot keep names (private window?).",
       offline: "The server cannot be reached right now.",
@@ -203,6 +208,7 @@ const TEXT = {
     eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
     allClasses: "SEMUA KELAS",
     race: "BUAT RUANG LOMBA UNTUK KELAS INI",
+    raceLine: (s: string) => `Ruang lomba baru: ${s}. Ubah di RUANG LOMBA.`,
     board: "BALAPAN SMARTBOARD",
     boardTitle: "Balapan di smartboard",
     boardBody: "Tiga siswa berlomba berdampingan di layar besar kelas, masing-masing menyentuh kolomnya sendiri. Pilih siapa yang main; game terbuka dengan mereka.",
@@ -228,7 +234,8 @@ const TEXT = {
     groupsNote:
       "Ruang lomba punya 6 meja, jadi kelas berlomba per kelompok, satu kelompok satu pertandingan: kursi 01 sampai 06 kelompok A, 07 sampai 12 kelompok B, dan seterusnya. Pilih kelompok lain untuk sebuah kursi di sini; layar kelas memanggil kelompok bergiliran.",
     byNumber: "KELOMPOK MENURUT NOMOR KURSI",
-    tooBig: (g: string, n: number) => `Kelompok ${g} punya ${n} kursi, padahal ruang punya 6 meja: yang datang terakhir menunggu giliran lain.`,
+    tooBig: (g: string, n: number) =>
+      `Kelompok ${g} punya ${n} kursi dan ruang punya 6 meja: sisanya menunggu, dan setelah tiap balapan yang belum balapan mengambil mejanya.`,
     official: (n: number, stars: number) => [`${n} lomba`, `${stars}★`],
     lastOfficial: (place: number, points: number) => `terakhir: ke-${place}, ${points} poin`,
     own: (races: number, practices: number) => [`${races} lawan robot`, `${practices} latihan`],
@@ -265,7 +272,8 @@ const TEXT = {
     importNames: "MUAT NAMA (CSV)",
     namesNote:
       "Nama hanya disimpan di browser ini dan tidak pernah dikirim ke Numeria. Simpan sebagai berkas CSV untuk cadangan atau untuk komputer lain.",
-    namesLoaded: (n: number) => `${n} nama dimuat.`,
+    namesLoaded: (n: number, stale: number) =>
+      `${n} nama dimuat.` + (stale ? ` ${stale} baris dilewati: kursinya sudah untuk siswa baru.` : ""),
     cardsReady: (n: number) =>
       `${n} kartu siap. Cetak sekarang: gambarnya hanya tampil sekali, dan hilang bila halaman ini ditinggalkan.`,
     print: "CETAK KARTU",
@@ -289,7 +297,7 @@ const TEXT = {
       label: "Tulis nama kelas 1 sampai 30 huruf.",
       grade: "Pilih jenjang.",
       school_year: "Tahun ajaran terlalu panjang.",
-      seats: "Satu kelas berisi 1 sampai 40 kursi.",
+      seats: "Satu kelas berisi 1 sampai 100 kursi.",
       seats_limit: "Jumlah kursi melebihi batas akun ini.",
       classes_limit: "Akun ini belum bisa membuat kelas lagi.",
       not_organizer: "Daftar sebagai penyelenggara dulu.",
@@ -297,7 +305,8 @@ const TEXT = {
       class_not_found: "Kelas itu sudah tidak ada.",
       archived: "Kelas ini sudah diarsipkan.",
       seat_not_found: "Kursi itu sudah tidak ada.",
-      group: "Pilih kelompok A sampai H.",
+      class_frozen: "Akun ini ditangguhkan, jadi kelasnya menunggu.",
+      group: "Pilih kelompok A sampai Q.",
       names_file: "Kolom pertama berkas itu tidak berisi nomor kursi.",
       names_store: "Browser ini tidak bisa menyimpan nama (jendela privat?).",
       offline: "Server belum bisa dihubungi.",
@@ -307,9 +316,9 @@ const TEXT = {
 };
 type Text = (typeof TEXT)["en"];
 
-/** A room for a class has this many desks; a class races in groups A to H. */
+/** A room for a class has this many desks; a class races in groups A to Q. */
 const DESKS = 6;
-const GROUPS = [0, 1, 2, 3, 4, 5, 6, 7];
+const GROUPS = Array.from({ length: 17 }, (_, g) => g);
 const letter = (g: number) => String.fromCharCode(65 + g);
 
 function ErrorLine({ t, code }: { t: Text; code: string }) {
@@ -332,7 +341,20 @@ function thisSchoolYear(): string {
 }
 
 /** MY CLASSES: the list, then one class's page; `onRace` opens a race room for a class. */
-export function MyClasses({ lang, user, trial, onRace }: { lang: Lang; user: User; trial: boolean; onRace: (classId: string) => void }) {
+export function MyClasses({
+  lang,
+  user,
+  trial,
+  onRace,
+  raceLine,
+}: {
+  lang: Lang;
+  user: User;
+  trial: boolean;
+  onRace: (classId: string) => void;
+  /** How a race room opened now is raced. */
+  raceLine: string;
+}) {
   const t = TEXT[lang];
   const [classes, setClasses] = useState<ClassRow[]>();
   const [error, setError] = useState("");
@@ -373,6 +395,8 @@ export function MyClasses({ lang, user, trial, onRace }: { lang: Lang; user: Use
           onBack={() => setOpenId(null)}
           onChange={() => void load()}
           onRace={() => onRace(opened.id)}
+          raceLine={raceLine}
+          trial={trial}
         />
       ) : (
         <>
@@ -439,14 +463,14 @@ function NewClass({
   const [label, setLabel] = useState("");
   const [grade, setGrade] = useState(5);
   const [year, setYear] = useState(thisSchoolYear);
-  const max = trial ? 5 : 40;
+  const max = trial ? 5 : 100;
   const [seats, setSeats] = useState(String(trial ? 5 : 30));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const make = () => {
     const n = Number(seats);
     if (!label.trim()) return setError("label");
-    if (!Number.isInteger(n) || n < 1 || n > max) return setError(n > max && n <= 40 ? "seats_limit" : "seats");
+    if (!Number.isInteger(n) || n < 1 || n > max) return setError(n > max && n <= 100 ? "seats_limit" : "seats");
     setBusy(true);
     setError("");
     api<{ class: ClassRow; seats: Card[] }>(user, "/classes", {
@@ -511,6 +535,8 @@ function ClassPage({
   onBack,
   onChange,
   onRace,
+  raceLine,
+  trial,
 }: {
   t: Text;
   lang: Lang;
@@ -522,6 +548,8 @@ function ClassPage({
   onBack: () => void;
   onChange: () => void;
   onRace: () => void;
+  raceLine: string;
+  trial: boolean;
 }) {
   const [seats, setSeats] = useState<Seat[]>();
   const [names, setNames] = useState<Record<number, string>>({});
@@ -620,12 +648,13 @@ function ClassPage({
     setNote("");
     f.text()
       .then((text) => {
-        const found = parseNamesCsv(text);
-        if (Object.keys(found).length === 0) throw new Error("names_file");
+        const now = Object.fromEntries((seats ?? []).map((s) => [s.number, s.pseudonym]));
+        const { names: found, stale } = parseNamesCsv(text, now);
+        if (Object.keys(found).length === 0 && stale === 0) throw new Error("names_file");
         const count = Object.values(found).filter(Boolean).length;
         return writeNames(row.id, found).then(() => {
           setNames((all) => ({ ...all, ...found }));
-          setNote(t.namesLoaded(count));
+          setNote(t.namesLoaded(count, stale));
         });
       })
       .catch((e) => setError(errorCode(e) === "names_file" ? "names_file" : "names_store"));
@@ -663,6 +692,7 @@ function ClassPage({
             {t.grade(row.grade)}
             {row.school_year ? `, ${row.school_year}` : ""} · {t.seatsCount(row.seats)}
           </p>
+          {active && <p className="soft">{t.raceLine(raceLine)}</p>}
         </div>
         <div className="row">
           {active && (
@@ -719,78 +749,80 @@ function ClassPage({
           {query.trim() && <span className="soft">{shown.length > 0 ? t.shown(shown.length, seats.length) : t.noMatch}</span>}
         </div>
       )}
-      <table className="past-table seats">
-        <thead>
-          <tr>
-            {t.cols.map((c, i) => (
-              <th key={i}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((s) => (
-            <tr key={s.number}>
-              <td className="seat-no">{two(s.number)}</td>
-              <td>
-                <input
-                  className="field name"
-                  aria-label={`${t.cols[1]} ${s.number}`}
-                  placeholder={t.namePlaceholder}
-                  maxLength={80}
-                  defaultValue={names[s.number] ?? ""}
-                  key={`${s.number}:${names[s.number] ?? ""}`}
-                  onBlur={(e) => e.target.value !== (names[s.number] ?? "") && name(s.number, e.target.value)}
-                />
-              </td>
-              <td>{s.pseudonym}</td>
-              <td>
-                <Pick
-                  className={s.group_chosen ? "group chosen" : "group"}
-                  label={`${t.cols[3]} ${s.number}`}
-                  value={s.group}
-                  disabled={!active || busy}
-                  onChange={(group) => act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group }) }))}
-                  options={GROUPS.map((g) => ({ value: g, label: letter(g) }))}
-                />
-              </td>
-              <td className="seat-stats">
-                {t.official(s.official.matches, s.official.stars).map((line) => (
-                  <div key={line}>{line}</div>
-                ))}
-                {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
-                {(s.board?.races ?? 0) > 0 && <div className="soft">{t.onBoard(s.board!.races)}</div>}
-              </td>
-              <td className="seat-stats">
-                {t.own(s.own.races, s.own.practices).map((line) => (
-                  <div key={line}>{line}</div>
-                ))}
-                {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
-                {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
-              </td>
-              <td className="seat-stats">
-                {s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}
-              </td>
-              <td className="seat-actions">
-                {active && (
-                  <>
-                    {s.locked && (
-                      <button type="button" className="btn small blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))}>
-                        {t.unlock}
-                      </button>
-                    )}
-                    <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })}>
-                      {t.newPicture}
-                    </button>
-                    <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })}>
-                      {t.empty}
-                    </button>
-                  </>
-                )}
-              </td>
+      <div className="table-scroll">
+        <table className="past-table seats">
+          <thead>
+            <tr>
+              {t.cols.map((c, i) => (
+                <th key={i}>{c}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {shown.map((s) => (
+              <tr key={s.number}>
+                <td className="seat-no">{two(s.number)}</td>
+                <td>
+                  <input
+                    className="field name"
+                    aria-label={`${t.cols[1]} ${s.number}`}
+                    placeholder={t.namePlaceholder}
+                    maxLength={80}
+                    defaultValue={names[s.number] ?? ""}
+                    key={`${s.number}:${names[s.number] ?? ""}`}
+                    onBlur={(e) => e.target.value !== (names[s.number] ?? "") && name(s.number, e.target.value)}
+                  />
+                </td>
+                <td>{s.pseudonym}</td>
+                <td>
+                  <Pick
+                    className={s.group_chosen ? "group chosen" : "group"}
+                    label={`${t.cols[3]} ${s.number}`}
+                    value={s.group}
+                    disabled={!active || busy}
+                    onChange={(group) => act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group }) }))}
+                    options={GROUPS.map((g) => ({ value: g, label: letter(g) }))}
+                  />
+                </td>
+                <td className="seat-stats">
+                  {t.official(s.official.matches, s.official.stars).map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                  {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
+                  {(s.board?.races ?? 0) > 0 && <div className="soft">{t.onBoard(s.board!.races)}</div>}
+                </td>
+                <td className="seat-stats">
+                  {t.own(s.own.races, s.own.practices).map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                  {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
+                  {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
+                </td>
+                <td className="seat-stats">
+                  {s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}
+                </td>
+                <td className="seat-actions">
+                  {active && (
+                    <div>
+                      {s.locked && (
+                        <button type="button" className="btn small blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))}>
+                          {t.unlock}
+                        </button>
+                      )}
+                      <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })}>
+                        {t.newPicture}
+                      </button>
+                      <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })}>
+                        {t.empty}
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="soft">{t.namesNote}</p>
       <div className="row class-tools">
         <button type="button" className="btn small" onClick={save} disabled={!seats}>
@@ -837,14 +869,14 @@ function ClassPage({
         </button>
       </div>
       {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />}
-      {seats && <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} />}
+      {seats && <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} trial={trial} />}
       {seats && <ClassTown lang={lang} user={user} base={base} names={names} />}
       {ask && (
         <div className="veil" role="dialog" aria-modal="true" aria-label={askText} onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
           <div className="paper-sheet narrow">
             <p>{askText}</p>
             {ask.kind === "add" && (
-              <NumberField label={askText} min={1} max={40} value={more} onChange={setMore} autoFocus />
+              <NumberField label={askText} min={1} max={100} value={more} onChange={setMore} autoFocus />
             )}
             {ask.kind === "erase" && (
               <>

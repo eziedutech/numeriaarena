@@ -132,6 +132,15 @@ impl GameType {
             _ => 1.2,
         }
     }
+
+    /// How much longer than the expected answer time an answer of this game
+    /// may take for the same speed bonus: building takes longer than picking.
+    pub fn time_factor(self) -> f64 {
+        match self {
+            GameType::OrbForge | GameType::BridgeBuilder | GameType::MeasureHunt => 1.5,
+            _ => 1.0,
+        }
+    }
 }
 
 // ---------------------------------------------------------------- ability
@@ -146,10 +155,14 @@ pub struct Rating {
 
 impl Rating {
     pub fn start(grade: Option<u8>, p: &FairnessParams) -> Rating {
+        // Grades 4 to 6 have their own start; the others go on by the same step.
+        let step = (p.start_theta_grade6 - p.start_theta_grade4) / 2.0;
         let theta = match grade {
             Some(4) => p.start_theta_grade4,
             Some(5) => p.start_theta_grade5,
             Some(6) => p.start_theta_grade6,
+            Some(g @ 1..=3) => p.start_theta_grade4 - step * f64::from(4 - g),
+            Some(g @ 7..=9) => p.start_theta_grade6 + step * f64::from(g - 6),
             _ => 0.0,
         };
         Rating {
@@ -706,6 +719,16 @@ mod tests {
         )
         .unwrap();
         assert!(!recent[recent.len() - 20..].contains(&cands[only.index].key));
+    }
+
+    #[test]
+    fn every_grade_starts_a_step_from_the_next() {
+        let p = params();
+        let start = |g| Rating::start(Some(g), &p).theta;
+        assert_eq!(start(5), p.start_theta_grade5);
+        assert!((start(1) - -2.0).abs() < 1e-9 && (start(9) - 2.0).abs() < 1e-9);
+        assert!((1..9).all(|g| start(g) < start(g + 1)));
+        assert_eq!(Rating::start(None, &p).theta, 0.0);
     }
 
     #[test]

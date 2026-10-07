@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::State;
 use crate::ai::{AiError, CLASS_INSIGHT, Gateway};
 use crate::answers::class_report;
-use crate::organizer::{ApiError, signed_in};
+use crate::organizer::ApiError;
 use crate::rooms::Content;
 
 /// Changed whenever the prompt or the input changes, so old insights are made again.
@@ -369,7 +369,7 @@ pub async fn insight(
     headers: HeaderMap,
     Json(b): Json<InsightBody>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(
         class_insight(
             &state.db,

@@ -14,7 +14,7 @@ use sqlx::PgPool;
 
 use crate::State;
 use crate::classes::{audit, owned, student};
-use crate::organizer::{ApiError, bearer, signed_in};
+use crate::organizer::{ApiError, bearer};
 use crate::rooms::Content;
 
 /// At most this many answers in one request (the device sends 200 at a time).
@@ -327,7 +327,7 @@ pub async fn report(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(
         class_report(&state.db, state.rooms.content(), user.id, &id).await?,
     ))
@@ -438,7 +438,7 @@ pub async fn board(
     headers: HeaderMap,
     Json(race): Json<BoardRace>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(
         record_board(&state.db, state.rooms.content(), user.id, &id, &race).await?,
     ))

@@ -68,7 +68,11 @@ export async function clearNames(classId: string): Promise<void> {
   await run("readwrite", (s) => s.delete(range(classId)));
 }
 
-const cell = (v: string) => (/[",\n\r]/u.test(v) ? `"${v.replace(/"/gu, '""')}"` : v);
+/** A cell; one a spreadsheet would read as a formula starts with a quote mark. */
+const cell = (raw: string) => {
+  const v = /^[=+\-@\t\r]/u.test(raw) ? `'${raw}` : raw;
+  return /[",\n\r]/u.test(v) ? `"${v.replace(/"/gu, '""')}"` : v;
+};
 
 /** seat,pseudonym,name, one line per seat. */
 export function namesCsv(seats: { number: number; pseudonym: string }[], names: Record<number, string>): string {
@@ -109,14 +113,25 @@ function rows(text: string): string[][] {
 /**
  * Names from a CSV file: the first column is the seat number, the last the
  * name (so both "seat,name" and our own "seat,pseudonym,name" read). Lines
- * without a seat number, such as the header, are skipped.
+ * without a seat number, such as the header, are skipped, and so is a line
+ * of ours whose pseudonym is no longer its seat's: that seat was emptied for
+ * a new student since the file was saved.
  */
-export function parseNamesCsv(text: string): Record<number, string> {
+export function parseNamesCsv(
+  text: string,
+  pseudonyms: Record<number, string> = {},
+): { names: Record<number, string>; stale: number } {
   const names: Record<number, string> = {};
+  let stale = 0;
   for (const r of rows(text.replace(/^\uFEFF/u, ""))) {
     const n = Number(r[0]?.trim());
-    if (!Number.isInteger(n) || n < 1 || n > 99 || r.length < 2) continue;
-    names[n] = (r[r.length - 1] ?? "").replace(/\s+/gu, " ").trim();
+    if (!Number.isInteger(n) || n < 1 || n > 100 || r.length < 2) continue;
+    const was = r.length >= 3 ? r[1].trim() : "";
+    if (was && pseudonyms[n] && was !== pseudonyms[n]) {
+      stale++;
+      continue;
+    }
+    names[n] = (r[r.length - 1] ?? "").replace(/^'(?=[=+\-@])/u, "").replace(/\s+/gu, " ").trim();
   }
-  return names;
+  return { names, stale };
 }

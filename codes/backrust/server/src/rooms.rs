@@ -6,7 +6,7 @@
 //! every wave and of the match, keyed by their event id, so writing again
 //! after a failure never counts an answer twice.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -257,6 +257,8 @@ pub(crate) struct Seated {
     pub(crate) class_id: String,
     /// The seat's race group, in a room for its class.
     pub(crate) group: u8,
+    /// The class's grade, which the seat races at in a room for anyone.
+    pub(crate) grade: i16,
 }
 
 /// Every open room by its codes.
@@ -354,6 +356,26 @@ impl Rooms {
             let _ = tx.send(Cmd::Close).await;
         }
         true
+    }
+
+    /// Seat `seat_id` of class `class_id` got a new picture or a new student:
+    /// whoever sits at it in a room for the class leaves, and its place there
+    /// is no longer theirs.
+    pub async fn unseat(&self, class_id: &str, seat_id: i64) {
+        let txs: Vec<mpsc::Sender<Cmd>> = {
+            let map = self.codes.lock().expect("codes");
+            map.values()
+                .filter(|e| {
+                    e.hosted
+                        .as_ref()
+                        .is_some_and(|h| h.class.as_ref().is_some_and(|c| c.id == class_id))
+                })
+                .map(|e| e.tx.clone())
+                .collect()
+        };
+        for tx in txs {
+            let _ = tx.send(Cmd::Unseat { seat_id }).await;
+        }
     }
 
     /// Closes every room still open for class `class_id`, as when it is deleted.
@@ -564,6 +586,10 @@ enum Cmd {
     },
     /// Its host closed it: everyone out, and the room ends.
     Close,
+    /// A class seat is no longer the student who sat down with it.
+    Unseat {
+        seat_id: i64,
+    },
 }
 
 struct Slot {
@@ -571,6 +597,8 @@ struct Slot {
     token: String,
     /// The class seat racing here, when a signed-in student took it.
     seat_id: Option<i64>,
+    /// That seat's class grade.
+    grade: Option<i16>,
     conn: Option<u64>,
     ready: bool,
 }
@@ -612,6 +640,9 @@ struct Room {
     starts_at: Option<f64>,
     /// In a room for a class: the race group whose seats sit down (0 is A).
     turn: u8,
+    /// The seats that raced since their group was called: in a group of more
+    /// than six, one who has not raced yet takes such a seat's desk.
+    raced: HashSet<i64>,
     /// A duel (FIND A RIVAL) at this grade.
     duel: Option<i16>,
     /// A duel's first student is in: a robot takes the empty seat at this time.
@@ -652,6 +683,7 @@ impl Room {
             shut: false,
             starts_at: None,
             turn: 0,
+            raced: HashSet::new(),
             duel: None,
             rival_by: None,
             setup: RoomSetup::default(),
@@ -789,6 +821,11 @@ impl Room {
         {
             return;
         }
+        self.remove_slot(seat);
+    }
+
+    /// Takes seat `seat` out of the lobby, the later seats moving up one.
+    fn remove_slot(&mut self, seat: usize) {
         self.slots.remove(seat);
         for c in self.conns.values_mut() {
             if let Some(s) = c.seat
@@ -800,6 +837,54 @@ impl Room {
         let lobby = self.lobby();
         self.broadcast(&lobby);
         self.settle();
+    }
+
+    /// The room is full: in a room for a class, a classmate who has not raced
+    /// since their group was called takes the desk of one who has.
+    fn make_room(&mut self, student: Option<&Seated>) -> bool {
+        let Some(s) = student else {
+            return false;
+        };
+        if self.class.is_none() || self.raced.contains(&s.seat_id) {
+            return false;
+        }
+        let Some(seat) = self
+            .slots
+            .iter()
+            .position(|o| o.seat_id.is_some_and(|id| self.raced.contains(&id)))
+        else {
+            return false;
+        };
+        if let Some(conn) = self.slots[seat].conn {
+            if let Some(c) = self.conns.get_mut(&conn) {
+                c.seat = None;
+            }
+            self.send(conn, ServerMsg::Error { code: "seat_given" });
+            self.drop_conn(conn);
+        }
+        self.remove_slot(seat);
+        true
+    }
+
+    /// Seat `seat_id` got a new picture or student: its device leaves, and
+    /// its place in a race on is no longer the seat's.
+    fn unseat(&mut self, seat_id: i64) {
+        self.raced.remove(&seat_id);
+        let Some(seat) = self.slots.iter().position(|s| s.seat_id == Some(seat_id)) else {
+            return;
+        };
+        if let Some(conn) = self.slots[seat].conn {
+            self.send(conn, ServerMsg::Error { code: "seat_changed" });
+            self.drop_conn(conn);
+        }
+        if self.game.is_some() {
+            let slot = &mut self.slots[seat];
+            slot.seat_id = None;
+            slot.grade = None;
+            slot.token = random_hex();
+        } else {
+            self.remove_slot(seat);
+        }
     }
 
     /// The class's seat numbers by race group.
@@ -843,6 +928,9 @@ impl Room {
     /// The class screen calls group `group`: the last group's seats leave
     /// (each told `turn_over`), and the next match seats only the new group.
     fn call_group(&mut self, group: u8) {
+        if group != self.turn {
+            self.raced.clear();
+        }
         self.turn = group;
         self.game = None;
         self.match_id = None;
@@ -960,12 +1048,13 @@ impl Room {
                 } else if self.game.is_some() {
                     let _ = reply.send(Err("match_started"));
                     return;
-                } else if self.slots.len() >= self.seats {
+                } else if self.slots.len() >= self.seats && !self.make_room(student.as_ref()) {
                     let _ = reply.send(Err("room_full"));
                     return;
                 } else {
                     // A signed-in student races under their seat's pseudonym,
                     // unless a seat from another class has it in this room.
+                    let grade = student.as_ref().map(|s| s.grade);
                     let (seat_id, name) = match student {
                         Some(s) if self.slots.iter().all(|o| o.name != s.pseudonym) => {
                             (Some(s.seat_id), s.pseudonym)
@@ -975,6 +1064,7 @@ impl Room {
                     self.slots.push(Slot {
                         name,
                         seat_id,
+                        grade,
                         token: random_hex(),
                         conn: None,
                         ready: false,
@@ -986,7 +1076,8 @@ impl Room {
                 }
                 self.next_conn += 1;
                 let is_host = host.is_some() && host == self.host_token;
-                if is_host {
+                // The lobby shows the group as the class page has it now.
+                if is_host || seat.is_some() {
                     self.refresh_groups().await;
                 }
                 self.conns.insert(
@@ -1029,6 +1120,7 @@ impl Room {
                     self.leave_duel(s);
                 }
             }
+            Cmd::Unseat { seat_id } => self.unseat(seat_id),
             Cmd::Close => {
                 // What was answered is kept; the match does not go on.
                 if self.game.is_some() && self.done_at.is_none() {
@@ -1205,12 +1297,14 @@ impl Room {
             .map(|(i, s)| Classmate {
                 name: s.name.clone(),
                 player_id: format!("{}:{i}", self.id),
-                // A class's room plays at the class's grade, a duel at its own.
+                // A class's room plays at the class's grade, a duel at its own,
+                // a room for anyone at each student's class grade.
                 grade: self
                     .class
                     .as_ref()
                     .map(|c| c.grade)
                     .or(self.duel)
+                    .or(s.grade)
                     .and_then(|g| u8::try_from(g).ok()),
             })
             .collect();
@@ -1221,6 +1315,7 @@ impl Room {
             self.rooms.content.version.clone(),
         );
         cfg.waves = self.setup.waves();
+        cfg.boss_game = self.setup.final_game();
         let mut m = match ClassMatch::new(
             self.rooms.content.templates.clone(),
             cfg,
@@ -1243,6 +1338,7 @@ impl Room {
             }
         }
         self.game = Some(m);
+        self.raced.extend(self.slots.iter().filter_map(|s| s.seat_id));
         self.done_at = None;
         self.match_id = Some(random_hex());
         self.unsaved.clear();
@@ -1485,6 +1581,8 @@ pub async fn create(
         (None, _) => None,
         (Some(_), None) => return Err(ApiError(StatusCode::UNAUTHORIZED, "signed_out")),
         (Some(id), Some(u)) => {
+            // Only a teacher who may keep classes opens a room for one.
+            crate::classes::allowance(&state.db, u.id, u.admin).await?;
             let row: Option<(String, i16)> = sqlx::query_as(
                 "SELECT label, grade FROM classes WHERE id = $1 AND owner = $2 AND status = 'active'",
             )
@@ -1681,6 +1779,7 @@ async fn connection(rooms: Arc<Rooms>, db: sqlx::PgPool, mut socket: WebSocket) 
                 pseudonym: s.pseudonym,
                 class_id: s.class_id,
                 group: s.race_group,
+                grade: s.grade,
             }),
             Err(e) => {
                 tracing::warn!("student lookup failed: {e}");

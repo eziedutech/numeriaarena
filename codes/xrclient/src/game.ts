@@ -341,7 +341,7 @@ const BOOK_MID_Z = -0.12;
  * towards the camera as in the logo.
  */
 const LOGO_COLOR = 0xf2716b;
-const LOGO_AT = new Vector3(0, 0.023, -0.36);
+const LOGO_AT = new Vector3(0, 0.023, -0.33);
 const LOGO_SCALE = 2.8;
 const LOGO_YAW = -0.55;
 
@@ -1962,10 +1962,12 @@ export class GameSystem extends createSystem({
 
   /** The teacher closed the Class Match room, or called another group: back to the menu, saying so. */
   private classClosed(): void {
-    const turnOver = this.race instanceof ClassRace && this.race.turnOver;
-    console.info(turnOver ? '[class] another group is called' : '[class] the room was closed');
+    const why = this.race instanceof ClassRace ? this.race.why : '';
+    console.info(`[class] ${why || 'room_closed'}`);
     this.endRace();
-    this.score.set(turnOver ? T.classTurnOver : T.classClosed);
+    this.score.set(
+      why === 'turn_over' ? T.classTurnOver : why === 'seat_given' ? T.classSeatGiven : why === 'seat_changed' ? T.classSeatChanged : T.classClosed,
+    );
   }
 
   private endRace(): void {

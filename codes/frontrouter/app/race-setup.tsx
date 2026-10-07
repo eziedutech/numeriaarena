@@ -45,7 +45,7 @@ const TEXT = {
       harder: "Each student's questions are aimed a little harder than their level: good for a challenge day.",
     } as Record<Level, string>,
     order: "Order",
-    final: "then a short final round",
+    final: (game: string) => `then a short final round of ${game}`,
     total: (m: number, s: number) => `About ${m} min${s ? ` ${s} s` : ""} of rounds`,
     usual: "USUAL RACE",
     names: {
@@ -76,7 +76,7 @@ const TEXT = {
       harder: "Soal tiap siswa dibuat sedikit lebih sulit dari tingkatnya: cocok untuk hari tantangan.",
     } as Record<Level, string>,
     order: "Urutan",
-    final: "lalu babak final singkat",
+    final: (game: string) => `lalu babak final singkat ${game}`,
     total: (m: number, s: number) => `Sekitar ${m} menit${s ? ` ${s} detik` : ""} babak`,
     usual: "LOMBA BAWAAN",
     names: {
@@ -105,17 +105,18 @@ export function clean(s: Partial<RoomSetup> | null | undefined): RoomSetup {
   return { games: [...new Set(s!.games!.filter((g) => games.includes(g)))], rounds, seconds, level };
 }
 
-export function readSetup(): RoomSetup {
+/** The setup `owner` (an account's email) last chose in this browser. */
+export function readSetup(owner: string): RoomSetup {
   try {
-    return clean(JSON.parse(localStorage.getItem(KEY) ?? "null"));
+    return clean(JSON.parse(localStorage.getItem(`${KEY}:${owner}`) ?? "null"));
   } catch {
     return USUAL;
   }
 }
 
-function keep(s: RoomSetup) {
+function keep(owner: string, s: RoomSetup) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    localStorage.setItem(`${KEY}:${owner}`, JSON.stringify(s));
   } catch {
     // A private window may refuse; the choice just lasts this visit.
   }
@@ -128,10 +129,20 @@ export function describe(lang: Lang, setup: RoomSetup | null | undefined): strin
   return t.summary(s.games.map((g) => t.names[g]).join(", "), s.rounds, s.seconds, t.short[s.level]);
 }
 
-export function RaceSetup({ lang, setup, onChange }: { lang: Lang; setup: RoomSetup; onChange: (s: RoomSetup) => void }) {
+export function RaceSetup({
+  lang,
+  owner,
+  setup,
+  onChange,
+}: {
+  lang: Lang;
+  owner: string;
+  setup: RoomSetup;
+  onChange: (s: RoomSetup) => void;
+}) {
   const t = TEXT[lang];
   const set = (next: RoomSetup) => {
-    keep(next);
+    keep(owner, next);
     onChange(next);
   };
   const toggle = (g: RoomGame) => {
@@ -197,7 +208,7 @@ export function RaceSetup({ lang, setup, onChange }: { lang: Lang; setup: RoomSe
       </div>
       <p className="soft">{t.levelNote[setup.level]}</p>
       <p className="soft">
-        {t.order}: {order.join(", ")}, {t.final}. {t.total(Math.floor(total / 60), total % 60)}.
+        {t.order}: {order.join(", ")}, {t.final(t.names[setup.games[0]])}. {t.total(Math.floor(total / 60), total % 60)}.
       </p>
       {!usual && (
         <button type="button" className="btn small" onClick={() => set({ ...USUAL })}>

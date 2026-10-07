@@ -42,6 +42,7 @@ const TEXT = {
     dayCount: (n: number) => (n === 1 ? "1 day" : `${n} days`),
     empty: "Nobody yet.",
     global: "Take part in GLOBAL",
+    globalTrial: "A trial class shows on GLOBAL once an admin approves your account.",
     globalNote: "GLOBAL ranks every class that takes part. It shows only a student's pseudonym and the class's grade, never the class name, the school or a real name.",
     refresh: "REFRESH",
     failed: "The leaderboard could not be loaded. Try REFRESH.",
@@ -61,6 +62,7 @@ const TEXT = {
     dayCount: (n: number) => `${n} hari`,
     empty: "Belum ada.",
     global: "Ikut GLOBAL",
+    globalTrial: "Kelas percobaan tampil di GLOBAL setelah admin menyetujui akun Anda.",
     globalNote: "GLOBAL memeringkat semua kelas yang ikut. Yang tampil hanya nama samaran siswa dan tingkat kelas, tidak pernah nama kelas, sekolah, atau nama asli.",
     refresh: "MUAT ULANG",
     failed: "Papan peringkat belum bisa dimuat. Coba MUAT ULANG.",
@@ -77,9 +79,12 @@ export function ClassLeaders({
   active,
   seats,
   names,
+  trial,
 }: {
   lang: Lang;
   user: User;
+  /** A trial class waits for its teacher's approval before it shows on GLOBAL. */
+  trial: boolean;
   /** The class's API path. */
   base: string;
   /** An archived class keeps its boards but no longer changes GLOBAL. */
@@ -137,6 +142,7 @@ export function ClassLeaders({
         </label>
       )}
       <p className="soft">{t.globalNote}</p>
+      {trial && <p className="soft">{t.globalTrial}</p>}
       {error && (
         <p className="err" role="alert">
           {error === "offline" ? t.offline : t.failed}

@@ -18,7 +18,7 @@ use crate::State;
 use crate::ai::{AiError, CLASS_INSIGHT, Gateway, PRACTICE_PLAN};
 use crate::answers::class_report;
 use crate::insight::{ENOUGH, allowed_numbers, check_line, first_tries, insight_input};
-use crate::organizer::{ApiError, signed_in};
+use crate::organizer::ApiError;
 use crate::rooms::Content;
 
 /// Changed whenever the prompt or the input changes, so old plans are made again.
@@ -216,7 +216,7 @@ pub async fn practice(
     headers: HeaderMap,
     Json(b): Json<PracticeBody>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(
         practice_plan(
             &state.db,

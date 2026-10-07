@@ -5,6 +5,8 @@
 //!   judged count (rooms for a class, rooms for anyone, FIND A RIVAL), so a
 //!   score can never be sent in by a device. Points measure effort against
 //!   what was expected, so a student who finds maths hard can top it too.
+//!   Global takes only the usual race, so a room of longer or easier rounds
+//!   cannot top it; My Class takes every race of the class.
 //! - Most Days: the days a seat played in the period, any kind of play, at
 //!   most one a day, so it rewards coming back rather than playing long.
 //! - City Builder: the Folds in the finished buildings of a seat's Fold Town.
@@ -21,9 +23,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgPool, Postgres, Transaction};
 
+use foldlings_core::setup::RoomSetup;
+
 use crate::State;
 use crate::classes::{audit, owned, student};
-use crate::organizer::{ApiError, bearer, signed_in};
+use crate::organizer::{ApiError, bearer};
 
 /// Rows of a board, above the asking seat's own.
 const TOP: i64 = 10;
@@ -61,13 +65,17 @@ const ROWS: &str = "
     ORDER BY place";
 
 /// Best points in one judged race; a tie goes to whoever reached it first.
+/// Global counts only rooms of the usual race (or from before rooms had a setup).
 fn strike_sql() -> String {
+    let usual = json!(RoomSetup::default());
     format!(
         "WITH {SCOPE},
         best AS (
             SELECT DISTINCT ON (r.class_seat_id) r.class_seat_id AS seat, r.points::bigint AS score, r.created_at AS at
-            FROM match_seat_results r JOIN scope ON scope.id = r.class_seat_id, since
+            FROM match_seat_results r JOIN scope ON scope.id = r.class_seat_id
+                 JOIN matches m ON m.id = r.match_id JOIN rooms ro ON ro.id = m.room_id, since
             WHERE r.created_at >= since.t AND r.points > 0
+              AND ($1 <> '' OR ro.setup IS NULL OR ro.setup = '{usual}'::jsonb)
             ORDER BY r.class_seat_id, r.points DESC, r.created_at
         ),
         ranked AS (SELECT seat, score, row_number() OVER (ORDER BY score DESC, at) AS place FROM best)
@@ -210,7 +218,7 @@ pub async fn for_class(
     headers: HeaderMap,
     Query(q): Query<Ask>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     let period = Period::parse(q.period.as_deref())?;
     let on_global: Option<bool> =
         sqlx::query_scalar("SELECT on_global FROM classes WHERE id = $1 AND owner = $2")
@@ -254,7 +262,7 @@ pub async fn global_setting(
     headers: HeaderMap,
     Json(body): Json<OnGlobal>,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(set_on_global(&state.db, user.id, &id, body.on).await?))
 }
 

@@ -176,8 +176,8 @@ html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter
 #home .seg.on { background: ${COLORS.cobalt}; }
 #home .offline { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); }
 #home .hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-#home .hint.bar { left: 50%; top: 284px; width: auto; height: auto; overflow: visible; clip-path: none; transform: translateX(-50%);
-  font-size: 16px; font-weight: 700; color: ${PAPER}; background: rgba(58, 45, 20, 0.62); padding: 7px 16px; white-space: nowrap; letter-spacing: 0.01em; }
+#home .hint.bar { left: 50%; top: 278px; width: auto; height: auto; overflow: visible; clip-path: none; transform: translateX(-50%);
+  font-size: 14px; font-weight: 700; color: ${PAPER}; background: rgba(58, 45, 20, 0.62); padding: 4px 14px; white-space: nowrap; letter-spacing: 0.01em; }
 #home .head { position: absolute; top: 312px; }
 #home .card { position: absolute; width: 350px; height: 78px; display: flex; align-items: center; gap: 14px;
   padding: 12px 18px 12px 12px; cursor: pointer; transition: transform 0.12s; }
@@ -1332,9 +1332,13 @@ export class Home {
       );
       const readyNow = l ? l.ready.filter(Boolean).length : 0;
       state.textContent = link.shut
-        ? link.turnOver
+        ? link.why === 'turn_over'
           ? t.turnOver
-          : t.roomClosed
+          : link.why === 'seat_given'
+            ? t.seatGiven
+            : link.why === 'seat_changed'
+              ? t.seatChanged
+              : t.roomClosed
         : open
           ? t.lobbyReadyWait(readyNow, l?.names.length ?? 0)
           : duel

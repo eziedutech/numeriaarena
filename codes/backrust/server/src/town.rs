@@ -21,7 +21,7 @@ use std::collections::hash_map::Entry;
 
 use crate::State;
 use crate::classes::student;
-use crate::organizer::{ApiError, bearer, signed_in};
+use crate::organizer::{ApiError, bearer};
 
 /// The lands of a class, with the seat that owns each.
 async fn cells(
@@ -126,7 +126,7 @@ pub async fn class_map(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    let user = signed_in(&state, &headers).await?;
+    let (user, _) = crate::classes::teacher(&state, &headers).await?;
     Ok(Json(teacher_map(&state.db, user.id, &id).await?))
 }
 

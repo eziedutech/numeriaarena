@@ -859,7 +859,7 @@ impl ClassMatch {
     fn finish_bot_answer(&mut self, d: usize, at: f64) {
         let game = self.game();
         let boss = self.phase == Phase::Boss;
-        let expected = self.cfg.expected_answer_ms;
+        let expected = self.cfg.expected_answer_ms * game.time_factor();
         let (mut w, theta, pace) = {
             let b = self.bot(d);
             (b.work.take().expect("checked"), b.theta, b.pace_ms)
