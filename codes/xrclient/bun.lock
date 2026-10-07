@@ -6,6 +6,7 @@
       "name": "xrclient",
       "dependencies": {
         "@iwsdk/core": "1.0.0",
+        "@mediapipe/tasks-vision": "1.1.0",
         "@pmndrs/uikit": "1.0.76",
         "@pmndrs/uikit-horizon": "1.0.76",
         "@pmndrs/uikit-lucide": "1.0.76",
@@ -266,6 +267,8 @@
     "@iwsdk/vite-plugin-dev": ["@iwsdk/vite-plugin-dev@1.0.0", "", { "dependencies": { "@drawcall/uikitml": "0.1.8", "@iwer/devui": "^2.5.0", "@iwsdk/core": "1.0.0", "@iwsdk/scene-composition": "1.0.0", "@preact/signals-core": "^1.12.1", "@vitejs/plugin-basic-ssl": "^2.3.0", "lucide": "^0.468.0", "open": "^10.2.0", "playwright": "^1.58.2", "preact": "^10.29.7", "sharp": "^0.35.4", "three": "npm:super-three@0.181.0", "three-viewport-gizmo": "^2.2.0", "ws": "^8.21.1" }, "peerDependencies": { "vite": "^7.0.0" } }, "sha512-xiWqzIxxGpQe7cO6SNHb9A5DjhClVYquP5eW0Q4pUY9UMiBVGx96PJUV9PsXD0+tuH0KYYD6fDDgX3CC71bPVQ=="],
 
     "@iwsdk/xr-input": ["@iwsdk/xr-input@1.0.0", "", { "dependencies": { "@pmndrs/pointer-events": "^6.6.22", "@preact/signals-core": "^1.11.0" }, "peerDependencies": { "three": ">=0.160.0" } }, "sha512-/7QuzfOI3otEPVy007tBWI0JQBePJ6B4Vk3SUEKnUMpTcr0Kt1SrybM6/kZabK4wxThzsN8Swj3DBjdknLmn6A=="],
+
+    "@mediapipe/tasks-vision": ["@mediapipe/tasks-vision@1.1.0", "", {}, "sha512-ZJqh0wMKOINorfSffvDAxzyO1//c+FiG3IkzOdNDnLqvBB3DbMfj0bB/tys2SNf9S914sgoIbIpF4HTOi336cg=="],
 
     "@meta-quest/metavr": ["@meta-quest/metavr@1.8.0", "", { "bin": { "metavr": "bin/metavr.js" } }, "sha512-FiU5DaGUA2G5QpXj34nbypu2lQZVYu6hhecI65XjBMN1DEcKlyzqNbfzAWbQjNDnzEZ8twnzHm7rJQ+Wqrmvzw=="],
 

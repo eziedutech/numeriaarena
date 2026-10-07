@@ -40,6 +40,36 @@ function bootProgress(): Plugin {
   };
 }
 
+/** The hand reader's runtime for the smartboard camera (src/board/camera.ts), with and without SIMD. */
+const CAMERA_WASM = 'node_modules/@mediapipe/tasks-vision/wasm';
+const CAMERA_FILES = ['vision_wasm_internal.js', 'vision_wasm_internal.wasm', 'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm'];
+
+/**
+ * camera/wasm/ beside the game, from the installed package rather than kept
+ * in the repository: served by the dev server, written into the build. Like
+ * the model in public/camera/, it is left out of the offline worker's list,
+ * so only a board that turns the camera on fetches it (and then keeps it).
+ */
+function cameraFiles(): Plugin {
+  return {
+    name: 'numeria-camera-files',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const name = /\/camera\/wasm\/([^/?]+)/.exec(req.url ?? '')?.[1];
+        if (!name || !CAMERA_FILES.includes(name)) return next();
+        res.setHeader('Content-Type', name.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
+        res.end(readFileSync(join(CAMERA_WASM, name)));
+      });
+    },
+    generateBundle() {
+      for (const name of CAMERA_FILES) this.emitFile({ type: 'asset', fileName: `camera/wasm/${name}`, source: readFileSync(join(CAMERA_WASM, name)) });
+    },
+  };
+}
+
+/** Kept for the camera only, never fetched ahead. */
+const notKept = (f: string) => !f.startsWith('camera/');
+
 /** Every file under `dir`, as paths relative to it with forward slashes. */
 function filesUnder(dir: string, prefix = ''): string[] {
   return readdirSync(join(dir, prefix), { withFileTypes: true }).flatMap((d) =>
@@ -59,8 +89,8 @@ function offlineWorker(): Plugin {
     apply: 'build',
     generateBundle(_options, bundle) {
       // Names in the bundle carry a content hash; public files are taken with their sizes.
-      const built = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
-      const pub = filesUnder('public').map((f) => ({ f, size: statSync(join('public', f)).size }));
+      const built = Object.keys(bundle).filter((f) => !f.endsWith('.map') && notKept(f));
+      const pub = filesUnder('public').filter(notKept).map((f) => ({ f, size: statSync(join('public', f)).size }));
       const version = createHash('sha256')
         .update(JSON.stringify([built.sort(), pub]))
         .digest('hex')
@@ -77,7 +107,7 @@ function offlineWorker(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [iwsdkDev(), bootProgress(), offlineWorker()],
+  plugins: [iwsdkDev(), cameraFiles(), bootProgress(), offlineWorker()],
   server: {
     host: '0.0.0.0',
     port: 3322,

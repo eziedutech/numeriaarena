@@ -3,6 +3,7 @@ import { sfx } from '../audio.js';
 import { el, paperText } from '../home/paper.js';
 import { onTeacher, teacherCall, teacherState } from '../home/teacher.js';
 import { BOARD_TEXT, type BoardText } from './board-text.js';
+import { startCamera, type Camera } from './camera.js';
 import { decorate, FIELD_TOP, lookOf, LOOKS_CSS, target } from './looks.js';
 import { WALKER_H, WALKER_W, walkers } from './paper-art.js';
 import { makeRace, seeded, shuffled, topicsFor, type Question, type Topic } from './questions.js';
@@ -236,6 +237,9 @@ class Board {
   private timers: number[] = [];
   private ticking = 0;
   private onResize = () => this.fit();
+  /** Hands read by the board's camera; off until the teacher turns it on for this race. */
+  private useCamera = false;
+  private camera: Camera | null = null;
 
   private unlisten: () => void;
 
@@ -274,7 +278,13 @@ class Board {
     });
   }
 
+  private stopCamera(): void {
+    this.camera?.stop();
+    this.camera = null;
+  }
+
   private fresh(): HTMLDivElement {
+    this.stopCamera();
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
     cancelAnimationFrame(this.ticking);
@@ -298,6 +308,7 @@ class Board {
   }
 
   private close(): void {
+    this.stopCamera();
     for (const t of this.timers) clearTimeout(t);
     cancelAnimationFrame(this.ticking);
     window.removeEventListener('resize', this.onResize);
@@ -468,6 +479,14 @@ class Board {
       });
       el('span', '', label).textContent = t.record;
     }
+    if ('mediaDevices' in navigator) {
+      const label = el('label', 'check', sheet);
+      const box = el('input', '', label);
+      box.type = 'checkbox';
+      box.checked = this.useCamera;
+      box.addEventListener('change', () => (this.useCamera = box.checked));
+      el('span', '', label).textContent = t.camera;
+    }
     const note = el('p', 'note', sheet);
     note.setAttribute('role', 'status');
 
@@ -517,6 +536,25 @@ class Board {
       );
     });
     end.style.minHeight = '52px';
+    if (this.useCamera) {
+      const chip = el('div', 'cam-chip off shadow', bar);
+      chip.setAttribute('role', 'status');
+      chip.textContent = t.cameraStarting;
+      const on = el('span', '');
+      on.textContent = t.cameraOn;
+      void startCamera(chip, import.meta.env.BASE_URL).then(
+        (camera) => {
+          // The race may have ended while the camera was starting.
+          if (!chip.isConnected) return camera.stop();
+          this.camera = camera;
+          chip.appendChild(on);
+        },
+        (e: unknown) => {
+          console.warn('[board] camera not started', e);
+          chip.textContent = t.cameraFailed;
+        },
+      );
+    }
 
     const cols = el('div', 'cols', stage);
     let startAt = 0;
