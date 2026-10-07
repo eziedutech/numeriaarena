@@ -57,11 +57,12 @@ const EN = {
   town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
   board: ['LEADERBOARD', 'My class and the world'],
   soon: 'SOON',
-  footer: ['How to play', 'For parents', 'Privacy', 'Credits and licenses', 'About'],
+  footer: ['How to play', 'For parents', 'Privacy', 'Terms of use', 'Credits and licenses', 'About'],
   fullPolicy: 'Read the full privacy policy and how to delete data',
   /** Where each footer page goes on for longer, on the site. */
   more: {
     'How to play': 'Read the full guide',
+    'Terms of use': 'Read the full terms of use',
     'Credits and licenses': 'See every credit and license',
     About: 'Read more about Numeria Arena',
   } as Record<string, string>,
@@ -196,6 +197,8 @@ const EN = {
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
       'We keep as little as we can. Without a class, nothing leaves this device. With a class, the server keeps a made-up player name (like BLUE CRANE 07) and the answers given, never a real name, email, photo, voice, or what the headset cameras see. Teachers who sign in share their name and email so we can run their classes.',
+    'Terms of use':
+      "Numeria Arena is free to play, with or without an account. Play fairly, with your own class card only. Teachers and organisers agree to the terms to make classes and look after their students' cards and names. It may not be used officially on behalf of a school or other institution without the developer's written permission.",
     'Credits and licenses':
       'Built with the Immersive Web SDK (MIT) and three.js (MIT); the smartboard camera reads hands with MediaPipe (Apache 2.0). Paper animals, letters and pictures are made by the project owner. The background music was made by the project owner with an AI music tool. Every third-party part is listed with its license in the source repository.',
     About:
@@ -252,10 +255,11 @@ const ID: typeof EN = {
   town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
   board: ['PAPAN PERINGKAT', 'Kelasku dan seluruh dunia'],
   soon: 'SEGERA',
-  footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Kredit dan lisensi', 'Tentang'],
+  footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Syarat penggunaan', 'Kredit dan lisensi', 'Tentang'],
   fullPolicy: 'Baca kebijakan privasi lengkap dan cara menghapus data',
   more: {
     'How to play': 'Baca panduan lengkap',
+    'Terms of use': 'Baca syarat penggunaan lengkap',
     'Credits and licenses': 'Lihat semua kredit dan lisensi',
     About: 'Baca selengkapnya tentang Numeria Arena',
   } as Record<string, string>,
@@ -389,6 +393,8 @@ const ID: typeof EN = {
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:
       'Kami menyimpan sesedikit mungkin. Tanpa kelas, tidak ada data yang keluar dari perangkat ini. Dengan kelas, server menyimpan nama pemain samaran (misalnya BLUE CRANE 07) dan jawaban, tidak pernah nama asli, email, foto, suara, atau apa yang dilihat kamera headset. Guru yang masuk memberikan nama dan email agar kami bisa menjalankan kelasnya.',
+    'Terms of use':
+      'Numeria Arena gratis dimainkan, dengan atau tanpa akun. Bermainlah dengan jujur, hanya dengan kartu kelasmu sendiri. Guru dan penyelenggara menyetujui syarat ini untuk membuat kelas dan menjaga kartu serta nama siswanya. Game ini tidak boleh dipakai secara resmi atas nama sekolah atau lembaga lain tanpa izin tertulis dari pengembang.',
     'Credits and licenses':
       'Dibangun dengan Immersive Web SDK (MIT) dan three.js (MIT); kamera smartboard membaca tangan dengan MediaPipe (Apache 2.0). Hewan kertas, huruf, dan gambar dibuat oleh pemilik proyek. Musik latarnya dibuat oleh pemilik proyek dengan alat musik AI. Setiap bagian pihak ketiga tercatat bersama lisensinya di repositori sumber.',
     About:

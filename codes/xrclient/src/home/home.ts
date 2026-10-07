@@ -55,11 +55,12 @@ const HOME_AT = new Vector3(0, 0.95, -0.22);
 const EDU = import.meta.env.DEV ? `http://${location.hostname}:3320/edu/` : '/edu/';
 
 /**
- * The hint in ink on a page canvas: its first sentence bold and underlined in
- * pencil, the rest below, wrapped to the page clear of the spine. Drawn
- * twice as tall as wide, since the camera sees the page from a low angle.
+ * The hint in ink at the top of a page canvas: its first sentence bold and
+ * underlined in pencil, the rest below, wrapped to the page clear of the
+ * spine, and the page's own pencil maths kept under it. Drawn twice as tall
+ * as wide, since the camera sees the page from a low angle.
  */
-function drawNote(canvas: HTMLCanvasElement, text: string): void {
+function drawNote(canvas: HTMLCanvasElement, text: string, pencil?: CanvasImageSource): void {
   const c = canvas.getContext('2d')!;
   c.clearRect(0, 0, canvas.width, canvas.height);
   const STRETCH = 2;
@@ -91,7 +92,9 @@ function drawNote(canvas: HTMLCanvasElement, text: string): void {
   const tall = head.length * headStep + gap + body.length * bodyStep;
   c.save();
   c.scale(1, STRETCH);
-  c.translate(0, (canvas.height / STRETCH - tall) / 2);
+  // Under the page's first pencil sums, which stay above it.
+  const top = 190;
+  c.translate(0, top);
   c.rotate(-0.015);
   c.fillStyle = c.strokeStyle = 'rgba(58, 63, 75, 0.92)';
   c.textBaseline = 'alphabetic';
@@ -117,6 +120,19 @@ function drawNote(canvas: HTMLCanvasElement, text: string): void {
     y += bodyStep;
   }
   c.restore();
+  if (pencil) {
+    // Bands of the pencil maths (canvas rows): 7 x 8 = 56 and 3/4 at the
+    // top, then 0.25 and the last sum, each kept only whole and clear of the ink.
+    const below = (top + tall + 16) * STRETCH;
+    c.save();
+    c.beginPath();
+    for (const [from, to] of [[0, 340], [940, 1070], [1150, canvas.height]]) {
+      if (to <= top * STRETCH - 20 || from >= below) c.rect(0, from, canvas.width, to - from);
+    }
+    c.clip();
+    c.drawImage(pencil, 0, 0, canvas.width, canvas.height);
+    c.restore();
+  }
 }
 
 const ICONS: Record<string, string> = {
@@ -428,13 +444,15 @@ export class Home {
       canvas.height = 1434;
       const texture = new CanvasTexture(canvas);
       texture.colorSpace = SRGBColorSpace;
+      // Sharp at the low angle the camera sees the page from (clamped to what the device has).
+      texture.anisotropy = 16;
       this.note = { sheet, canvas, texture, pencil: (sheet.material as MeshBasicMaterial).map, text: '' };
     }
     const note = this.note;
     const paper = note.sheet.material as MeshBasicMaterial;
     if (note.text !== text) {
       note.text = text;
-      drawNote(note.canvas, text);
+      drawNote(note.canvas, text, note.pencil?.image as CanvasImageSource | undefined);
       note.texture.needsUpdate = true;
     }
     if (paper.map !== note.texture) {
@@ -682,6 +700,7 @@ export class Home {
         'How to play': '/how-to-play',
         'For parents': '/privacy#parents',
         Privacy: '/privacy',
+        'Terms of use': '/terms',
         'Credits and licenses': '/credits',
         About: '/about',
       };
