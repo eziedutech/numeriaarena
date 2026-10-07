@@ -87,6 +87,3 @@ export type MenuButtonValue = (typeof Games)[keyof typeof Games];
 export const MenuButton = createComponent('MenuButton', {
   game: { type: Types.Enum, default: Games.BalloonBurst, enum: Games },
 });
-
-/** An animal waiting in the line behind the book; touching it says hello. */
-export const LineTap = createComponent('LineTap', {});

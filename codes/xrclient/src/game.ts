@@ -1,5 +1,4 @@
 import {
-  Box3,
   BoxGeometry,
   CanvasTexture,
   createSystem,
@@ -67,7 +66,7 @@ import {
 import { ClassRace } from './game/class-race.js';
 import { SPECIES, type Species } from './assets.js';
 import { Home, type Device, type PlayMode } from './home/home.js';
-import { Balloon, Creature, Crystal, DeskRoot, LineTap, MenuButton, Orb, type MenuButtonValue } from './game-components.js';
+import { Balloon, Creature, Crystal, DeskRoot, MenuButton, Orb, type MenuButtonValue } from './game-components.js';
 import { RaceScene, type Stage } from './race-view.js';
 import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
@@ -87,6 +86,7 @@ import { TOWN_TEXT } from './town/town-text.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork, online } from './offline.js';
 import { LobbyBook, type LobbyFacts } from './lobby-book.js';
+import { PageTurn, PAGE_TURN_S } from './page-turn.js';
 import { openBoard } from './board/board.js';
 
 const WAVE = 6;
@@ -186,14 +186,8 @@ const CRYSTAL_TAG_LEAN = 0.55;
 const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fractions, ACCENTS.decimals, ACCENTS.measurement];
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.36, STAND.z);
-/** The portal at the back of the book, where creatures come from and go home to. */
 /** Behind the book, where the paper bird of the old stand-in flies to. */
 const HOME = new Vector3(0, 0.023, -0.215);
-/**
- * The line of animals waiting behind the book: five places across the back
- * of the table, front of the line on the right (they face +X, in profile).
- * They are plain white paper until called, then take the question's colour.
- */
 /**
  * The desk menu, drawn as the home page's header is: paper chips with a
  * soft shadow, each a picture, leaning back in front of the book. The games
@@ -310,30 +304,30 @@ const PRESS_DIP_M = 0.006;
 const PRESS_DIP_MS = 160;
 /** The first-time hand repeats its press every this many seconds. */
 const HINT_LOOP_S = 2.2;
-const LINE_SIZE = 5;
-const LINE_Z = -0.245;
-/** Space between two animals in the line. */
-const LINE_SPACE = 0.014;
-const LINE_SCALE = 0.85;
+/**
+ * Each creature pops up out of the book's fold as a new page lands, from
+ * this small, and a creature that missed shrinks to this before the next
+ * page turns over it.
+ */
+const POP_FROM = 0.001;
+const POP_UP_S = 0.45;
+const MISSED_SCALE = 0.35;
+const MISSED_S = 0.7;
+/** A page that turned this recently is the next creature's: it pops up at once. */
+const FRESH_PAGE_MS = 400;
 /**
  * On the desk menu the book is LOBBY_BOOK times its size, grown from its
- * front edge, and the animals LOBBY_LINE_SCALE behind it at LOBBY_LINE_Z;
- * a game starting eases them back to the size its layout is made for.
+ * front edge; a game starting eases it back to the size its layout is made for.
  * Under the home page the book is HOME_BOOK, the size its camera is set for.
  */
 const LOBBY_BOOK = 2.25;
 const HOME_BOOK = 1.3;
 /** The desk menu's book grows wide, not thick: its paper and cover only this much taller. */
 const LOBBY_BOOK_Y = 1.15;
-const LOBBY_LINE_SCALE = 1.2;
-const LOBBY_LINE_Z = -0.62;
 /** The leaderboard places on the book are asked again after this long. */
 const PLACES_FOR_MS = 60_000;
 /** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
 const BOOK_MID_Z = -0.12;
-const LINE_PAPER = 0xfbf6ec;
-/** Where an animal goes after its turn: off the back right of the table. */
-const EXIT = new Vector3(0.38, 0.023, LINE_Z);
 
 /**
  * Foldlings show their side to the player, head to the right and turned a
@@ -434,7 +428,6 @@ interface Tween {
 }
 
 type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap' | 'town';
-/** An animal waiting in the line behind the book. */
 /** A row of a seat's leaderboard (see leaders.ts): its own has `me`. */
 interface SeatRow {
   place: number;
@@ -445,14 +438,6 @@ interface SeatRow {
 interface SeatBoards {
   strike?: SeatRow[];
   city?: SeatRow[];
-}
-
-interface LineAnimal {
-  species: Species;
-  entity: Entity;
-  offerId: number;
-  /** Its length across the table at line size. */
-  width: number;
 }
 
 /** A balloon's lane and drift: its own pace and where in its swing it is. */
@@ -507,7 +492,6 @@ export class GameSystem extends createSystem({
   heldOrbs: { required: [Orb, Grabbed] },
   buttons: { required: [MenuButton] },
   pressedButtons: { required: [MenuButton, Pressed] },
-  pressedLine: { required: [LineTap, Pressed] },
 }) {
   private core?: Core;
   /** Device storage; answers judged before it opens wait in `unsaved`. */
@@ -564,8 +548,12 @@ export class GameSystem extends createSystem({
   private tipVel = [new Vector3(), new Vector3()];
   private tipNow = new Vector3();
   private lastPoke = '';
-  /** The animals waiting their turn behind the book, front of the line first. */
-  private line: LineAnimal[] = [];
+  /** The book's pages turning over, one for each new creature. */
+  private pages = new PageTurn(() => this.book());
+  /** When the last page landed: a creature called just after pops up from it. */
+  private pageTurnedAt = -Infinity;
+  /** A creature that missed, shrunk and waiting for the next page to cover it. */
+  private covered?: Entity;
   private menuOnly: 'all' | 'practice' = 'all';
   /** MY BEST and ME, written on the book's pages on the desk menu. */
   private lobbyBook = new LobbyBook(() => this.book());
@@ -772,7 +760,6 @@ export class GameSystem extends createSystem({
 
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
-      this.queries.pressedLine.subscribe('qualify', (e) => this.greet(e)),
       // A mouse click outside XR is always deliberate; in XR a touch must be a poke,
       // and with controllers only a trigger click counts (a ray waved past, or the
       // controller pushed through a balloon, is not a choice).
@@ -1149,7 +1136,6 @@ export class GameSystem extends createSystem({
     this.phase = 'menu';
     this.menuShownAt = performance.now();
     this.menuOnly = only;
-    this.syncLine(this.lineFrom);
     this.sizeLobby(true);
     const desk = this.deskEntity()!.object3D!;
     if (!this.score.mesh.parent) desk.add(this.score.mesh);
@@ -1420,7 +1406,6 @@ export class GameSystem extends createSystem({
     }
   }
 
-  /** Touching an animal in the line: it hops and its name shows above it. */
   /**
    * Menu chips as the home page's header has them: separate paper cards with
    * a soft black shadow, `cols` across in rows centred on `at`, leaning back
@@ -1481,36 +1466,14 @@ export class GameSystem extends createSystem({
     return this.deskEntity()?.object3D?.getObjectByName('desk-book');
   }
 
-  /** Whether the book and the line are at their desk menu size. */
+  /** Whether the book is at its desk menu size. */
   private lobby = false;
 
-  /**
-   * Grows the book and the line of animals for the desk menu, or eases them
-   * back for a game; the line keeps its order and only moves.
-   */
+  /** Grows the book for the desk menu, or eases it back for a game. */
   private sizeLobby(on: boolean): void {
     if (on === this.lobby) return;
     this.lobby = on;
     this.fitBook();
-    const places = this.linePlaces(this.line.map((a) => a.width));
-    this.line.forEach((a, k) => {
-      const obj = a.entity.object3D;
-      if (!obj) return;
-      for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === obj) this.tweens.splice(i, 1);
-      this.tween(obj, places[k], 0.5, 0.008, this.lineScale());
-    });
-  }
-
-  /**
-   * In the headset the desk menu has no line of animals: they come out of
-   * the book in a game, and behind the large book they would only sometimes fit on the table.
-   */
-  private hideLobbyLine(): void {
-    const show = !this.lobby || this.world.visibilityState.peek() === VisibilityState.NonImmersive;
-    for (const a of this.line) {
-      const obj = a.entity.object3D;
-      if (obj && obj.visible !== show) obj.visible = show;
-    }
   }
 
   /** The size the book is eased to last. */
@@ -1528,22 +1491,6 @@ export class GameSystem extends createSystem({
     const tw = this.tweens[this.tweens.length - 1];
     tw.yFrom = book.scale.y;
     tw.yTo = s === LOBBY_BOOK ? LOBBY_BOOK_Y : s;
-  }
-
-  /** The line's animals' size: larger on the desk menu. */
-  private lineScale(): number {
-    return this.lobby ? LOBBY_LINE_SCALE : LINE_SCALE;
-  }
-
-  private greet(e: Entity): void {
-    if (this.phase !== 'menu') return;
-    const a = this.line.find((l) => l.entity === e);
-    const obj = e.object3D;
-    if (!a || !obj || this.tweens.some((t) => t.obj === obj)) return;
-    console.info(`[menu] hello ${a.species}`);
-    const at = obj.position.clone();
-    this.tween(obj, at, 0.45, 0.03, this.lineScale());
-    this.pop(T.animal[a.species] ?? a.species.toUpperCase(), INK, undefined, at.clone().add(new Vector3(0, 0.1, 0.02)), 0.022);
   }
 
   private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {
@@ -2306,7 +2253,6 @@ export class GameSystem extends createSystem({
     if (home) {
       if (this.queries.buttons.entities.size > 0) this.clearMenu();
       this.home.show();
-      if (this.line.length === 0 && this.deskEntity()) this.syncLine(this.lineFrom);
     } else {
       this.home.hide(!immersive && this.phase !== 'loading');
     }
@@ -2329,6 +2275,9 @@ export class GameSystem extends createSystem({
 
   private clearPlay(): void {
     this.endDemo();
+    this.pages.clear();
+    if (this.covered?.active) this.remove(this.covered);
+    this.covered = undefined;
     this.clearPrompt();
     this.clear(this.queries.creatures);
     this.clear(this.queries.balloons);
@@ -2342,80 +2291,6 @@ export class GameSystem extends createSystem({
   private spawnPractice(): void {
     if (!this.core) return;
     this.spawnOffer(this.core.next(this.kind));
-  }
-
-  /** The offer the front of the line is waiting for. */
-  private lineFrom = 1;
-
-  /**
-   * Places along the line for animals of these widths: front on the right,
-   * each one beside the next with a small gap, the whole line centred.
-   */
-  private linePlaces(widths: number[]): Vector3[] {
-    // The widths are at size 1; the line is spaced at its size now.
-    const s = this.lineScale();
-    const total = widths.reduce((sum, w) => sum + w * s, 0) + LINE_SPACE * s * (widths.length - 1);
-    let right = total / 2;
-    return widths.map((w) => {
-      const at = new Vector3(right - (w * s) / 2, 0.023, this.lobby ? LOBBY_LINE_Z : LINE_Z);
-      right -= w * s + LINE_SPACE * s;
-      return at;
-    });
-  }
-
-  /**
-   * Makes the line show the animals for offers `from` to `from + 4`, as they
-   * stand; rebuilt at once only when it does not match.
-   */
-  private syncLine(from: number): void {
-    this.lineFrom = from;
-    const want = Array.from({ length: LINE_SIZE }, (_, k) => speciesFor(from + k));
-    if (this.line.length === LINE_SIZE && this.line.every((a, k) => a.species === want[k] && a.offerId === from + k)) return;
-    for (const a of this.line) this.remove(a.entity);
-    this.line = want.map((species, k) => this.lineAnimal(species, from + k));
-    const places = this.linePlaces(this.line.map((a) => a.width));
-    this.line.forEach((a, k) => a.entity.object3D!.position.copy(places[k]));
-  }
-
-  /** A white paper animal for the line, measured so the line can space it. */
-  private lineAnimal(species: Species, offerId: number): LineAnimal {
-    const fig = makeFoldling(LINE_PAPER, species);
-    for (const c of fig.root.getObjectByName('flag_anchor')?.children ?? []) c.visible = false;
-    fig.root.name = `line-${species}`;
-    fig.root.rotation.y = 0;
-    fig.root.scale.setScalar(this.lineScale());
-    fig.root.updateMatrixWorld(true);
-    const size = new Box3().setFromObject(fig.root).getSize(new Vector3()).divideScalar(this.lineScale());
-    const entity = this.add(fig.root);
-    entity.addComponent(LineTap);
-    entity.addComponent(PokeInteractable);
-    entity.addComponent(RayInteractable);
-    return { species, entity, offerId, width: size.x };
-  }
-
-  /**
-   * The front animal leaves the line to bring offer `offerId`; the others
-   * step up and a new one joins at the back. Returns where the caller should
-   * start the creature.
-   */
-  private callFromLine(offerId: number): Vector3 {
-    this.sizeLobby(false);
-    this.syncLine(offerId);
-    const front = this.line.shift()!;
-    const from = front.entity.object3D!.position.clone();
-    this.remove(front.entity);
-    const next = offerId + LINE_SIZE;
-    const joiner = this.lineAnimal(speciesFor(next), next);
-    this.line.push(joiner);
-    const places = this.linePlaces(this.line.map((a) => a.width));
-    const obj = joiner.entity.object3D!;
-    obj.position.copy(places[LINE_SIZE - 1]).add(new Vector3(-joiner.width * this.lineScale(), 0, 0));
-    obj.scale.setScalar(0.001);
-    this.line.forEach((a, k) => {
-      if (a.entity.object3D) this.tween(a.entity.object3D, places[k], 0.6, 0.012, this.lineScale());
-    });
-    this.lineFrom = offerId + 1;
-    return from;
   }
 
   private spawnOffer(offer: Offer | RaceOffer): void {
@@ -2438,11 +2313,11 @@ export class GameSystem extends createSystem({
     const figure = makeFoldling(color, this.species);
     this.figure = figure;
     const { root } = figure;
-    // It steps out of the front of the line behind the book.
-    const from = this.callFromLine(offer.offer_id);
+    // It waits in the book's fold, too small to see, for its page.
+    this.sizeLobby(false);
     root.rotation.y = CREATURE_YAW;
-    root.scale.setScalar(LINE_SCALE);
-    root.position.copy(from);
+    root.scale.setScalar(POP_FROM);
+    root.position.copy(STAND);
     const e = this.add(root);
     e.addComponent(Creature, { offerId: offer.offer_id });
     // The card above the creature says what to do: the question in Balloon
@@ -2475,7 +2350,21 @@ export class GameSystem extends createSystem({
     this.timerBar.visible = false;
     this.creatureScale = boss ? 1.4 : 1;
     this.offering = undefined;
-    this.tween(root, STAND, 0.7, 0.03, this.creatureScale, () => {
+    // A new page turns over and the creature pops up out of the fold as it
+    // lands (at once when a page has just turned over a creature that missed).
+    const fresh = performance.now() - this.pageTurnedAt < FRESH_PAGE_MS;
+    const wait = fresh ? 0 : PAGE_TURN_S;
+    if (!fresh) {
+      this.sound('unfold', root);
+      this.pages.turn();
+    }
+    // Held small until then: a creature without a tween is set to its size each frame.
+    this.tween(root, STAND, wait, 0, POP_FROM, () => this.popUp(root, offer));
+  }
+
+  /** The creature stands up out of the fold, then its pieces come. */
+  private popUp(root: Object3D, offer: Offer | RaceOffer): void {
+    this.tween(root, STAND, POP_UP_S, 0.03, this.creatureScale, () => {
       this.showPieces(offer);
       // The how-to is for its first creature only: a next one ends it.
       this.endDemo();
@@ -2932,7 +2821,7 @@ export class GameSystem extends createSystem({
       return;
     }
     // Wrong: the flag turns red and the creature bounces. With a second try
-    // it stays; otherwise it leaves.
+    // it stays; otherwise it shrinks and the next page turns over it.
     this.figure?.mark?.('wrong');
     if (!this.figure?.play('bounce', true)) this.tween(obj, obj.position.clone(), 0.25, 0.04, 1);
     if (!v.retry_allowed) {
@@ -2942,11 +2831,8 @@ export class GameSystem extends createSystem({
       this.prompt?.set(gate ? `${this.prompt.value} → ${gate}` : this.prompt.value.replace('?', v.expected_text));
       this.stampMissed();
       this.phase = 'between';
-      // Missed twice: it walks home without points.
-      this.tween(obj, EXIT, 1.4, 0.02, 0.2, () => {
-        this.remove(creature);
-        this.next();
-      });
+      // Missed: it shrinks where it stands, then the next page covers it.
+      this.tween(obj, STAND, MISSED_S, 0, this.creatureScale * MISSED_SCALE, () => this.coverMissed(creature));
     }
   }
 
@@ -3301,6 +3187,29 @@ export class GameSystem extends createSystem({
     this.timerBar.material = paper(left > 0.5 ? CORRECT : TRY_AGAIN, { doubleSide: true });
   }
 
+  /**
+   * The next page turns over a creature that missed: it folds flat as the
+   * page passes over the fold and is gone, and the next creature pops up
+   * from the page that landed.
+   */
+  private coverMissed(creature: Entity): void {
+    if (!creature.active) return;
+    this.covered = creature;
+    const obj = creature.object3D!;
+    this.sound('unfold', obj);
+    this.tween(obj, STAND, PAGE_TURN_S / 2, 0, POP_FROM);
+    this.pages.turn(
+      () => {
+        if (this.covered === creature) this.covered = undefined;
+        if (creature.active) this.remove(creature);
+      },
+      () => {
+        this.pageTurnedAt = performance.now();
+        this.next();
+      },
+    );
+  }
+
   private next(): void {
     // A creature's (or its bird's) way out that ends after a quit or the results: nothing comes next.
     if (this.phase === 'menu' || this.phase === 'recap' || this.phase === 'town') return;
@@ -3412,7 +3321,6 @@ export class GameSystem extends createSystem({
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     this.runHome();
-    this.hideLobbyLine();
     const onHome = this.home.visible;
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
@@ -3423,6 +3331,7 @@ export class GameSystem extends createSystem({
     }
     this.trackTips(delta);
     this.runTweens(delta);
+    this.pages.update(delta);
     for (const m of mixers) m.update(delta);
     this.runTimer();
     this.runPops(delta);
