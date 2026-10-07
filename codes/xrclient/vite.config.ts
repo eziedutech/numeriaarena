@@ -6,8 +6,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig, type Plugin } from 'vite';
@@ -88,14 +88,19 @@ function offlineWorker(): Plugin {
     name: 'numeria-offline-worker',
     apply: 'build',
     generateBundle(_options, bundle) {
-      // Names in the bundle carry a content hash; public files are taken with their sizes.
-      const built = Object.keys(bundle).filter((f) => !f.endsWith('.map') && notKept(f));
-      const pub = filesUnder('public').filter(notKept).map((f) => ({ f, size: statSync(join('public', f)).size }));
-      const version = createHash('sha256')
-        .update(JSON.stringify([built.sort(), pub]))
-        .digest('hex')
-        .slice(0, 12);
-      const files = ['./', ...built.map((f) => `./${f}`), ...pub.map((p) => `./${p.f}`)];
+      // Each file with a hash of its content, so a new build's worker can keep
+      // the unchanged ones from the last build instead of fetching them again.
+      const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex').slice(0, 16);
+      const built = Object.values(bundle)
+        .filter((f) => !f.fileName.endsWith('.map') && notKept(f.fileName))
+        .map((f): [string, string] => [`./${f.fileName}`, hash(f.type === 'chunk' ? f.code : f.source)]);
+      const pub = filesUnder('public')
+        .filter(notKept)
+        .map((f): [string, string] => [`./${f}`, hash(readFileSync(join('public', f)))]);
+      const listed = [...built, ...pub].sort(([a], [b]) => (a < b ? -1 : 1));
+      const version = hash(JSON.stringify(listed)).slice(0, 12);
+      // The page has no hash: it is always asked of the network.
+      const files = [['./', null], ...listed];
       const code = readFileSync('scripts/offline-worker.js', 'utf8');
       this.emitFile({
         type: 'asset',
@@ -106,8 +111,33 @@ function offlineWorker(): Plugin {
   };
 }
 
+/** Where the icon package's icons live, one file each. */
+const ICONS = 'node_modules/@pmndrs/uikit-lucide/dist';
+
+/**
+ * The icon package is pointed at src/ui-icons.ts, which keeps only the icons
+ * the panels use (it explains why). A panel naming an icon that file lacks
+ * would show nothing, so the build stops instead, naming it.
+ */
+function onlyUsedIcons(): Plugin {
+  return {
+    name: 'numeria-only-used-icons',
+    buildStart() {
+      const kept = readFileSync('src/ui-icons.ts', 'utf8');
+      for (const panel of filesUnder('public/ui').filter((f) => f.endsWith('.uikitml'))) {
+        const tags = readFileSync(join('public/ui', panel), 'utf8').matchAll(/<([A-Z][A-Za-z0-9]*)/g);
+        for (const [, tag] of tags) {
+          if (existsSync(join(ICONS, `${tag}.js`)) && !kept.includes(`/${tag}.js'`)) {
+            this.error(`public/ui/${panel} uses the icon ${tag}: add it to src/ui-icons.ts`);
+          }
+        }
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [iwsdkDev(), cameraFiles(), bootProgress(), offlineWorker()],
+  plugins: [iwsdkDev(), onlyUsedIcons(), cameraFiles(), bootProgress(), offlineWorker()],
   server: {
     host: '0.0.0.0',
     port: 3322,
@@ -129,6 +159,7 @@ export default defineConfig({
   // (three@0.185 vs app super-three@0.181). Duplicate Component classes break
   // instanceof checks → "Only pmndrs/uikit components can be added as children".
   resolve: {
+    alias: [{ find: /^@pmndrs\/uikit-lucide$/, replacement: resolve('src/ui-icons.ts') }],
     dedupe: [
       'three',
       '@pmndrs/uikit',
@@ -142,7 +173,6 @@ export default defineConfig({
       'three',
       '@pmndrs/uikit',
       '@pmndrs/uikit-horizon',
-      '@pmndrs/uikit-lucide',
       '@drawcall/uikitml',
     ],
     esbuildOptions: { target: 'esnext' },

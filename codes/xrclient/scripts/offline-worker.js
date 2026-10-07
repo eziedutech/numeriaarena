@@ -1,15 +1,21 @@
 // The game's service worker (sw.js). The build writes VERSION and FILES in
 // front of this code (vite.config.ts, offlineWorker): FILES is every file of
-// the build, relative to this worker, so all of the game can be kept.
+// the build as [path relative to this worker, hash of its content], so all
+// of the game can be kept.
 //
-// - Install: fetch every file once, one at a time so a slow school network is
-//   not flooded, into a cache named after this build. A file that fails is
-//   fetched again when the game asks for it.
+// - Install: wait until the game on an open page is up (it says so, see
+//   src/offline.ts), so keeping files never takes the network from the
+//   start. Then copy every file whose content is unchanged from the kept
+//   copy of an older build, and fetch the rest once, one at a time so a
+//   slow school network is not flooded, into a cache named after this build.
+//   A file that fails is fetched again when the game asks for it.
 // - Activate: drop the caches of older builds, take this page.
-// - The page itself: network first, so an online player always gets the
-//   newest build; the kept copy when offline.
-// - Everything else of the game: the kept copy first, else the network
-//   (and keep it).
+// - The page itself: network first (started with the worker, by navigation
+//   preload), so an online player always gets the newest build; the kept
+//   copy when offline.
+// - Everything else of the game: the kept copy first, else the network.
+//   A response is handed to the page as it arrives and kept alongside, so the
+//   loading screen can count the bytes as they come.
 // - The API and version.json never come from the cache.
 //
 // A new build does not take over open tabs (no skipWaiting): a tab running
@@ -21,24 +27,74 @@ const SCOPE = new URL('./', self.location.href);
 const PAGE = new URL('./', SCOPE).href;
 const NEVER = ['api/', 'version.json', 'sw.js'];
 const PAGE_WAIT_MS = 4000;
+/** How long a new worker waits for an open page to say the game is up. */
+const BOOT_WAIT_MS = 60000;
+/** Each cache keeps the hashes of its files here, for the next build to compare. */
+const HASHES = new URL('__hashes.json', SCOPE).href;
+/** Names under assets/ carry a hash of their content: any kept copy is the same file. */
+const HASHED = new URL('assets/', SCOPE).href;
+
+let gameUp;
+const booted = new Promise((resolve) => (gameUp = resolve));
+self.addEventListener('message', (event) => {
+  if (event.data === 'numeria-booted') gameUp();
+});
+
+/** Resolves once no open page is still loading the game, or after BOOT_WAIT_MS. */
+async function quiet() {
+  const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  if (pages.length === 0) return;
+  // A page that is already up answers this; one still loading says so when it is up.
+  for (const p of pages) p.postMessage('numeria-booted?');
+  await Promise.race([booted, new Promise((resolve) => setTimeout(resolve, BOOT_WAIT_MS))]);
+}
+
+/** A copy of `url` with content `hash` kept by an older build, if there is one. */
+async function older(url, hash, before) {
+  for (const { cache, hashes } of before) {
+    if (!url.startsWith(HASHED) && (!hash || hashes[url] !== hash)) continue;
+    const copy = await cache.match(url);
+    if (copy) return copy;
+  }
+  return undefined;
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
+      await quiet();
       const cache = await caches.open(CACHE);
+      const before = [];
+      for (const name of await caches.keys()) {
+        if (!name.startsWith('numeria-play-') || name === CACHE) continue;
+        const old = await caches.open(name);
+        const list = await old.match(HASHES);
+        before.push({ cache: old, hashes: list ? await list.json().catch(() => ({})) : {} });
+      }
+      const hashes = {};
       let failed = 0;
-      for (const file of FILES) {
+      let copied = 0;
+      for (const [file, hash] of FILES) {
         const url = new URL(file, SCOPE).href;
+        if (hash) hashes[url] = hash;
         if (await cache.match(url)) continue;
+        const copy = await older(url, hash, before);
+        if (copy) {
+          await cache.put(url, copy);
+          copied++;
+          continue;
+        }
         try {
-          const res = await fetch(url, { cache: 'no-cache' });
+          // Hashed names never change content: the browser's own copy will do.
+          const res = await fetch(url, { cache: url.startsWith(HASHED) ? 'default' : 'no-cache' });
           if (res.ok) await cache.put(url, res);
           else failed++;
         } catch {
           failed++;
         }
       }
-      console.info(`[offline] ${FILES.length - failed} of ${FILES.length} files kept for offline play (${CACHE})`);
+      await cache.put(HASHES, new Response(JSON.stringify(hashes), { headers: { 'Content-Type': 'application/json' } }));
+      console.info(`[offline] ${FILES.length - failed} of ${FILES.length} files kept for offline play, ${copied} from the last build (${CACHE})`);
     })(),
   );
 });
@@ -46,6 +102,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      if (self.registration.navigationPreload) await self.registration.navigationPreload.enable();
       for (const name of await caches.keys()) {
         if (name.startsWith('numeria-play-') && name !== CACHE) await caches.delete(name);
       }
@@ -55,16 +112,18 @@ self.addEventListener('activate', (event) => {
 });
 
 /** The page from the network, or after PAGE_WAIT_MS (or offline) the kept copy. */
-async function page(request) {
+async function page(event) {
   const cache = await caches.open(CACHE);
   const kept = () => cache.match(PAGE);
+  const network = Promise.resolve(event.preloadResponse).then((pre) => pre ?? fetch(event.request));
+  event.waitUntil(network.catch(() => undefined));
   try {
     const res = await Promise.race([
-      fetch(request),
+      network,
       new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), PAGE_WAIT_MS)),
     ]);
     if (res.ok) {
-      await cache.put(PAGE, res.clone());
+      event.waitUntil(cache.put(PAGE, res.clone()).catch(() => undefined));
       return res;
     }
     return (await kept()) ?? res;
@@ -75,12 +134,14 @@ async function page(request) {
   }
 }
 
-async function file(request) {
+async function file(event) {
   const cache = await caches.open(CACHE);
-  const copy = await cache.match(request);
+  const copy = await cache.match(event.request);
   if (copy) return copy;
-  const res = await fetch(request);
-  if (res.ok && res.type === 'basic') await cache.put(request, res.clone());
+  const res = await fetch(event.request);
+  // Kept while the page reads it: waiting for the whole file here would hold
+  // every byte back until the last one came.
+  if (res.ok && res.type === 'basic') event.waitUntil(cache.put(event.request, res.clone()).catch(() => undefined));
   return res;
 }
 
@@ -91,5 +152,5 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== SCOPE.origin || !url.href.startsWith(SCOPE.href)) return;
   const path = url.href.slice(SCOPE.href.length);
   if (NEVER.some((p) => path.startsWith(p))) return;
-  event.respondWith(request.mode === 'navigate' ? page(request) : file(request));
+  event.respondWith(request.mode === 'navigate' ? page(event) : file(event));
 });

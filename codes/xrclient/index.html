@@ -171,6 +171,11 @@
           shown = Math.max(shown, Math.min(100, Math.round(p)));
           pct.textContent = shown + '%';
           fill.style.width = shown + '%';
+          // The offline worker waits for this before keeping files (src/offline.ts).
+          if (shown >= 100 && !window.numeriaBooted) {
+            window.numeriaBooted = true;
+            window.dispatchEvent(new Event('numeria-booted'));
+          }
         }
         window.numeriaBootProgress = show;
         // Production: the code's size was written in at build (vite.config.ts).

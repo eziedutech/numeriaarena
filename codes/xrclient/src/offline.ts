@@ -8,6 +8,20 @@
 /** Registers sw.js in a production build; the dev server and its emulator stay as they are. */
 export function keepForOffline(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  // A new worker keeps its files only once the game is up, so it never takes
+  // the network from the loading screen: it asks, and is told when it happens.
+  const sw = navigator.serviceWorker;
+  const up = () => (window as unknown as { numeriaBooted?: boolean }).numeriaBooted === true;
+  sw.addEventListener('message', (event) => {
+    if (event.data === 'numeria-booted?' && up()) (event.source as ServiceWorker | null)?.postMessage('numeria-booted');
+  });
+  sw.startMessages();
+  const tell = () =>
+    void sw.getRegistration().then((reg) => {
+      for (const w of [reg?.installing, reg?.waiting]) w?.postMessage('numeria-booted');
+    });
+  if (up()) tell();
+  else window.addEventListener('numeria-booted', tell, { once: true });
   const register = () =>
     navigator.serviceWorker
       .register(`${import.meta.env.BASE_URL}sw.js`)
