@@ -219,26 +219,26 @@ class Pen {
 }
 
 function leftPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.best, 170);
+  pen.head(t.best, 210);
   if (f.best) {
-    const w = pen.text(String(f.best.points), pen.left, 385, 230, 700, TEAL);
-    pen.text(t.pts, pen.left + w + 24, 385, 84, 700);
-    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 488, 52, i < f.best.stars);
-    pen.text(t.bestAbout, pen.left, 595, 66, 400, SOFT);
+    const w = pen.text(String(f.best.points), pen.left, 415, 230, 700, TEAL);
+    pen.text(t.pts, pen.left + w + 24, 415, 84, 700);
+    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 512, 52, i < f.best.stars);
+    pen.text(t.bestAbout, pen.left, 612, 66, 400, SOFT);
   } else {
-    pen.para(t.noBest, 320, 84, 700, 96);
-    pen.para(t.noBestAbout, 520, 66, 400, 80, SOFT);
+    pen.para(t.noBest, 360, 84, 700, 96);
+    pen.para(t.noBestAbout, 550, 66, 400, 80, SOFT);
   }
-  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 685);
-  const w = pen.text(t.pick, pen.left, 770, 72, 700);
-  pen.line(pen.left, 790, pen.left + w, 5, SOFT);
+  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 695);
+  const w = pen.text(t.pick, pen.left, 772, 72, 700);
+  pen.line(pen.left, 791, pen.left + w, 5, SOFT);
 }
 
 function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.me, 170);
-  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 290, 116, 700, TEAL);
-  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 355, 64, 400, SOFT);
-  let y = f.seat ? 440 : 420;
+  pen.head(t.me, 210);
+  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 325, 116, 700, TEAL);
+  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 388, 64, 400, SOFT);
+  let y = f.seat ? 465 : 450;
   if (f.folds !== undefined) {
     pen.row(t.folds, String(f.folds), y);
     pen.row(t.buildings, String(f.buildings ?? 0), y + 90);
@@ -256,7 +256,7 @@ function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
     [t.city, 'city'],
   ];
   rows.forEach(([label, key], i) => {
-    const at = y + 70 + i * 76;
+    const at = y + 64 + i * 70;
     pen.text(label, pen.left, at, 58, 400, INK, 'left', col[0] - 170 - pen.left);
     pen.text(place(f.classPlace?.[key]), col[0], at, 76, 700, TEAL, 'right');
     pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 700, TEAL, 'right');
@@ -296,7 +296,7 @@ export class LobbyBook {
         page.key = key;
         const c = page.canvas.getContext('2d')!;
         // Clear of the spine: the left page's on its right, the right page's on its left.
-        const pen = side < 0 ? new Pen(c, 92, 900) : new Pen(c, 130, 940);
+        const pen = side < 0 ? new Pen(c, 135, 935) : new Pen(c, 95, 895);
         (side < 0 ? leftPage : rightPage)(pen, t, f);
         pen.draw(page.pencil?.image as CanvasImageSource | undefined);
         page.texture.needsUpdate = true;

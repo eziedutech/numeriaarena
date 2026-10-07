@@ -315,7 +315,7 @@ const LINE_SCALE = 0.85;
  * a game starting eases them back to the size its layout is made for.
  * Under the home page the book is HOME_BOOK, the size its camera is set for.
  */
-const LOBBY_BOOK = 2.4;
+const LOBBY_BOOK = 2.25;
 const HOME_BOOK = 1.3;
 const LOBBY_LINE_SCALE = 1.2;
 const LOBBY_LINE_Z = -0.62;
