@@ -81,6 +81,8 @@ const W = 1024;
 const H = 1434;
 /** Drawn this much taller than wide: the page is seen from a slant, in the headset and on screen. */
 const STRETCH = 1.8;
+/** The letters themselves are drawn less tall than the layout, so they keep their shape. */
+const GLYPH = 0.82;
 const INK = 'rgba(48, 52, 62, 0.96)';
 const SOFT = 'rgba(58, 63, 75, 0.82)';
 const TEAL = '#2f8f7d';
@@ -115,11 +117,15 @@ class Pen {
     this.strokes.push((c, halo) => {
       c.font = font;
       c.textAlign = align;
-      if (halo) c.strokeText(text, x, y);
+      c.save();
+      c.translate(x, y);
+      c.scale(1, GLYPH);
+      if (halo) c.strokeText(text, 0, 0);
       else {
         c.fillStyle = colour;
-        c.fillText(text, x, y);
+        c.fillText(text, 0, 0);
       }
+      c.restore();
     });
     return Math.min(wide, max);
   }

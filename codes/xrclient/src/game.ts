@@ -317,6 +317,8 @@ const LINE_SCALE = 0.85;
  */
 const LOBBY_BOOK = 2.25;
 const HOME_BOOK = 1.3;
+/** The desk menu's book grows wide, not thick: its paper and cover only this much taller. */
+const LOBBY_BOOK_Y = 1.15;
 const LOBBY_LINE_SCALE = 1.2;
 const LOBBY_LINE_Z = -0.62;
 /** The leaderboard places on the book are asked again after this long. */
@@ -419,6 +421,9 @@ interface Tween {
   arc: number;
   scaleFrom: number;
   scaleTo: number;
+  /** A height eased apart from the size: a book grown wider but not thicker. */
+  yFrom?: number;
+  yTo?: number;
   done?: () => void;
 }
 
@@ -1550,6 +1555,9 @@ export class GameSystem extends createSystem({
     // Only the newest ease: an older one still running would win every frame.
     for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === book) this.tweens.splice(i, 1);
     this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
+    const tw = this.tweens[this.tweens.length - 1];
+    tw.yFrom = book.scale.y;
+    tw.yTo = s === LOBBY_BOOK ? LOBBY_BOOK_Y : s;
   }
 
   /** The line's animals' size: larger on the desk menu. */
@@ -3370,6 +3378,7 @@ export class GameSystem extends createSystem({
       tw.obj.position.y += Math.sin(Math.PI * tw.t) * tw.arc;
       const s = tw.scaleFrom + (tw.scaleTo - tw.scaleFrom) * k;
       tw.obj.scale.set(s, s, s);
+      if (tw.yTo !== undefined) tw.obj.scale.y = tw.yFrom! + (tw.yTo - tw.yFrom!) * k;
       if (tw.t >= 1) {
         this.tweens.splice(i, 1);
         tw.done?.();
