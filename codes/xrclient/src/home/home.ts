@@ -279,8 +279,8 @@ const store = {
   },
 };
 
-/** The paper hand's marks that a how-to was seen: one per game, and the desk menu's. */
-const seenHowto = (k: string) => k.startsWith('numeria.howto.') || k === 'numeria.menuHintSeen';
+/** The paper hand's marks that a how-to was seen, one per game. */
+const seenHowto = (k: string) => k.startsWith('numeria.howto.');
 /** Where SHOW THE HOW-TO AGAIN keeps the marks it took away, so OFF can give them back. */
 const HOWTO_AGAIN = 'numeria.howtoAgain';
 

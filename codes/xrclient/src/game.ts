@@ -259,10 +259,11 @@ const TOWN_SLANT = 0.45;
 const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
-const HINT_SEEN = 'numeria.menuHintSeen';
 /**
- * First time a game appears on this device the paper hand shows how to play
- * it (`numeria.howto.<game>`), for up to DEMO_S or until the player acts.
+ * First time a game comes up in a practice on this device (or again after
+ * SHOW THE HOW-TO AGAIN), the paper hand shows the first creature's right
+ * answer, for up to DEMO_S or until the player acts. It is marked seen
+ * (`numeria.howto.<game>`) as it starts, so leaving and coming back never shows it twice.
  */
 const HOWTO_KEY = 'numeria.howto.';
 /**
@@ -572,13 +573,10 @@ export class GameSystem extends createSystem({
   private lobbyAsk = 0;
   /** The seat's leaderboards, kept a minute for the next menu. */
   private boardsGot = new Map<string, { at: number; boards: Promise<SeatBoards> }>();
-  private hintHand?: Group;
-  private hintLabel?: Label;
   /** The hovered menu cell's name, made once and moved to whichever cell is hovered. */
   private tip?: Label;
-  private hintT = 0;
-  /** The how-to on a game's first creature: which game, how long it has run, and the hand. */
-  private demo?: { game: GameKind; t: number; hand: Group };
+  /** The how-to on a game's first creature: which game, how long it has run, the hand, and the right answer it shows. */
+  private demo?: { game: GameKind; t: number; hand: Group; key: number[] };
   /** Running on this computer with the emulator (the public build never is). */
   private onEmulator = EMULATOR_HOSTS.includes(window.location.hostname);
   /** Emulator only: let hand touches pop balloons (Y toggles; T always works). */
@@ -639,8 +637,6 @@ export class GameSystem extends createSystem({
   private stage!: Stage;
   /** The menu's paper strips the cells lie on, gone with the menu. */
   private menuTrays: Entity[] = [];
-  /** The race's cell, which the first-time hand presses, in the desk's frame. */
-  private hintAt = new Vector3();
   /** Where a sound happens, in the world, filled in just before it plays. */
   private spotAt: Spot = { x: 0, y: 0, z: 0 };
   private earV = new Vector3();
@@ -816,7 +812,7 @@ export class GameSystem extends createSystem({
       // Picking up a crystal is the move the how-to shows: it can stop. A crystal
       // chosen by a click before is let go, so a click and a grab do not mix.
       this.queries.heldCrystals.subscribe('qualify', (e) => {
-        this.endDemo(true);
+        this.endDemo();
         this.sound('grab', e.object3D);
         this.unselect(e);
       }),
@@ -920,7 +916,6 @@ export class GameSystem extends createSystem({
     }
     // PRACTICE AGAIN and Done belong to results, the town's cards to the town; a late touch from them does nothing here.
     if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit' || pressed === 'build' || isTownChoice(pressed)) return;
-    this.hideHint(true);
     this.start(pressed);
   }
 
@@ -1195,18 +1190,16 @@ export class GameSystem extends createSystem({
     const set = settings.filter((c): c is MenuCell => c !== null);
     this.menuChips(set, SETTINGS_AT, set.length);
     this.addTownSticker();
-    this.showHint();
     this.showBest();
   }
 
-  /** Clears the desk menu: its buttons, envelopes, the writing on the book and hint. */
+  /** Clears the desk menu: its buttons, envelopes and the writing on the book. */
   private clearMenu(): void {
     this.clear(this.queries.buttons);
     for (const e of this.menuTrays) this.remove(e);
     this.menuTrays = [];
     this.lobbyAsk += 1;
     this.lobbyBook.erase();
-    this.hideHint(false);
     this.tip?.mesh.removeFromParent();
   }
 
@@ -1343,48 +1336,18 @@ export class GameSystem extends createSystem({
     e.addComponent(RayInteractable);
   }
 
-  /** First time on the desk menu: a paper hand pokes the race envelope, with three words under it. */
-  private showHint(): void {
-    try {
-      if (localStorage.getItem(HINT_SEEN)) return;
-    } catch {
-      // Without storage the hint shows each time; it never blocks anything.
-    }
-    if (this.hintHand) return;
-    const hand = this.paperHand('menu-hint-hand');
-    this.deskEntity()?.object3D?.add(hand);
-    this.hintHand = hand;
-    const label = new Label(T.touchHint, { height: 0.02 });
-    label.mesh.position.copy(MENU_FACING).multiplyScalar(0.07).add(this.hintAt);
-    this.deskEntity()?.object3D?.add(label.mesh);
-    this.labels.add(label.mesh);
-    this.hintLabel = label;
-    this.hintT = 0;
-  }
-
-  private hideHint(seen: boolean): void {
-    this.hintHand?.removeFromParent();
-    this.hintHand = undefined;
-    this.hintLabel?.mesh.removeFromParent();
-    if (this.hintLabel) this.labels.delete(this.hintLabel.mesh);
-    this.hintLabel = undefined;
-    if (seen) {
-      try {
-        localStorage.setItem(HINT_SEEN, '1');
-      } catch {
-        // Nothing to keep.
-      }
-    }
-  }
-
   /** A pale paper hand, index finger out along -Z, for showing what to do. */
   private paperHand(name: string): Group {
     return makePaperHand(name);
   }
 
-  /** Starts the how-to for `game` if this device has not seen it. */
+  /**
+   * Starts the how-to on a practice's creature if this device has not seen
+   * it for `game`: the core gives the right answer for it once, and the
+   * hand shows it. Never in a race, where the answers stay with the core.
+   */
   private startDemo(game: GameKind): void {
-    if (this.demo) return;
+    if (this.demo || this.race || !this.core || !this.offer) return;
     try {
       if (localStorage.getItem(HOWTO_KEY + game)) return;
     } catch {
@@ -1392,39 +1355,40 @@ export class GameSystem extends createSystem({
     }
     const desk = this.deskEntity()?.object3D;
     if (!desk) return;
+    const key = this.core.howToKey(this.offer.offer_id);
+    if (key.length === 0) return;
+    try {
+      localStorage.setItem(HOWTO_KEY + game, '1');
+    } catch {
+      // Nothing to keep.
+    }
     const hand = this.paperHand('demo-hand');
     hand.visible = false;
     desk.add(hand);
-    this.demo = { game, t: 0, hand };
-    console.info(`[howto] ${game}`);
+    this.demo = { game, t: 0, hand, key };
+    console.info(`[howto] ${game}: ${key.join(', ')}`);
   }
 
-  /** Ends the how-to; `seen` keeps it from showing again on this device. */
-  private endDemo(seen: boolean): void {
+  /** Takes the how-to's hand away (it was marked seen when it started). */
+  private endDemo(): void {
     const d = this.demo;
     if (!d) return;
     d.hand.removeFromParent();
     this.demo = undefined;
-    if (!seen) return;
-    try {
-      localStorage.setItem(HOWTO_KEY + d.game, '1');
-    } catch {
-      // Nothing to keep.
-    }
   }
 
   /**
-   * The hand plays the first move over and over: in Balloon Burst it comes
-   * in from the front and pokes the first balloon (the first weight, gate or
-   * plank in the newer games); in Orb Forge it lifts over the first crystal
-   * and carries across to the second. It only shows the move, never the answer.
+   * The hand shows the right answer over and over: it comes in from the
+   * front and pokes the right balloon, weight or gate; in Bridge Builder it
+   * pokes the right planks in turn; in Orb Forge it lifts over the first
+   * right crystal and carries it to the second (or, alone, to the creature).
    */
   private runDemo(delta: number): void {
     const d = this.demo;
     if (!d) return;
     d.t += delta;
     if (d.t > DEMO_S) {
-      this.endDemo(true);
+      this.endDemo();
       return;
     }
     const desk = this.deskEntity()?.object3D;
@@ -1434,36 +1398,26 @@ export class GameSystem extends createSystem({
       return c * c * (3 - 2 * c);
     };
     if (d.game !== 'orb_forge') {
-      const b = desk?.getObjectByName(d.game === 'balloon_burst' ? 'balloon-0' : 'choice-0');
+      const pick = d.key[Math.floor(d.t / HINT_LOOP_S) % d.key.length];
+      const b = desk?.getObjectByName(d.game === 'balloon_burst' ? `balloon-${pick}` : `choice-${pick}`);
       d.hand.visible = Boolean(b);
       if (!b) return;
-      // In, a short press on the balloon's middle, then back out.
+      // In, a short press on its middle, then back out.
       const reach = smooth(k < 0.45 ? k / 0.45 : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4);
       d.hand.position.set(b.position.x, b.position.y + 0.07, b.position.z + 0.035 + 0.1 * (1 - reach));
       d.hand.rotation.set(0, 0, 0);
     } else {
-      const a = desk?.getObjectByName('crystal-0');
-      const c = desk?.getObjectByName('crystal-1');
-      d.hand.visible = Boolean(a && c);
-      if (!a || !c) return;
+      const a = desk?.getObjectByName(`crystal-${d.key[0]}`);
+      const c = d.key.length > 1 ? desk?.getObjectByName(`crystal-${d.key[1]}`) : undefined;
+      d.hand.visible = Boolean(a);
+      if (!a) return;
+      const to = c?.position ?? STAND;
       // Down onto the first, across to the second at a small lift, then up and away.
       const across = smooth((k - 0.2) / 0.5);
       const lift = 0.03 + 0.03 * Math.sin(Math.PI * across) + 0.05 * smooth((k - 0.8) / 0.2) + 0.04 * (1 - smooth(k / 0.2));
-      d.hand.position.set(a.position.x + (c.position.x - a.position.x) * across, a.position.y + lift, a.position.z + 0.02);
+      d.hand.position.set(a.position.x + (to.x - a.position.x) * across, a.position.y + lift, a.position.z + (to.z - a.position.z) * across + 0.02);
       d.hand.rotation.set(-0.45, 0, 0);
     }
-  }
-
-  /** The hand moves in along the block's facing, presses the race's cell, and backs out again. */
-  private runHint(delta: number): void {
-    if (!this.hintHand) return;
-    this.hintT = (this.hintT + delta) % HINT_LOOP_S;
-    const k = this.hintT / HINT_LOOP_S;
-    // In over the first half, a short press, then away.
-    const reach = k < 0.45 ? k / 0.45 : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
-    const ease = reach * reach * (3 - 2 * reach);
-    this.hintHand.position.copy(MENU_FACING).multiplyScalar(0.02 + 0.08 * (1 - ease)).add(this.hintAt);
-    this.hintHand.rotation.x = MENU_LEAN;
   }
 
   /** Touching an animal in the line: it hops and its name shows above it. */
@@ -1514,7 +1468,6 @@ export class GameSystem extends createSystem({
         cell.add(shadow, b.mesh);
         cell.position.copy(place);
         cell.rotation.x = MENU_LEAN;
-        if (games && r === 0 && k === 0) this.hintAt.copy(place);
         const e = this.add(cell);
         e.addComponent(MenuButton, { game: choice });
         e.addComponent(PokeInteractable);
@@ -2375,8 +2328,7 @@ export class GameSystem extends createSystem({
   }
 
   private clearPlay(): void {
-    // Leaving mid-demo (Home, the end of a race) does not count as seen.
-    this.endDemo(false);
+    this.endDemo();
     this.clearPrompt();
     this.clear(this.queries.creatures);
     this.clear(this.queries.balloons);
@@ -2525,8 +2477,8 @@ export class GameSystem extends createSystem({
     this.offering = undefined;
     this.tween(root, STAND, 0.7, 0.03, this.creatureScale, () => {
       this.showPieces(offer);
-      // A different game came up while a how-to ran: that one is over.
-      if (this.demo && this.demo.game !== offer.game) this.endDemo(true);
+      // The how-to is for its first creature only: a next one ends it.
+      this.endDemo();
       this.startDemo(offer.game);
       this.shownAt = performance.now();
       // NO TIMER: no strip and, in the core, no speed bonus.
@@ -2656,7 +2608,7 @@ export class GameSystem extends createSystem({
     const o = this.offer;
     const obj = e.object3D;
     if (!o?.target || !obj) return;
-    this.endDemo(true);
+    this.endDemo();
     const at = this.laid.indexOf(e);
     if (at >= 0) {
       this.laid.splice(at, 1);
@@ -2752,7 +2704,7 @@ export class GameSystem extends createSystem({
       return;
     }
     // The player has done it once: the how-to has done its job.
-    this.endDemo(true);
+    this.endDemo();
     const index = e.getValue(Balloon, 'index') as number;
     const game = this.offer.game;
     this.sound(game === 'balloon_burst' ? 'pop' : game === 'bridge_builder' ? 'place' : 'tap', e.object3D);
@@ -2827,7 +2779,7 @@ export class GameSystem extends createSystem({
   private submitOrb(picks: number[]): void {
     this.lastPicks = picks;
     if (!this.offer || this.judging) return;
-    this.endDemo(true);
+    this.endDemo();
     const timeMs = performance.now() - this.shownAt;
     const id = this.offer.offer_id;
     // Bridge Builder's planks are judged as Orb Forge's crystals are.
@@ -3474,7 +3426,6 @@ export class GameSystem extends createSystem({
     for (const m of mixers) m.update(delta);
     this.runTimer();
     this.runPops(delta);
-    this.runHint(delta);
     this.runDemo(delta);
     this.hoverTargets(delta);
     this.floatBalloons(delta);
@@ -3684,7 +3635,7 @@ export class GameSystem extends createSystem({
 
   private clickCrystal(e: Entity): void {
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
-    this.endDemo(true);
+    this.endDemo();
     const obj = e.object3D!;
     if (!this.selected) {
       this.selected = e;
@@ -3786,7 +3737,7 @@ export class GameSystem extends createSystem({
       }
       if (!e?.active || e.hasComponent(Grabbed) || this.tweens.some((t) => t.obj === e.object3D)) continue;
       this.unselect();
-      this.endDemo(true);
+      this.endDemo();
       this.pulled = { e, side, home: e.object3D!.position.clone(), hand: hands };
       // Held at the grip it would take the grip pointer, which IWSDK puts
       // before the ray and so hides it; the ray stays to choose where it goes.

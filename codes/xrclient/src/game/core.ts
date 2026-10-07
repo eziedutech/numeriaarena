@@ -112,6 +112,11 @@ export class Core {
     this.session.close(offerId);
   }
 
+  /** The right answer the practice how-to shows, once per game; empty when there is none. */
+  howToKey(offerId: number): number[] {
+    return Array.from(this.session.howToKey(offerId));
+  }
+
   drainEvents(): unknown[] {
     return JSON.parse(this.session.drainEvents()) as unknown[];
   }
