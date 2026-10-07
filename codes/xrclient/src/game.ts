@@ -1311,10 +1311,10 @@ export class GameSystem extends createSystem({
     shade.width = 256;
     shade.height = 160;
     const sc = shade.getContext('2d')!;
-    sc.filter = 'blur(12px)';
-    sc.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    sc.filter = 'blur(16px)';
+    sc.fillStyle = 'rgba(60, 35, 10, 0.13)';
     sc.beginPath();
-    sc.ellipse(128, 86, 96, 52, 0, 0, Math.PI * 2);
+    sc.ellipse(128, 88, 88, 46, 0, 0, Math.PI * 2);
     sc.fill();
     const shadeTex = new CanvasTexture(shade);
     shadeTex.colorSpace = SRGBColorSpace;
