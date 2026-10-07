@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { User } from "firebase/auth";
 
 import type { Route } from "./+types/manage";
 import { api, errorCode, finishEmailLink, isSample, sendEmailLink, signInConfigured, signInWith, signOut, startSample, watchUser } from "../auth";
 import { AdminAi } from "../admin-ai";
-import { MyClasses } from "../classes";
+import { CLASS_TABS, MyClasses, type ClassTab } from "../classes";
 import { RaceSetup, USUAL, describe, readSetup, type RoomSetup } from "../race-setup";
 import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
@@ -51,6 +52,8 @@ const TEXT = {
     home: "Manage",
     account: "My account",
     organizers: "Organizers",
+    myClasses: "My classes",
+    raceRooms: "Race rooms",
     signedInAs: "Signed in as",
     modes: { teacher: "TEACHER", admin: "ADMIN" } as Record<Mode, string>,
     signIn: "For teachers, club organisers and admins. Students never sign in here.",
@@ -114,6 +117,16 @@ const TEXT = {
     historyCols: ["Place", "Player", "Points", "Stars"],
     historySeat: "Seat",
     robot: "robot",
+    roomTabs: { overview: "OVERVIEW", matches: "MATCHES" } as Record<RoomTab, string>,
+    roomDetail: "DETAILS",
+    roomNotFound: "This room is not among your last 30 rooms.",
+    allRooms: "ALL ROOMS",
+    roomSetup: "How it is raced",
+    roomOpened: "Opened",
+    roomKind: { class: "For a class", open: "Open to anyone" } as Record<string, string>,
+    roomClosedNote: "This room is closed: nobody can join it again. Its results stay here.",
+    roomNoMatches: "No match in this room yet.",
+    loading: "Loading...",
     locale: "en-GB",
     regTitle: "ABOUT YOU",
     regIntro: "One time only. Students never see your email.",
@@ -166,6 +179,8 @@ const TEXT = {
     home: "Kelola",
     account: "Akun saya",
     organizers: "Penyelenggara",
+    myClasses: "Kelas saya",
+    raceRooms: "Ruang lomba",
     signedInAs: "Masuk sebagai",
     modes: { teacher: "GURU", admin: "ADMIN" } as Record<Mode, string>,
     signIn: "Untuk guru, pembina klub, dan admin. Siswa tidak pernah masuk di sini.",
@@ -229,6 +244,16 @@ const TEXT = {
     historyCols: ["Peringkat", "Pemain", "Poin", "Bintang"],
     historySeat: "Kursi",
     robot: "robot",
+    roomTabs: { overview: "RINGKASAN", matches: "PERTANDINGAN" } as Record<RoomTab, string>,
+    roomDetail: "RINCIAN",
+    roomNotFound: "Ruang ini tidak ada di antara 30 ruang terakhir Anda.",
+    allRooms: "SEMUA RUANG",
+    roomSetup: "Cara berlomba",
+    roomOpened: "Dibuka",
+    roomKind: { class: "Untuk kelas", open: "Terbuka untuk siapa saja" } as Record<string, string>,
+    roomClosedNote: "Ruang ini sudah ditutup: tidak ada yang bisa masuk lagi. Hasilnya tetap di sini.",
+    roomNoMatches: "Belum ada pertandingan di ruang ini.",
+    loading: "Memuat...",
     locale: "id-ID",
     regTitle: "TENTANG ANDA",
     regIntro: "Hanya sekali. Siswa tidak pernah melihat email Anda.",
@@ -282,6 +307,10 @@ type Text = (typeof TEXT)["en"];
 
 const errorText = (t: Text, code: string) => t.errors[code] ?? t.errors.other;
 
+/** The tabs of a room's page, as `?tab=` names them. */
+const ROOM_TABS = ["overview", "matches"] as const;
+type RoomTab = (typeof ROOM_TABS)[number];
+
 /** One account can be an admin and a teacher at once; an admin picks which side of the page to use. */
 type Mode = "teacher" | "admin";
 const MODE_KEY = "numeria.manageAs";
@@ -323,6 +352,15 @@ export default function Manage() {
   useEffect(() => setMode(readMode()), []);
   const asAdmin = mode === "admin" && Boolean(me?.admin);
   const [adminView, setAdminView] = useState<"organizers" | "ai">("organizers");
+  // /manage/class/ID and /manage/room/ID: one class's or one room's page; the tab is in ?tab=.
+  const [kind, id] = (useParams()["*"] ?? "").split("/");
+  const classId = kind === "class" && id ? id : null;
+  const roomId = kind === "room" && id ? id : null;
+  const [search, setSearch] = useSearchParams();
+  const pageTab = search.get("tab") ?? "";
+  const setPageTab = (tab: string) => setSearch(tab === "overview" ? {} : { tab }, { replace: true, preventScrollReset: true });
+  // The open class's or room's name, for the breadcrumb.
+  const [trail, setTrail] = useState("");
 
   const loadMe = (u: User) => {
     setError("");
@@ -344,14 +382,22 @@ export default function Manage() {
       });
   }, []);
 
-  const crumbs = [t.home, asAdmin ? t.organizers : t.account];
+  const crumbs: { label: string; to?: string }[] = asAdmin
+    ? [{ label: t.home }, { label: t.organizers }]
+    : me && classId
+      ? [{ label: t.home }, { label: t.account, to: "/manage" }, { label: t.myClasses, to: "/manage#classes" }, { label: trail || "..." }]
+      : me && roomId
+        ? [{ label: t.home }, { label: t.account, to: "/manage" }, { label: t.raceRooms, to: "/manage#rooms" }, { label: trail || "..." }]
+        : [{ label: t.home }, { label: t.account }];
 
   return (
     <main className="paper-page manage">
       <nav className="paper-nav" aria-label={lang === "id" ? "Navigasi" : "Navigation"}>
         <ol className="crumbs">
-          {crumbs.map((c) => (
-            <li key={c}>{c}</li>
+          {crumbs.map((c, i) => (
+            <li key={i} aria-current={i === crumbs.length - 1 ? "page" : undefined}>
+              {c.to ? <Link to={c.to}>{c.label}</Link> : c.label}
+            </li>
           ))}
         </ol>
         <span className="nav-right">
@@ -403,7 +449,18 @@ export default function Manage() {
               {adminView === "ai" ? <AdminAi lang={lang} user={user} /> : <Organizers t={t} user={user} />}
             </>
           ) : (
-            <Account t={t} lang={lang} user={user} me={me} onChange={() => loadMe(user)} />
+            <Account
+              t={t}
+              lang={lang}
+              user={user}
+              me={me}
+              onChange={() => loadMe(user)}
+              classId={classId}
+              roomId={roomId}
+              pageTab={pageTab}
+              onPageTab={setPageTab}
+              onTrail={setTrail}
+            />
           )}
         </>
       )}
@@ -508,38 +565,100 @@ function AccountHead({ t, me }: { t: Text; me: Me }) {
 /** The signed-in adult: who, where, the approval status, the sign-up form if needed, and the class tools. */
 type Tab = "classes" | "rooms";
 
-function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: User; me: Me; onChange: () => void }) {
+function Account({
+  t,
+  lang,
+  user,
+  me,
+  onChange,
+  classId,
+  roomId,
+  pageTab,
+  onPageTab,
+  onTrail,
+}: {
+  t: Text;
+  lang: Lang;
+  user: User;
+  me: Me;
+  onChange: () => void;
+  /** With one of these, that class's or room's own page instead of the account. */
+  classId: string | null;
+  roomId: string | null;
+  pageTab: string;
+  onPageTab: (tab: string) => void;
+  onTrail: (label: string) => void;
+}) {
   const org = me.organizer?.org;
+  const navigate = useNavigate();
+  const { hash } = useLocation();
   // Bumped when a room opens or closes, so the open rooms and the history read again.
   const [rooms, setRooms] = useState(0);
   // The game links to /manage#classes and /manage#rooms, which open that tab.
-  const [tab, setTab] = useState<Tab>("classes");
-  useEffect(() => setTab(window.location.hash === "#rooms" ? "rooms" : "classes"), []);
+  const tab: Tab = hash === "#rooms" ? "rooms" : "classes";
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
   const [setup, setSetup] = useState<RoomSetup>(USUAL);
   useEffect(() => setSetup(readSetup(me.email)), [me.email]);
   const working = me.organizer && me.organizer.status !== "suspended";
-  const show = (next: Tab) => {
-    setTab(next);
-    window.history.replaceState(null, "", `#${next}`);
-  };
-  // A race room of six seats with the chosen setup, for one class or for anyone; the RACE ROOMS tab then shows it.
-  const openRoom = (classId?: string) => {
+  const show = (next: Tab) => navigate(`/manage#${next}`, { replace: !classId });
+  /**
+   * A race room of six seats with the chosen setup, for one class or for
+   * anyone; the RACE ROOMS tab then shows it, or from a class's page the
+   * new room's own page.
+   */
+  const openRoom = (forClass?: string, toRoom = false) => {
     if (opening) return;
     setOpening(true);
     setOpenError("");
-    show("rooms");
+    if (!toRoom) show("rooms");
     api<OpenedRoom>(user, "/rooms", {
       method: "POST",
-      body: JSON.stringify({ seats: 6, kind: "class", class_id: classId, setup }),
+      body: JSON.stringify({ seats: 6, kind: "class", class_id: forClass, setup }),
     })
       .then(
-        () => setRooms((n) => n + 1),
-        (e) => setOpenError(errorCode(e)),
+        (room) => {
+          setRooms((n) => n + 1);
+          if (toRoom) navigate(`/manage/room/${encodeURIComponent(room.id)}`);
+        },
+        (e) => {
+          setOpenError(errorCode(e));
+          if (toRoom) show("rooms");
+        },
       )
       .finally(() => setOpening(false));
   };
+  if (working && classId) {
+    return (
+      <MyClasses
+        lang={lang}
+        user={user}
+        trial={me.organizer?.status === "pending"}
+        onRace={(c) => openRoom(c, true)}
+        raceLine={describe(lang, setup)}
+        openId={classId}
+        tab={(CLASS_TABS as readonly string[]).includes(pageTab) ? (pageTab as ClassTab) : "overview"}
+        onOpen={(c) => navigate(c ? `/manage/class/${encodeURIComponent(c)}` : "/manage#classes")}
+        onTab={onPageTab}
+        onTrail={onTrail}
+      />
+    );
+  }
+  if (me.organizer && roomId) {
+    return (
+      <RoomPage
+        t={t}
+        lang={lang}
+        user={user}
+        id={roomId}
+        tab={(ROOM_TABS as readonly string[]).includes(pageTab) ? (pageTab as RoomTab) : "overview"}
+        onTab={onPageTab}
+        onTrail={onTrail}
+        version={rooms}
+        onChange={() => setRooms((n) => n + 1)}
+      />
+    );
+  }
   return (
     <>
       <section className="paper-sheet">
@@ -580,7 +699,18 @@ function Account({ t, lang, user, me, onChange }: { t: Text; lang: Lang; user: U
       )}
       {working && tab === "classes" && (
         <div role="tabpanel" id="panel-classes" aria-labelledby="tab-classes">
-          <MyClasses lang={lang} user={user} trial={me.organizer?.status === "pending"} onRace={openRoom} raceLine={describe(lang, setup)} />
+          <MyClasses
+            lang={lang}
+            user={user}
+            trial={me.organizer?.status === "pending"}
+            onRace={(c) => openRoom(c, true)}
+            raceLine={describe(lang, setup)}
+            openId={null}
+            tab="overview"
+            onOpen={(c) => navigate(c ? `/manage/class/${encodeURIComponent(c)}` : "/manage#classes")}
+            onTab={onPageTab}
+            onTrail={onTrail}
+          />
         </div>
       )}
       {me.organizer && (!working || tab === "rooms") && (
@@ -601,6 +731,10 @@ interface OpenedRoom {
   class_label?: string | null;
   setup?: RoomSetup | null;
 }
+
+/** The class screen of an open room; the host token stays in the hash, which the browser never sends to a server. */
+const screenUrl = (room: OpenedRoom) =>
+  `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
 
 interface ClassChoice {
   id: string;
@@ -696,8 +830,7 @@ function RaceRooms({
         {rooms?.length === 0 && <p className="soft">{t.noOpenRooms}</p>}
         <div className="tools tickets">
           {rooms?.map((room) => {
-            // The host token stays in the hash, which the browser never sends to a server.
-            const screen = `/screen?code=${encodeURIComponent(room.watch_code)}#host=${encodeURIComponent(room.host_token)}&play=${encodeURIComponent(room.play_code)}`;
+            const screen = screenUrl(room);
             return (
               <div key={room.id} className="tool ticket">
                 <strong>{t.roomFor(room.class_label)}</strong>
@@ -707,6 +840,9 @@ function RaceRooms({
                 <span>{describe(lang, room.setup)}</span>
                 <span className="soft">{t.roomSeats}</span>
                 <div className="row ticket-foot">
+                  <Link className="btn small" to={`/manage/room/${encodeURIComponent(room.id)}`}>
+                    {t.roomDetail}
+                  </Link>
                   <a className="btn small" href={screen} target="_blank" rel="noopener">
                     {t.openScreen}
                   </a>
@@ -719,26 +855,18 @@ function RaceRooms({
           })}
         </div>
       </section>
-      {asking && (
-        <div className="veil" role="dialog" aria-modal="true" aria-label={t.closeRoom} onClick={(e) => e.target === e.currentTarget && setAsking(null)}>
-          <div className="paper-sheet narrow">
-            <h2 className="dialog-title">
-              {t.closeRoom}: {asking.play_code}
-            </h2>
-            <p>{t.closeSure}</p>
-            <div className="actions">
-              <button type="button" className="btn" onClick={() => setAsking(null)} autoFocus>
-                {t.keepOpen}
-              </button>
-              <button type="button" className="btn suspended" onClick={() => close(asking)}>
-                {t.closeYes}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {asking && <CloseAsk t={t} code={asking.play_code} onKeep={() => setAsking(null)} onClose={() => close(asking)} />}
     </>
   );
+}
+
+interface PastMatch {
+  started_at: string;
+  ended_at: string | null;
+  seats: { name: string; bot: boolean }[];
+  /** The group that raced (0 is A), in a room for a class. */
+  race_group?: number | null;
+  players: { name: string; bot: boolean; points: number; place: number; stars: number }[] | null;
 }
 
 interface PastRoom {
@@ -750,17 +878,14 @@ interface PastRoom {
   class_label?: string | null;
   created_at: string;
   open: boolean;
-  matches: {
-    started_at: string;
-    ended_at: string | null;
-    seats: { name: string; bot: boolean }[];
-    /** The group that raced (0 is A), in a room for a class. */
-    race_group?: number | null;
-    players: { name: string; bot: boolean; points: number; place: number; stars: number }[] | null;
-  }[];
+  setup?: RoomSetup | null;
+  matches: PastMatch[];
 }
 
-/** ROOMS SO FAR: every room this adult opened, the newest first, with each match's results. */
+const dayOf = (t: Text, iso: string) => new Date(iso).toLocaleDateString(t.locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const clockOf = (t: Text, iso: string) => new Date(iso).toLocaleTimeString(t.locale, { hour: "2-digit", minute: "2-digit" });
+
+/** ROOMS SO FAR: every room this adult opened, the newest first, one line each that leads to the room's page. */
 function RoomHistory({ t, user, version }: { t: Text; user: User; version: number }) {
   const [rooms, setRooms] = useState<PastRoom[]>();
   const [error, setError] = useState("");
@@ -773,8 +898,6 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
       (e) => setError(errorCode(e)),
     );
   }, [user, version]);
-  const day = (iso: string) => new Date(iso).toLocaleDateString(t.locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-  const clock = (iso: string) => new Date(iso).toLocaleTimeString(t.locale, { hour: "2-digit", minute: "2-digit" });
   const matches = rooms?.reduce((n, r) => n + r.matches.length, 0) ?? 0;
   return (
     <section className="paper-sheet history">
@@ -782,79 +905,258 @@ function RoomHistory({ t, user, version }: { t: Text; user: User; version: numbe
       <ErrorLine t={t} code={error} />
       {rooms?.length === 0 && <p className="soft">{t.historyNone}</p>}
       {rooms && rooms.length > 0 && <p className="soft">{t.historySummary(rooms.length, matches)}</p>}
-      {rooms?.map((r, i) => (
-        // The newest room starts unfolded; the others fold to one line each.
-        <details key={r.id} className="past-room" open={i === 0}>
-          <summary className="past-head">
+      <div className="past-list">
+        {rooms?.map((r) => (
+          <Link key={r.id} to={`/manage/room/${encodeURIComponent(r.id)}`} className="past-head past-link">
             <strong className="past-code">{r.play_code}</strong>
             <span className="past-tags">
               {r.class_label && <span className="past-state">{r.class_label}</span>}
               <span className={r.open ? "past-state on" : "past-state"}>{r.open ? t.historyOpen : t.historyClosed}</span>
             </span>
             <span className="past-when">
-              {day(r.created_at)}, {clock(r.created_at)}
+              {dayOf(t, r.created_at)}, {clockOf(t, r.created_at)}
             </span>
             <span className="soft past-meta">{t.historyMeta(r.seats, r.matches.length)}</span>
-          </summary>
-          {r.matches.map((m, n) => {
-            const minutes = m.ended_at ? Math.max(1, Math.round((Date.parse(m.ended_at) - Date.parse(m.started_at)) / 60000)) : 0;
-            return (
-              <div key={m.started_at} className="past-match">
-                <p className="past-match-head">
-                  <strong>
-                    {t.historyMatch(n + 1)}
-                    {m.race_group != null && t.historyGroup(String.fromCharCode(65 + m.race_group))}
-                  </strong>
-                  <span className="soft">
-                    {clock(m.started_at)}
-                    {m.ended_at ? t.historyUntil(clock(m.ended_at), minutes) : ""}
-                  </span>
-                  {!m.players && <span className="past-state">{t.historyUnfinished}</span>}
-                </p>
-                <table className="past-table">
-                  <thead>
-                    <tr>
-                      <th>{m.players ? t.historyCols[0] : t.historySeat}</th>
-                      <th>{t.historyCols[1]}</th>
-                      {m.players && <th className="num">{t.historyCols[2]}</th>}
-                      {m.players && <th>{t.historyCols[3]}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {m.players
-                      ? [...m.players]
-                          .sort((a, b) => a.place - b.place)
-                          .map((p) => (
-                            <tr key={p.name} className={p.bot ? "bot" : ""}>
-                              <td>{p.place}</td>
-                              <td>
-                                {p.name}
-                                {p.bot && <span className="soft"> ({t.robot})</span>}
-                              </td>
-                              <td className="num">{p.points}</td>
-                              <td className="stars" aria-label={`${p.stars}/3`}>
-                                {"\u2605".repeat(p.stars)}
-                                <span className="dim">{"\u2605".repeat(Math.max(0, 3 - p.stars))}</span>
-                              </td>
-                            </tr>
-                          ))
-                      : m.seats.map((s, k) => (
-                          <tr key={s.name} className={s.bot ? "bot" : ""}>
-                            <td>{k + 1}</td>
-                            <td>
-                              {s.name}
-                              {s.bot && <span className="soft"> ({t.robot})</span>}
-                            </td>
-                          </tr>
-                        ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
-        </details>
-      ))}
+          </Link>
+        ))}
+      </div>
     </section>
+  );
+}
+
+/** Each match of a room, the first first: when, the group, and the places or, unfinished, who sat down. */
+function MatchList({ t, matches }: { t: Text; matches: PastMatch[] }) {
+  return (
+    <>
+      {matches.map((m, n) => {
+        const minutes = m.ended_at ? Math.max(1, Math.round((Date.parse(m.ended_at) - Date.parse(m.started_at)) / 60000)) : 0;
+        return (
+          <div key={m.started_at} className="past-match">
+            <p className="past-match-head">
+              <strong>
+                {t.historyMatch(n + 1)}
+                {m.race_group != null && t.historyGroup(String.fromCharCode(65 + m.race_group))}
+              </strong>
+              <span className="soft">
+                {clockOf(t, m.started_at)}
+                {m.ended_at ? t.historyUntil(clockOf(t, m.ended_at), minutes) : ""}
+              </span>
+              {!m.players && <span className="past-state">{t.historyUnfinished}</span>}
+            </p>
+            <table className="past-table">
+              <thead>
+                <tr>
+                  <th>{m.players ? t.historyCols[0] : t.historySeat}</th>
+                  <th>{t.historyCols[1]}</th>
+                  {m.players && <th className="num">{t.historyCols[2]}</th>}
+                  {m.players && <th>{t.historyCols[3]}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {m.players
+                  ? [...m.players]
+                      .sort((a, b) => a.place - b.place)
+                      .map((p) => (
+                        <tr key={p.name} className={p.bot ? "bot" : ""}>
+                          <td>{p.place}</td>
+                          <td>
+                            {p.name}
+                            {p.bot && <span className="soft"> ({t.robot})</span>}
+                          </td>
+                          <td className="num">{p.points}</td>
+                          <td className="stars" aria-label={`${p.stars}/3`}>
+                            {"★".repeat(p.stars)}
+                            <span className="dim">{"★".repeat(Math.max(0, 3 - p.stars))}</span>
+                          </td>
+                        </tr>
+                      ))
+                  : m.seats.map((s, k) => (
+                      <tr key={s.name} className={s.bot ? "bot" : ""}>
+                        <td>{k + 1}</td>
+                        <td>
+                          {s.name}
+                          {s.bot && <span className="soft"> ({t.robot})</span>}
+                        </td>
+                      </tr>
+                    ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * One room's page at /manage/room/ID: its codes, class screen and CLOSE
+ * while it is open, how it is raced, and each match's results. The room is
+ * looked up among the open rooms and the last 30 rooms.
+ */
+function RoomPage({
+  t,
+  lang,
+  user,
+  id,
+  tab,
+  onTab,
+  onTrail,
+  version,
+  onChange,
+}: {
+  t: Text;
+  lang: Lang;
+  user: User;
+  id: string;
+  tab: RoomTab;
+  onTab: (tab: RoomTab) => void;
+  onTrail: (label: string) => void;
+  version: number;
+  onChange: () => void;
+}) {
+  // undefined while asking the server, null when not there.
+  const [active, setActive] = useState<OpenedRoom | null>();
+  const [past, setPast] = useState<PastRoom | null>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    Promise.all([api<{ rooms: OpenedRoom[] }>(user, "/rooms"), api<{ rooms: PastRoom[] }>(user, "/rooms/history")]).then(
+      ([open, history]) => {
+        setActive(open.rooms.find((r) => r.id === id) ?? null);
+        setPast(history.rooms.find((r) => r.id === id) ?? null);
+        setError("");
+      },
+      (e) => {
+        setError(errorCode(e));
+        setActive(null);
+        setPast(null);
+      },
+    );
+  }, [user, id, version]);
+  const code = active?.play_code ?? past?.play_code ?? "";
+  useEffect(() => onTrail(code), [code]);
+  const close = () => {
+    if (busy || !active) return;
+    setAsking(false);
+    setBusy(true);
+    setError("");
+    api(user, `/rooms/${encodeURIComponent(active.id)}`, { method: "DELETE" })
+      .then(onChange, (e) => setError(errorCode(e)))
+      .finally(() => setBusy(false));
+  };
+
+  if (active === undefined) {
+    return (
+      <section className="paper-sheet" aria-busy="true">
+        <p className="soft">{t.loading}</p>
+      </section>
+    );
+  }
+  if (!active && !past) {
+    return (
+      <section className="paper-sheet">
+        {error ? <ErrorLine t={t} code={error} /> : <p>{t.roomNotFound}</p>}
+        <Link className="btn small" to="/manage#rooms">
+          {t.allRooms}
+        </Link>
+      </section>
+    );
+  }
+  const label = active?.class_label ?? past?.class_label;
+  const matches = past?.matches ?? [];
+  const tabName = (k: RoomTab) => (k === "matches" ? `${t.roomTabs.matches} (${matches.length})` : t.roomTabs[k]);
+  return (
+    <section className="paper-sheet room-page">
+      <div className="admin-head">
+        <div>
+          <h2 className="class-title">
+            <span className="past-code">{code}</span>
+            {label && <span className="past-state">{label}</span>}
+            <span className={active ? "past-state on" : "past-state"}>{active ? t.historyOpen : t.historyClosed}</span>
+          </h2>
+          <p className="soft">
+            {t.roomFor(label)}
+            {past ? ` · ${t.roomOpened} ${dayOf(t, past.created_at)}, ${clockOf(t, past.created_at)}` : ""}
+            {past ? ` · ${t.historyMeta(past.seats, matches.length)}` : ""}
+          </p>
+        </div>
+        {active && (
+          <div className="row">
+            <a className="btn small blue" href={screenUrl(active)} target="_blank" rel="noopener">
+              {t.openScreen}
+            </a>
+            <button type="button" className="btn small" onClick={() => setAsking(true)} disabled={busy}>
+              {t.closeRoom}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="page-tabs" role="tablist" aria-label={code}>
+        {ROOM_TABS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            id={`room-tab-${k}`}
+            aria-selected={tab === k}
+            aria-controls="room-panel"
+            className={tab === k ? "page-tab on" : "page-tab"}
+            onClick={() => onTab(k)}
+          >
+            {tabName(k)}
+          </button>
+        ))}
+      </div>
+      <ErrorLine t={t} code={error} />
+      <div role="tabpanel" id="room-panel" aria-labelledby={`room-tab-${tab}`} className="class-panel">
+        {tab === "overview" ? (
+          <>
+            {active ? (
+              <div className="class-block room-codes">
+                <p>{label ? t.roomPlayClass(label) : t.roomPlay}</p>
+                <CopyCode big label={t.roomCode} code={active.play_code} copyText={t.copy} copiedText={t.copied} />
+                <CopyCode label={t.roomWatch} code={active.watch_code} copyText={t.copy} copiedText={t.copied} />
+                <p className="soft">{t.roomSeats}</p>
+              </div>
+            ) : (
+              <p className="soft">{t.roomClosedNote}</p>
+            )}
+            <div className="class-block">
+              <h3>{t.roomSetup}</h3>
+              <p>{describe(lang, active?.setup ?? past?.setup)}</p>
+            </div>
+          </>
+        ) : matches.length > 0 ? (
+          <MatchList t={t} matches={matches} />
+        ) : (
+          <p className="soft">{t.roomNoMatches}</p>
+        )}
+      </div>
+      {asking && active && <CloseAsk t={t} code={active.play_code} onKeep={() => setAsking(false)} onClose={close} />}
+    </section>
+  );
+}
+
+/** CLOSE THE ROOM, asked on our own paper card. */
+function CloseAsk({ t, code, onKeep, onClose }: { t: Text; code: string; onKeep: () => void; onClose: () => void }) {
+  return (
+    <div className="veil" role="dialog" aria-modal="true" aria-label={t.closeRoom} onClick={(e) => e.target === e.currentTarget && onKeep()}>
+      <div className="paper-sheet narrow">
+        <h2 className="dialog-title">
+          {t.closeRoom}: {code}
+        </h2>
+        <p>{t.closeSure}</p>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onKeep} autoFocus>
+            {t.keepOpen}
+          </button>
+          <button type="button" className="btn suspended" onClick={onClose}>
+            {t.closeYes}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

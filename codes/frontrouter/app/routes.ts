@@ -9,7 +9,8 @@ export default [
   route("data-deletion", "routes/data-deletion.tsx"),
   route("credits", "routes/credits.tsx"),
   route("terms", "routes/terms.tsx"),
-  route("manage", "routes/manage.tsx"),
+  // /manage, a class's page at /manage/class/ID and a room's at /manage/room/ID.
+  route("manage/*", "routes/manage.tsx"),
   route("screen", "routes/screen.tsx"),
   route("edu", "routes/edu.tsx"),
   route("edu/:id", "routes/edu-lesson.tsx"),

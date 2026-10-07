@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router";
 import type { User } from "firebase/auth";
 
 import { api, errorCode } from "./auth";
@@ -14,10 +15,21 @@ import { Picture, PICTURE_NAMES } from "./pictures";
 
 /**
  * MY CLASSES on /manage: a teacher's standing classes, each with numbered
- * seats. A seat's picture password comes back from the server only once (when
- * the class or seat is made, or given a new picture), so its cards are printed
- * from this page at that moment. Real names live only in this browser.
+ * seats, and each class's own page at /manage/class/ID, in tabs. A seat's
+ * picture password comes back from the server only once (when the class or
+ * seat is made, or given a new picture), so its cards are printed from this
+ * page at that moment. Real names live only in this browser.
  */
+
+/** The tabs of a class's page, as `?tab=` names them. */
+export const CLASS_TABS = ["overview", "seats", "groups", "report", "ranks", "town"] as const;
+export type ClassTab = (typeof CLASS_TABS)[number];
+
+/** Fresh cards by class, kept outside the page so moving between its pages keeps them until printed. */
+const cardStore: Record<string, Card[]> = {};
+
+/** A seat played within this many days counts as playing lately. */
+const LATELY_DAYS = 7;
 
 interface ClassRow {
   id: string;
@@ -91,6 +103,30 @@ const TEXT = {
     trial: "Until an admin approves you: one class with up to 5 seats.",
     newClass: "NEW CLASS",
     eduHint: "Paper lessons to show on the smartboard or share with the class",
+    classTabs: {
+      overview: "OVERVIEW",
+      seats: "SEATS & CARDS",
+      groups: "GROUPS",
+      report: "REPORT",
+      ranks: "RANKINGS",
+      town: "TOWN",
+    } as Record<ClassTab, string>,
+    stat: {
+      seats: "Seats",
+      lately: "Played in the last 7 days",
+      never: "Never signed in",
+      locked: "Locked seats",
+      groups: "Race groups",
+    },
+    signInTitle: "SIGNING IN",
+    raceTitle: "RACING",
+    endTitle: "ARCHIVE OR DELETE",
+    endNote: "Archive a class at the end of the school year: its code stops working and it stays here to read. Deleting removes it and its records from Numeria for good.",
+    listSummary: (active: number, archived: number) => `${active} active${archived ? `, ${archived} archived` : ""}`,
+    archivedTitle: "ARCHIVED",
+    groupTitle: (g: string, n: number) => `Group ${g} · ${n} ${n === 1 ? "seat" : "seats"}`,
+    moveTo: (n: number) => `Group of seat ${n}`,
+    lockedSeats: (n: number) => `${n} ${n === 1 ? "seat is" : "seats are"} locked after wrong pictures. Unlock ${n === 1 ? "it" : "them"} under SEATS & CARDS.`,
     allClasses: "ALL CLASSES",
     race: "NEW RACE ROOM FOR THIS CLASS",
     raceLine: (s: string) => `A new race room: ${s}. Change it under RACE ROOMS.`,
@@ -146,6 +182,7 @@ const TEXT = {
       points: "Points in the last class race",
       group: "Group",
     } as Record<SortKey, string>,
+    loading: "Loading...",
     shown: (n: number, all: number) => `${n} of ${all} seats`,
     noMatch: "No seat matches.",
     addSeats: "ADD SEATS",
@@ -206,6 +243,30 @@ const TEXT = {
     trial: "Sampai admin menyetujui Anda: satu kelas dengan paling banyak 5 kursi.",
     newClass: "KELAS BARU",
     eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
+    classTabs: {
+      overview: "RINGKASAN",
+      seats: "KURSI & KARTU",
+      groups: "KELOMPOK",
+      report: "LAPORAN",
+      ranks: "PERINGKAT",
+      town: "KOTA",
+    } as Record<ClassTab, string>,
+    stat: {
+      seats: "Kursi",
+      lately: "Bermain 7 hari terakhir",
+      never: "Belum pernah masuk",
+      locked: "Kursi terkunci",
+      groups: "Kelompok lomba",
+    },
+    signInTitle: "CARA MASUK",
+    raceTitle: "LOMBA",
+    endTitle: "ARSIPKAN ATAU HAPUS",
+    endNote: "Arsipkan kelas di akhir tahun ajaran: kodenya tidak berlaku lagi dan kelasnya tetap ada di sini untuk dibaca. Menghapus membuang kelas dan catatannya dari Numeria selamanya.",
+    listSummary: (active: number, archived: number) => `${active} aktif${archived ? `, ${archived} diarsipkan` : ""}`,
+    archivedTitle: "DIARSIPKAN",
+    groupTitle: (g: string, n: number) => `Kelompok ${g} · ${n} kursi`,
+    moveTo: (n: number) => `Kelompok kursi ${n}`,
+    lockedSeats: (n: number) => `${n} kursi terkunci karena salah gambar. Buka kuncinya di KURSI & KARTU.`,
     allClasses: "SEMUA KELAS",
     race: "BUAT RUANG LOMBA UNTUK KELAS INI",
     raceLine: (s: string) => `Ruang lomba baru: ${s}. Ubah di RUANG LOMBA.`,
@@ -261,6 +322,7 @@ const TEXT = {
       points: "Poin lomba kelas terakhir",
       group: "Kelompok",
     } as Record<SortKey, string>,
+    loading: "Memuat...",
     shown: (n: number, all: number) => `${n} dari ${all} kursi`,
     noMatch: "Tidak ada kursi yang cocok.",
     addSeats: "TAMBAH KURSI",
@@ -340,13 +402,22 @@ function thisSchoolYear(): string {
   return `${y}/${String((y + 1) % 100).padStart(2, "0")}`;
 }
 
-/** MY CLASSES: the list, then one class's page; `onRace` opens a race room for a class. */
+/**
+ * MY CLASSES: the list, or with `openId` that class's page on tab `tab`;
+ * `onOpen` and `onTab` move between them, `onRace` opens a race room for a
+ * class, and `onTrail` names the open class for the breadcrumb.
+ */
 export function MyClasses({
   lang,
   user,
   trial,
   onRace,
   raceLine,
+  openId,
+  tab,
+  onOpen,
+  onTab,
+  onTrail,
 }: {
   lang: Lang;
   user: User;
@@ -354,14 +425,24 @@ export function MyClasses({
   onRace: (classId: string) => void;
   /** How a race room opened now is raced. */
   raceLine: string;
+  openId: string | null;
+  tab: ClassTab;
+  onOpen: (classId: string | null) => void;
+  onTab: (tab: ClassTab) => void;
+  onTrail: (label: string) => void;
 }) {
   const t = TEXT[lang];
   const [classes, setClasses] = useState<ClassRow[]>();
   const [error, setError] = useState("");
   const [making, setMaking] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  // Fresh cards by class, kept while this page lives.
-  const [cards, setCards] = useState<Record<string, Card[]>>({});
+  const [cards, setCardsHere] = useState<Record<string, Card[]>>(() => ({ ...cardStore }));
+  const setCards = (next: (all: Record<string, Card[]>) => Record<string, Card[]>) =>
+    setCardsHere((all) => {
+      const made = next(all);
+      for (const k of Object.keys(cardStore)) delete cardStore[k];
+      Object.assign(cardStore, made);
+      return made;
+    });
   const load = () =>
     api<{ classes: ClassRow[] }>(user, "/classes").then(
       (r) => {
@@ -380,55 +461,82 @@ export function MyClasses({
       return { ...all, [classId]: [...byNumber.values()].sort((a, b) => a.number - b.number) };
     });
   const opened = classes?.find((c) => c.id === openId);
+  useEffect(() => onTrail(opened?.label ?? ""), [opened?.label]);
+  const active = classes?.filter((c) => c.status === "active") ?? [];
+  const archived = classes?.filter((c) => c.status !== "active") ?? [];
+  const rowOf = (c: ClassRow) => (
+    <Link key={c.id} to={`/manage/class/${encodeURIComponent(c.id)}`} className={c.status === "active" ? "class-row" : "class-row old"}>
+      <strong className="class-label">{c.label}</strong>
+      <span>
+        {t.grade(c.grade)}
+        {c.school_year ? `, ${c.school_year}` : ""} · {t.seatsCount(c.seats)}
+      </span>
+      {c.join_code ? <span className="class-code">{c.join_code}</span> : <span className="past-state">{t.archived}</span>}
+    </Link>
+  );
+
+  if (openId) {
+    return (
+      <section className="paper-sheet classes" id="classes">
+        {opened ? (
+          <ClassPage
+            key={opened.id}
+            t={t}
+            lang={lang}
+            user={user}
+            row={opened}
+            tab={tab}
+            onTab={onTab}
+            cards={cards[opened.id] ?? []}
+            onCards={(c) => keep(opened.id, c)}
+            onPrinted={() => setCards((all) => ({ ...all, [opened.id]: [] }))}
+            onBack={() => onOpen(null)}
+            onChange={() => void load()}
+            onRace={() => onRace(opened.id)}
+            raceLine={raceLine}
+            trial={trial}
+          />
+        ) : classes || error ? (
+          <>
+            <ErrorLine t={t} code={error || "class_not_found"} />
+            <Link className="btn small" to="/manage#classes">
+              {t.allClasses}
+            </Link>
+          </>
+        ) : (
+          <p className="soft">{t.loading}</p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="paper-sheet classes" id="classes">
-      {opened ? (
-        <ClassPage
-          t={t}
-          lang={lang}
-          user={user}
-          row={opened}
-          cards={cards[opened.id] ?? []}
-          onCards={(c) => keep(opened.id, c)}
-          onPrinted={() => setCards((all) => ({ ...all, [opened.id]: [] }))}
-          onBack={() => setOpenId(null)}
-          onChange={() => void load()}
-          onRace={() => onRace(opened.id)}
-          raceLine={raceLine}
-          trial={trial}
-        />
-      ) : (
-        <>
-          <div className="admin-head">
-            <h2>{t.title}</h2>
-            <span className="head-buttons">
-              <a className="btn" href="/edu/" title={t.eduHint}>
-                MATH EDU
-              </a>
-              <button type="button" className="btn blue" onClick={() => setMaking(true)} disabled={!classes}>
-                {t.newClass}
-              </button>
-            </span>
-          </div>
-          <p className="soft">{t.intro}</p>
-          {trial && <p className="soft">{t.trial}</p>}
-          <ErrorLine t={t} code={error} />
-          {classes?.length === 0 && <p>{t.none}</p>}
-          <div className="class-list">
-            {classes?.map((c) => (
-              <button key={c.id} type="button" className={c.status === "active" ? "class-row" : "class-row old"} onClick={() => setOpenId(c.id)}>
-                <strong className="class-label">{c.label}</strong>
-                <span>
-                  {t.grade(c.grade)}
-                  {c.school_year ? `, ${c.school_year}` : ""} · {t.seatsCount(c.seats)}
-                </span>
-                {c.join_code ? <span className="class-code">{c.join_code}</span> : <span className="past-state">{t.archived}</span>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+        <div className="admin-head">
+          <h2>{t.title}</h2>
+          <span className="head-buttons">
+            <a className="btn" href="/edu/" title={t.eduHint}>
+              MATH EDU
+            </a>
+            <button type="button" className="btn blue" onClick={() => setMaking(true)} disabled={!classes}>
+              {t.newClass}
+            </button>
+          </span>
+        </div>
+        <p className="soft">{t.intro}</p>
+        {trial && <p className="soft">{t.trial}</p>}
+        <ErrorLine t={t} code={error} />
+        {classes?.length === 0 && <p>{t.none}</p>}
+        {classes && classes.length > 0 && <p className="soft">{t.listSummary(active.length, archived.length)}</p>}
+        <div className="class-list">{active.map(rowOf)}</div>
+        {archived.length > 0 && (
+          <details className="class-archived">
+            <summary>
+              {t.archivedTitle} ({archived.length})
+            </summary>
+            <div className="class-list">{archived.map(rowOf)}</div>
+          </details>
+        )}
       {making && (
         <NewClass
           t={t}
@@ -439,7 +547,7 @@ export function MyClasses({
             setMaking(false);
             keep(row.id, fresh);
             setClasses((list) => [row, ...(list ?? [])]);
-            setOpenId(row.id);
+            onOpen(row.id);
           }}
         />
       )}
@@ -529,6 +637,8 @@ function ClassPage({
   lang,
   user,
   row,
+  tab,
+  onTab,
   cards,
   onCards,
   onPrinted,
@@ -542,6 +652,8 @@ function ClassPage({
   lang: Lang;
   user: User;
   row: ClassRow;
+  tab: ClassTab;
+  onTab: (tab: ClassTab) => void;
   cards: Card[];
   onCards: (c: Card[]) => void;
   onPrinted: () => void;
@@ -680,6 +792,19 @@ function ClassPage({
             ? t.askErase
             : t.howMany;
 
+  const now = Date.now();
+  const lately = seats?.filter((s) => s.last_seen_at && now - Date.parse(s.last_seen_at) < LATELY_DAYS * 86_400_000).length ?? 0;
+  const never = seats?.filter((s) => !s.last_seen_at).length ?? 0;
+  const locked = seats?.filter((s) => s.locked).length ?? 0;
+  const byGroup = [...sizes.keys()].sort((a, b) => a - b).map((g) => [g, (seats ?? []).filter((s) => s.group === g)] as const);
+  const stats: [string, number][] = [
+    [t.stat.seats, seats?.length ?? row.seats],
+    [t.stat.lately, lately],
+    [t.stat.never, never],
+    [t.stat.locked, locked],
+    [t.stat.groups, sizes.size],
+  ];
+
   return (
     <>
       <div className="admin-head">
@@ -691,32 +816,37 @@ function ClassPage({
           <p className="soft">
             {t.grade(row.grade)}
             {row.school_year ? `, ${row.school_year}` : ""} · {t.seatsCount(row.seats)}
+            {row.join_code ? ` · ${t.code} ${row.join_code}` : ""}
           </p>
           {active && <p className="soft">{t.raceLine(raceLine)}</p>}
         </div>
-        <div className="row">
-          {active && (
-            <>
-              <button type="button" className="btn small blue" onClick={onRace}>
-                {t.race}
-              </button>
-              <button type="button" className="btn small blue" onClick={() => setBoard(true)} disabled={!seats?.length}>
-                {t.board}
-              </button>
-            </>
-          )}
-          <button type="button" className="btn small" onClick={onBack}>
-            {t.allClasses}
-          </button>
-        </div>
+        {active && (
+          <div className="row">
+            <button type="button" className="btn small blue" onClick={onRace}>
+              {t.race}
+            </button>
+            <button type="button" className="btn small blue" onClick={() => setBoard(true)} disabled={!seats?.length}>
+              {t.board}
+            </button>
+          </div>
+        )}
       </div>
-      {row.join_code && (
-        <div className="class-join">
-          <span className="soft">{t.code}</span>
-          <span className="room-code">{row.join_code}</span>
-          <span className="soft">{t.signInHow}</span>
-        </div>
-      )}
+      <div className="page-tabs" role="tablist" aria-label={row.label}>
+        {CLASS_TABS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            id={`class-tab-${k}`}
+            aria-selected={tab === k}
+            aria-controls="class-panel"
+            className={tab === k ? "page-tab on" : "page-tab"}
+            onClick={() => onTab(k)}
+          >
+            {t.classTabs[k]}
+          </button>
+        ))}
+      </div>
       {cards.length > 0 && (
         <div className="cards-ready" role="status">
           <p>{t.cardsReady(cards.length)}</p>
@@ -732,145 +862,208 @@ function ClassPage({
       )}
       <ErrorLine t={t} code={error} />
       {note && <p role="status">{note}</p>}
-      <p className="soft">{t.recordsNote}</p>
-      <p className="soft">{t.groupsNote}</p>
-      {big.map(([g, n]) => (
-        <p key={g} className="err">
-          {t.tooBig(letter(g), n)}
-        </p>
-      ))}
-      {seats && seats.length > 0 && (
-        <div className="seat-find">
-          <input className="field" type="text" enterKeyHint="search" placeholder={t.find} aria-label={t.find} value={query} onChange={(e) => setQuery(e.target.value)} />
-          <label className="report-pick">
-            <span className="soft">{t.sortBy}</span>
-            <Pick className="group" label={t.sortBy} value={sortBy} onChange={setSortBy} options={SORTS.map((k) => ({ value: k, label: t.sorts[k] }))} />
-          </label>
-          {query.trim() && <span className="soft">{shown.length > 0 ? t.shown(shown.length, seats.length) : t.noMatch}</span>}
-        </div>
-      )}
-      <div className="table-scroll">
-        <table className="past-table seats">
-          <thead>
-            <tr>
-              {t.cols.map((c, i) => (
-                <th key={i}>{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((s) => (
-              <tr key={s.number}>
-                <td className="seat-no">{two(s.number)}</td>
-                <td>
-                  <input
-                    className="field name"
-                    aria-label={`${t.cols[1]} ${s.number}`}
-                    placeholder={t.namePlaceholder}
-                    maxLength={80}
-                    defaultValue={names[s.number] ?? ""}
-                    key={`${s.number}:${names[s.number] ?? ""}`}
-                    onBlur={(e) => e.target.value !== (names[s.number] ?? "") && name(s.number, e.target.value)}
-                  />
-                </td>
-                <td>{s.pseudonym}</td>
-                <td>
-                  <Pick
-                    className={s.group_chosen ? "group chosen" : "group"}
-                    label={`${t.cols[3]} ${s.number}`}
-                    value={s.group}
-                    disabled={!active || busy}
-                    onChange={(group) => act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group }) }))}
-                    options={GROUPS.map((g) => ({ value: g, label: letter(g) }))}
-                  />
-                </td>
-                <td className="seat-stats">
-                  {t.official(s.official.matches, s.official.stars).map((line) => (
-                    <div key={line}>{line}</div>
-                  ))}
-                  {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
-                  {(s.board?.races ?? 0) > 0 && <div className="soft">{t.onBoard(s.board!.races)}</div>}
-                </td>
-                <td className="seat-stats">
-                  {t.own(s.own.races, s.own.practices).map((line) => (
-                    <div key={line}>{line}</div>
-                  ))}
-                  {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
-                  {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
-                </td>
-                <td className="seat-stats">
-                  {s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}
-                </td>
-                <td className="seat-actions">
-                  {active && (
-                    <div>
-                      {s.locked && (
-                        <button type="button" className="btn small blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))}>
-                          {t.unlock}
-                        </button>
-                      )}
-                      <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })}>
-                        {t.newPicture}
-                      </button>
-                      <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })}>
-                        {t.empty}
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="soft">{t.namesNote}</p>
-      <div className="row class-tools">
-        <button type="button" className="btn small" onClick={save} disabled={!seats}>
-          {t.exportNames}
-        </button>
-        <button type="button" className="btn small" onClick={() => file.current?.click()}>
-          {t.importNames}
-        </button>
-        <input
-          ref={file}
-          type="file"
-          accept=".csv,text/csv"
-          hidden
-          onChange={(e) => {
-            loadFile(e.target.files?.[0]);
-            e.target.value = "";
-          }}
-        />
-        {active && (
+      <div role="tabpanel" id="class-panel" aria-labelledby={`class-tab-${tab}`} className="class-panel">
+        {!seats ? (
+          <p className="soft">{t.loading}</p>
+        ) : tab === "overview" ? (
           <>
-            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "add" })}>
-              {t.addSeats}
-            </button>
-            {seats?.some((s) => s.group_chosen) && (
-              <button type="button" className="btn small" disabled={busy} onClick={() => act(api(user, `${base}/groups`, { method: "DELETE" }))}>
-                {t.byNumber}
-              </button>
+            <div className="stat-grid">
+              {stats.map(([label, n]) => (
+                <div key={label} className="stat">
+                  <strong>{n}</strong>
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+            {active && locked > 0 && <p className="soft">{t.lockedSeats(locked)}</p>}
+            {big.map(([g, n]) => (
+              <p key={g} className="err">
+                {t.tooBig(letter(g), n)}
+              </p>
+            ))}
+            {row.join_code && (
+              <div className="class-block">
+                <h3>{t.signInTitle}</h3>
+                <div className="class-join">
+                  <span className="soft">{t.code}</span>
+                  <span className="room-code">{row.join_code}</span>
+                  <span className="soft">{t.signInHow}</span>
+                </div>
+              </div>
             )}
-            <button type="button" className="btn small suspended" disabled={busy} onClick={() => setAsk({ kind: "archive" })}>
-              {t.archive}
-            </button>
+            <div className="class-block end">
+              <h3>{t.endTitle}</h3>
+              <p className="soft">{t.endNote}</p>
+              <div className="row">
+                {active && (
+                  <button type="button" className="btn small suspended" disabled={busy} onClick={() => setAsk({ kind: "archive" })}>
+                    {t.archive}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn small suspended"
+                  disabled={busy}
+                  onClick={() => {
+                    setTyped("");
+                    setAsk({ kind: "erase" });
+                  }}
+                >
+                  {t.erase}
+                </button>
+              </div>
+            </div>
           </>
+        ) : tab === "seats" ? (
+          <>
+            <p className="soft">{t.recordsNote}</p>
+            {seats.length > 0 && (
+              <div className="seat-find">
+                <input className="field" type="text" enterKeyHint="search" placeholder={t.find} aria-label={t.find} value={query} onChange={(e) => setQuery(e.target.value)} />
+                <label className="report-pick">
+                  <span className="soft">{t.sortBy}</span>
+                  <Pick className="group" label={t.sortBy} value={sortBy} onChange={setSortBy} options={SORTS.map((k) => ({ value: k, label: t.sorts[k] }))} />
+                </label>
+                {query.trim() && <span className="soft">{shown.length > 0 ? t.shown(shown.length, seats.length) : t.noMatch}</span>}
+              </div>
+            )}
+            <div className="table-scroll">
+              <table className="past-table seats">
+                <thead>
+                  <tr>
+                    {t.cols.map((c, i) => (
+                      <th key={i}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((s) => (
+                    <tr key={s.number}>
+                      <td className="seat-no">{two(s.number)}</td>
+                      <td>
+                        <input
+                          className="field name"
+                          aria-label={`${t.cols[1]} ${s.number}`}
+                          placeholder={t.namePlaceholder}
+                          maxLength={80}
+                          defaultValue={names[s.number] ?? ""}
+                          key={`${s.number}:${names[s.number] ?? ""}`}
+                          onBlur={(e) => e.target.value !== (names[s.number] ?? "") && name(s.number, e.target.value)}
+                        />
+                      </td>
+                      <td>{s.pseudonym}</td>
+                      <td className="seat-group">{letter(s.group)}</td>
+                      <td className="seat-stats">
+                        {t.official(s.official.matches, s.official.stars).map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                        {s.last_official && <div className="soft">{t.lastOfficial(s.last_official.place, s.last_official.points)}</div>}
+                        {(s.board?.races ?? 0) > 0 && <div className="soft">{t.onBoard(s.board!.races)}</div>}
+                      </td>
+                      <td className="seat-stats">
+                        {t.own(s.own.races, s.own.practices).map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                        {s.other_rooms.matches > 0 && <div className="soft">{t.otherRooms(s.other_rooms.matches)}</div>}
+                        {s.own.days > 0 && <div className="soft">{t.days(s.own.days)}</div>}
+                      </td>
+                      <td className="seat-stats">
+                        {s.locked ? <span className="past-state lock">{t.locked}</span> : <span className="soft">{day(s.last_seen_at)}</span>}
+                      </td>
+                      <td className="seat-actions">
+                        {active && (
+                          <div>
+                            {s.locked && (
+                              <button type="button" className="btn small blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))}>
+                                {t.unlock}
+                              </button>
+                            )}
+                            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })}>
+                              {t.newPicture}
+                            </button>
+                            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })}>
+                              {t.empty}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="soft">{t.namesNote}</p>
+            <div className="row class-tools">
+              <button type="button" className="btn small" onClick={save}>
+                {t.exportNames}
+              </button>
+              <button type="button" className="btn small" onClick={() => file.current?.click()}>
+                {t.importNames}
+              </button>
+              <input
+                ref={file}
+                type="file"
+                accept=".csv,text/csv"
+                hidden
+                onChange={(e) => {
+                  loadFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              {active && (
+                <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "add" })}>
+                  {t.addSeats}
+                </button>
+              )}
+            </div>
+          </>
+        ) : tab === "groups" ? (
+          <>
+            <p className="soft">{t.groupsNote}</p>
+            {big.map(([g, n]) => (
+              <p key={g} className="err">
+                {t.tooBig(letter(g), n)}
+              </p>
+            ))}
+            {active && seats.some((s) => s.group_chosen) && (
+              <div className="row class-tools">
+                <button type="button" className="btn small" disabled={busy} onClick={() => act(api(user, `${base}/groups`, { method: "DELETE" }))}>
+                  {t.byNumber}
+                </button>
+              </div>
+            )}
+            <div className="group-grid">
+              {byGroup.map(([g, list]) => (
+                <div key={g} className={list.length > DESKS ? "group-card big" : "group-card"}>
+                  <h4>{t.groupTitle(letter(g), list.length)}</h4>
+                  <ul>
+                    {list.map((s) => (
+                      <li key={s.number}>
+                        <span className="seat-no">{two(s.number)}</span>
+                        <span className="group-who">{names[s.number] || s.pseudonym}</span>
+                        <Pick
+                          className={s.group_chosen ? "group chosen" : "group"}
+                          label={t.moveTo(s.number)}
+                          value={s.group}
+                          disabled={!active || busy}
+                          onChange={(group) => act(api(user, `${base}/seats/${s.number}/group`, { method: "POST", body: JSON.stringify({ group }) }))}
+                          options={GROUPS.map((x) => ({ value: x, label: letter(x) }))}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : tab === "report" ? (
+          <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />
+        ) : tab === "ranks" ? (
+          <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} trial={trial} />
+        ) : (
+          <ClassTown lang={lang} user={user} base={base} names={names} />
         )}
-        <button
-          type="button"
-          className="btn small suspended"
-          disabled={busy}
-          onClick={() => {
-            setTyped("");
-            setAsk({ kind: "erase" });
-          }}
-        >
-          {t.erase}
-        </button>
       </div>
-      {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />}
-      {seats && <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} trial={trial} />}
-      {seats && <ClassTown lang={lang} user={user} base={base} names={names} />}
       {ask && (
         <div className="veil" role="dialog" aria-modal="true" aria-label={askText} onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
           <div className="paper-sheet narrow">

@@ -1945,3 +1945,168 @@ button.tool {
 .town-flag.measurement {
   fill: #e0b62c;
 }
+
+/* A class's or a room's own page: the breadcrumb leads back, tabs under the heading, one panel at a time. */
+.crumbs a {
+  color: var(--cobalt);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  text-decoration: underline;
+}
+
+.page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 14px 0 16px;
+  border-bottom: 3px solid var(--cobalt);
+}
+
+.page-tab {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 9px 14px;
+  background: #f1e3c4;
+  color: var(--ink);
+}
+
+.page-tab:hover {
+  background: #ecd7ab;
+}
+
+.page-tab.on {
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.class-panel > :first-child {
+  margin-top: 0;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: #f1e3c4;
+}
+
+.stat strong {
+  font-size: 28px;
+}
+
+.stat span {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.class-block {
+  margin-top: 18px;
+}
+
+.class-block h3 {
+  margin-top: 0;
+}
+
+.class-block.end {
+  padding-top: 14px;
+  border-top: 2px dashed rgba(58, 63, 75, 0.25);
+}
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.group-card {
+  padding: 10px 12px;
+  background: #f5ecd9;
+  border-top: 4px solid var(--cobalt);
+}
+
+.group-card.big {
+  border-top-color: #c0392b;
+}
+
+.group-card h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.group-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-card li {
+  display: grid;
+  grid-template-columns: 2.4em 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.group-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.class-row,
+.past-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.class-archived {
+  margin-top: 16px;
+}
+
+.class-archived summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.past-link {
+  border-top: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+.past-link:last-child {
+  border-bottom: 2px solid rgba(58, 63, 75, 0.12);
+}
+
+.past-head.past-link::after {
+  content: "\203A";
+  font-size: 22px;
+  transform: none;
+}
+
+.room-page .class-title .past-code {
+  font-size: 28px;
+}
+
+.room-codes {
+  padding: 12px 14px;
+  background: #f1e3c4;
+}
+
+.room-codes p:first-child {
+  margin-top: 0;
+}
