@@ -341,7 +341,7 @@ const BOOK_MID_Z = -0.12;
  * towards the camera as in the logo.
  */
 const LOGO_COLOR = 0xf2716b;
-const LOGO_AT = new Vector3(0, 0.023, -0.33);
+const LOGO_AT = new Vector3(0, -0.01, -0.33);
 const LOGO_SCALE = 2.8;
 const LOGO_YAW = -0.55;
 
