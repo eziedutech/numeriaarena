@@ -3050,8 +3050,9 @@ export class GameSystem extends createSystem({
       this.tip = new Label(text, { height: TIP_H, anchor: 'bottom' });
       this.labels.add(this.tip.mesh);
     } else this.tip.set(text);
-    // BIG NUMBERS grows the chips' names too.
-    this.tip.mesh.scale.setScalar(textScale());
+    // BIG NUMBERS grows the chips' names too, around the card's own size
+    // (a Label keeps its width and height in its scale).
+    this.tip.pulse(textScale());
     if (this.tip.mesh.parent !== desk) desk.add(this.tip.mesh);
     const lift = (over.userData.tipH as number) / 2 + 0.006;
     this.tip.mesh.position.copy(over.position).addScaledVector(MENU_UP, lift).addScaledVector(MENU_FACING, 0.012);
