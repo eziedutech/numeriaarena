@@ -1,4 +1,4 @@
-import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
+import { CanvasTexture, Quaternion, SRGBColorSpace, Vector3, type Mesh, type MeshBasicMaterial, type Object3D, type PerspectiveCamera, type Texture } from '@iwsdk/core';
 
 import { ACCESS, accessOn, bigText, getLang, musicOn, onSettings, setBigText, setAccess, setLang, setMusic, setSound, soundOn } from '../settings.js';
 import { sfx } from '../audio.js';
@@ -54,6 +54,71 @@ const HOME_AT = new Vector3(0, 0.95, -0.22);
 /** Math Edu is a page of the site; the dev server here only has the game, so it points to the site's own dev server. */
 const EDU = import.meta.env.DEV ? `http://${location.hostname}:3320/edu/` : '/edu/';
 
+/**
+ * The hint in ink on a page canvas: its first sentence bold and underlined in
+ * pencil, the rest below, wrapped to the page clear of the spine. Drawn
+ * twice as tall as wide, since the camera sees the page from a low angle.
+ */
+function drawNote(canvas: HTMLCanvasElement, text: string): void {
+  const c = canvas.getContext('2d')!;
+  c.clearRect(0, 0, canvas.width, canvas.height);
+  const STRETCH = 2;
+  const left = 90;
+  const width = 800;
+  const font = (size: number, weight: number) => `${weight} ${size}px 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif`;
+  const wrap = (words: string, size: number, weight: number) => {
+    c.font = font(size, weight);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && c.measureText(next).width > width) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+  const cut = text.search(/[.;]\s/u);
+  const headText = cut > 0 ? text.slice(0, cut + 1) : text;
+  const bodyText = cut > 0 ? text.slice(cut + 2) : '';
+  const head = wrap(headText, 72, 800);
+  const body = bodyText ? wrap(bodyText, 58, 600) : [];
+  const headStep = 84;
+  const bodyStep = 72;
+  const gap = body.length ? 44 : 0;
+  const tall = head.length * headStep + gap + body.length * bodyStep;
+  c.save();
+  c.scale(1, STRETCH);
+  c.translate(0, (canvas.height / STRETCH - tall) / 2);
+  c.rotate(-0.015);
+  c.fillStyle = c.strokeStyle = 'rgba(58, 63, 75, 0.92)';
+  c.textBaseline = 'alphabetic';
+  let y = 64;
+  c.font = font(72, 800);
+  for (const line of head) {
+    c.fillText(line, left, y);
+    y += headStep;
+  }
+  // A pencil line under the heading, a little wavy like a hand drew it.
+  c.lineWidth = 5;
+  c.lineCap = 'round';
+  c.beginPath();
+  const under = y - headStep + 22;
+  const end = left + Math.min(width, Math.max(...head.map((l) => c.measureText(l).width)));
+  c.moveTo(left, under);
+  c.quadraticCurveTo((left + end) / 2, under + 7, end, under - 2);
+  c.stroke();
+  y += gap - headStep + bodyStep;
+  c.font = font(58, 600);
+  for (const line of body) {
+    c.fillText(line, left, y);
+    y += bodyStep;
+  }
+  c.restore();
+}
+
 const ICONS: Record<string, string> = {
   practice: '<rect width="54" height="54" fill="#fff8ec"/><path d="M27 8 32 22 47 22 35 31 39 46 27 37 15 46 19 31 7 22 22 22z" fill="#3fb6a0"/><path d="M27 8 32 22 47 22 35 31 39 46 27 37z" fill="#2f8f7d"/>',
   robots: '<rect width="54" height="54" fill="#fff8ec"/><rect x="25.5" y="7" width="3" height="9" fill="#3a3f4b"/><rect x="21" y="5" width="12" height="4" fill="#3469c4"/><rect x="11" y="16" width="32" height="26" fill="#3469c4"/><path d="M27 16h16v26H27z" fill="#2a54a0"/><rect x="18" y="24" width="6" height="6" fill="#fff8ec"/><rect x="30" y="24" width="6" height="6" fill="#fff8ec"/><rect x="20" y="34" width="14" height="3" fill="#fff8ec"/>',
@@ -92,9 +157,10 @@ html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter
 #home .chip { padding: 8px 12px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
-#home .offline { position: absolute; left: 50%; top: 336px; transform: translateX(-50%); }
-#home .hint { position: absolute; left: 50%; top: 284px; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: ${PAPER};
-  background: rgba(58, 45, 20, 0.62); padding: 7px 16px; white-space: nowrap; letter-spacing: 0.01em; }
+#home .offline { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); }
+#home .hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#home .hint.bar { left: 50%; top: 284px; width: auto; height: auto; overflow: visible; clip-path: none; transform: translateX(-50%);
+  font-size: 16px; font-weight: 700; color: ${PAPER}; background: rgba(58, 45, 20, 0.62); padding: 7px 16px; white-space: nowrap; letter-spacing: 0.01em; }
 #home .head { position: absolute; top: 312px; }
 #home .card { position: absolute; width: 350px; height: 78px; display: flex; align-items: center; gap: 14px;
   padding: 12px 18px 12px 12px; cursor: pointer; transition: transform 0.12s; }
@@ -235,6 +301,8 @@ export class Home {
    * box to close each time.
    */
   private signInAsked = false;
+  /** The hint written on the book's left page while this page is up, and the page's own pencil maths. */
+  private note?: { sheet: Mesh; canvas: HTMLCanvasElement; texture: CanvasTexture; pencil: Texture | null; text: string };
   /** Opened in a headset's own browser: XR or this window, and no smartboard. */
   // The XR emulator in development puts a Quest's user agent on navigator
   // itself; a real browser keeps it on the prototype.
@@ -343,10 +411,52 @@ export class Home {
     this.fit();
   }
 
+  /**
+   * Writes `text` on the book's left page in place of its pencil maths, its
+   * first sentence as a heading. False while the book is not in the scene.
+   */
+  private writeOnBook(text: string): boolean {
+    if (!this.shown) return false;
+    if (!this.note) {
+      let top: Object3D = this.camera;
+      while (top.parent) top = top.parent;
+      const sheet = top.getObjectByName('desk-book')?.children.find((o) => o.name === 'page-sketch' && o.position.x < 0) as Mesh | undefined;
+      if (!sheet) return false;
+      const canvas = document.createElement('canvas');
+      // The page's own proportions (0.15 by 0.21 m), as its pencil maths.
+      canvas.width = 1024;
+      canvas.height = 1434;
+      const texture = new CanvasTexture(canvas);
+      texture.colorSpace = SRGBColorSpace;
+      this.note = { sheet, canvas, texture, pencil: (sheet.material as MeshBasicMaterial).map, text: '' };
+    }
+    const note = this.note;
+    const paper = note.sheet.material as MeshBasicMaterial;
+    if (note.text !== text) {
+      note.text = text;
+      drawNote(note.canvas, text);
+      note.texture.needsUpdate = true;
+    }
+    if (paper.map !== note.texture) {
+      paper.map = note.texture;
+      paper.needsUpdate = true;
+    }
+    return true;
+  }
+
+  /** The book's left page gets its pencil maths back for the game. */
+  private eraseBook(): void {
+    if (!this.note) return;
+    const paper = this.note.sheet.material as MeshBasicMaterial;
+    paper.map = this.note.pencil;
+    paper.needsUpdate = true;
+  }
+
   /** Hides the page; `inGame` shows the small Home button over the browser game. */
   hide(inGame: boolean): void {
     if (this.shown) {
       this.shown = false;
+      this.eraseBook();
       this.root.style.display = 'none';
       document.body.classList.remove('home-open');
       if (this.savedEye) {
@@ -445,7 +555,12 @@ export class Home {
         this.render();
       });
     }
-    el('div', 'hint', this.stage).textContent = this.onHeadset && this.device !== 'smartboard' ? t.hintHeadset[this.device] : t.hint[this.device];
+    // Where to play, said in ink on the book's left page; read aloud from the
+    // page, and a bar under the header only while the book is not there yet.
+    const hint = this.onHeadset && this.device !== 'smartboard' ? t.hintHeadset[this.device] : t.hint[this.device];
+    const said = el('div', 'hint', this.stage);
+    said.textContent = hint;
+    if (!this.writeOnBook(hint)) said.classList.add('bar');
     if (!online()) {
       // No network: the games still play, and say where their results go. A row of its own,
       // under the hint, so the chips above keep their width.
