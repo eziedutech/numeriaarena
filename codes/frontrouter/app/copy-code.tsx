@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 /** Puts text on the clipboard, with the old way for a page the browser does not trust. */
-async function copy(text: string): Promise<boolean> {
+export async function copy(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;

@@ -2298,3 +2298,53 @@ a.class-row,
 .proof-or {
   margin: 18px 0 0;
 }
+
+/* Phones: the nav wraps under the trail instead of running off the side, and what is tapped gets room for a finger. */
+@media (max-width: 640px) {
+  .paper-nav {
+    flex-wrap: wrap;
+  }
+
+  .crumbs {
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: 2px;
+  }
+
+  .paper-chip .seg {
+    min-height: 36px;
+    min-width: 40px;
+  }
+
+  .paper-foot a {
+    display: inline-block;
+    padding: 8px 2px;
+  }
+
+  label > input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+  }
+
+  .report-missed .lesson-link {
+    display: block;
+    margin: 4px 0 0;
+    white-space: normal;
+  }
+}
+
+/* The card shown instead of a part made for a projector or smartboard on a narrow screen. */
+.wide-only {
+  text-align: center;
+}
+
+.wide-only-art {
+  display: block;
+  width: 72px;
+  margin: 0 auto 10px;
+  fill: none;
+  stroke: var(--cobalt);
+  stroke-width: 3;
+  stroke-linecap: round;
+}

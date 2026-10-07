@@ -6,6 +6,7 @@ import { CopyCode } from "../copy-code";
 import { useLang, type Lang } from "../legal";
 import { describe, type RoomSetup } from "../race-setup";
 import { GAME } from "../game-link";
+import { WideOnly } from "../wide-only";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Arena Screen - Numeria Arena" }, { name: "robots", content: "noindex" }];
@@ -461,11 +462,13 @@ export default function Screen() {
         </a>
         <LangSwitch lang={lang} setLang={setLang} />
       </nav>
-      {addr.code ? (
-        <Watching key={addr.code} t={t} lang={lang} code={addr.code} host={addr.host} play={addr.play} />
-      ) : (
-        <AskCode t={t} />
-      )}
+      <WideOnly lang={lang}>
+        {addr.code ? (
+          <Watching key={addr.code} t={t} lang={lang} code={addr.code} host={addr.host} play={addr.play} />
+        ) : (
+          <AskCode t={t} />
+        )}
+      </WideOnly>
     </main>
   );
 }

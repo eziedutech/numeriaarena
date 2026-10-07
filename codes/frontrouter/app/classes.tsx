@@ -13,6 +13,7 @@ import type { Lang } from "./legal";
 import { IconButton } from "./icon-button";
 import { NumberField, Pick } from "./pick";
 import { Picture, PICTURE_NAMES } from "./pictures";
+import { WideOnly } from "./wide-only";
 
 /**
  * MY CLASSES on /manage: a teacher's standing classes, each with numbered
@@ -1058,7 +1059,9 @@ function ClassPage({
         ) : tab === "ranks" ? (
           <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} trial={trial} />
         ) : (
-          <ClassTown lang={lang} user={user} base={base} names={names} />
+          <WideOnly lang={lang}>
+            <ClassTown lang={lang} user={user} base={base} names={names} />
+          </WideOnly>
         )}
       </div>
       {ask && (
