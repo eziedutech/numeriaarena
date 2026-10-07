@@ -97,7 +97,6 @@ export const EN = {
   musicCaption: 'MUSIC',
   roomName: { here: 'MY ROOM', classroom: 'CLASS', bedroom: 'BEDROOM' } as Record<Room, string>,
   onOff: (on: boolean): string => (on ? 'ON' : 'OFF'),
-  best: (points: number, stars: number) => `BEST: ${points} PTS${stars ? `, ${stars} ★` : ''}`,
   /** The desk card that leaves a game in the headset, and what it says once pressed. */
   quit: 'QUIT',
   quitSure: 'SURE?',
@@ -198,7 +197,6 @@ export const ID: Text = {
   musicCaption: 'MUSIK',
   roomName: { here: 'RUANGANKU', classroom: 'KELAS', bedroom: 'KAMAR' } as Record<Room, string>,
   onOff: (on: boolean) => (on ? 'NYALA' : 'MATI'),
-  best: (points: number, stars: number) => `TERBAIK: ${points} POIN${stars ? `, ${stars} ★` : ''}`,
   quit: 'KELUAR',
   quitSure: 'YAKIN?',
   quitAgain: 'Tekan lagi untuk keluar',

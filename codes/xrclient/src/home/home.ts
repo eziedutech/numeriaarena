@@ -26,6 +26,7 @@ import { checkStudent, findRival, studentRoom, onStudent, studentSignIn, student
 import { online, onNetwork } from '../offline.js';
 import { readCheckpoint } from '../race-checkpoint.js';
 import { leaderboardSticker } from './leaderboard-sticker.js';
+import { bookPage } from '../lobby-book.js';
 import { townSticker } from './town-sticker.js';
 import { openTown } from '../town/town-page.js';
 
@@ -436,8 +437,9 @@ export class Home {
     if (!this.note) {
       let top: Object3D = this.camera;
       while (top.parent) top = top.parent;
-      const sheet = top.getObjectByName('desk-book')?.children.find((o) => o.name === 'page-sketch' && o.position.x < 0) as Mesh | undefined;
-      if (!sheet) return false;
+      const page = bookPage(top.getObjectByName('desk-book'), -1);
+      if (!page) return false;
+      const sheet = page.sheet;
       const canvas = document.createElement('canvas');
       // The page's own proportions (0.15 by 0.21 m), as its pencil maths.
       canvas.width = 1024;
@@ -446,7 +448,7 @@ export class Home {
       texture.colorSpace = SRGBColorSpace;
       // Sharp at the low angle the camera sees the page from (clamped to what the device has).
       texture.anisotropy = 16;
-      this.note = { sheet, canvas, texture, pencil: (sheet.material as MeshBasicMaterial).map, text: '' };
+      this.note = { sheet, canvas, texture, pencil: page.pencil, text: '' };
     }
     const note = this.note;
     const paper = note.sheet.material as MeshBasicMaterial;
@@ -466,6 +468,8 @@ export class Home {
   private eraseBook(): void {
     if (!this.note) return;
     const paper = this.note.sheet.material as MeshBasicMaterial;
+    // Only its own note: the desk menu may already have written on the page.
+    if (paper.map !== this.note.texture) return;
     paper.map = this.note.pencil;
     paper.needsUpdate = true;
   }

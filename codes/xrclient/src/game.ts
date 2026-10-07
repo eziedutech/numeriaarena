@@ -78,14 +78,15 @@ import { setEars, sfx, type Cue, type Spot } from './audio.js';
 import { readAloud, stopReading } from './speech.js';
 import { steadyAim } from './steady-aim.js';
 import { townSticker } from './home/town-sticker.js';
-import { onStudent, reportPlay, seatKey, studentState } from './home/student.js';
+import { onStudent, reportPlay, seatKey, studentState, type Student } from './home/student.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
 import { skillTitle, unmarked } from './town/town-landmarks.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
 import { openTown } from './town/town-page.js';
 import { TOWN_TEXT } from './town/town-text.js';
 import { syncAnswers } from './answer-sync.js';
-import { onNetwork } from './offline.js';
+import { onNetwork, online } from './offline.js';
+import { LobbyBook, type LobbyFacts } from './lobby-book.js';
 import { openBoard } from './board/board.js';
 
 const WAVE = 6;
@@ -244,12 +245,9 @@ const GAME_TINT: Record<MenuChoice, string> = {
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
 };
-/** Right of the book on the desk, facing the player like the Fold Town sticker on its left. */
-const BEST_AT = new Vector3(0.32, 0.03, -0.05);
-const BEST_H = 0.024;
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-const TOWN_AT = new Vector3(-0.34, 0.0, -0.08);
+const TOWN_AT = new Vector3(-0.42, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
@@ -310,10 +308,14 @@ const LINE_SCALE = 0.85;
  * On the desk menu the book is LOBBY_BOOK times its size, grown from its
  * front edge, and the animals LOBBY_LINE_SCALE behind it at LOBBY_LINE_Z;
  * a game starting eases them back to the size its layout is made for.
+ * Under the home page the book is HOME_BOOK, the size its camera is set for.
  */
-const LOBBY_BOOK = 1.3;
+const LOBBY_BOOK = 1.75;
+const HOME_BOOK = 1.3;
 const LOBBY_LINE_SCALE = 1.2;
-const LOBBY_LINE_Z = -0.35;
+const LOBBY_LINE_Z = -0.47;
+/** The leaderboard places on the book are asked again after this long. */
+const PLACES_FOR_MS = 60_000;
 /** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
 const BOOK_MID_Z = -0.12;
 const LINE_PAPER = 0xfbf6ec;
@@ -417,6 +419,18 @@ interface Tween {
 
 type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap' | 'town';
 /** An animal waiting in the line behind the book. */
+/** A row of a seat's leaderboard (see leaders.ts): its own has `me`. */
+interface SeatRow {
+  place: number;
+  score: number;
+  me: boolean;
+}
+
+interface SeatBoards {
+  strike?: SeatRow[];
+  city?: SeatRow[];
+}
+
 interface LineAnimal {
   species: Species;
   entity: Entity;
@@ -537,7 +551,12 @@ export class GameSystem extends createSystem({
   /** The animals waiting their turn behind the book, front of the line first. */
   private line: LineAnimal[] = [];
   private menuOnly: 'all' | 'practice' = 'all';
-  private bestCard?: Label;
+  /** MY BEST and ME, written on the book's pages on the desk menu. */
+  private lobbyBook = new LobbyBook(() => this.book());
+  /** Counts the times the pages were asked for; an older answer is dropped. */
+  private lobbyAsk = 0;
+  /** The seat's leaderboards, kept a minute for the next menu. */
+  private boardsGot = new Map<string, { at: number; boards: Promise<SeatBoards> }>();
   private hintHand?: Group;
   private hintLabel?: Label;
   /** The hovered menu cell's name, made once and moved to whichever cell is hovered. */
@@ -1165,29 +1184,80 @@ export class GameSystem extends createSystem({
     this.showBest();
   }
 
-  /** Clears the desk menu: its buttons, envelopes, best card and hint. */
+  /** Clears the desk menu: its buttons, envelopes, the writing on the book and hint. */
   private clearMenu(): void {
     this.clear(this.queries.buttons);
     for (const e of this.menuTrays) this.remove(e);
     this.menuTrays = [];
-    this.bestCard?.mesh.removeFromParent();
-    this.bestCard = undefined;
+    this.lobbyAsk += 1;
+    this.lobbyBook.erase();
     this.hideHint(false);
     this.tip?.mesh.removeFromParent();
   }
 
-  /** The best score kept on this device, as a small card above HOME. */
+  /**
+   * MY BEST and ME on the book's pages: what this device knows at once, then
+   * the Fold Town's Folds and, for a seat, its places on the leaderboards.
+   */
   private showBest(): void {
-    this.bestCard?.mesh.removeFromParent();
-    this.bestCard = undefined;
-    const best = this.readBest();
-    if (!best) return;
-    const card = new Label(T.best(best.points, best.stars), { height: BEST_H });
-    card.mesh.name = 'best-card';
-    card.mesh.position.copy(BEST_AT);
-    this.deskEntity()?.object3D?.add(card.mesh);
-    this.labels.add(card.mesh);
-    this.bestCard = card;
+    const ask = ++this.lobbyAsk;
+    const s = studentState();
+    const facts: LobbyFacts = {
+      best: this.readBest(),
+      seat: s ? { name: s.pseudonym, classLabel: s.class_label, seat: s.seat } : undefined,
+      places: s ? (online() ? 'loading' : 'offline') : undefined,
+    };
+    const write = () => {
+      if (ask === this.lobbyAsk) this.lobbyBook.write(facts);
+      return ask === this.lobbyAsk;
+    };
+    write();
+    void (async () => {
+      try {
+        const model = await TownModel.open();
+        try {
+          if (model.seat && online()) await model.sync().catch(() => undefined);
+          const v = model.view();
+          facts.folds = v.balance;
+          facts.buildings = v.buildings;
+        } finally {
+          model.dispose();
+        }
+      } catch (e) {
+        console.warn('[lobby] town not read', e);
+      }
+      if (!write()) return;
+      if (!s || !online()) return void console.info(`[lobby] book written: best ${facts.best?.points ?? '-'}, folds ${facts.folds ?? '-'}`);
+      try {
+        const [mine, world] = await Promise.all([this.seatBoards(s, 'class'), this.seatBoards(s, 'global')]);
+        const me = (rows?: SeatRow[]) => rows?.find((r) => r.me);
+        facts.classPlace = { strike: me(mine.strike)?.place, city: me(mine.city)?.place };
+        facts.worldPlace = { strike: me(world.strike)?.place, city: me(world.city)?.place };
+        facts.raceBest = me(mine.strike)?.score;
+        facts.places = 'ready';
+      } catch (e) {
+        console.warn('[lobby] places not loaded', e);
+        facts.places = 'offline';
+      }
+      write();
+      console.info(`[lobby] book written: best ${facts.best?.points ?? '-'}, folds ${facts.folds ?? '-'}, places ${facts.places ?? 'guest'}`);
+    })();
+  }
+
+  /** A seat's board, all time: the top ten and its own row. */
+  private seatBoards(s: Student, board: 'class' | 'global'): Promise<SeatBoards> {
+    const key = `${s.token}:${board}`;
+    const kept = this.boardsGot.get(key);
+    if (kept && performance.now() - kept.at < PLACES_FOR_MS) return kept.boards;
+    const boards = fetch(`/api/student/leaderboard?board=${board}&period=all`, { headers: { Authorization: `Bearer ${s.token}` } }).then(
+      (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<SeatBoards>;
+      },
+    );
+    boards.catch(() => this.boardsGot.delete(key));
+    this.boardsGot.set(key, { at: performance.now(), boards });
+    return boards;
   }
 
   private readBest(): { points: number; stars: number } | undefined {
@@ -1436,11 +1506,7 @@ export class GameSystem extends createSystem({
   private sizeLobby(on: boolean): void {
     if (on === this.lobby) return;
     this.lobby = on;
-    const book = this.book();
-    if (book) {
-      const s = on ? LOBBY_BOOK : 1;
-      this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
-    }
+    this.fitBook();
     const places = this.linePlaces(this.line.map((a) => a.width));
     this.line.forEach((a, k) => {
       const obj = a.entity.object3D;
@@ -1448,6 +1514,18 @@ export class GameSystem extends createSystem({
       for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === obj) this.tweens.splice(i, 1);
       this.tween(obj, places[k], 0.5, 0.008, this.lineScale());
     });
+  }
+
+  /** The size the book is eased to last. */
+  private bookSize = 1;
+
+  /** Eases the book to its size now: the desk menu's, the home page's, or a game's. */
+  private fitBook(): void {
+    const book = this.book();
+    const s = !this.lobby ? 1 : this.homeWasShown ? HOME_BOOK : LOBBY_BOOK;
+    if (!book || s === this.bookSize) return;
+    this.bookSize = s;
+    this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
   }
 
   /** The line's animals' size: larger on the desk menu. */
@@ -2243,6 +2321,7 @@ export class GameSystem extends createSystem({
       } else {
         this.showTitle();
       }
+      this.fitBook();
     }
   }
 
