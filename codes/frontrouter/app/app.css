@@ -1662,10 +1662,11 @@ button.tool {
 .pick-button {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-height: 40px;
   border: 0;
+  border-bottom: 2px solid rgba(58, 63, 75, 0.28);
   border-radius: 0;
   background: #f1e3c4;
   color: inherit;
@@ -1673,11 +1674,25 @@ button.tool {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.pick-button:hover:not(:disabled),
+.pick-button[aria-expanded="true"] {
+  background: #ecd7ab;
+  border-bottom-color: var(--cobalt);
+}
+
+.pick-button:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
 }
 
 .pick.group .pick-button {
   min-height: 0;
+  gap: 8px;
   padding: 4px 8px;
+  font-weight: 700;
 }
 
 .pick.chosen .pick-button {
@@ -1693,46 +1708,75 @@ button.tool {
   flex: 1;
 }
 
+/* A small chevron that turns over while the list is open. */
 .pick-arrow {
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 6px solid currentColor;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
 }
 
 .pick-button[aria-expanded="true"] .pick-arrow {
-  transform: rotate(180deg);
+  margin-top: 3px;
+  transform: rotate(225deg);
 }
 
-.pick-list {
+.pick .pick-list {
   position: absolute;
   z-index: 30;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   min-width: 100%;
   max-height: 280px;
+  overflow-x: hidden;
   overflow-y: auto;
   margin: 0;
-  padding: 4px 0;
+  padding: 6px;
   list-style: none;
   background: var(--paper);
-  box-shadow: 0 6px 18px rgba(58, 63, 75, 0.25);
-  border-radius: 8px;
+  border-top: 3px solid var(--cobalt);
+  box-shadow: 0 8px 22px rgba(58, 63, 75, 0.22);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 63, 75, 0.3) transparent;
 }
 
-.pick-list li {
-  padding: 7px 12px;
+.pick .pick-list li {
+  position: relative;
+  margin: 0;
+  padding: 8px 14px 8px 30px;
   white-space: nowrap;
   cursor: pointer;
+  list-style: none;
 }
 
-.pick-list li.hover {
-  background: rgba(58, 63, 75, 0.08);
+.pick .pick-list li.hover {
+  background: #f1e3c4;
 }
 
-.pick-list li.on {
+.pick .pick-list li.on {
   font-weight: 700;
+  color: var(--cobalt);
+}
+
+/* The chosen one is ticked. */
+.pick .pick-list li.on::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 5px;
+  height: 10px;
+  margin-top: -7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.pick.group .pick-list li {
+  padding: 6px 12px 6px 28px;
 }
 
 /* NumberField: a whole number with − and + in place of the browser's spinner. */
@@ -2109,4 +2153,123 @@ a.class-row,
 
 .room-codes p:first-child {
   margin-top: 0;
+}
+
+/* IconButton: an icon on paper, with our own tip beside it on hover and on keyboard focus. */
+.icon-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: #f1e3c4;
+  color: var(--ink);
+  box-shadow: 2px 3px 0 rgba(60, 40, 20, 0.18);
+  transition: background 0.12s, transform 0.12s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: #ecd7ab;
+  transform: translateY(-1px);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+.icon-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.icon-btn.blue {
+  background: var(--cobalt);
+  color: var(--paper);
+}
+
+.icon-btn.danger {
+  color: #b03a2e;
+}
+
+.icon-btn.danger:hover:not(:disabled) {
+  background: #f8c2bf;
+}
+
+/* The tip opens to the left, so it stays inside a table that scrolls sideways. */
+.icon-btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  right: calc(100% + 10px);
+  top: 50%;
+  width: max-content;
+  max-width: 240px;
+  padding: 7px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 4px 12px rgba(58, 63, 75, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(4px, -50%);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.icon-btn[data-tip]:hover::after,
+.icon-btn[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.seat-actions > div {
+  gap: 8px;
+}
+
+/* A thin scrollbar under wide tables, in the paper's colours. */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 63, 75, 0.3) transparent;
+}
+
+/* A room's page: no rule over its heading, its codes side by side, then what it is. */
+.room-page h2 {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.room-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.room-code-row .copy-code {
+  padding-right: 14px;
+}
+
+.room-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 18px 0 0;
+}
+
+.room-facts dt {
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.room-facts dd {
+  margin: 0;
 }

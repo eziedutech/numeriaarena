@@ -65,7 +65,7 @@ function English() {
 
       <h2>2. Learning in Math Edu</h2>
       <ol>
-        <li>Open MATH EDU from the home page. Pick a grade, then a topic.</li>
+        <li>Open MATH LESSONS from the home page. Pick a grade, then a topic.</li>
         <li>
           Each lesson is a paper sheet that moves step by step: watch, drag things, and see what happens. There are no
           questions and no scores.
@@ -177,7 +177,7 @@ function Indonesian() {
 
       <h2>2. Belajar di Math Edu</h2>
       <ol>
-        <li>Buka MATH EDU dari beranda. Pilih kelas, lalu topiknya.</li>
+        <li>Buka EDUKASI MATEMATIKA dari beranda. Pilih kelas, lalu topiknya.</li>
         <li>
           Setiap pelajaran adalah lembar kertas yang bergerak langkah demi langkah: lihat, geser, dan amati yang terjadi.
           Tanpa soal dan tanpa skor.

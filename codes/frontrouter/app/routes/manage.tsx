@@ -119,6 +119,8 @@ const TEXT = {
     robot: "robot",
     roomTabs: { overview: "OVERVIEW", matches: "MATCHES" } as Record<RoomTab, string>,
     roomDetail: "DETAILS",
+    roomJoin: "Students press RACE MY CLASSMATES in the game and enter the room code.",
+    roomJoinClass: (l: string) => `Students of ${l} press RACE MY CLASSMATES in the game and join with one button, or enter the room code.`,
     roomNotFound: "This room is not among your last 30 rooms.",
     allRooms: "ALL ROOMS",
     roomSetup: "How it is raced",
@@ -246,6 +248,8 @@ const TEXT = {
     robot: "robot",
     roomTabs: { overview: "RINGKASAN", matches: "PERTANDINGAN" } as Record<RoomTab, string>,
     roomDetail: "RINCIAN",
+    roomJoin: "Siswa menekan LOMBA DENGAN TEMAN di game lalu memasukkan kode ruang.",
+    roomJoinClass: (l: string) => `Siswa ${l} menekan LOMBA DENGAN TEMAN di game lalu bergabung dengan satu tombol, atau memasukkan kode ruang.`,
     roomNotFound: "Ruang ini tidak ada di antara 30 ruang terakhir Anda.",
     allRooms: "SEMUA RUANG",
     roomSetup: "Cara berlomba",
@@ -1113,19 +1117,21 @@ function RoomPage({
         {tab === "overview" ? (
           <>
             {active ? (
-              <div className="class-block room-codes">
-                <p>{label ? t.roomPlayClass(label) : t.roomPlay}</p>
-                <CopyCode big label={t.roomCode} code={active.play_code} copyText={t.copy} copiedText={t.copied} />
-                <CopyCode label={t.roomWatch} code={active.watch_code} copyText={t.copy} copiedText={t.copied} />
+              <div className="room-codes">
+                <p>{label ? t.roomJoinClass(label) : t.roomJoin}</p>
+                <div className="room-code-row">
+                  <CopyCode big label={t.roomCode} code={active.play_code} copyText={t.copy} copiedText={t.copied} />
+                  <CopyCode label={t.roomWatch} code={active.watch_code} copyText={t.copy} copiedText={t.copied} />
+                </div>
                 <p className="soft">{t.roomSeats}</p>
               </div>
             ) : (
               <p className="soft">{t.roomClosedNote}</p>
             )}
-            <div className="class-block">
-              <h3>{t.roomSetup}</h3>
-              <p>{describe(lang, active?.setup ?? past?.setup)}</p>
-            </div>
+            <dl className="room-facts">
+              <dt>{t.roomSetup}</dt>
+              <dd>{describe(lang, active?.setup ?? past?.setup)}</dd>
+            </dl>
           </>
         ) : matches.length > 0 ? (
           <MatchList t={t} matches={matches} />

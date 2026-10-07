@@ -10,7 +10,7 @@ import "../edu/edu.css";
 import { GAME } from "../game-link";
 
 export function meta() {
-  return [{ title: "Math Edu - Numeria Arena" }];
+  return [{ title: "Math Lessons - Numeria Arena" }];
 }
 
 const TEXT = {

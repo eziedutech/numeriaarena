@@ -18,8 +18,8 @@ const FEATURES: { en: string; id: string; items: { en: [string, string]; id: [st
     id: "Pembelajaran interaktif",
     items: [
       {
-        en: ["MATH EDU", "step-by-step paper lessons for grade 4 to 6, on the page or around the learner in VR"],
-        id: ["MATH EDU", "pelajaran kertas langkah demi langkah untuk kelas 4 sampai 6, di halaman atau di sekeliling siswa dalam VR"],
+        en: ["MATH LESSONS", "step-by-step paper lessons for grade 4 to 6, on the page or around the learner in VR"],
+        id: ["EDUKASI MATEMATIKA", "pelajaran kertas langkah demi langkah untuk kelas 4 sampai 6, di halaman atau di sekeliling siswa dalam VR"],
       },
       {
         en: ["PRACTICE ON MY OWN", "untimed practice at the student's own pace"],

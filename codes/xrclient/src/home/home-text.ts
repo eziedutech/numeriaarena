@@ -52,7 +52,7 @@ const EN = {
   studentFirst: 'Enter your student code first',
   student: ["I'M IN A CLASS", 'Class code, seat and pictures'],
   teacher: ['TEACHER SIGN IN', 'Classes, rooms and reports'],
-  tips: ['MATH EDU', 'Paper lessons for grade 4 to 6'],
+  tips: ['MATH LESSONS', 'Interactive primary school math lessons'],
   watch: ['WATCH A MATCH', 'With a watch code, or the demo match'],
   town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
   board: ['LEADERBOARD', 'My class and the world'],
@@ -196,7 +196,7 @@ const EN = {
   },
   pages: {
     'How to play':
-      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. In MATH EDU, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
+      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. In MATH LESSONS, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
     'For parents':
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
@@ -254,7 +254,7 @@ const ID: typeof EN = {
   studentFirst: 'Masukkan kode siswa dulu',
   student: ['AKU DI KELAS', 'Kode kelas, kursi, dan gambar'],
   teacher: ['MASUK SEBAGAI GURU', 'Kelas, ruang main, dan laporan'],
-  tips: ['MATH EDU', 'Pelajaran kertas kelas 4 sampai 6'],
+  tips: ['EDUKASI MATEMATIKA', 'Materi-materi pembelajaran matematika SD interaktif'],
   watch: ['TONTON PERTANDINGAN', 'Dengan kode tonton, atau pertandingan demo'],
   town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
   board: ['PAPAN PERINGKAT', 'Kelasku dan seluruh dunia'],
@@ -396,7 +396,7 @@ const ID: typeof EN = {
   },
   pages: {
     'How to play':
-      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Di MATH EDU, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
+      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Di EDUKASI MATEMATIKA, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
     'For parents':
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:

@@ -10,6 +10,7 @@ import { ClassTown } from "./class-town";
 import { ClassReport } from "./class-report";
 import { clearNames, namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
+import { IconButton } from "./icon-button";
 import { NumberField, Pick } from "./pick";
 import { Picture, PICTURE_NAMES } from "./pictures";
 
@@ -98,10 +99,11 @@ interface Card {
 const TEXT = {
   en: {
     title: "MY CLASSES",
-    intro: "A class keeps its seats all year. Each student gets a card with the class code, a seat number and three pictures.",
+    intro: "A class keeps its seats all year. Each student gets a sign-in card with the class code, a seat number and a picture password: three pictures in order.",
     none: "No classes yet.",
     trial: "Until an admin approves you: one class with up to 5 seats.",
     newClass: "NEW CLASS",
+    edu: "MATH LESSONS",
     eduHint: "Paper lessons to show on the smartboard or share with the class",
     classTabs: {
       overview: "OVERVIEW",
@@ -126,7 +128,7 @@ const TEXT = {
     archivedTitle: "ARCHIVED",
     groupTitle: (g: string, n: number) => `Group ${g} · ${n} ${n === 1 ? "seat" : "seats"}`,
     moveTo: (n: number) => `Group of seat ${n}`,
-    lockedSeats: (n: number) => `${n} ${n === 1 ? "seat is" : "seats are"} locked after wrong pictures. Unlock ${n === 1 ? "it" : "them"} under SEATS & CARDS.`,
+    lockedSeats: (n: number) => `${n} ${n === 1 ? "seat is" : "seats are"} locked after wrong picture passwords. Unlock ${n === 1 ? "it" : "them"} under SEATS & CARDS.`,
     allClasses: "ALL CLASSES",
     race: "NEW RACE ROOM FOR THIS CLASS",
     raceLine: (s: string) => `A new race room: ${s}. Change it under RACE ROOMS.`,
@@ -167,9 +169,9 @@ const TEXT = {
     namePlaceholder: "Name",
     never: "not yet",
     locked: "LOCKED",
-    newPicture: "NEW PICTURE",
-    unlock: "UNLOCK",
-    empty: "EMPTY THE SEAT",
+    newPicture: "New picture password: prints a new sign-in card, and the old card stops working",
+    unlock: "Unlock the seat: it was locked after too many wrong picture passwords",
+    empty: "Empty the seat for a new student: new pseudonym, new picture password, the records start again",
     find: "Find a name or pseudonym",
     sortBy: "Sort by",
     sorts: {
@@ -201,9 +203,9 @@ const TEXT = {
       `${n} ${n === 1 ? "card is" : "cards are"} ready. Print ${n === 1 ? "it" : "them"} now: the pictures show only once, and leaving this page loses them.`,
     print: "PRINT THE CARDS",
     printDone: "DONE, HIDE THEM",
-    askPicture: (n: number) => `Give seat ${n} a new picture? The old card stops working and the student's devices sign out.`,
+    askPicture: (n: number) => `Give seat ${n} a new picture password? A new card is printed, the old card stops working and the student's devices sign out.`,
     askEmpty: (n: number) =>
-      `Empty seat ${n} for a new student? It gets a new pseudonym and picture, the old card stops working and its name here is cleared.`,
+      `Empty seat ${n} for a new student? It gets a new pseudonym and picture password, the old card stops working and its name here is cleared.`,
     askArchive: "Archive this class? Its code stops working and every student signs out. The class stays here to read.",
     askErase:
       "Delete this class for good? Its seats, answers, race results, reports, towns and AI notes, and the races in its rooms, are deleted from Numeria, and the names kept in this browser go too. This cannot be undone. Save the names or the report first if you need them.",
@@ -238,10 +240,11 @@ const TEXT = {
   },
   id: {
     title: "KELAS SAYA",
-    intro: "Kelas menyimpan kursinya sepanjang tahun. Tiap siswa mendapat kartu berisi kode kelas, nomor kursi, dan tiga gambar.",
+    intro: "Kelas menyimpan kursinya sepanjang tahun. Tiap siswa mendapat kartu masuk berisi kode kelas, nomor kursi, dan sandi gambar: tiga gambar berurutan.",
     none: "Belum ada kelas.",
     trial: "Sampai admin menyetujui Anda: satu kelas dengan paling banyak 5 kursi.",
     newClass: "KELAS BARU",
+    edu: "EDUKASI MATEMATIKA",
     eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
     classTabs: {
       overview: "RINGKASAN",
@@ -266,7 +269,7 @@ const TEXT = {
     archivedTitle: "DIARSIPKAN",
     groupTitle: (g: string, n: number) => `Kelompok ${g} · ${n} kursi`,
     moveTo: (n: number) => `Kelompok kursi ${n}`,
-    lockedSeats: (n: number) => `${n} kursi terkunci karena salah gambar. Buka kuncinya di KURSI & KARTU.`,
+    lockedSeats: (n: number) => `${n} kursi terkunci karena salah sandi gambar. Buka kuncinya di KURSI & KARTU.`,
     allClasses: "SEMUA KELAS",
     race: "BUAT RUANG LOMBA UNTUK KELAS INI",
     raceLine: (s: string) => `Ruang lomba baru: ${s}. Ubah di RUANG LOMBA.`,
@@ -307,9 +310,9 @@ const TEXT = {
     namePlaceholder: "Nama",
     never: "belum",
     locked: "TERKUNCI",
-    newPicture: "GAMBAR BARU",
-    unlock: "BUKA KUNCI",
-    empty: "KOSONGKAN KURSI",
+    newPicture: "Sandi gambar baru: mencetak kartu masuk baru, dan kartu lama tidak berlaku",
+    unlock: "Buka kunci kursi: terkunci karena terlalu sering salah sandi gambar",
+    empty: "Kosongkan kursi untuk siswa baru: samaran baru, sandi gambar baru, catatan mulai dari awal",
     find: "Cari nama atau samaran",
     sortBy: "Urutkan",
     sorts: {
@@ -340,9 +343,9 @@ const TEXT = {
       `${n} kartu siap. Cetak sekarang: gambarnya hanya tampil sekali, dan hilang bila halaman ini ditinggalkan.`,
     print: "CETAK KARTU",
     printDone: "SELESAI, SEMBUNYIKAN",
-    askPicture: (n: number) => `Beri kursi ${n} gambar baru? Kartu lama tidak berlaku lagi dan perangkat siswa itu keluar.`,
+    askPicture: (n: number) => `Beri kursi ${n} sandi gambar baru? Kartu baru dicetak, kartu lama tidak berlaku lagi, dan perangkat siswa itu keluar.`,
     askEmpty: (n: number) =>
-      `Kosongkan kursi ${n} untuk siswa baru? Kursi mendapat samaran dan gambar baru, kartu lama tidak berlaku, dan namanya di sini dihapus.`,
+      `Kosongkan kursi ${n} untuk siswa baru? Kursi mendapat samaran dan sandi gambar baru, kartu lama tidak berlaku, dan namanya di sini dihapus.`,
     askArchive: "Arsipkan kelas ini? Kodenya tidak berlaku lagi dan semua siswa keluar. Kelas tetap ada di sini untuk dibaca.",
     askErase:
       "Hapus kelas ini selamanya? Kursi, jawaban, hasil lomba, laporan, kota, dan catatan AI-nya, serta lomba di ruangnya, dihapus dari Numeria, dan nama yang tersimpan di browser ini ikut terhapus. Ini tidak bisa dibatalkan. Simpan nama atau laporannya dulu bila masih perlu.",
@@ -516,7 +519,7 @@ export function MyClasses({
           <h2>{t.title}</h2>
           <span className="head-buttons">
             <a className="btn" href="/edu/" title={t.eduHint}>
-              MATH EDU
+              {t.edu}
             </a>
             <button type="button" className="btn blue" onClick={() => setMaking(true)} disabled={!classes}>
               {t.newClass}
@@ -974,16 +977,10 @@ function ClassPage({
                         {active && (
                           <div>
                             {s.locked && (
-                              <button type="button" className="btn small blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))}>
-                                {t.unlock}
-                              </button>
+                              <IconButton tip={t.unlock} icon="unlock" tone="blue" disabled={busy} onClick={() => act(api(user, `${base}/seats/${s.number}/unlock`, { method: "POST" }))} />
                             )}
-                            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })}>
-                              {t.newPicture}
-                            </button>
-                            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })}>
-                              {t.empty}
-                            </button>
+                            <IconButton tip={t.newPicture} icon="key" disabled={busy} onClick={() => setAsk({ kind: "picture", seat: s.number })} />
+                            <IconButton tip={t.empty} icon="empty" tone="danger" disabled={busy} onClick={() => setAsk({ kind: "empty", seat: s.number })} />
                           </div>
                         )}
                       </td>

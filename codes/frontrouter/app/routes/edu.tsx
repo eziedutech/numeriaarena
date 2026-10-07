@@ -8,14 +8,14 @@ import { GAME } from "../game-link";
 
 export function meta() {
   return [
-    { title: "Math Edu - Numeria Arena" },
+    { title: "Math Lessons - Numeria Arena" },
     { name: "description", content: "Paper lessons that show and guide primary school maths, grade 4 to 6, on the page and in VR." },
   ];
 }
 
 const TEXT = {
   en: {
-    title: "MATH EDU",
+    title: "MATH LESSONS",
     lead: "Paper lessons that show how maths works: watch, move things, and see what happens. No questions, no scores. Open one on a smartboard for the class, or on your own, or step inside it in VR.",
     grade: (g: number) => `GRADE ${g}`,
     steps: "Open",
@@ -23,7 +23,7 @@ const TEXT = {
     game: "TO THE GAME",
   },
   id: {
-    title: "MATH EDU",
+    title: "EDUKASI MATEMATIKA",
     lead: "Pelajaran kertas yang memperlihatkan cara kerja matematika: lihat, geser, dan amati yang terjadi. Tanpa soal, tanpa skor. Buka di smartboard untuk satu kelas, sendiri, atau masuk ke dalamnya lewat VR.",
     grade: (g: number) => `KELAS ${g}`,
     steps: "Buka",
