@@ -29,6 +29,7 @@ import { leaderboardSticker } from './leaderboard-sticker.js';
 import { bookPage } from '../lobby-book.js';
 import { townSticker } from './town-sticker.js';
 import { openTown } from '../town/town-page.js';
+import { phoneNotice, wideEnough, wideNotice } from './phone.js';
 
 /**
  * The home page: a flat paper page over the browser view of the book. Where
@@ -427,6 +428,7 @@ export class Home {
     this.camera.position.copy(HOME_EYE);
     this.camera.lookAt(HOME_AT);
     this.fit();
+    phoneNotice();
   }
 
   /**
@@ -613,7 +615,7 @@ export class Home {
       this.card('left', 0, t.openRoom, 'room', COLORS.coral, () => window.location.assign('/manage#rooms'));
       this.card('left', 1, t.myClasses, 'classes', COLORS.teal, () => window.location.assign('/manage#classes'));
       this.card('left', 2, t.history, 'history', COLORS.cobalt, () => window.location.assign('/manage#rooms'));
-      if (!this.onHeadset) this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => openBoard());
+      if (!this.onHeadset) this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => (wideEnough() ? openBoard() : wideNotice()));
     } else {
       left.appendChild(paperText(t.play, 30, INK));
       this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
@@ -621,7 +623,7 @@ export class Home {
       // Alone, against robots, against one rival, with the class, then the class's big screen.
       this.card('left', 2, t.rival, 'rival', COLORS.coral, () => this.findRival());
       this.card('left', 3, t.classmates, 'classmates', COLORS.teal, () => this.joinRoom());
-      if (!this.onHeadset) this.card('left', 4, t.smartboard, 'smartboard', COLORS.violet, () => openBoard());
+      if (!this.onHeadset) this.card('left', 4, t.smartboard, 'smartboard', COLORS.violet, () => (wideEnough() ? openBoard() : wideNotice()));
     }
 
     // Right: who you are, and learning more.
