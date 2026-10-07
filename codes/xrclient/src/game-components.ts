@@ -35,6 +35,14 @@ const Games = {
   Home: 'home',
   Language: 'lang',
   BigText: 'bigtext',
+  /** ACCESSIBILITY on the desk menu: its own line of chips in place of the settings, and BACK out of it. */
+  Access: 'access',
+  AccessBack: 'access_back',
+  NoTimer: 'no_timer',
+  Contrast: 'contrast',
+  ReadAloud: 'read_aloud',
+  SteadyAim: 'steady_aim',
+  HowtoAgain: 'howto_again',
   /** ROOM, floating over the desk menu in the headset: the room around the desk. */
   Room: 'room',
   /** SOUND and MUSIC in the desk menu's settings: sound effects and the quiet music on or off. */

@@ -3,7 +3,7 @@
  * another table with the same keys.
  */
 import type { Highlight } from './game/core.js';
-import type { Room } from './settings.js';
+import type { Access, Room } from './settings.js';
 
 const ORDINAL = ['1ST', '2ND', '3RD'];
 const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}TH`;
@@ -91,6 +91,10 @@ export const EN = {
   /** The settings cards on the desk: a small caption over a large value. */
   langCaption: 'LANGUAGE',
   bigCaption: 'BIG NUMBERS',
+  accessCaption: 'ACCESSIBILITY',
+  back: 'BACK',
+  access: { noTimer: 'NO TIMER', contrast: 'HIGH CONTRAST', readAloud: 'READ ALOUD', steadyAim: 'STEADY AIM' } as Record<Access, string>,
+  howtoAgain: 'SHOW THE HOW-TO AGAIN',
   roomCaption: 'ROOM',
   soundCaption: 'SOUND',
   musicCaption: 'MUSIC',
@@ -190,6 +194,10 @@ export const ID: Text = {
   bigText: (_on: boolean) => 'ANGKA BESAR',
   langCaption: 'BAHASA',
   bigCaption: 'ANGKA BESAR',
+  accessCaption: 'AKSESIBILITAS',
+  back: 'KEMBALI',
+  access: { noTimer: 'TANPA WAKTU', contrast: 'KONTRAS TINGGI', readAloud: 'BACAKAN SOAL', steadyAim: 'BIDIKAN STABIL' } as Record<Access, string>,
+  howtoAgain: 'TAMPILKAN PETUNJUK LAGI',
   roomCaption: 'RUANG',
   soundCaption: 'SUARA',
   musicCaption: 'MUSIK',

@@ -71,7 +71,7 @@ import { classroom } from './class-events.js';
 import { CHECKPOINT_KEY, clearCheckpoint, readCheckpoint, type RaceCheckpoint } from './race-checkpoint.js';
 import { LocalStore, sharedStore } from './storage.js';
 import { T, useLanguage } from './text.js';
-import { accessOn, ROOMS, bigText, getLang, getRoom, musicOn, onSettings, setBigText, setLang, setMusic, setRoom, setSound, soundOn, textScale } from './settings.js';
+import { accessOn, ROOMS, bigText, getLang, getRoom, howtoPending, musicOn, onSettings, setAccess, setBigText, setHowtoPending, setLang, setMusic, setRoom, setSound, soundOn, textScale, type Access } from './settings.js';
 import { setEars, sfx, type Cue, type Spot } from './audio.js';
 import { readAloud, stopReading } from './speech.js';
 import { steadyAim } from './steady-aim.js';
@@ -221,6 +221,14 @@ const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
 const MENU_UP = new Vector3(0, Math.cos(MENU_LEAN), Math.sin(MENU_LEAN));
 /** The name shown over a menu cell pointed at or touched, the cells having only pictures. */
 const TIP_H = 0.016;
+/** The desk menu's accessibility line: BACK, then each choice as the home page's popup has them. */
+type AccessChoice = 'access' | 'access_back' | 'no_timer' | 'contrast' | 'read_aloud' | 'steady_aim' | 'howto_again';
+const ACCESS_CHIPS: [AccessChoice, Access, ToolIcon][] = [
+  ['no_timer', 'noTimer', 'timerOff'],
+  ['contrast', 'contrast', 'contrast'],
+  ['read_aloud', 'readAloud', 'speech'],
+  ['steady_aim', 'steadyAim', 'crosshair'],
+];
 /** Each game's picture. */
 const GAME_ICON: Record<MenuChoice, ToolIcon> = {
   race: 'flag',
@@ -450,7 +458,7 @@ interface Drift {
 
 type MenuChoice = GameKind | 'race';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | AccessChoice | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -883,6 +891,26 @@ export class GameSystem extends createSystem({
       setBigText(!bigText());
       return;
     }
+    // ACCESSIBILITY swaps the settings for its own line; BACK swaps them back.
+    if (pressed === 'access' || pressed === 'access_back') {
+      this.accessOpen = pressed === 'access';
+      this.clearMenu();
+      this.showMenu(this.menuOnly);
+      return;
+    }
+    if (pressed === 'no_timer' || pressed === 'contrast' || pressed === 'read_aloud' || pressed === 'steady_aim') {
+      const chip = ACCESS_CHIPS.find(([choice]) => choice === pressed)!;
+      setAccess(chip[1], !accessOn(chip[1]));
+      console.info(`[menu] ${chip[1]} ${accessOn(chip[1]) ? 'on' : 'off'}`);
+      return;
+    }
+    if (pressed === 'howto_again') {
+      setHowtoPending(!howtoPending());
+      console.info(`[menu] how-to again ${howtoPending() ? 'on' : 'off'}`);
+      this.clearMenu();
+      this.showMenu(this.menuOnly);
+      return;
+    }
     if (pressed === 'sound') {
       setSound(!soundOn());
       console.info(`[menu] sound ${soundOn() ? 'on' : 'off'}`);
@@ -1163,9 +1191,15 @@ export class GameSystem extends createSystem({
     // The room is the headset's only: in the browser its place stays empty.
     const tip = (caption: string, value: string) => `${caption}: ${value}`;
     const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
-    const settings: (MenuCell | null)[] = [
+    const anyAccess = bigText() || ACCESS_CHIPS.some(([, a]) => accessOn(a));
+    const settings: (MenuCell | null)[] = this.accessOpen ? [
+      ['access_back', 'back', T.back, 'plain'],
+      ['bigtext', 'textSize', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
+      ...ACCESS_CHIPS.map(([choice, a, icon]): MenuCell => [choice, icon, tip(T.access[a], T.onOff(accessOn(a))), accessOn(a) ? 'on' : 'plain']),
+      ['howto_again', 'hand', tip(T.howtoAgain, T.onOff(howtoPending())), howtoPending() ? 'on' : 'plain'],
+    ] : [
       ['lang', 'language', tip(T.langCaption, getLang().toUpperCase()), 'plain'],
-      ['bigtext', 'access', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
+      ['access', 'access', T.accessCaption, anyAccess ? 'on' : 'plain'],
       browser ? null : ['room', 'room', tip(T.roomCaption, T.roomName[getRoom()]), getRoom() === 'here' ? 'plain' : 'on'],
       ['sound', soundOn() ? 'sound' : 'soundOff', tip(T.soundCaption, T.onOff(soundOn())), soundOn() ? 'plain' : 'off'],
       ['music', musicOn() ? 'music' : 'musicOff', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'plain' : 'off'],
@@ -1176,6 +1210,9 @@ export class GameSystem extends createSystem({
     this.addTownSticker();
     this.showBest();
   }
+
+  /** The desk menu shows the accessibility line in place of the settings. */
+  private accessOpen = false;
 
   /** Clears the desk menu: its buttons, envelopes and the writing on the book. */
   private clearMenu(): void {
@@ -1463,7 +1500,7 @@ export class GameSystem extends createSystem({
         if (!c) {
           if (!heading) return;
           // What the chips hold, written on the desk menu in the place left over; no button.
-          const t = new ToolButton('envelope', heading, w, CHIP_H, 'plain', { title: true, wordH: GAME_WORD_H, theme: 'home' });
+          const t = new ToolButton('envelope', heading, w, CHIP_H, 'plain', { title: true, wordH: GAME_WORD_H * textScale(), theme: 'home' });
           const g = new Group();
           g.name = 'menu-heading';
           g.add(t.mesh);
@@ -1573,6 +1610,7 @@ export class GameSystem extends createSystem({
     const desk = this.deskEntity()?.object3D;
     if (desk && !this.score.mesh.parent) desk.add(this.score.mesh);
     this.showTitle();
+    this.accessOpen = false;
     this.clearMenu();
     this.played = 0;
     this.practiceRight = 0;
@@ -2976,6 +3014,8 @@ export class GameSystem extends createSystem({
       this.tip = new Label(text, { height: TIP_H, anchor: 'bottom' });
       this.labels.add(this.tip.mesh);
     } else this.tip.set(text);
+    // BIG NUMBERS grows the chips' names too.
+    this.tip.mesh.scale.setScalar(textScale());
     if (this.tip.mesh.parent !== desk) desk.add(this.tip.mesh);
     const lift = (over.userData.tipH as number) / 2 + 0.006;
     this.tip.mesh.position.copy(over.position).addScaledVector(MENU_UP, lift).addScaledVector(MENU_FACING, 0.012);

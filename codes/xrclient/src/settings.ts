@@ -128,3 +128,41 @@ showContrast();
 export function onSettings(f: () => void): void {
   listeners.add(f);
 }
+
+/** The paper hand's marks that a how-to was seen, one per game. */
+const seenHowto = (k: string) => k.startsWith('numeria.howto.');
+/** Where SHOW THE HOW-TO AGAIN keeps the marks it took away, so OFF can give them back. */
+const HOWTO_AGAIN = 'numeria.howtoAgain';
+
+/** The how-to is waiting to show again: asked for, and no game has shown it since. */
+export function howtoPending(): boolean {
+  try {
+    if (localStorage.getItem(HOWTO_AGAIN) === null) return false;
+    if (!Object.keys(localStorage).some(seenHowto)) return true;
+    // A game has shown its how-to again, so the ask is used up.
+    localStorage.removeItem(HOWTO_AGAIN);
+  } catch {
+    // Without storage the how-to shows every time anyway.
+  }
+  return false;
+}
+
+/** ON takes away the marks (kept aside); OFF before any game used them puts them back. */
+export function setHowtoPending(on: boolean): void {
+  try {
+    if (on) {
+      const kept: Record<string, string> = {};
+      for (const k of Object.keys(localStorage).filter(seenHowto)) {
+        kept[k] = localStorage.getItem(k) ?? '1';
+        localStorage.removeItem(k);
+      }
+      localStorage.setItem(HOWTO_AGAIN, JSON.stringify(kept));
+    } else {
+      const kept = JSON.parse(localStorage.getItem(HOWTO_AGAIN) ?? '{}') as Record<string, string>;
+      for (const [k, v] of Object.entries(kept)) localStorage.setItem(k, v);
+      localStorage.removeItem(HOWTO_AGAIN);
+    }
+  } catch {
+    // Without storage the how-to shows every time anyway.
+  }
+}

@@ -1,5 +1,5 @@
 import { CanvasTexture, SRGBColorSpace, type Mesh, type MeshBasicMaterial, type Object3D, type Texture } from '@iwsdk/core';
-import { getLang } from './settings.js';
+import { bigText, getLang } from './settings.js';
 
 /**
  * The desk menu's open book as its notice board: MY BEST on the left page,
@@ -105,6 +105,8 @@ const FONT = "'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif";
 /** One page's ink, drawn in two passes: first a clear margin through the pencil, then the ink. */
 type Stroke = (c: CanvasRenderingContext2D, halo: boolean) => void;
 
+const BIG_PEN = 1.12;
+
 class Pen {
   readonly strokes: Stroke[] = [];
   constructor(
@@ -113,8 +115,9 @@ class Pen {
     readonly right: number,
   ) {}
 
+  /** BIG NUMBERS writes a little larger; the lines keep their places, so not by the whole text scale. */
   font(size: number, weight: number): string {
-    return `${weight} ${size}px ${FONT}`;
+    return `${weight} ${size * (bigText() ? BIG_PEN : 1)}px ${FONT}`;
   }
 
   width(text: string, size: number, weight: number): number {
@@ -318,7 +321,7 @@ export class LobbyBook {
   /** Writes the facts on both pages; redrawn only when they change. */
   write(f: LobbyFacts): void {
     const t = TEXT[getLang() === 'id' ? 'id' : 'en'];
-    const key = JSON.stringify([getLang(), f]);
+    const key = JSON.stringify([getLang(), bigText(), f]);
     [-1, 1].forEach((side, i) => {
       const page = this.page(side, i);
       if (!page) return;

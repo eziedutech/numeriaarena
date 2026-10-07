@@ -1,6 +1,6 @@
 import { CanvasTexture, Quaternion, SRGBColorSpace, Vector3, type Mesh, type MeshBasicMaterial, type Object3D, type PerspectiveCamera, type Texture } from '@iwsdk/core';
 
-import { ACCESS, accessOn, bigText, getLang, musicOn, onSettings, setBigText, setAccess, setLang, setMusic, setSound, soundOn } from '../settings.js';
+import { ACCESS, accessOn, bigText, getLang, howtoPending, musicOn, onSettings, setBigText, setAccess, setHowtoPending, setLang, setMusic, setSound, soundOn } from '../settings.js';
 import { sfx } from '../audio.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
 import { el, hoverTips, paperText, tipOn } from './paper.js';
@@ -279,43 +279,6 @@ const store = {
   },
 };
 
-/** The paper hand's marks that a how-to was seen, one per game. */
-const seenHowto = (k: string) => k.startsWith('numeria.howto.');
-/** Where SHOW THE HOW-TO AGAIN keeps the marks it took away, so OFF can give them back. */
-const HOWTO_AGAIN = 'numeria.howtoAgain';
-
-/** The how-to is waiting to show again: asked for, and no game has shown it since. */
-function howtoPending(): boolean {
-  try {
-    if (localStorage.getItem(HOWTO_AGAIN) === null) return false;
-    if (!Object.keys(localStorage).some(seenHowto)) return true;
-    // A game has shown its how-to again, so the ask is used up.
-    localStorage.removeItem(HOWTO_AGAIN);
-  } catch {
-    // Without storage the how-to shows every time anyway.
-  }
-  return false;
-}
-
-/** ON takes away the marks (kept aside); OFF before any game used them puts them back. */
-function setHowtoPending(on: boolean): void {
-  try {
-    if (on) {
-      const kept: Record<string, string> = {};
-      for (const k of Object.keys(localStorage).filter(seenHowto)) {
-        kept[k] = localStorage.getItem(k) ?? '1';
-        localStorage.removeItem(k);
-      }
-      localStorage.setItem(HOWTO_AGAIN, JSON.stringify(kept));
-    } else {
-      const kept = JSON.parse(localStorage.getItem(HOWTO_AGAIN) ?? '{}') as Record<string, string>;
-      for (const [k, v] of Object.entries(kept)) localStorage.setItem(k, v);
-      localStorage.removeItem(HOWTO_AGAIN);
-    }
-  } catch {
-    // Without storage the how-to shows every time anyway.
-  }
-}
 
 /** Line icons for the header's buttons, in the accessibility chip's blue (or the text colour). */
 const ICON = (paths: string[], size = 22, color = '#3469c4') =>
