@@ -3,7 +3,7 @@ import { Quaternion, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 import { ACCESS, accessOn, bigText, getLang, musicOn, onSettings, setBigText, setAccess, setLang, setMusic, setSound, soundOn } from '../settings.js';
 import { sfx } from '../audio.js';
 import { HOME_TEXT, type HomeText, type Lang } from './home-text.js';
-import { el, paperText } from './paper.js';
+import { el, hoverTips, paperText, tipOn } from './paper.js';
 import { openBoard } from '../board/board.js';
 import { openLeaders } from '../leaders/leaders.js';
 import {
@@ -92,9 +92,9 @@ html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter
 #home .chip { padding: 8px 12px; background: ${PAPER}; display: flex; align-items: center; gap: 10px; }
 #home .seg { padding: 2px 8px; cursor: pointer; }
 #home .seg.on { background: ${COLORS.cobalt}; }
-#home .offline { position: absolute; left: 50%; top: 304px; transform: translateX(-50%); }
-#home .hint { position: absolute; left: 50%; top: 266px; transform: translateX(-50%); font-size: 15px; color: ${PAPER};
-  background: rgba(92, 66, 24, 0.42); padding: 5px 12px; white-space: nowrap; }
+#home .offline { position: absolute; left: 50%; top: 336px; transform: translateX(-50%); }
+#home .hint { position: absolute; left: 50%; top: 284px; transform: translateX(-50%); font-size: 16px; font-weight: 700; color: ${PAPER};
+  background: rgba(58, 45, 20, 0.62); padding: 7px 16px; white-space: nowrap; letter-spacing: 0.01em; }
 #home .head { position: absolute; top: 312px; }
 #home .card { position: absolute; width: 350px; height: 78px; display: flex; align-items: center; gap: 14px;
   padding: 12px 18px 12px 12px; cursor: pointer; transition: transform 0.12s; }
@@ -151,6 +151,8 @@ html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter
 #home .seat.undo:disabled { opacity: 0.5; cursor: default; }
 #home .btn { padding: 12px 18px; border: 0; cursor: pointer; display: flex; align-items: center; }
 #home .actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
+#home a.btn { text-decoration: none; }
+#home .linkrow { display: flex; margin: 14px 0 0; }
 #home .wide { width: 100%; margin-top: 10px; justify-content: flex-start; font-family: inherit; font-weight: 700; font-size: 17px;
   color: ${INK}; background: ${PAPER}; }
 #home .field { width: 100%; box-sizing: border-box; height: 46px; padding: 0 12px; background: #f1e3c4; border: 0;
@@ -252,6 +254,7 @@ export class Home {
     this.root.id = 'home';
     this.root.style.display = 'none';
     document.body.appendChild(this.root);
+    hoverTips(this.root);
     this.back = el('button', 'shadow', document.body);
     this.back.id = 'home-back';
     this.back.addEventListener('click', () => this.onBack());
@@ -391,12 +394,12 @@ export class Home {
       const name = this.onHeadset && d === 'computer' ? t.window : t.device[d];
       const tab = el('button', `tab${this.device === d ? ' on' : ''}${off ? ' off' : ''}`, tabs);
       tab.innerHTML = DEVICE_ICON[d];
-      tab.title = `${t.playOn} ${name}`;
+      tab.dataset.tip = `${t.playOn} ${name}`;
       tab.setAttribute('aria-label', `${t.playOn} ${name}`);
       tab.setAttribute('aria-pressed', String(this.device === d));
       // Without a headset the tab stays, and says where the game opens on one.
       if (off) {
-        tab.title = t.noXr;
+        tab.dataset.tip = t.noXr;
         tab.setAttribute('aria-disabled', 'true');
         tab.addEventListener('click', () => this.message(t.noXr, t.noXrBody));
       } else tab.addEventListener('click', () => this.setDevice(d));
@@ -404,7 +407,7 @@ export class Home {
     const chips = el('div', 'chips top', this.stage);
     const lang = el('div', 'chip shadow', chips);
     lang.innerHTML = GLOBE_ICON;
-    lang.title = t.language;
+    tipOn(lang, t.language);
     for (const code of ['en', 'id'] as Lang[]) {
       const seg = el('button', `seg${this.lang === code ? ' on' : ''}`, lang);
       seg.style.border = '0';
@@ -418,7 +421,7 @@ export class Home {
     access.style.cursor = 'pointer';
     access.innerHTML =
       '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="4" r="3.2" fill="#3469c4"/><path d="M2 8h18v3h-6v10h-3v-6h0v6H8V11H2z" fill="#3469c4"/></svg>';
-    access.title = t.accessibility;
+    access.dataset.tip = t.accessibility;
     access.setAttribute('aria-label', t.accessibility);
     access.addEventListener('click', () => this.accessibility());
     // Sound effects and the music, each on or off with one press.
@@ -432,7 +435,7 @@ export class Home {
       b.style.border = '0';
       b.style.cursor = 'pointer';
       b.innerHTML = on ? icon : offIcon;
-      b.title = word(on);
+      b.dataset.tip = word(on);
       b.setAttribute('aria-label', word(on));
       b.setAttribute('aria-pressed', String(on));
       b.addEventListener('click', () => {
@@ -474,8 +477,10 @@ export class Home {
       left.appendChild(paperText(t.play, 30, INK));
       this.card('left', 0, t.practice, 'practice', COLORS.teal, () => this.play('practice'));
       this.card('left', 1, robots, 'robots', COLORS.cobalt, () => this.play('race'));
-      this.card('left', 2, t.classmates, 'classmates', COLORS.coral, () => this.joinRoom());
-      if (!this.onHeadset) this.card('left', 3, t.smartboard, 'smartboard', COLORS.violet, () => openBoard());
+      // Alone, against robots, against one rival, with the class, then the class's big screen.
+      this.card('left', 2, t.rival, 'rival', COLORS.coral, () => this.findRival());
+      this.card('left', 3, t.classmates, 'classmates', COLORS.teal, () => this.joinRoom());
+      if (!this.onHeadset) this.card('left', 4, t.smartboard, 'smartboard', COLORS.violet, () => openBoard());
     }
 
     // Right: who you are, and learning more.
@@ -492,7 +497,7 @@ export class Home {
       const card = this.card('right', row++, [name, `${where}${status}`], 'person', COLORS.cobalt, () => this.account(me));
       card.style.background = COLORS.cobalt;
       card.style.color = PAPER;
-      card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER));
+      card.querySelector('canvas')?.replaceWith(paperText(name, name.length > 20 ? 17 : 18, PAPER, 248));
       // The games themselves, to see what the students play.
       this.card('right', row++, t.tryPractice, 'practice', COLORS.teal, () => this.play('practice'));
       this.card('right', row++, kept ? [t.tryRobots[0], robots[1]] : t.tryRobots, 'robots', COLORS.cobalt, () => this.play('race'));
@@ -513,7 +518,6 @@ export class Home {
       badge.style.background = COLORS.teal;
       badge.appendChild(paperText(t.inClass, 12, PAPER));
       card.setAttribute('aria-label', `${t.studentHi(student.pseudonym)}. ${sub}. ${t.inClass}`);
-      this.card('right', row++, t.rival, 'rival', COLORS.coral, () => this.findRival());
     } else {
       this.card('right', row++, t.student, 'student', COLORS.sun, () => this.studentCode());
       const card = this.card('right', row++, t.teacher, 'teacher', COLORS.cobalt, () => this.teacherSignIn());
@@ -609,7 +613,8 @@ export class Home {
     card.appendChild(svg);
     const txt = el('div', '', card);
     const len = title.length;
-    txt.appendChild(paperText(title, len > 20 ? 17 : 18, coloured ? PAPER : INK));
+    // The words keep inside the card: 350 wide, less the icon and the padding.
+    txt.appendChild(paperText(title, len > 20 ? 17 : 18, coloured ? PAPER : INK, 248));
     el('div', 'sub', txt).textContent = sub;
     if (soon) {
       const s = el('span', 'soon', card);
@@ -704,14 +709,22 @@ export class Home {
   private message(title: string, text: string, link?: { href: string; label: string }): void {
     const { veil, body } = this.popup(title);
     el('p', '', body).textContent = text;
-    if (link) {
-      const p = el('p', '', body);
-      const a = el('a', '', p);
-      a.href = link.href;
-      a.textContent = link.label;
-      a.style.color = COLORS.cobalt;
-    }
+    if (link) this.linkButton(body, link.href, link.label);
     this.actions(body, veil);
+  }
+
+  /** A link in a popup, as a paper button that opens the page on the site. */
+  private linkButton(body: HTMLElement, href: string, label: string, newTab = false): HTMLAnchorElement {
+    const a = el('a', 'btn shadow', el('div', 'linkrow', body));
+    a.href = href;
+    a.style.background = COLORS.cobalt;
+    a.appendChild(paperText(label.toUpperCase(), 16, PAPER));
+    a.setAttribute('aria-label', label);
+    if (newTab) {
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+    }
+    return a;
   }
 
   private accessibility(): void {
@@ -824,7 +837,7 @@ export class Home {
       const b = el('button', 'sym', pics);
       b.innerHTML = pictureSvg(n, 36);
       b.setAttribute('aria-label', name);
-      b.title = name;
+      b.dataset.tip = name;
       b.addEventListener('click', () => {
         if (picked.length < 3) picked.push(n);
         showPicked();
@@ -1029,6 +1042,21 @@ export class Home {
   /** FIND A RIVAL: a duel for the student's grade, then its lobby. */
   private findRival(): void {
     const t = this.t;
+    // A rival is found for a class seat: without one, sign in first.
+    if (!studentState()) {
+      const { veil, body } = this.popup(t.rival[0]);
+      el('p', '', body).textContent = t.rivalSignIn;
+      const go = el('button', 'btn wide shadow', body);
+      go.style.background = COLORS.sun;
+      go.appendChild(paperText(t.student[0], 17, INK));
+      go.setAttribute('aria-label', t.student[0]);
+      go.addEventListener('click', () => {
+        veil.remove();
+        this.studentCode();
+      });
+      this.actions(body, veil);
+      return;
+    }
     if (ClassRace.pending) {
       this.lobby(ClassRace.pending);
       return;
@@ -1280,10 +1308,7 @@ export class Home {
           .catch((e) => showError(authErrorCode(e)));
       }),
     );
-    const more = el('a', '', el('p', '', body));
-    more.href = '/manage';
-    more.textContent = t.manageInstead;
-    more.style.color = COLORS.cobalt;
+    this.linkButton(body, '/manage', t.manageInstead);
     this.actions(body, veil);
   }
 
@@ -1386,11 +1411,7 @@ export class Home {
         ? '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8l4 4 8-9" stroke="#fff8ec" stroke-width="3" fill="none"/></svg>'
         : '';
     });
-    const terms = el('a', 'soft', body);
-    terms.textContent = t.readTerms;
-    terms.href = '/terms';
-    terms.target = '_blank';
-    terms.rel = 'noreferrer';
+    this.linkButton(body, '/terms', t.readTerms, true);
     const showError = this.errorLine(body);
     this.actions(body, veil, () => {
       showError();
@@ -1422,10 +1443,7 @@ export class Home {
     el('div', 'step', body).textContent = t.status[me.organizer.status];
     if (me.organizer.status === 'pending') el('p', '', body).textContent = t.pendingBody;
     // The full teacher page (classes, rooms, and for admins the organizer gate) is on the site.
-    const manage = el('a', '', el('p', '', body));
-    manage.href = '/manage';
-    manage.textContent = t.manageLink;
-    manage.style.color = COLORS.cobalt;
+    this.linkButton(body, '/manage', t.manageLink);
     const out = el('button', 'btn wide shadow', body);
     out.appendChild(paperText(t.signOut, 16, INK));
     out.setAttribute('aria-label', t.signOut);

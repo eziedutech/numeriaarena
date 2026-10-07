@@ -10,7 +10,7 @@ import {
 } from '@iwsdk/core';
 import { getLang, type Lang } from '../settings.js';
 import { sfx } from '../audio.js';
-import { el, paperText } from '../home/paper.js';
+import { el, hoverTips, paperText } from '../home/paper.js';
 import { online } from '../offline.js';
 import { assetOf, footprint, LAND_KINDS, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
 import { classMap, takeCell, TownModel, type ClassMap } from './town-model.js';
@@ -170,6 +170,7 @@ class TownPage {
     }
     this.root = el('div', '', document.body);
     this.root.id = 'town';
+    hoverTips(this.root);
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'true');
     this.root.setAttribute('aria-label', sample ? this.t.sampleTitle : this.t.title);
@@ -357,7 +358,7 @@ class TownPage {
     add.textContent = `+ ${t.newLand}`;
     if (closed && lands.length) {
       add.setAttribute('aria-disabled', 'true');
-      add.title = this.closedText(closed, lands.length - 1);
+      add.dataset.tip = this.closedText(closed, lands.length - 1);
     }
     add.addEventListener('click', () => {
       if (closed && lands.length) this.say(this.closedText(closed, lands.length - 1));
@@ -537,14 +538,14 @@ class TownPage {
     if (this.mode.kind === 'idle') return;
     const turn = el('button', 'btn go', this.tools);
     turn.textContent = `↻ ${this.t.turn}`;
-    turn.title = 'R';
+    turn.dataset.tip = `${this.t.turn} (R)`;
     turn.addEventListener('click', () => {
       this.turnHeld();
       this.canvas.focus();
     });
     const cancel = el('button', 'btn', this.tools);
     cancel.textContent = this.t.cancel;
-    cancel.title = 'Esc';
+    cancel.dataset.tip = `${this.t.cancel} (Esc)`;
     cancel.addEventListener('click', () => {
       this.mode = { kind: 'idle' };
       this.redraw();

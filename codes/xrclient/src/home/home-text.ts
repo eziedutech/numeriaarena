@@ -45,6 +45,8 @@ const EN = {
   classmates: ['RACE MY CLASSMATES', 'Same class, real time'],
   rival: ['FIND A RIVAL', 'A student of your grade, or a robot'],
   rivalFinding: 'Looking for a rival...',
+  rivalSignIn:
+    'FIND A RIVAL races a student of your grade from another class, live. Sign in to your class seat first, with the card from your teacher.',
   lobbyRival: (s: number) => `Looking for a rival in your grade. If nobody comes, a robot races you in ${s} s.`,
   smartboard: ['RACE ON THE SMARTBOARD', 'Three players, one big screen'],
   studentFirst: 'Enter your student code first',
@@ -238,6 +240,8 @@ const ID: typeof EN = {
   classmates: ['LOMBA DENGAN TEMAN', 'Satu kelas, langsung'],
   rival: ['CARI LAWAN', 'Siswa satu tingkat, atau robot'],
   rivalFinding: 'Mencari lawan...',
+  rivalSignIn:
+    'CARI LAWAN mempertemukanmu secara langsung dengan siswa satu tingkat dari kelas lain. Masuk dulu ke kursi kelasmu dengan kartu dari gurumu.',
   lobbyRival: (s: number) => `Mencari lawan satu tingkat. Kalau tidak ada yang datang, robot melawanmu dalam ${s} detik.`,
   smartboard: ['BALAPAN DI SMARTBOARD', 'Tiga pemain, satu layar besar'],
   studentFirst: 'Masukkan kode siswa dulu',
