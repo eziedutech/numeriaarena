@@ -1386,6 +1386,11 @@ export class Home {
         ? '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8l4 4 8-9" stroke="#fff8ec" stroke-width="3" fill="none"/></svg>'
         : '';
     });
+    const terms = el('a', 'soft', body);
+    terms.textContent = t.readTerms;
+    terms.href = '/terms';
+    terms.target = '_blank';
+    terms.rel = 'noreferrer';
     const showError = this.errorLine(body);
     this.actions(body, veil, () => {
       showError();

@@ -123,7 +123,8 @@ const TEXT = {
     kinds: { school: "SCHOOL", tutoring: "TUTORING", community: "COMMUNITY", event: "EVENT" } as Record<string, string>,
     country: "Country (2 letters, like ID or US)",
     statement:
-      "I am a teacher or organiser responsible for the children in my groups, and I will get parental permission as my local rules require.",
+      "I am a teacher or organiser responsible for the children in my groups, and I will get parental permission as my local rules require. I agree to the terms of use.",
+    readTerms: "Read the terms of use",
     save: "SAVE",
     tab: { pending: "WAITING", approved: "APPROVED", suspended: "SUSPENDED" } as Record<Status, string>,
     empty: { pending: "Nobody is waiting.", approved: "No approved organisers yet.", suspended: "Nobody is suspended." } as Record<Status, string>,
@@ -237,7 +238,8 @@ const TEXT = {
     kinds: { school: "SEKOLAH", tutoring: "BIMBEL", community: "KOMUNITAS", event: "ACARA" } as Record<string, string>,
     country: "Negara (2 huruf, misalnya ID atau US)",
     statement:
-      "Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat.",
+      "Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat. Saya menyetujui syarat penggunaan.",
+    readTerms: "Baca syarat penggunaan",
     save: "SIMPAN",
     tab: { pending: "MENUNGGU", approved: "DISETUJUI", suspended: "DITANGGUHKAN" } as Record<Status, string>,
     empty: { pending: "Tidak ada yang menunggu.", approved: "Belum ada penyelenggara yang disetujui.", suspended: "Tidak ada yang ditangguhkan." } as Record<Status, string>,
@@ -897,6 +899,9 @@ function SignUp({ t, user, me, onDone }: { t: Text; user: User; me: Me; onDone: 
         <span className="mark">{agree ? "✓" : ""}</span>
         <span>{t.statement}</span>
       </button>
+      <a className="soft" href="/terms" target="_blank" rel="noreferrer">
+        {t.readTerms}
+      </a>
       <ErrorLine t={t} code={error} />
       <div className="actions">
         <button

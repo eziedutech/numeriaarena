@@ -90,6 +90,7 @@ export function PaperPage({
         <a href="/about">{lang === "id" ? "Tentang" : "About"}</a>
         <a href="/how-to-play">{lang === "id" ? "Cara bermain" : "How to play"}</a>
         <a href="/privacy">{lang === "id" ? "Privasi" : "Privacy"}</a>
+        <a href="/terms">{lang === "id" ? "Syarat penggunaan" : "Terms of use"}</a>
         <a href="/data-deletion">{lang === "id" ? "Penghapusan data" : "Data deletion"}</a>
         <a href="/credits">{lang === "id" ? "Kredit dan lisensi" : "Credits and licenses"}</a>
         <a href={`mailto:${CONTACT}`}>{CONTACT}</a>

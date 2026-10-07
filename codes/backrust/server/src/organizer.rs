@@ -14,7 +14,7 @@ use crate::auth::{Adult, AuthError};
 
 /// The organizer statement the sign-up form shows. A new wording gets a new
 /// version, and the client must send the version it showed.
-pub const TERMS_VERSION: &str = "organizer-2026-10-02";
+pub const TERMS_VERSION: &str = "organizer-2026-10-07";
 
 const ORG_KINDS: [&str; 5] = ["school", "tutoring", "community", "event", "personal"];
 

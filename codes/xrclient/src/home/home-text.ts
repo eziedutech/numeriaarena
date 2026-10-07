@@ -136,7 +136,8 @@ const EN = {
   kinds: { school: 'SCHOOL', tutoring: 'TUTORING', community: 'COMMUNITY', event: 'EVENT' },
   country: 'Country (2 letters, like ID or US)',
   statement:
-    'I am a teacher or organizer responsible for the children in my groups, and I will get parental permission as my local rules require.',
+    'I am a teacher or organizer responsible for the children in my groups, and I will get parental permission as my local rules require. I agree to the terms of use.',
+  readTerms: 'Read the terms of use',
   account: 'TEACHER ACCOUNT',
   manageLink: 'Open the teacher page on this site',
   manageInstead: 'Or open the full teacher page',
@@ -326,7 +327,8 @@ const ID: typeof EN = {
   kinds: { school: 'SEKOLAH', tutoring: 'BIMBEL', community: 'KOMUNITAS', event: 'ACARA' },
   country: 'Negara (2 huruf, misalnya ID atau US)',
   statement:
-    'Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat.',
+    'Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat. Saya menyetujui syarat penggunaan.',
+  readTerms: 'Baca syarat penggunaan',
   account: 'AKUN GURU',
   manageLink: 'Buka halaman guru di situs ini',
   manageInstead: 'Atau buka halaman guru lengkap',
