@@ -254,10 +254,6 @@ const TICK_FROM_S = 10;
 const TOWN_W = 0.145;
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
-/** Turned this far towards the player, so seen from their seat its buildings stand straight, not leaning right. */
-const TOWN_TURN = 0.45;
-/** And rolled back this much on its face, so the turn does not tip its right end down. */
-const TOWN_ROLL = 0.1;
 const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
@@ -1338,7 +1334,7 @@ export class GameSystem extends createSystem({
     sticker.name = 'menu-town';
     sticker.add(shadow, plane);
     sticker.position.copy(TOWN_AT);
-    sticker.rotation.set(MENU_LEAN, TOWN_TURN, TOWN_ROLL, 'YXZ');
+    sticker.rotation.x = MENU_LEAN;
     const e = this.add(sticker);
     e.addComponent(MenuButton, { game: 'town' });
     e.addComponent(PokeInteractable);
