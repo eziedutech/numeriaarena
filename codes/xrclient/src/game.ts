@@ -254,13 +254,10 @@ const TICK_FROM_S = 10;
 const TOWN_W = 0.145;
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
-/** Turned this far towards the player from their seat, so its buildings stand straight, not leaning right. */
+/** Turned this far towards the player, so seen from their seat its buildings stand straight, not leaning right. */
 const TOWN_TURN = 0.45;
-/** And rolled back this much on its face for that turn, so it does not tip its right end down. */
+/** And rolled back this much on its face, so the turn does not tip its right end down. */
 const TOWN_ROLL = 0.1;
-/** As the player's head moves it keeps turning to face them, never more than this, eased by this much a frame. */
-const TOWN_TURN_MAX = 1;
-const TOWN_EASE = 0.12;
 const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
@@ -1342,7 +1339,6 @@ export class GameSystem extends createSystem({
     sticker.add(shadow, plane);
     sticker.position.copy(TOWN_AT);
     sticker.rotation.set(MENU_LEAN, TOWN_TURN, TOWN_ROLL, 'YXZ');
-    this.townCard = sticker;
     const e = this.add(sticker);
     e.addComponent(MenuButton, { game: 'town' });
     e.addComponent(PokeInteractable);
@@ -1564,21 +1560,6 @@ export class GameSystem extends createSystem({
       const obj = a.entity.object3D;
       if (obj && obj.visible !== show) obj.visible = show;
     }
-  }
-
-  /** The Fold Town sticker on the desk menu, and the player's eye in the desk's space. */
-  private townCard?: Object3D;
-  private townEye = new Vector3();
-
-  /** Turns the Fold Town sticker towards the player's head, so from wherever they look its buildings stand up straight. */
-  private faceTown(): void {
-    const card = this.townCard;
-    if (!card?.parent || !this.lobby) return;
-    this.camera.getWorldPosition(this.townEye);
-    card.parent.worldToLocal(this.townEye);
-    const want = Math.max(-TOWN_TURN_MAX, Math.min(TOWN_TURN_MAX, Math.atan2(this.townEye.x - card.position.x, this.townEye.z - card.position.z)));
-    const yaw = card.rotation.y + (want - card.rotation.y) * TOWN_EASE;
-    card.rotation.set(MENU_LEAN, yaw, (TOWN_ROLL * yaw) / TOWN_TURN, 'YXZ');
   }
 
   /** The size the book is eased to last. */
@@ -3482,7 +3463,6 @@ export class GameSystem extends createSystem({
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     this.runHome();
     this.hideLobbyLine();
-    this.faceTown();
     const onHome = this.home.visible;
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
