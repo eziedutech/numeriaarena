@@ -14,8 +14,8 @@ export interface Places {
   city?: number;
 }
 
-/** A teacher's account: waiting for approval, approved or suspended; none until signed up. */
-export type TeacherStatus = 'pending' | 'approved' | 'suspended';
+/** A teacher's account: waiting for verification, asked for more, verified, rejected or suspended; none until signed up. */
+export type TeacherStatus = 'pending' | 'needs_info' | 'approved' | 'rejected' | 'suspended';
 
 export interface LobbyFacts {
   best?: { points: number; stars: number };
@@ -57,7 +57,13 @@ const TEXT = {
     signIn: 'Sign in to your class to join the leaderboards.',
     teacher: 'TEACHER',
     status: 'ACCOUNT',
-    statuses: { pending: 'Waiting for approval', approved: 'Verified', suspended: 'Suspended' } as Record<TeacherStatus, string>,
+    statuses: {
+      pending: 'Waiting for verification',
+      needs_info: 'More proof needed',
+      approved: 'Verified',
+      rejected: 'Not verified',
+      suspended: 'Suspended',
+    } as Record<TeacherStatus, string>,
     finishSignUp: 'Finish signing up',
   },
   id: {
@@ -83,7 +89,13 @@ const TEXT = {
     signIn: 'Masuk ke kelasmu untuk ikut papan peringkat.',
     teacher: 'GURU',
     status: 'AKUN',
-    statuses: { pending: 'Menunggu persetujuan', approved: 'Terverifikasi', suspended: 'Ditangguhkan' } as Record<TeacherStatus, string>,
+    statuses: {
+      pending: 'Menunggu verifikasi',
+      needs_info: 'Perlu bukti tambahan',
+      approved: 'Terverifikasi',
+      rejected: 'Tidak terverifikasi',
+      suspended: 'Ditangguhkan',
+    } as Record<TeacherStatus, string>,
     finishSignUp: 'Selesaikan pendaftaran',
   },
 };

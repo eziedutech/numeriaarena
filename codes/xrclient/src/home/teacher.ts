@@ -16,7 +16,7 @@ export interface Me {
   email: string;
   name: string;
   admin: boolean;
-  organizer: { status: 'pending' | 'approved' | 'suspended'; org: Org | null } | null;
+  organizer: { status: 'pending' | 'needs_info' | 'approved' | 'rejected' | 'suspended'; org: Org | null } | null;
   terms_version: string;
 }
 

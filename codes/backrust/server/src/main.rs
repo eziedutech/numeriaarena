@@ -63,6 +63,7 @@ pub fn router(state: State) -> Router {
         .route("/api/health", get(organizer::health))
         .route("/api/me", get(organizer::me))
         .route("/api/organizer", post(organizer::register))
+        .route("/api/organizer/proof", post(organizer::send_proof))
         .route("/api/admin/organizers", get(admin::list))
         .route("/api/admin/organizers/{id}", post(admin::decide))
         .route("/api/admin/ai", get(ai::admin::overview))

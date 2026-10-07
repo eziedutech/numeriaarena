@@ -21,16 +21,38 @@ export function meta({}: Route.MetaArgs) {
  * gate. Every right is checked again by the server.
  */
 
-type Status = "pending" | "approved" | "suspended";
-const STATUSES: Status[] = ["pending", "approved", "suspended"];
+type Status = "pending" | "needs_info" | "approved" | "rejected" | "suspended";
+const STATUSES: Status[] = ["pending", "needs_info", "approved", "rejected", "suspended"];
+
+/** What a teacher sends to show they teach at a school: facts an admin can check, never a document. */
+interface Proof {
+  school: string;
+  city: string;
+  npsn: string;
+  teacher_role: string;
+  proof_url: string;
+  school_email: string;
+  head_contact: string;
+}
 
 interface Me {
   email: string;
   name: string;
   admin: boolean;
-  organizer: { status: Status; org: { name: string; kind: string; country: string } | null } | null;
+  organizer: {
+    status: Status;
+    org: { name: string; kind: string; country: string } | null;
+    /** The admin's message when they ask for more or reject. */
+    note: string;
+    proof: (Proof & { sent: string }) | null;
+    /** While not verified: when the trial class pauses. */
+    trial_until: string | null;
+  } | null;
   terms_version: string;
 }
+
+/** Until an admin verifies them, a teacher keeps one trial class; rejected or suspended, none. */
+const verifying = (s: Status) => s === "pending" || s === "needs_info";
 
 interface Organizer {
   user_id: number;
@@ -43,6 +65,15 @@ interface Organizer {
   org_name: string | null;
   org_kind: string | null;
   country: string | null;
+  note: string;
+  school: string | null;
+  city: string | null;
+  npsn: string | null;
+  teacher_role: string | null;
+  proof_url: string | null;
+  school_email: string | null;
+  head_contact: string | null;
+  proof_sent: string | null;
   joined: string;
   updated: string;
 }
@@ -71,8 +102,21 @@ const TEXT = {
     sampleMaking: "Making your sample class...",
     sampleHere: "This is a sample teacher. Everything here is made up and gone after 24 hours. Sign out to start again or to sign in as yourself.",
     toGame: "TO THE GAME",
-    status: { pending: "Waiting for approval", approved: "Verified", suspended: "Suspended" } as Record<Status, string>,
-    pendingBody: "An admin checks new organisers. Until then you can set up one trial class with 5 seats and robots.",
+    status: {
+      pending: "Waiting for verification",
+      needs_info: "More proof needed",
+      approved: "Verified",
+      rejected: "Not verified",
+      suspended: "Suspended",
+    } as Record<Status, string>,
+    pendingBody: "An admin checks that every teacher really teaches at a school. Until then you can try one class with 5 seats and robots.",
+    proofAsk: "Fill in the form below so an admin can check.",
+    proofSent: (d: string) => `You sent your proof on ${d} UTC. An admin checks it, and the answer shows here.`,
+    trialUntil: (d: string) => `If you are not verified by ${d}, your trial class waits until you are. Nothing in it is lost.`,
+    trialOver: "Your trial is over: the trial class waits, with nothing lost, until an admin verifies you.",
+    needsInfoBody: "An admin needs more before verifying you:",
+    rejectedBody: "An admin could not verify you as a teacher:",
+    contact: "Write to numeria@eziedutech.dev if you think this is a mistake.",
     suspendedBody: "This account is suspended. Write to numeria@eziedutech.dev if you think this is a mistake.",
     admin: "Admin",
     tabs: [
@@ -141,9 +185,40 @@ const TEXT = {
       "I am a teacher or organiser responsible for the children in my groups, and I will get parental permission as my local rules require. I agree to the terms of use.",
     readTerms: "Read the terms of use",
     save: "SAVE",
-    tab: { pending: "WAITING", approved: "APPROVED", suspended: "SUSPENDED" } as Record<Status, string>,
-    empty: { pending: "Nobody is waiting.", approved: "No approved organisers yet.", suspended: "Nobody is suspended." } as Record<Status, string>,
-    to: { pending: "BACK TO WAITING", approved: "APPROVE", suspended: "SUSPEND" } as Record<Status, string>,
+    proofTitle: "SHOW THAT YOU TEACH",
+    proofIntro: "No documents or photos, only facts an admin can check. Students never see them, and they are deleted with your account.",
+    proofSchool: "School name",
+    proofCity: "City or district",
+    proofNpsn: "NPSN, the school's 8-character number (schools in Indonesia)",
+    proofRole: "What you teach, like grade 5 class teacher or maths teacher",
+    proofUrl: "A page on the school's website that names you",
+    proofEmail: "Or your email at the school",
+    proofOr: "Give at least one of these two.",
+    proofHead: "How the head of the school can be reached to confirm (if you like)",
+    proofSend: "SEND FOR VERIFICATION",
+    proofEdit: "CHANGE WHAT I SENT",
+    tab: { pending: "WAITING", needs_info: "ASKED FOR MORE", approved: "APPROVED", rejected: "REJECTED", suspended: "SUSPENDED" } as Record<Status, string>,
+    empty: {
+      pending: "Nobody is waiting.",
+      needs_info: "Nobody was asked for more.",
+      approved: "No approved organisers yet.",
+      rejected: "Nobody was rejected.",
+      suspended: "Nobody is suspended.",
+    } as Record<Status, string>,
+    to: { pending: "BACK TO WAITING", needs_info: "ASK FOR MORE", approved: "APPROVE", rejected: "REJECT", suspended: "SUSPEND" } as Record<Status, string>,
+    noProof: "No proof sent yet.",
+    proofFacts: {
+      school: "School",
+      city: "City",
+      npsn: "NPSN",
+      teacher_role: "Teaches",
+      proof_url: "School page",
+      school_email: "School email",
+      head_contact: "Head of school",
+      proof_sent: "Sent",
+    } as Record<string, string>,
+    noteShown: "Message shown to them",
+    reasonShown: "Message to the teacher, shown on their page (also kept in the audit log)",
     verified: "verified",
     unverified: "not verified",
     personal: "personal workspace",
@@ -155,6 +230,17 @@ const TEXT = {
     cancel: "CANCEL",
     errors: {
       reason: "Write a reason of 3 to 300 letters.",
+      school: "Write the school name, 2 to 120 letters.",
+      city: "Write the city or district.",
+      npsn: "An NPSN has 8 characters. Leave it empty outside Indonesia.",
+      teacher_role: "Write what you teach.",
+      proof_url: "Write the full address of the page, starting with https://.",
+      school_email: "That email does not look right.",
+      proof: "Give a school page that names you or your school email.",
+      head_contact: "The contact is too long.",
+      proof_closed: "This account no longer waits for verification. Reload the page.",
+      rejected: "This account was not verified as a teacher.",
+      class_frozen: "This class waits until you are verified.",
       setup_games: "Pick one to five games for the race.",
       setup_time: "Pick fewer rounds or shorter ones: a race lasts at most 15 minutes.",
       unchanged: "That organiser already has this status.",
@@ -200,8 +286,21 @@ const TEXT = {
     sampleMaking: "Membuat kelas contoh Anda...",
     sampleHere: "Ini guru contoh. Semua isinya buatan dan hilang setelah 24 jam. Keluar untuk mulai lagi atau masuk dengan akun Anda sendiri.",
     toGame: "KE GAME",
-    status: { pending: "Menunggu persetujuan", approved: "Terverifikasi", suspended: "Ditangguhkan" } as Record<Status, string>,
-    pendingBody: "Admin memeriksa penyelenggara baru. Sambil menunggu, Anda bisa menyiapkan satu kelas percobaan dengan 5 kursi dan robot.",
+    status: {
+      pending: "Menunggu verifikasi",
+      needs_info: "Perlu bukti tambahan",
+      approved: "Terverifikasi",
+      rejected: "Tidak terverifikasi",
+      suspended: "Ditangguhkan",
+    } as Record<Status, string>,
+    pendingBody: "Admin memeriksa bahwa setiap guru benar-benar mengajar di sebuah sekolah. Sambil menunggu, Anda bisa mencoba satu kelas dengan 5 kursi dan robot.",
+    proofAsk: "Isi formulir di bawah agar admin bisa memeriksa.",
+    proofSent: (d: string) => `Anda mengirim bukti pada ${d} UTC. Admin memeriksanya, dan jawabannya tampil di sini.`,
+    trialUntil: (d: string) => `Bila belum terverifikasi sampai ${d}, kelas percobaan Anda menunggu sampai terverifikasi. Isinya tidak hilang.`,
+    trialOver: "Masa percobaan habis: kelas percobaan menunggu, tanpa ada yang hilang, sampai admin memverifikasi Anda.",
+    needsInfoBody: "Admin butuh keterangan tambahan sebelum memverifikasi Anda:",
+    rejectedBody: "Admin tidak bisa memverifikasi Anda sebagai guru:",
+    contact: "Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     suspendedBody: "Akun ini ditangguhkan. Tulis ke numeria@eziedutech.dev bila menurut Anda ini keliru.",
     admin: "Admin",
     tabs: [
@@ -270,9 +369,40 @@ const TEXT = {
       "Saya guru atau penyelenggara yang bertanggung jawab atas anak-anak di grup saya, dan akan meminta izin orang tua sesuai aturan setempat. Saya menyetujui syarat penggunaan.",
     readTerms: "Baca syarat penggunaan",
     save: "SIMPAN",
-    tab: { pending: "MENUNGGU", approved: "DISETUJUI", suspended: "DITANGGUHKAN" } as Record<Status, string>,
-    empty: { pending: "Tidak ada yang menunggu.", approved: "Belum ada penyelenggara yang disetujui.", suspended: "Tidak ada yang ditangguhkan." } as Record<Status, string>,
-    to: { pending: "KEMBALIKAN KE MENUNGGU", approved: "SETUJUI", suspended: "TANGGUHKAN" } as Record<Status, string>,
+    proofTitle: "BUKTIKAN BAHWA ANDA GURU",
+    proofIntro: "Tanpa dokumen atau foto, hanya keterangan yang bisa diperiksa admin. Siswa tidak pernah melihatnya, dan ikut terhapus bersama akun Anda.",
+    proofSchool: "Nama sekolah",
+    proofCity: "Kota atau kabupaten",
+    proofNpsn: "NPSN, nomor sekolah 8 karakter (sekolah di Indonesia)",
+    proofRole: "Yang Anda ajar, misalnya guru kelas 5 atau guru matematika",
+    proofUrl: "Halaman di situs sekolah yang mencantumkan nama Anda",
+    proofEmail: "Atau email Anda di sekolah",
+    proofOr: "Isi paling sedikit salah satu dari dua ini.",
+    proofHead: "Kontak kepala sekolah untuk konfirmasi (bila berkenan)",
+    proofSend: "KIRIM UNTUK VERIFIKASI",
+    proofEdit: "UBAH YANG SAYA KIRIM",
+    tab: { pending: "MENUNGGU", needs_info: "DIMINTA TAMBAHAN", approved: "DISETUJUI", rejected: "DITOLAK", suspended: "DITANGGUHKAN" } as Record<Status, string>,
+    empty: {
+      pending: "Tidak ada yang menunggu.",
+      needs_info: "Tidak ada yang diminta tambahan.",
+      approved: "Belum ada penyelenggara yang disetujui.",
+      rejected: "Tidak ada yang ditolak.",
+      suspended: "Tidak ada yang ditangguhkan.",
+    } as Record<Status, string>,
+    to: { pending: "KEMBALIKAN KE MENUNGGU", needs_info: "MINTA TAMBAHAN", approved: "SETUJUI", rejected: "TOLAK", suspended: "TANGGUHKAN" } as Record<Status, string>,
+    noProof: "Belum mengirim bukti.",
+    proofFacts: {
+      school: "Sekolah",
+      city: "Kota",
+      npsn: "NPSN",
+      teacher_role: "Mengajar",
+      proof_url: "Halaman sekolah",
+      school_email: "Email sekolah",
+      head_contact: "Kepala sekolah",
+      proof_sent: "Dikirim",
+    } as Record<string, string>,
+    noteShown: "Pesan yang ia lihat",
+    reasonShown: "Pesan untuk guru, tampil di halamannya (juga disimpan di log audit)",
     verified: "terverifikasi",
     unverified: "belum terverifikasi",
     personal: "ruang kerja pribadi",
@@ -284,6 +414,17 @@ const TEXT = {
     cancel: "BATAL",
     errors: {
       reason: "Tulis alasan 3 sampai 300 huruf.",
+      school: "Tulis nama sekolah, 2 sampai 120 huruf.",
+      city: "Tulis kota atau kabupaten.",
+      npsn: "NPSN terdiri dari 8 karakter. Kosongkan bila di luar Indonesia.",
+      teacher_role: "Tulis yang Anda ajar.",
+      proof_url: "Tulis alamat lengkap halamannya, diawali https://.",
+      school_email: "Email itu sepertinya keliru.",
+      proof: "Isi halaman sekolah yang mencantumkan nama Anda atau email sekolah Anda.",
+      head_contact: "Kontaknya terlalu panjang.",
+      proof_closed: "Akun ini tidak lagi menunggu verifikasi. Muat ulang halaman.",
+      rejected: "Akun ini tidak terverifikasi sebagai guru.",
+      class_frozen: "Kelas ini menunggu sampai Anda terverifikasi.",
       setup_games: "Pilih satu sampai lima game untuk lomba.",
       setup_time: "Pilih babak lebih sedikit atau lebih singkat: lomba paling lama 15 menit.",
       unchanged: "Penyelenggara itu sudah berstatus ini.",
@@ -604,7 +745,9 @@ function Account({
   const [openError, setOpenError] = useState("");
   const [setup, setSetup] = useState<RoomSetup>(USUAL);
   useEffect(() => setSetup(readSetup(me.email)), [me.email]);
-  const working = me.organizer && me.organizer.status !== "suspended";
+  const status = me.organizer?.status;
+  const working = status && (status === "approved" || verifying(status));
+  const trial = !!status && verifying(status);
   const show = (next: Tab) => navigate(`/manage#${next}`, { replace: !classId });
   /**
    * A race room of six seats with the chosen setup, for one class or for
@@ -637,7 +780,7 @@ function Account({
       <MyClasses
         lang={lang}
         user={user}
-        trial={me.organizer?.status === "pending"}
+        trial={trial}
         onRace={(c) => openRoom(c, true)}
         raceLine={describe(lang, setup)}
         openId={classId}
@@ -674,12 +817,12 @@ function Account({
               <strong>{t.status[me.organizer.status]}</strong>
               {org && org.kind !== "personal" ? ` · ${org.name}, ${org.country}` : ""}
             </p>
-            {me.organizer.status === "pending" && <p>{t.pendingBody}</p>}
-            {me.organizer.status === "suspended" && <p>{t.suspendedBody}</p>}
+            <Standing t={t} organizer={me.organizer} />
           </>
         )}
       </section>
       {!me.organizer && <SignUp t={t} user={user} me={me} onDone={onChange} />}
+      {me.organizer && verifying(me.organizer.status) && <ProofForm t={t} user={user} me={me} onDone={onChange} />}
       {working && (
         <section className="folder">
           <div className="tools folder-tabs" role="tablist">
@@ -706,7 +849,7 @@ function Account({
           <MyClasses
             lang={lang}
             user={user}
-            trial={me.organizer?.status === "pending"}
+            trial={trial}
             onRace={(c) => openRoom(c, true)}
             raceLine={describe(lang, setup)}
             openId={null}
@@ -1290,6 +1433,12 @@ function Organizers({ t, user }: { t: Text; user: User }) {
               <span className="soft">
                 {t.joined} {r.joined} UTC. {t.changed} {r.updated} UTC, {t.via[r.path] ?? r.path}.
               </span>
+              <ProofFacts t={t} row={r} />
+              {r.note && (
+                <span className="soft">
+                  {t.noteShown}: {r.note}
+                </span>
+              )}
             </div>
             <div className="org-actions">
               {STATUSES.filter((s) => s !== r.status).map((to) => (
@@ -1329,7 +1478,7 @@ function Decide({ t, user, row, to, onClose }: { t: Text; user: User; row: Organ
           {t.to[to]}: {row.name || row.email}
         </h2>
         <label className="field-label" htmlFor="reason">
-          {t.reason}
+          {to === "needs_info" || to === "rejected" ? t.reasonShown : t.reason}
         </label>
         <textarea id="reason" className="field" rows={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
         <ErrorLine t={t} code={error} />
@@ -1360,5 +1509,154 @@ function Decide({ t, user, row, to, onClose }: { t: Text; user: User; row: Organ
         </div>
       </div>
     </div>
+  );
+}
+
+/** Where the teacher stands with verification, in a line or two. */
+function Standing({ t, organizer }: { t: Text; organizer: NonNullable<Me["organizer"]> }) {
+  const { status, note, proof, trial_until } = organizer;
+  const over = trial_until !== null && new Date(trial_until).getTime() <= Date.now();
+  return (
+    <>
+      {status === "pending" && (
+        <p>
+          {t.pendingBody} {proof ? t.proofSent(proof.sent) : t.proofAsk}
+        </p>
+      )}
+      {status === "needs_info" && (
+        <p>
+          {t.needsInfoBody} <strong>{note}</strong>
+        </p>
+      )}
+      {verifying(status) && trial_until && <p className="soft">{over ? t.trialOver : t.trialUntil(dayOf(t, trial_until))}</p>}
+      {status === "rejected" && (
+        <p>
+          {t.rejectedBody} <strong>{note}</strong> {t.contact}
+        </p>
+      )}
+      {status === "suspended" && <p>{t.suspendedBody}</p>}
+    </>
+  );
+}
+
+const PROOF_KEYS = ["school", "city", "npsn", "teacher_role", "proof_url", "school_email", "head_contact"] as const;
+
+/** A proof as label and value lines, the page and the email as links an admin can follow. */
+function Facts({ t, values }: { t: Text; values: Partial<Record<(typeof PROOF_KEYS)[number] | "proof_sent", string | null>> }) {
+  return (
+    <dl className="room-facts proof-facts">
+      {[...PROOF_KEYS, "proof_sent" as const].map((k) => {
+        const v = values[k];
+        if (!v) return null;
+        return (
+          <div key={k} className="proof-fact">
+            <dt>{t.proofFacts[k]}</dt>
+            <dd>
+              {k === "proof_url" ? (
+                <a href={v} target="_blank" rel="noreferrer noopener">
+                  {v}
+                </a>
+              ) : k === "school_email" ? (
+                <a href={`mailto:${v}`}>{v}</a>
+              ) : k === "proof_sent" ? (
+                `${v} UTC`
+              ) : (
+                v
+              )}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+function ProofFacts({ t, row }: { t: Text; row: Organizer }) {
+  if (!row.proof_sent) return <span className="soft">{t.noProof}</span>;
+  return <Facts t={t} values={row} />;
+}
+
+/**
+ * The verification form of a teacher who waits or was asked for more: no
+ * documents, only facts an admin can check. Once sent it folds to what was
+ * sent, with a button to change it.
+ */
+function ProofForm({ t, user, me, onDone }: { t: Text; user: User; me: Me; onDone: () => void }) {
+  const sent = me.organizer?.proof ?? null;
+  const org = me.organizer?.org;
+  const [open, setOpen] = useState(!sent || me.organizer?.status === "needs_info");
+  const [p, setP] = useState<Proof>(() => ({
+    school: sent?.school ?? (org && org.kind !== "personal" ? org.name : ""),
+    city: sent?.city ?? "",
+    npsn: sent?.npsn ?? "",
+    teacher_role: sent?.teacher_role ?? "",
+    proof_url: sent?.proof_url ?? "",
+    school_email: sent?.school_email ?? "",
+    head_contact: sent?.head_contact ?? "",
+  }));
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const field = (k: keyof Proof, label: string, max: number, type = "text") => (
+    <>
+      <label className="field-label" htmlFor={`proof-${k}`}>
+        {label}
+      </label>
+      <input
+        id={`proof-${k}`}
+        className={k === "npsn" ? "field short" : "field"}
+        type={type}
+        maxLength={max}
+        value={p[k]}
+        onChange={(e) => setP({ ...p, [k]: e.target.value })}
+      />
+    </>
+  );
+  if (!open && sent) {
+    return (
+      <section className="paper-sheet narrow">
+        <h2 className="dialog-title">{t.proofTitle}</h2>
+        <Facts t={t} values={{ ...sent, proof_sent: sent.sent }} />
+        <div className="actions">
+          <button type="button" className="btn small" onClick={() => setOpen(true)}>
+            {t.proofEdit}
+          </button>
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="paper-sheet narrow">
+      <h2 className="dialog-title">{t.proofTitle}</h2>
+      <p>{t.proofIntro}</p>
+      {field("school", t.proofSchool, 120)}
+      {field("city", t.proofCity, 60)}
+      {field("npsn", t.proofNpsn, 12)}
+      {field("teacher_role", t.proofRole, 60)}
+      <p className="soft proof-or">{t.proofOr}</p>
+      {field("proof_url", t.proofUrl, 300, "url")}
+      {field("school_email", t.proofEmail, 120, "email")}
+      {field("head_contact", t.proofHead, 120)}
+      <ErrorLine t={t} code={error} />
+      <div className="actions">
+        <button
+          type="button"
+          className="btn blue"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError("");
+            api(user, "/organizer/proof", { method: "POST", body: JSON.stringify(p) })
+              .then(() => {
+                setOpen(false);
+                onDone();
+              })
+              .catch((e) => setError(errorCode(e)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {t.proofSend}
+        </button>
+      </div>
+    </section>
   );
 }

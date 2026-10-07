@@ -291,6 +291,17 @@ async fn a_class_from_creation_to_archive() {
     );
     suspend("approved").await.unwrap();
     assert!(student(&db, &back).await.unwrap().is_some());
+    // So does a trial class 14 days on, until its teacher is verified.
+    suspend("pending").await.unwrap();
+    assert!(student(&db, &back).await.unwrap().is_some());
+    sqlx::query("UPDATE classes SET created_at = now() - interval '15 days' WHERE id = $1")
+        .bind(&id)
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(student(&db, &back).await.unwrap().is_none());
+    suspend("approved").await.unwrap();
+    assert!(student(&db, &back).await.unwrap().is_some());
 
     // A reset seat gets a name no other seat has.
     let card = change_seat(&db, owner, &id, 3, SeatChange::Reset)
@@ -418,6 +429,13 @@ async fn pending_teachers_get_one_small_class_and_others_none() {
     assert!(matches!(
         allowance(&db, suspended, false).await,
         Err(ApiError(_, "suspended"))
+    ));
+    let asked = teacher(&db, Some("needs_info")).await;
+    assert_eq!(allowance(&db, asked, false).await.unwrap(), Allowance::Trial);
+    let rejected = teacher(&db, Some("rejected")).await;
+    assert!(matches!(
+        allowance(&db, rejected, false).await,
+        Err(ApiError(_, "rejected"))
     ));
 }
 

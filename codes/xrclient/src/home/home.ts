@@ -860,7 +860,9 @@ export class Home {
     const a = el('a', 'btn shadow', el('div', 'linkrow', body));
     a.href = href;
     a.style.background = COLORS.cobalt;
-    a.appendChild(paperText(label.toUpperCase(), 16, PAPER));
+    // A long label shrinks to stay inside the card (580px wide, less its and the button's padding).
+    const room = Math.min(580, window.innerWidth * 0.92) - 52 - 36;
+    a.appendChild(paperText(label.toUpperCase(), 16, PAPER, room));
     a.setAttribute('aria-label', label);
     if (newTab) {
       a.target = '_blank';
@@ -1591,7 +1593,7 @@ export class Home {
     const org = me.organizer.org;
     if (org && org.kind !== 'personal') el('p', '', body).textContent = `${org.name}, ${org.country}`;
     el('div', 'step', body).textContent = t.status[me.organizer.status];
-    if (me.organizer.status === 'pending') el('p', '', body).textContent = t.pendingBody;
+    if (me.organizer.status === 'pending' || me.organizer.status === 'needs_info') el('p', '', body).textContent = t.pendingBody;
     // The full teacher page (classes, rooms, and for admins the organizer gate) is on the site.
     this.linkButton(body, '/manage', t.manageLink);
     const out = el('button', 'btn wide shadow', body);

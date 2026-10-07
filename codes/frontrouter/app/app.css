@@ -240,9 +240,15 @@ body {
   color: var(--paper);
 }
 
-.btn.suspended {
+.btn.suspended,
+.btn.rejected {
   background: #f2716b;
   color: var(--paper);
+}
+
+.btn.needs_info {
+  background: #f0b64b;
+  color: var(--ink);
 }
 
 .btn:disabled {
@@ -2272,4 +2278,23 @@ a.class-row,
 
 .room-facts dd {
   margin: 0;
+}
+
+
+/* A teacher's proof: label and value lines, in the admin's list and on the teacher's page. */
+.proof-facts {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.proof-fact {
+  display: contents;
+}
+
+.proof-facts dd {
+  overflow-wrap: anywhere;
+}
+
+.proof-or {
+  margin: 18px 0 0;
 }

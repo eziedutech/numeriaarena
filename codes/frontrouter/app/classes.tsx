@@ -101,7 +101,7 @@ const TEXT = {
     title: "MY CLASSES",
     intro: "A class keeps its seats all year. Each student gets a sign-in card with the class code, a seat number and a picture password: three pictures in order.",
     none: "No classes yet.",
-    trial: "Until an admin approves you: one class with up to 5 seats.",
+    trial: "Until an admin verifies you: one class with up to 5 seats, for 14 days.",
     newClass: "NEW CLASS",
     edu: "MATH LESSONS",
     eduHint: "Paper lessons to show on the smartboard or share with the class",
@@ -195,7 +195,7 @@ const TEXT = {
     exportNames: "SAVE NAMES (CSV)",
     importNames: "LOAD NAMES (CSV)",
     namesNote:
-      "Names are kept only in this browser and are never sent to Numeria. Save them as a CSV file to keep a copy or to use another computer.",
+      "Names are kept only in this browser and are never sent to Numeria. Save them as a CSV file to keep a copy or to use another computer. That file is also the template: fill in its name column in a spreadsheet, save it as CSV and load it back. A file of your own with seat number and name columns reads too.",
     namesLoaded: (n: number, stale: number) =>
       `${n} ${n === 1 ? "name" : "names"} loaded.` +
       (stale ? ` ${stale} ${stale === 1 ? "line was" : "lines were"} skipped: that seat has a new student now.` : ""),
@@ -230,7 +230,7 @@ const TEXT = {
       class_not_found: "That class is gone.",
       archived: "This class is archived.",
       seat_not_found: "That seat is gone.",
-      class_frozen: "This account is suspended, so its classes wait.",
+      class_frozen: "This class waits: the account is not verified or is suspended.",
       group: "Pick a group from A to Q.",
       names_file: "That file has no seat numbers in its first column.",
       names_store: "This browser cannot keep names (private window?).",
@@ -242,7 +242,7 @@ const TEXT = {
     title: "KELAS SAYA",
     intro: "Kelas menyimpan kursinya sepanjang tahun. Tiap siswa mendapat kartu masuk berisi kode kelas, nomor kursi, dan sandi gambar: tiga gambar berurutan.",
     none: "Belum ada kelas.",
-    trial: "Sampai admin menyetujui Anda: satu kelas dengan paling banyak 5 kursi.",
+    trial: "Sampai admin memverifikasi Anda: satu kelas dengan paling banyak 5 kursi, selama 14 hari.",
     newClass: "KELAS BARU",
     edu: "EDUKASI MATEMATIKA",
     eduHint: "Pelajaran kertas untuk ditampilkan di smartboard atau dibagikan ke kelas",
@@ -336,7 +336,7 @@ const TEXT = {
     exportNames: "SIMPAN NAMA (CSV)",
     importNames: "MUAT NAMA (CSV)",
     namesNote:
-      "Nama hanya disimpan di browser ini dan tidak pernah dikirim ke Numeria. Simpan sebagai berkas CSV untuk cadangan atau untuk komputer lain.",
+      "Nama hanya disimpan di browser ini dan tidak pernah dikirim ke Numeria. Simpan sebagai berkas CSV untuk cadangan atau untuk komputer lain. Berkas itu juga templatenya: isi kolom name di spreadsheet, simpan sebagai CSV, lalu muat lagi. Berkas sendiri dengan kolom nomor kursi dan nama juga bisa dibaca.",
     namesLoaded: (n: number, stale: number) =>
       `${n} nama dimuat.` + (stale ? ` ${stale} baris dilewati: kursinya sudah untuk siswa baru.` : ""),
     cardsReady: (n: number) =>
@@ -370,7 +370,7 @@ const TEXT = {
       class_not_found: "Kelas itu sudah tidak ada.",
       archived: "Kelas ini sudah diarsipkan.",
       seat_not_found: "Kursi itu sudah tidak ada.",
-      class_frozen: "Akun ini ditangguhkan, jadi kelasnya menunggu.",
+      class_frozen: "Kelas ini menunggu: akunnya belum terverifikasi atau ditangguhkan.",
       group: "Pilih kelompok A sampai Q.",
       names_file: "Kolom pertama berkas itu tidak berisi nomor kursi.",
       names_store: "Browser ini tidak bisa menyimpan nama (jendela privat?).",

@@ -1,6 +1,7 @@
 //! Signed-in adults: who am I, and the organizer self-registration gate
 //! (docs/SKEMA-PENGGUNA.md 3.2). A new organizer is `pending` unless their
-//! verified email is on an approved school domain.
+//! verified email is on an approved school domain, and sends a proof that
+//! they teach at a school for an admin to check.
 
 use axum::Json;
 use axum::extract::State as Extract;
@@ -77,6 +78,38 @@ pub struct Org {
 pub struct Organizer {
     status: String,
     org: Option<Org>,
+    /// The admin's message with `needs_info` or `rejected`, else empty.
+    note: String,
+    /// The proof last sent, if any.
+    proof: Option<SentProof>,
+    /// While not yet verified: when the trial class pauses, UTC ISO.
+    trial_until: Option<String>,
+}
+
+/// What a pending organizer sends to show they teach at a school: facts an
+/// admin can check, never a document.
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, sqlx::FromRow)]
+pub struct Proof {
+    pub(crate) school: String,
+    pub(crate) city: String,
+    #[serde(default)]
+    pub(crate) npsn: String,
+    pub(crate) teacher_role: String,
+    #[serde(default)]
+    pub(crate) proof_url: String,
+    #[serde(default)]
+    pub(crate) school_email: String,
+    #[serde(default)]
+    pub(crate) head_contact: String,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct SentProof {
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    proof: Proof,
+    /// UTC, "YYYY-MM-DD HH:MM".
+    sent: String,
 }
 
 #[derive(Serialize)]
@@ -153,12 +186,12 @@ pub(crate) async fn signed_in(state: &State, headers: &HeaderMap) -> Result<User
     })
 }
 
-/// Approval status, then the owned organization name, kind and country.
-type OrganizerRow = (String, Option<String>, Option<String>, Option<String>);
+/// Approval status and note, then the owned organization name, kind and country.
+type OrganizerRow = (String, String, Option<String>, Option<String>, Option<String>);
 
 async fn me_for(state: &State, user: &User) -> Result<Me, ApiError> {
     let row: Option<OrganizerRow> = sqlx::query_as(
-        "SELECT a.status, o.name, o.kind, o.country
+        "SELECT a.status, a.note, o.name, o.kind, o.country
          FROM organizer_approvals a
          LEFT JOIN memberships m ON m.user_id = a.user_id AND m.role = 'owner'
          LEFT JOIN organizations o ON o.id = m.org_id
@@ -169,17 +202,46 @@ async fn me_for(state: &State, user: &User) -> Result<Me, ApiError> {
     .bind(user.id)
     .fetch_optional(&state.db)
     .await?;
-    let organizer = row.map(|(status, name, kind, country)| Organizer {
-        status,
-        org: match (name, kind, country) {
-            (Some(name), Some(kind), Some(country)) => Some(Org {
-                name,
-                kind,
-                country,
-            }),
-            _ => None,
-        },
-    });
+    let organizer = match row {
+        None => None,
+        Some((status, note, name, kind, country)) => {
+            let proof = sqlx::query_as::<_, SentProof>(
+                "SELECT school, city, npsn, teacher_role, proof_url, school_email, head_contact,
+                        to_char(sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') AS sent
+                 FROM teacher_proofs WHERE user_id = $1",
+            )
+            .bind(user.id)
+            .fetch_optional(&state.db)
+            .await?;
+            // The trial runs from the first class (crate::classes::OWNER_FROZEN).
+            let trial_until = if matches!(status.as_str(), "pending" | "needs_info") {
+                sqlx::query_scalar::<_, Option<String>>(
+                    "SELECT to_char((min(created_at) + interval '14 days') AT TIME ZONE 'UTC',
+                                    'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')
+                     FROM classes WHERE owner = $1",
+                )
+                .bind(user.id)
+                .fetch_one(&state.db)
+                .await?
+            } else {
+                None
+            };
+            Some(Organizer {
+                status,
+                org: match (name, kind, country) {
+                    (Some(name), Some(kind), Some(country)) => Some(Org {
+                        name,
+                        kind,
+                        country,
+                    }),
+                    _ => None,
+                },
+                note,
+                proof,
+                trial_until,
+            })
+        }
+    };
     Ok(Me {
         email: user.adult.email.clone(),
         name: user.name.clone(),
@@ -334,11 +396,178 @@ pub async fn register(
     Ok((StatusCode::CREATED, Json(me_for(&state, &user).await?)))
 }
 
+fn length(s: &str, range: std::ops::RangeInclusive<usize>) -> bool {
+    range.contains(&s.chars().count())
+}
+
+/// A proof that passed the checks, trimmed: a school, its city and the
+/// teacher's role, and a school page or a school email an admin can check.
+fn validate_proof(p: &Proof) -> Result<Proof, &'static str> {
+    let school = p.school.trim();
+    if !length(school, 2..=120) {
+        return Err("school");
+    }
+    let city = p.city.trim();
+    if !length(city, 2..=60) {
+        return Err("city");
+    }
+    let npsn: String = p.npsn.split_whitespace().collect::<String>().to_uppercase();
+    if !npsn.is_empty() && !(npsn.len() == 8 && npsn.chars().all(|c| c.is_ascii_alphanumeric())) {
+        return Err("npsn");
+    }
+    let role = p.teacher_role.trim();
+    if !length(role, 2..=60) {
+        return Err("teacher_role");
+    }
+    let url = p.proof_url.trim();
+    let web = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .and_then(|rest| rest.split('/').next())
+        .is_some_and(|host| host.contains('.') && !host.starts_with('.'));
+    if !url.is_empty() && (!web || url.len() > 300 || url.chars().any(char::is_whitespace)) {
+        return Err("proof_url");
+    }
+    let email = p.school_email.trim().to_lowercase();
+    let mail = email
+        .split_once('@')
+        .is_some_and(|(who, domain)| !who.is_empty() && domain.contains('.') && !domain.contains('@'));
+    if !email.is_empty() && (!mail || email.len() > 120 || email.chars().any(char::is_whitespace)) {
+        return Err("school_email");
+    }
+    if url.is_empty() && email.is_empty() {
+        return Err("proof");
+    }
+    let head = p.head_contact.trim();
+    if !length(head, 0..=120) {
+        return Err("head_contact");
+    }
+    Ok(Proof {
+        school: school.to_string(),
+        city: city.to_string(),
+        npsn,
+        teacher_role: role.to_string(),
+        proof_url: url.to_string(),
+        school_email: email,
+        head_contact: head.to_string(),
+    })
+}
+
+/// `POST /api/organizer/proof`: a pending organizer's proof, sent again as
+/// often as needed while they wait or after an admin asked for more, which
+/// puts them back in the queue.
+pub async fn send_proof(
+    Extract(state): Extract<State>,
+    headers: HeaderMap,
+    Json(body): Json<Proof>,
+) -> Result<Json<Me>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    let p = validate_proof(&body).map_err(|why| ApiError(StatusCode::UNPROCESSABLE_ENTITY, why))?;
+    let mut tx = state.db.begin().await?;
+    let from: Option<String> =
+        sqlx::query_scalar("SELECT status FROM organizer_approvals WHERE user_id = $1 FOR UPDATE")
+            .bind(user.id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    match from.as_deref() {
+        None => return Err(ApiError(StatusCode::FORBIDDEN, "not_organizer")),
+        Some("pending" | "needs_info") => {}
+        Some(_) => return Err(ApiError(StatusCode::CONFLICT, "proof_closed")),
+    }
+    sqlx::query(
+        "INSERT INTO teacher_proofs
+             (user_id, school, city, npsn, teacher_role, proof_url, school_email, head_contact)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (user_id) DO UPDATE SET
+             school = EXCLUDED.school,
+             city = EXCLUDED.city,
+             npsn = EXCLUDED.npsn,
+             teacher_role = EXCLUDED.teacher_role,
+             proof_url = EXCLUDED.proof_url,
+             school_email = EXCLUDED.school_email,
+             head_contact = EXCLUDED.head_contact,
+             sent_at = now()",
+    )
+    .bind(user.id)
+    .bind(&p.school)
+    .bind(&p.city)
+    .bind(&p.npsn)
+    .bind(&p.teacher_role)
+    .bind(&p.proof_url)
+    .bind(&p.school_email)
+    .bind(&p.head_contact)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE organizer_approvals SET status = 'pending', note = '', updated_at = now()
+         WHERE user_id = $1",
+    )
+    .bind(user.id)
+    .execute(&mut *tx)
+    .await?;
+    // The audit log keeps that a proof came, not what it says.
+    sqlx::query("INSERT INTO audit_log (actor, action, target, detail) VALUES ($1, 'organizer.proof', $2, $3)")
+        .bind(user.id)
+        .bind(format!("user:{}", user.id))
+        .bind(json!({ "from": from }))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    tracing::info!("organizer {} sent a proof", user.id);
+    Ok(Json(me_for(&state, &user).await?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     type Change = fn(&mut Registration);
+    type ProofChange = fn(&mut Proof);
+
+    fn proof() -> Proof {
+        Proof {
+            school: " SD Harapan 1 ".into(),
+            city: "Bandung".into(),
+            npsn: "2020 1234".into(),
+            teacher_role: "Guru kelas 5".into(),
+            proof_url: "https://sdharapan.sch.id/guru".into(),
+            school_email: "".into(),
+            head_contact: "".into(),
+        }
+    }
+
+    #[test]
+    fn a_proof_is_trimmed_and_needs_a_page_or_a_school_email() {
+        let p = validate_proof(&proof()).unwrap();
+        assert_eq!((p.school.as_str(), p.npsn.as_str()), ("SD Harapan 1", "20201234"));
+        let mut by_mail = proof();
+        by_mail.proof_url = " ".into();
+        by_mail.school_email = " Rina@SDHarapan.sch.id ".into();
+        assert_eq!(validate_proof(&by_mail).unwrap().school_email, "rina@sdharapan.sch.id");
+        let mut abroad = proof();
+        abroad.npsn = "".into();
+        assert!(validate_proof(&abroad).is_ok());
+    }
+
+    #[test]
+    fn refuses_a_proof_an_admin_cannot_check() {
+        let cases: [(ProofChange, &str); 9] = [
+            (|p| p.school = "S".into(), "school"),
+            (|p| p.city = " ".into(), "city"),
+            (|p| p.npsn = "1234".into(), "npsn"),
+            (|p| p.teacher_role = "".into(), "teacher_role"),
+            (|p| p.proof_url = "sdharapan.sch.id".into(), "proof_url"),
+            (|p| p.proof_url = "https://localhost/x".into(), "proof_url"),
+            (|p| p.school_email = "rina@".into(), "school_email"),
+            (|p| p.proof_url = "".into(), "proof"),
+            (|p| p.head_contact = "x".repeat(121), "head_contact"),
+        ];
+        for (change, why) in cases {
+            let mut p = proof();
+            change(&mut p);
+            assert_eq!(validate_proof(&p), Err(why), "{why}");
+        }
+    }
 
     fn reg() -> Registration {
         Registration {

@@ -29,7 +29,8 @@ use crate::rooms::{pseudonym, random_code, random_hex, random_u64};
 
 /// Seats in one class.
 const MAX_SEATS: i16 = 100;
-/// Seats in a pending organizer's one trial class.
+/// Seats in a pending organizer's one trial class, which pauses 14 days
+/// after it was made until the organizer is verified (OWNER_FROZEN).
 const TRIAL_SEATS: i16 = 5;
 /// Active classes per teacher.
 const MAX_CLASSES: i64 = 30;
@@ -179,7 +180,7 @@ fn fresh_name(taken: &[String]) -> String {
 // ------------------------------------------------------------ teacher side
 
 /// What the signed-in adult may make: approved organizers (and admins) a
-/// full set, pending ones a single trial class.
+/// full set, pending ones (and those asked for more proof) a single trial class.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Allowance {
     Trial,
@@ -197,14 +198,15 @@ pub(crate) async fn allowance(db: &PgPool, user: i64, admin: bool) -> Result<All
             .await?;
     match status.as_deref() {
         Some("approved") => Ok(Allowance::Full),
-        Some("pending") => Ok(Allowance::Trial),
+        Some("pending" | "needs_info") => Ok(Allowance::Trial),
+        Some("rejected") => Err(err(StatusCode::FORBIDDEN, "rejected")),
         Some(_) => Err(err(StatusCode::FORBIDDEN, "suspended")),
         None => Err(err(StatusCode::FORBIDDEN, "not_organizer")),
     }
 }
 
 /// A signed-in adult who may keep classes: an admin, an approved organizer,
-/// or a pending one with their trial class. A suspended one may not.
+/// or a pending one with their trial class. A rejected or suspended one may not.
 pub(crate) async fn teacher(state: &State, headers: &HeaderMap) -> Result<(User, Allowance), ApiError> {
     let user = signed_in(state, headers).await?;
     let a = allowance(&state.db, user.id, user.admin).await?;
@@ -772,7 +774,7 @@ pub(crate) async fn sign_in(db: &PgPool, guard: &Guard, body: &SignIn) -> Result
     let code = body.class_code.trim().to_uppercase();
     let mut tx = db.begin().await?;
     let class: Option<(String, String, i16, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "SELECT id, label, grade, {OWNER_SUSPENDED} FROM classes c
+        "SELECT id, label, grade, {OWNER_FROZEN} FROM classes c
          WHERE join_code = $1 AND status = 'active'"
     )))
     .bind(&code)
@@ -877,10 +879,13 @@ pub(crate) struct Student {
 /// Seat id, class id, number, pseudonym, class label, grade, chosen group.
 type StudentRow = (i64, String, i16, String, String, i16, Option<i16>);
 
-/// True when the teacher of class `c` is suspended: the class waits, its
-/// devices signed out, until the account is back.
-const OWNER_SUSPENDED: &str = "EXISTS (SELECT 1 FROM organizer_approvals a
-    WHERE a.user_id = c.owner AND a.status = 'suspended')";
+/// True when class `c` waits, its devices signed out: its teacher is
+/// suspended or rejected, or not verified yet 14 days after making it (the
+/// trial is over). It is back as the account is.
+pub(crate) const OWNER_FROZEN: &str = "EXISTS (SELECT 1 FROM organizer_approvals a
+    WHERE a.user_id = c.owner
+      AND (a.status IN ('suspended', 'rejected')
+           OR (a.status IN ('pending', 'needs_info') AND c.created_at < now() - interval '14 days')))";
 
 /// The student a token belongs to, while it is fresh and the class active.
 pub(crate) async fn student(db: &PgPool, token: &str) -> Result<Option<Student>, sqlx::Error> {
@@ -890,7 +895,7 @@ pub(crate) async fn student(db: &PgPool, token: &str) -> Result<Option<Student>,
          JOIN class_seats s ON s.id = t.seat_id
          JOIN classes c ON c.id = s.class_id
          WHERE t.token_hash = $1 AND t.expires_at > now() AND c.status = 'active'
-           AND NOT {OWNER_SUSPENDED}"
+           AND NOT {OWNER_FROZEN}"
     )))
     .bind(token_hash(token))
     .fetch_optional(db)

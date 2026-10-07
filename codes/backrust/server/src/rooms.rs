@@ -1583,14 +1583,20 @@ pub async fn create(
         (Some(id), Some(u)) => {
             // Only a teacher who may keep classes opens a room for one.
             crate::classes::allowance(&state.db, u.id, u.admin).await?;
-            let row: Option<(String, i16)> = sqlx::query_as(
-                "SELECT label, grade FROM classes WHERE id = $1 AND owner = $2 AND status = 'active'",
-            )
+            let row: Option<(String, i16, bool)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                "SELECT label, grade, {} FROM classes c
+                 WHERE id = $1 AND owner = $2 AND status = 'active'",
+                crate::classes::OWNER_FROZEN
+            )))
             .bind(id)
             .bind(u.id)
             .fetch_optional(&state.db)
             .await?;
-            let (label, grade) = row.ok_or(ApiError(StatusCode::NOT_FOUND, "class_not_found"))?;
+            let (label, grade, frozen) =
+                row.ok_or(ApiError(StatusCode::NOT_FOUND, "class_not_found"))?;
+            if frozen {
+                return Err(ApiError(StatusCode::FORBIDDEN, "class_frozen"));
+            }
             Some(RoomClass {
                 id: id.clone(),
                 label,

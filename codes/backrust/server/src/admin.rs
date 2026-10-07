@@ -1,7 +1,9 @@
 //! Global Admin, first part: the organizer gate (docs/SKEMA-PENGGUNA.md 3.2,
-//! docs/ADMIN.md). An admin lists organizers by status and approves,
-//! suspends or returns one to pending, always with a reason, and every change
-//! goes to the audit log. Only a verified email on ADMIN_EMAILS is an admin.
+//! docs/ADMIN.md). An admin lists organizers by status with the proof each
+//! sent, and approves, asks for more, rejects, suspends or returns one to
+//! pending, always with a reason, and every change goes to the audit log.
+//! Asking for more and rejecting show the reason to the organizer. Only a
+//! verified email on ADMIN_EMAILS is an admin.
 
 use axum::Json;
 use axum::extract::{Path, Query, State as Extract};
@@ -12,7 +14,7 @@ use serde_json::json;
 use crate::State;
 use crate::organizer::{ApiError, User, signed_in};
 
-const STATUSES: [&str; 3] = ["pending", "approved", "suspended"];
+const STATUSES: [&str; 5] = ["pending", "needs_info", "approved", "rejected", "suspended"];
 
 async fn admin(state: &State, headers: &HeaderMap) -> Result<User, ApiError> {
     let user = signed_in(state, headers).await?;
@@ -45,6 +47,18 @@ pub struct OrganizerRow {
     org_name: Option<String>,
     org_kind: Option<String>,
     country: Option<String>,
+    /// The message the organizer reads with `needs_info` or `rejected`.
+    note: String,
+    /// The proof they sent, all empty when none came yet.
+    school: Option<String>,
+    city: Option<String>,
+    npsn: Option<String>,
+    teacher_role: Option<String>,
+    proof_url: Option<String>,
+    school_email: Option<String>,
+    head_contact: Option<String>,
+    /// UTC, "YYYY-MM-DD HH:MM".
+    proof_sent: Option<String>,
     /// When they first signed in and when their status last changed, UTC, "YYYY-MM-DD HH:MM".
     joined: String,
     updated: String,
@@ -56,19 +70,23 @@ macro_rules! row_sql {
         concat!(
             "SELECT u.id AS user_id, u.display_name AS name, u.email, u.email_verified,
             u.sign_in_provider AS provider, a.status, a.path,
-            o.name AS org_name, o.kind AS org_kind, o.country,
+            o.name AS org_name, o.kind AS org_kind, o.country, a.note,
+            p.school, p.city, p.npsn, p.teacher_role, p.proof_url, p.school_email, p.head_contact,
+            to_char(p.sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') AS proof_sent,
             to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') AS joined,
             to_char(a.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') AS updated
      FROM organizer_approvals a
      JOIN users u ON u.id = a.user_id
      LEFT JOIN memberships m ON m.user_id = u.id AND m.role = 'owner'
-     LEFT JOIN organizations o ON o.id = m.org_id ",
+     LEFT JOIN organizations o ON o.id = m.org_id
+     LEFT JOIN teacher_proofs p ON p.user_id = u.id ",
             $tail
         )
     };
 }
 
-/// Organizers with one status, the most recently changed first.
+/// Organizers with one status: those who sent a proof first, then the most
+/// recently changed.
 pub async fn list(
     Extract(state): Extract<State>,
     headers: HeaderMap,
@@ -79,7 +97,8 @@ pub async fn list(
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "status"));
     }
     let rows = sqlx::query_as::<_, OrganizerRow>(row_sql!(
-        "WHERE a.status = $1 AND a.path <> 'demo' ORDER BY a.updated_at DESC, u.id DESC LIMIT 200"
+        "WHERE a.status = $1 AND a.path <> 'demo'
+         ORDER BY p.user_id IS NULL, a.updated_at DESC, u.id DESC LIMIT 200"
     ))
     .bind(&q.status)
     .fetch_all(&state.db)
@@ -129,17 +148,20 @@ pub async fn decide(
         return Err(ApiError(StatusCode::CONFLICT, "unchanged"));
     }
     // An admin's approval is the manual path; the approver is kept with it.
+    // Asking for more or rejecting leaves the reason for the organizer to read.
     sqlx::query(
         "UPDATE organizer_approvals SET
              status = $2,
              path = CASE WHEN $2 = 'approved' AND path = 'self' THEN 'manual' ELSE path END,
              approved_by = CASE WHEN $2 = 'approved' THEN $3 ELSE approved_by END,
+             note = CASE WHEN $2 IN ('needs_info', 'rejected') THEN $4 ELSE '' END,
              updated_at = now()
          WHERE user_id = $1",
     )
     .bind(user_id)
     .bind(status)
     .bind(by.id)
+    .bind(&reason)
     .execute(&mut *tx)
     .await?;
     sqlx::query("INSERT INTO audit_log (actor, action, target, detail) VALUES ($1, 'organizer.status', $2, $3)")
@@ -177,6 +199,7 @@ mod tests {
             validate(&d("approved", "  school email checked  ")),
             Ok(("approved", "school email checked".into()))
         );
+        assert_eq!(validate(&d("needs_info", "add a school page")), Ok(("needs_info", "add a school page".into())));
         assert_eq!(validate(&d("deleted", "spam")), Err("status"));
         assert_eq!(validate(&d("suspended", "  ")), Err("reason"));
         assert_eq!(validate(&d("suspended", &"x".repeat(301))), Err("reason"));
