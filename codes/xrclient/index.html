@@ -6,8 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
-    <link rel="icon" href="data:," />
     <title>Numeria Arena</title>
+    <meta name="description" content="Math games on a paper desk: practise, race robots and classmates, and build a town with what you earn." />
+    <!-- The paper chicken is the game's mark: the tab, the home screen and a shared link. -->
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#e0c780" />
+    <meta property="og:title" content="Numeria Arena" />
+    <meta property="og:description" content="Math games on a paper desk: practise, race robots and classmates, and build a town with what you earn." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://numeria.eziedutech.dev/play/icons/og-card.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>
       /* The page never scrolls: the home page and the game fill the window. */
       html,
@@ -46,6 +57,13 @@
       #boot .title {
         width: min(430px, 86vw);
         height: auto;
+      }
+      /* The paper chicken over the title, as on the home page's book. */
+      #boot .mark {
+        width: min(132px, 30vw);
+        height: auto;
+        margin-bottom: -10px;
+        filter: drop-shadow(3px 6px 6px rgba(70, 50, 25, 0.25));
       }
       #boot .card {
         width: min(330px, 86vw);
@@ -126,6 +144,7 @@
   </head>
   <body style="margin: 0; background: #e0c780">
     <div id="boot" role="status" aria-live="polite">
+      <img class="mark" src="icons/chicken-256.webp" alt="" width="132" height="132" />
       <img class="title" src="ui2d/brand/title_numeria_arena.webp" alt="Numeria Arena" width="430" height="84" />
       <div class="card">
         <div class="folds" aria-hidden="true"><span></span><span></span><span></span></div>

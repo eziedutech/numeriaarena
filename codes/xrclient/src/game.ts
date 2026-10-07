@@ -47,6 +47,7 @@ import {
   type Figure,
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
+import { makeOrigami } from './art/origami.js';
 import { makePaperHand } from './art/paper-hand.js';
 import { BANK_H, GATE_H, PAN_CARD_Z, PAN_TOP, PLANK_L, PLANK_T, WEIGHT_H, makeBalance, makeBank, makeGate, makeParcel, makePlank, makeWeight } from './art/game-props.js';
 import { UI_HEIGHT, placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
@@ -334,6 +335,15 @@ const LOBBY_BOOK_Y = 1.15;
 const PLACES_FOR_MS = 60_000;
 /** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
 const BOOK_MID_Z = -0.12;
+/**
+ * Under the home page the game's mark, the coral paper chicken, stands
+ * behind the book where the line of animals stood, turned a little
+ * towards the camera as in the logo.
+ */
+const LOGO_COLOR = 0xf2716b;
+const LOGO_AT = new Vector3(0, 0.023, -0.36);
+const LOGO_SCALE = 2.8;
+const LOGO_YAW = -0.55;
 
 /**
  * Foldlings show their side to the player, head to the right and turned a
@@ -1550,6 +1560,29 @@ export class GameSystem extends createSystem({
     this.fitBook();
   }
 
+  /** The paper chicken standing behind the book under the home page. */
+  private logo?: Entity;
+
+  /** Pops the chicken up when the home page shows, folds it away when it goes. */
+  private showLogo(on: boolean): void {
+    if (!on) {
+      const obj = this.logo?.object3D;
+      if (!obj || !this.logo) return;
+      const e = this.logo;
+      this.logo = undefined;
+      this.tween(obj, obj.position, 0.25, 0, 0.001, () => this.remove(e));
+      return;
+    }
+    if (this.logo || !this.deskEntity()) return;
+    const { model } = makeOrigami('chicken', LOGO_COLOR);
+    model.name = 'home-logo';
+    model.rotation.y = LOGO_YAW;
+    model.position.copy(LOGO_AT);
+    model.scale.setScalar(0.001);
+    this.logo = this.add(model);
+    this.tween(model, LOGO_AT, 0.45, 0.04, LOGO_SCALE);
+  }
+
   /** The size the book is eased to last. */
   private bookSize = 1;
 
@@ -2308,6 +2341,7 @@ export class GameSystem extends createSystem({
     // The page has its own title; the 3D title and score come back after it.
     if (home !== this.homeWasShown) {
       this.homeWasShown = home;
+      this.showLogo(home);
       if (home) {
         if (this.title) this.title.visible = false;
         this.score.mesh.visible = false;

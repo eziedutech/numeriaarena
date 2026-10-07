@@ -294,11 +294,13 @@ interface Scanned {
   turn: number;
   flag: [number, number];
   eye?: [number, number];
+  /** The eye's radius when not SCANNED_EYE_R: a smaller head gets a smaller eye. */
+  eyeR?: number;
 }
 
 /** Heights rank the animals by size (elephant, cow, dog and chicken, cat and rabbit, bird, fish), not true to life. */
 const SCANNED: Record<Species, Scanned> = {
-  chicken: { height: 0.062, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.8, 0.875] },
+  chicken: { height: 0.062, turn: Math.PI / 2, flag: [0.42, 0.62], eye: [0.86, 0.9], eyeR: 0.0011 },
   cat: { height: 0.05, turn: Math.PI / 2, flag: [0.45, 0.7], eye: [0.86, 0.6] },
   rabbit: { height: 0.056, turn: Math.PI / 2, flag: [0.4, 0.5], eye: [0.82, 0.58] },
   elephant: { height: 0.085, turn: Math.PI / 2, flag: [0.45, 0.85], eye: [0.9, 0.6] },
@@ -497,7 +499,7 @@ export function makeOrigami(
     body.add(mesh);
     if (scanned.eye) {
       for (const side of [1, -1]) {
-        const eye = new Mesh(new CircleGeometry(SCANNED_EYE_R, 10), paper(SCANNED_EYE));
+        const eye = new Mesh(new CircleGeometry(SCANNED[species].eyeR ?? SCANNED_EYE_R, 10), paper(SCANNED_EYE));
         eye.name = 'eye';
         eye.position.set(scanned.eye.x, scanned.eye.y, side > 0 ? scanned.front + 0.0006 : scanned.back - 0.0006);
         if (side < 0) eye.rotation.y = Math.PI;

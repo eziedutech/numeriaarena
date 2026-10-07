@@ -14,12 +14,21 @@ import "@fontsource/atkinson-hyperlegible/700.css";
 import "./app.css";
 import { GAME } from "./game-link";
 
+// The game's paper chicken on every page's tab and home-screen shortcut.
+export const links: Route.LinksFunction = () => [
+  { rel: "icon", href: "/favicon.ico", sizes: "any" },
+  { rel: "icon", type: "image/png", sizes: "32x32", href: "/icons/favicon-32.png" },
+  { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+];
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#e0c780" />
+        <meta property="og:image" content="https://numeria.eziedutech.dev/icons/og-card.png" />
         <Meta />
         <Links />
       </head>
