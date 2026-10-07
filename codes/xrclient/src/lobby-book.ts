@@ -14,10 +14,15 @@ export interface Places {
   city?: number;
 }
 
+/** A teacher's account: waiting for approval, approved or suspended; none until signed up. */
+export type TeacherStatus = 'pending' | 'approved' | 'suspended';
+
 export interface LobbyFacts {
   best?: { points: number; stars: number };
   /** A signed-in seat; a guest has none. */
   seat?: { name: string; classLabel: string; seat: number };
+  /** A signed-in teacher, written on the right page in place of a seat. */
+  teacher?: { name: string; org?: string; status?: TeacherStatus };
   folds?: number;
   buildings?: number;
   /** The seat's best points in one race the server judged. */
@@ -50,6 +55,10 @@ const TEXT = {
     loading: 'Finding your places...',
     offline: 'Places show when online.',
     signIn: 'Sign in to your class to join the leaderboards.',
+    teacher: 'TEACHER',
+    status: 'ACCOUNT',
+    statuses: { pending: 'Waiting for approval', approved: 'Approved', suspended: 'Suspended' } as Record<TeacherStatus, string>,
+    finishSignUp: 'Finish signing up',
   },
   id: {
     best: 'TERBAIKKU',
@@ -72,6 +81,10 @@ const TEXT = {
     loading: 'Mencari peringkatmu...',
     offline: 'Peringkat tampil saat online.',
     signIn: 'Masuk ke kelasmu untuk ikut papan peringkat.',
+    teacher: 'GURU',
+    status: 'AKUN',
+    statuses: { pending: 'Menunggu persetujuan', approved: 'Disetujui', suspended: 'Ditangguhkan' } as Record<TeacherStatus, string>,
+    finishSignUp: 'Selesaikan pendaftaran',
   },
 };
 type Words = (typeof TEXT)['en'];
@@ -242,6 +255,7 @@ function leftPage(pen: Pen, t: Words, f: LobbyFacts): void {
 
 function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
   pen.head(t.me, 210);
+  if (f.teacher) return teacherPage(pen, t, f.teacher);
   pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 325, 116, 700, TEAL);
   if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 388, 64, 400, SOFT);
   let y = f.seat ? 465 : 450;
@@ -267,6 +281,16 @@ function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
     pen.text(place(f.classPlace?.[key]), col[0], at, 76, 700, TEAL, 'right');
     pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 700, TEAL, 'right');
   });
+}
+
+/** A teacher's right page: their name, TEACHER, their school, and their account's status. */
+function teacherPage(pen: Pen, t: Words, me: NonNullable<LobbyFacts['teacher']>): void {
+  pen.text(me.name.toUpperCase(), pen.left, 325, 116, 700, TEAL);
+  pen.text(t.teacher, pen.left, 388, 64, 400, SOFT);
+  let y = 480;
+  if (me.org) y = pen.para(me.org, y, 72, 700, 84) + 10;
+  pen.text(t.status, pen.left, y, 62, 400, SOFT);
+  pen.text(me.status ? t.statuses[me.status] : t.finishSignUp, pen.left, y + 88, 76, 700, me.status === 'approved' ? TEAL : INK);
 }
 
 interface Page {

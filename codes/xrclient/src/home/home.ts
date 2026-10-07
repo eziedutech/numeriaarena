@@ -620,7 +620,10 @@ export class Home {
     const hint = this.onHeadset && this.device !== 'smartboard' ? t.hintHeadset[this.device] : t.hint[this.device];
     const said = el('div', 'hint', this.stage);
     said.textContent = hint;
-    if (!this.writeOnBook(hint)) said.classList.add('bar');
+    // Signed in, the book's pages are the player's (written by the game), and the hint goes over them.
+    const signedIn = teacherState().kind === 'in' || studentState() !== null;
+    if (signedIn) this.eraseBook();
+    if (signedIn || !this.writeOnBook(hint)) said.classList.add('bar');
     if (!online()) {
       // No network: the games still play, and say where their results go. A row of its own,
       // under the hint, so the chips above keep their width.

@@ -77,6 +77,7 @@ import { readAloud, stopReading } from './speech.js';
 import { steadyAim } from './steady-aim.js';
 import { townSticker } from './home/town-sticker.js';
 import { onStudent, reportPlay, seatKey, studentState, type Student } from './home/student.js';
+import { teacherState, type TeacherState } from './home/teacher.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
 import { skillTitle, unmarked } from './town/town-landmarks.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
@@ -1183,7 +1184,28 @@ export class GameSystem extends createSystem({
     this.menuTrays = [];
     this.lobbyAsk += 1;
     this.lobbyBook.erase();
+    this.homeBookFor = undefined;
     this.tip?.mesh.removeFromParent();
+  }
+
+  /** Who the home page's book was written for last: the seat, the teacher and the language. */
+  private homeBookFor?: [Student | null, TeacherState, string];
+
+  /**
+   * Under the home page the book shows a signed-in student's or teacher's
+   * pages as the desk menu does, written again when who is signed in or the
+   * language changes; a guest's stays pencil.
+   */
+  private homeBook(): void {
+    const s = studentState();
+    const t = teacherState();
+    const lang = getLang();
+    const was = this.homeBookFor;
+    if (was && was[0] === s && was[1] === t && was[2] === lang) return;
+    this.homeBookFor = [s, t, lang];
+    if (s || t.kind === 'in') return this.showBest();
+    this.lobbyAsk += 1;
+    this.lobbyBook.erase();
   }
 
   /**
@@ -1192,17 +1214,29 @@ export class GameSystem extends createSystem({
    */
   private showBest(): void {
     const ask = ++this.lobbyAsk;
-    const s = studentState();
+    const teacher = teacherState();
+    // A signed-in teacher's page has them in place of a seat, as the home page does.
+    const s = teacher.kind === 'in' ? null : studentState();
     const facts: LobbyFacts = {
       best: this.readBest(),
       seat: s ? { name: s.pseudonym, classLabel: s.class_label, seat: s.seat } : undefined,
       places: s ? (online() ? 'loading' : 'offline') : undefined,
     };
+    if (teacher.kind === 'in') {
+      const me = teacher.me;
+      const org = me.organizer?.org;
+      facts.teacher = {
+        name: me.name || me.email.split('@')[0],
+        org: org && org.kind !== 'personal' ? org.name : undefined,
+        status: me.organizer?.status,
+      };
+    }
     const write = () => {
       if (ask === this.lobbyAsk) this.lobbyBook.write(facts);
       return ask === this.lobbyAsk;
     };
     write();
+    if (facts.teacher) return;
     void (async () => {
       try {
         const model = await TownModel.open();
@@ -1849,7 +1883,7 @@ export class GameSystem extends createSystem({
       });
     }
     this.resultsChips([
-      ['build', 'house', T.build, 'plain'],
+      ['build', 'city', T.build, 'plain'],
       ['done', 'check', T.done, 'accent'],
     ]);
     void this.landmarkNews(saved);
@@ -1916,7 +1950,7 @@ export class GameSystem extends createSystem({
     this.resultsChips([
       ['again', 'replay', T.again, 'plain'],
       ['games', 'envelope', T.otherGame, 'plain'],
-      ['build', 'house', T.build, 'plain'],
+      ['build', 'city', T.build, 'plain'],
       ['done', 'check', T.done, 'accent'],
     ]);
     void this.landmarkNews(saved);
@@ -2224,7 +2258,9 @@ export class GameSystem extends createSystem({
     if (home) {
       if (this.queries.buttons.entities.size > 0) this.clearMenu();
       this.home.show();
+      this.homeBook();
     } else {
+      this.homeBookFor = undefined;
       this.home.hide(!immersive && this.phase !== 'loading');
     }
     // A practice in the browser can be left for another game (in the headset QUIT does it).
