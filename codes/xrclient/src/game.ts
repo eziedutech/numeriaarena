@@ -247,9 +247,14 @@ const GAME_TINT: Record<MenuChoice, string> = {
 };
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-/** The Fold Town sticker, lying back like the chips left of the games and lifted off the desk like them. */
-const TOWN_AT = new Vector3(-0.33, 0.026, 0.118);
-const TOWN_W = 0.17;
+/**
+ * The Fold Town sticker, lying back left of the games like their chips: about
+ * as tall as their two rows and centred on them, TOWN_GAP clear of their left edge.
+ */
+const TOWN_W = 0.145;
+const TOWN_H = (TOWN_W * 2) / 3;
+const TOWN_GAP = 0.025;
+const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 const HINT_SEEN = 'numeria.menuHintSeen';
@@ -1301,7 +1306,7 @@ export class GameSystem extends createSystem({
       tex.needsUpdate = true;
     };
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(townSticker(600))}`;
-    const h = (TOWN_W * canvas.height) / canvas.width;
+    const h = TOWN_H;
     const plane = new Mesh(
       new PlaneGeometry(TOWN_W, h),
       new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: DoubleSide }),
