@@ -9,6 +9,7 @@ mod classes;
 mod demo_teacher;
 mod insight;
 mod leaderboard;
+mod mail;
 mod organizer;
 mod practice;
 mod rooms;
@@ -39,6 +40,8 @@ pub struct AppState {
     /// Wrong picture passwords per class, to pause a class's sign-in.
     pub classes: classes::Guard,
     pub ai: ai::Gateway,
+    /// Letters to teachers; off without SMTP settings.
+    pub mail: mail::Mailer,
 }
 
 pub type State = Arc<AppState>;
@@ -189,6 +192,7 @@ async fn main() {
         classes: classes::Guard::default(),
         // Keys of AI providers are sealed with this; without it AI stays off.
         ai: ai::Gateway::new(std::env::var("AI_MASTER_KEY").ok().as_deref()),
+        mail: mail::Mailer::from_env(),
     });
 
     let port: u16 = std::env::var("PORT")

@@ -175,6 +175,14 @@ pub async fn decide(
         "admin {} set organizer {user_id} from {from} to {status}",
         by.id
     );
+    if status == "approved" {
+        let (email, name): (String, String) =
+            sqlx::query_as("SELECT email, display_name FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_one(&state.db)
+                .await?;
+        state.mail.verified(user_id, &email, &name);
+    }
     let row = sqlx::query_as::<_, OrganizerRow>(row_sql!("WHERE a.user_id = $1"))
         .bind(user_id)
         .fetch_one(&state.db)

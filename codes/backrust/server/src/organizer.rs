@@ -391,6 +391,9 @@ pub async fn register(
         .await?;
     tx.commit().await?;
     tracing::info!("organizer {} registered, {status} ({path})", user.id);
+    if auto {
+        state.mail.verified(user.id, &user.adult.email, &v.name);
+    }
 
     user.name = v.name;
     Ok((StatusCode::CREATED, Json(me_for(&state, &user).await?)))

@@ -12,6 +12,7 @@ axum = { workspace = true, features = ["ws"] }
 tokio.workspace = true
 sqlx.workspace = true
 jsonwebtoken.workspace = true
+lettre.workspace = true
 reqwest.workspace = true
 ring.workspace = true
 rustls.workspace = true
