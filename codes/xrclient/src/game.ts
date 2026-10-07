@@ -48,7 +48,7 @@ import {
 } from './art/models.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { makePaperHand } from './art/paper-hand.js';
-import { BANK_H, GATE_H, PLANK_L, PLANK_T, WEIGHT_H, makeBalance, makeBank, makeGate, makePlank, makeWeight } from './art/game-props.js';
+import { BANK_H, GATE_H, PAN_CARD_Z, PAN_TOP, PLANK_L, PLANK_T, WEIGHT_H, makeBalance, makeBank, makeGate, makeParcel, makePlank, makeWeight } from './art/game-props.js';
 import { UI_HEIGHT, placeUiImage, prefetchUi, showStickerBackings, uiImage, useUiLanguage, type UiName } from './art/ui2d.js';
 import {
   BUILD_GAMES,
@@ -523,7 +523,7 @@ export class GameSystem extends createSystem({
   /** What stands on the desk for the creature's question (a balance, the banks of a gap): gone with its card. */
   private props: Entity[] = [];
   /** Balance Gate: the beam that levels and the right pan's card. */
-  private balance?: { beam: Object3D; right: Label };
+  private balance?: { beam: Object3D; pans: [Object3D, Object3D]; right: Label };
   /** Bridge Builder: the planks laid in the gap, left to right. */
   private laid: Entity[] = [];
   private figure?: Figure;
@@ -2408,11 +2408,17 @@ export class GameSystem extends createSystem({
     b.root.name = 'balance';
     b.root.position.copy(BALANCE_AT);
     b.beam.rotation.z = BALANCE_TIP;
+    // The pans hang level whichever way the beam tips.
+    for (const pan of b.pans) pan.rotation.z = -BALANCE_TIP;
+    // A parcel is weighed on the left pan; the cards stand in front of the strings.
+    const parcel = makeParcel();
+    parcel.position.y = PAN_TOP;
+    b.pans[0].add(parcel);
     const left = offer.prompt[getLang()].replace(/\s*=\s*\?\s*$/u, '');
-    this.label(left, 0.02 * textScale(), b.pans[0], 0.03);
-    const right = this.label('?', 0.02 * textScale(), b.pans[1], 0.03);
+    this.label(left, 0.02 * textScale(), b.pans[0], 0.03, PAN_CARD_Z);
+    const right = this.label('?', 0.02 * textScale(), b.pans[1], 0.03, PAN_CARD_Z);
     this.addProp(b.root);
-    this.balance = { beam: b.beam, right };
+    this.balance = { beam: b.beam, pans: b.pans, right };
     const n = offer.balloons.length;
     offer.balloons.forEach((w, i) => {
       const g = makeWeight(BALLOON_COLORS[i % BALLOON_COLORS.length]);
@@ -2440,7 +2446,7 @@ export class GameSystem extends createSystem({
   private showPlanks(offer: Offer): void {
     this.laid = [];
     for (const side of [-1, 1]) {
-      const bank = makeBank();
+      const bank = makeBank(side);
       bank.name = 'bridge-bank';
       bank.position.set(side * (GAP_W / 2 + 0.03), 0, GAP_Z);
       this.addProp(bank);
@@ -2628,9 +2634,14 @@ export class GameSystem extends createSystem({
     } else {
       this.tween(obj, obj.position.clone(), 0.2, 0, 0.01, () => this.remove(e));
     }
-    // The right weight levels the beam, its number on the right pan.
+    // The right weight levels the beam, a small one of it and its number on the right pan.
     if (verdict.correct && this.balance) {
       this.balance.beam.rotation.z = 0;
+      for (const pan of this.balance.pans) pan.rotation.z = 0;
+      const small = makeWeight(BALLOON_COLORS[index % BALLOON_COLORS.length]);
+      small.position.y = PAN_TOP;
+      small.scale.setScalar(0.6);
+      this.balance.pans[1].add(small);
       this.balance.right.set(this.offer.balloons[index]?.text ?? '?');
     }
     this.afterVerdict(verdict);
