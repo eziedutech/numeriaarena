@@ -219,30 +219,30 @@ class Pen {
 }
 
 function leftPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.best, 110);
+  pen.head(t.best, 170);
   if (f.best) {
-    const w = pen.text(String(f.best.points), pen.left, 330, 230, 800, TEAL);
-    pen.text(t.pts, pen.left + w + 24, 330, 84, 800);
-    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 440, 52, i < f.best.stars);
-    pen.text(t.bestAbout, pen.left, 560, 62, 700, SOFT);
+    const w = pen.text(String(f.best.points), pen.left, 385, 230, 800, TEAL);
+    pen.text(t.pts, pen.left + w + 24, 385, 84, 800);
+    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 488, 52, i < f.best.stars);
+    pen.text(t.bestAbout, pen.left, 595, 62, 700, SOFT);
   } else {
-    pen.para(t.noBest, 260, 84, 800, 96);
-    pen.para(t.noBestAbout, 470, 62, 700, 76, SOFT);
+    pen.para(t.noBest, 320, 84, 800, 96);
+    pen.para(t.noBestAbout, 520, 62, 700, 76, SOFT);
   }
-  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 660);
-  const w = pen.text(t.pick, pen.left, 765, 72, 800);
-  pen.line(pen.left, 788, pen.left + w, 5, SOFT);
+  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 685);
+  const w = pen.text(t.pick, pen.left, 770, 72, 800);
+  pen.line(pen.left, 790, pen.left + w, 5, SOFT);
 }
 
 function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.me, 110);
-  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 240, 116, 800, TEAL);
-  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 315, 60, 700, SOFT);
-  let y = f.seat ? 400 : 380;
+  pen.head(t.me, 170);
+  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 290, 116, 800, TEAL);
+  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 355, 60, 700, SOFT);
+  let y = f.seat ? 440 : 420;
   if (f.folds !== undefined) {
     pen.row(t.folds, String(f.folds), y);
-    pen.row(t.buildings, String(f.buildings ?? 0), y + 95);
-    y += 205;
+    pen.row(t.buildings, String(f.buildings ?? 0), y + 90);
+    y += 190;
   }
   if (!f.seat) return void pen.para(t.signIn, y, 62, 700, 76);
   if (f.places !== 'ready') return void pen.para(f.places === 'offline' ? t.offline : t.loading, y, 62, 700, 76, SOFT);
@@ -256,7 +256,7 @@ function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
     [t.city, 'city'],
   ];
   rows.forEach(([label, key], i) => {
-    const at = y + 75 + i * 80;
+    const at = y + 70 + i * 76;
     pen.text(label, pen.left, at, 58, 800, INK, 'left', col[0] - 170 - pen.left);
     pen.text(place(f.classPlace?.[key]), col[0], at, 76, 800, TEAL, 'right');
     pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 800, TEAL, 'right');
