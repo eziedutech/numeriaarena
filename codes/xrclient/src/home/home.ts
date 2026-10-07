@@ -558,9 +558,16 @@ export class Home {
     t.footer.forEach((label, i) => {
       const b = el('button', '', footer);
       b.textContent = label;
-      // Privacy and the page for parents point to the full policy on the site.
-      const policy = keys[i] === 'Privacy' || keys[i] === 'For parents' ? { href: '/privacy', label: t.fullPolicy } : undefined;
-      b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]], policy));
+      // Each page goes on for longer on the site; privacy and the page for parents in the full policy.
+      const pages: Record<string, string> = {
+        'How to play': '/how-to-play',
+        'For parents': '/privacy#parents',
+        Privacy: '/privacy',
+        'Credits and licenses': '/credits',
+        About: '/about',
+      };
+      const more = { href: pages[keys[i]], label: t.more[keys[i]] ?? t.fullPolicy };
+      b.addEventListener('click', () => this.message(label.toUpperCase(), t.pages[keys[i]], more));
     });
     // Teachers and admins: the full teacher page on the site (not on a student's device).
     if (!student) {

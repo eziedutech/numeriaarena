@@ -5,7 +5,7 @@ import { GAME } from "./game-link";
 export type Lang = "en" | "id";
 
 export const CONTACT = "numeria@eziedutech.dev";
-export const UPDATED = { en: "Last updated 2 October 2026", id: "Terakhir diperbarui 2 Oktober 2026" };
+export const UPDATED = { en: "Last updated 7 October 2026", id: "Terakhir diperbarui 7 Oktober 2026" };
 
 function readLang(): Lang {
   try {
@@ -13,6 +13,21 @@ function readLang(): Lang {
   } catch {
     return "en";
   }
+}
+
+/**
+ * A picture from the game, with a caption under it. Pictures live in
+ * `public/info/`; one not there yet leaves no gap on the page.
+ */
+export function Shot({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+  const [gone, setGone] = useState(false);
+  if (gone) return null;
+  return (
+    <figure className="paper-shot">
+      <img src={`/info/${src}`} alt={alt} loading="lazy" onError={() => setGone(true)} />
+      <figcaption>{caption}</figcaption>
+    </figure>
+  );
 }
 
 export function useLang(): [Lang, (l: Lang) => void] {
@@ -72,8 +87,11 @@ export function PaperPage({
         {children}
       </article>
       <footer className="paper-foot">
+        <a href="/about">{lang === "id" ? "Tentang" : "About"}</a>
+        <a href="/how-to-play">{lang === "id" ? "Cara bermain" : "How to play"}</a>
         <a href="/privacy">{lang === "id" ? "Privasi" : "Privacy"}</a>
         <a href="/data-deletion">{lang === "id" ? "Penghapusan data" : "Data deletion"}</a>
+        <a href="/credits">{lang === "id" ? "Kredit dan lisensi" : "Credits and licenses"}</a>
         <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
       </footer>
     </main>

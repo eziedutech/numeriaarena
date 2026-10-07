@@ -57,6 +57,12 @@ const EN = {
   soon: 'SOON',
   footer: ['How to play', 'For parents', 'Privacy', 'Credits and licenses', 'About'],
   fullPolicy: 'Read the full privacy policy and how to delete data',
+  /** Where each footer page goes on for longer, on the site. */
+  more: {
+    'How to play': 'Read the full guide, with pictures',
+    'Credits and licenses': 'See every credit and license',
+    About: 'Read more about Numeria Arena',
+  } as Record<string, string>,
   close: 'CLOSE',
   cancel: 'CANCEL',
   go: 'GO',
@@ -182,14 +188,15 @@ const EN = {
   },
   pages: {
     'How to play':
-      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
+      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. In MATH EDU, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
     'For parents':
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
       'We keep as little as we can. Without a class, nothing leaves this device. With a class, the server keeps a made-up player name (like BLUE CRANE 07) and the answers given, never a real name, email, photo, voice, or what the headset cameras see. Teachers who sign in share their name and email so we can run their classes.',
     'Credits and licenses':
       'Built with the Immersive Web SDK (MIT) and three.js (MIT); the smartboard camera reads hands with MediaPipe (Apache 2.0). Paper animals, letters and pictures are made by the project owner. The background music was made by the project owner with an AI music tool. Every third-party part is listed with its license in the source repository.',
-    About: 'Numeria Arena is a mixed reality maths game for children aged 10 to 12: a pop-up book opens on your real desk and paper animals bring you questions.',
+    About:
+      'Numeria Arena makes primary school maths effective, modern and fun. In the headset a pop-up book opens on your real desk and paper animals bring you questions; on a screen or a smartboard the same games play in the browser. It joins interactive lessons, fair races and a paper town you build with every answer.',
   },
 };
 
@@ -242,6 +249,11 @@ const ID: typeof EN = {
   soon: 'SEGERA',
   footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Kredit dan lisensi', 'Tentang'],
   fullPolicy: 'Baca kebijakan privasi lengkap dan cara menghapus data',
+  more: {
+    'How to play': 'Baca panduan lengkap, dengan gambar',
+    'Credits and licenses': 'Lihat semua kredit dan lisensi',
+    About: 'Baca selengkapnya tentang Numeria Arena',
+  } as Record<string, string>,
   close: 'TUTUP',
   cancel: 'BATAL',
   go: 'MASUK',
@@ -366,14 +378,15 @@ const ID: typeof EN = {
   },
   pages: {
     'How to play':
-      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
+      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Di MATH EDU, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
     'For parents':
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:
       'Kami menyimpan sesedikit mungkin. Tanpa kelas, tidak ada data yang keluar dari perangkat ini. Dengan kelas, server menyimpan nama pemain samaran (misalnya BLUE CRANE 07) dan jawaban, tidak pernah nama asli, email, foto, suara, atau apa yang dilihat kamera headset. Guru yang masuk memberikan nama dan email agar kami bisa menjalankan kelasnya.',
     'Credits and licenses':
       'Dibangun dengan Immersive Web SDK (MIT) dan three.js (MIT); kamera smartboard membaca tangan dengan MediaPipe (Apache 2.0). Hewan kertas, huruf, dan gambar dibuat oleh pemilik proyek. Musik latarnya dibuat oleh pemilik proyek dengan alat musik AI. Setiap bagian pihak ketiga tercatat bersama lisensinya di repositori sumber.',
-    About: 'Numeria Arena adalah game matematika mixed reality untuk anak 10 sampai 12 tahun: buku pop-up terbuka di mejamu dan hewan kertas membawakan soal.',
+    About:
+      'Numeria Arena membuat matematika sekolah dasar efektif, modern, dan menyenangkan. Di headset, buku pop-up terbuka di meja nyatamu dan hewan kertas membawakan soal; di layar atau smartboard, game yang sama berjalan di browser. Numeria Arena memadukan pelajaran interaktif, lomba yang jujur, dan kota kertas yang kamu bangun dari setiap jawaban.',
   },
 };
 

@@ -538,6 +538,20 @@ pub(crate) async fn change_seat(
             .bind(seat)
             .execute(&mut *tx)
             .await?;
+        // Nor their town, nor what the AI made from their numbers.
+        for sql in [
+            "DELETE FROM town_events WHERE class_seat_id = $1",
+            "DELETE FROM town_items WHERE class_seat_id = $1",
+            "DELETE FROM town_plots WHERE class_seat_id = $1",
+        ] {
+            sqlx::query(sql).bind(seat).execute(&mut *tx).await?;
+        }
+        for sql in [
+            "DELETE FROM ai_insights WHERE class_id = $1 AND seat = $2",
+            "DELETE FROM ai_practice WHERE class_id = $1 AND seat = $2",
+        ] {
+            sqlx::query(sql).bind(id).bind(number).execute(&mut *tx).await?;
+        }
     }
     let picture = new_picture();
     let salt = random_hex();

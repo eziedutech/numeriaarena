@@ -8,21 +8,11 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+// The letters come with the site, so no font service sees who visits.
+import "@fontsource/atkinson-hyperlegible/400.css";
+import "@fontsource/atkinson-hyperlegible/700.css";
 import "./app.css";
 import { GAME } from "./game-link";
-
-export const links: Route.LinksFunction = () => [
-  { rel: "preconnect", href: "https://fonts.googleapis.com" },
-  {
-    rel: "preconnect",
-    href: "https://fonts.gstatic.com",
-    crossOrigin: "anonymous",
-  },
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap",
-  },
-];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

@@ -126,6 +126,33 @@ body {
   color: var(--cobalt);
 }
 
+.paper-shot {
+  margin: 18px 0;
+}
+
+.paper-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  box-shadow: var(--shadow);
+}
+
+.paper-shot figcaption {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.paper-sheet .lead {
+  font-size: 19px;
+}
+
+.paper-sheet h3 {
+  margin: 18px 0 4px;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+
 .paper-foot {
   display: flex;
   flex-wrap: wrap;
