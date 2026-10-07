@@ -174,6 +174,16 @@ impl GameSession {
     pub fn total_points(&self) -> u32 {
         self.inner.total_points()
     }
+
+    /// The practice how-to's right answer (balloon, weight or gate index, or
+    /// crystal or plank indices), once per game; empty when there is none.
+    #[wasm_bindgen(js_name = howToKey)]
+    pub fn how_to_key(&mut self, offer_id: u32) -> Vec<u32> {
+        self.inner
+            .how_to_key(offer_id)
+            .map(|k| k.into_iter().map(|i| i as u32).collect())
+            .unwrap_or_default()
+    }
 }
 
 /// Race for the headset: the player against two rival bots.

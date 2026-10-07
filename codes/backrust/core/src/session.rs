@@ -186,6 +186,8 @@ pub struct SoloSession {
     events: Vec<AnswerEvent>,
     /// Written into each answer event: `solo_squad` unless a match says otherwise.
     mode: &'static str,
+    /// Games whose right answer the paper hand has been shown in this session.
+    shown_how_to: Vec<GameType>,
 }
 
 fn adapter_key(game: GameType) -> &'static str {
@@ -257,6 +259,7 @@ impl SoloSession {
                 total_points: 0,
                 events: Vec::new(),
                 mode: "solo_squad",
+                shown_how_to: Vec::new(),
             },
             rejected,
         ))
@@ -855,6 +858,19 @@ impl SoloSession {
             }
             _ => None,
         }
+    }
+
+    /// The right answer for the practice how-to's paper hand to show: only
+    /// for a creature not yet answered, and only once per game a session.
+    pub fn how_to_key(&mut self, offer_id: u32) -> Option<Vec<usize>> {
+        let open = self.open.get(&offer_id)?;
+        let game = open.offer.game;
+        if open.attempt != 1 || self.shown_how_to.contains(&game) {
+            return None;
+        }
+        let key = self.answer_key(offer_id)?;
+        self.shown_how_to.push(game);
+        Some(key)
     }
 
     /// Answer events since the last call, oldest first, for the device outbox.

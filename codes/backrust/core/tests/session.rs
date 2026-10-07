@@ -388,3 +388,21 @@ fn balance_gate_has_one_right_weight_of_three() {
         assert!(v.correct);
     }
 }
+
+#[test]
+fn the_how_to_shows_one_right_answer_per_game_and_only_before_an_answer() {
+    let mut s = pack(5);
+    let first = s.next(GameType::BalloonBurst).unwrap();
+    let key = s.how_to_key(first.offer_id).expect("the first balloon creature has a how-to");
+    assert_eq!(key, s.answer_key(first.offer_id).unwrap());
+    // Asked again, or for the next creature of the same game: no more answers.
+    assert!(s.how_to_key(first.offer_id).is_none());
+    let wrong = (key[0] + 1) % first.balloons.len();
+    s.answer_balloon(first.offer_id, wrong, 4000.0, 0.0).unwrap();
+    let next = s.next(GameType::BalloonBurst).unwrap();
+    assert!(s.how_to_key(next.offer_id).is_none());
+    // Another game still has its own how-to once.
+    let bridge = s.next(GameType::BridgeBuilder).unwrap();
+    assert_eq!(s.how_to_key(bridge.offer_id), s.answer_key(bridge.offer_id));
+    assert!(s.how_to_key(bridge.offer_id).is_none());
+}
