@@ -46,7 +46,6 @@ import {
   speciesFor,
   type Figure,
 } from './art/models.js';
-import { BUTTON_H, BUTTON_W } from './art/paper-props.js';
 import { ACCENTS, accentForSkill, CORRECT, INK, paper, TRY_AGAIN } from './art/palette.js';
 import { makePaperHand } from './art/paper-hand.js';
 import { BANK_H, GATE_H, PLANK_L, PLANK_T, WEIGHT_H, makeBalance, makeBank, makeGate, makePlank, makeWeight } from './art/game-props.js';
@@ -212,6 +211,8 @@ const CHIP_BLUR = 0.006;
 const CHIP_SHADOW = new Vector3(0.0015, -0.003, -0.001);
 /** The middle of the chips' line, its front edge level with the games block's. */
 const SETTINGS_AT = new Vector3(0.107, 0.029, 0.127);
+/** A results screen's chips: one line in the middle, level with the settings'. */
+const RESULTS_AT = new Vector3(0, SETTINGS_AT.y, SETTINGS_AT.z);
 const MENU_LEAN = -1;
 /** The way a leaning strip's face looks: up and towards the player. */
 const MENU_FACING = new Vector3(0, Math.sin(-MENU_LEAN), Math.cos(MENU_LEAN));
@@ -273,14 +274,8 @@ const MENU_GRACE_MS = 800;
  */
 const CHOICE_GRACE_MS = 1200;
 const CHOICE_ARM_M = 0.06;
-/**
- * A results choice is a paper card cut to its word: 3 cm letters, CHOICE_PAD
- * of paper left and right, CHOICE_H tall, and CHOICE_SPACE between two cards.
- */
-const CHOICE_TEXT_H = 0.03;
-const CHOICE_H = 0.058;
-const CHOICE_PAD = 0.022;
-const CHOICE_SPACE = 0.03;
+/** The news of a landmark built, over the results' chips. */
+const NEWS_Y = 0.088;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 /**
@@ -322,6 +317,8 @@ const FRESH_PAGE_MS = 400;
  */
 const LOBBY_BOOK = 2.25;
 const HOME_BOOK = 1.3;
+/** In a race the book is this much wider and deeper, as thick as ever so the creatures still stand on its pages. */
+const RACE_BOOK = 1.5;
 /** The desk menu's book grows wide, not thick: its paper and cover only this much taller. */
 const LOBBY_BOOK_Y = 1.15;
 /** The leaderboard places on the book are asked again after this long. */
@@ -1411,9 +1408,10 @@ export class GameSystem extends createSystem({
    * a soft black shadow, `cols` across in rows centred on `at`, leaning back
    * as the menu does, the language one wider. A place left over in the last
    * row shows `heading`. Each chip is a button named `menu-<choice>`, its
-   * name shown over it while pointed at or touched.
+   * name shown over it while pointed at or touched; a results screen's
+   * (`choice`) take a press only as its choices do (see CHOICE_GRACE_MS).
    */
-  private menuChips(cells: MenuCell[], at: Vector3, cols: number, heading?: string): void {
+  private menuChips(cells: MenuCell[], at: Vector3, cols: number, heading?: string, choice = false): void {
     const width = (c: MenuCell | undefined) => (c?.[0] === 'lang' ? CHIP_LANG_W : CHIP_W);
     const rows = Math.ceil(cells.length / cols);
     const slots: (MenuCell | undefined)[] = Array.from({ length: rows * cols }, (_, i) => cells[i]);
@@ -1450,6 +1448,11 @@ export class GameSystem extends createSystem({
         cell.name = `menu-${choice}`;
         cell.userData.tip = word;
         cell.userData.tipH = CHIP_H;
+        if (choice) {
+          cell.userData.choice = true;
+          cell.userData.shownAt = performance.now();
+          cell.userData.armed = false;
+        }
         cell.add(shadow, b.mesh);
         cell.position.copy(place);
         cell.rotation.x = MENU_LEAN;
@@ -1482,7 +1485,7 @@ export class GameSystem extends createSystem({
   /** Eases the book to its size now: the desk menu's, the home page's, or a game's. */
   private fitBook(): void {
     const book = this.book();
-    const s = !this.lobby ? 1 : this.homeWasShown ? HOME_BOOK : LOBBY_BOOK;
+    const s = !this.lobby ? (this.race ? RACE_BOOK : 1) : this.homeWasShown ? HOME_BOOK : LOBBY_BOOK;
     if (!book || s === this.bookSize) return;
     this.bookSize = s;
     // Only the newest ease: an older one still running would win every frame.
@@ -1490,7 +1493,7 @@ export class GameSystem extends createSystem({
     this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
     const tw = this.tweens[this.tweens.length - 1];
     tw.yFrom = book.scale.y;
-    tw.yTo = s === LOBBY_BOOK ? LOBBY_BOOK_Y : s;
+    tw.yTo = s === LOBBY_BOOK ? LOBBY_BOOK_Y : s === RACE_BOOK ? 1 : s;
   }
 
   private addButton(game: ButtonChoice, title: string, x: number, color: number, scale = 1.3, labelH = 0.03): Object3D {
@@ -1503,7 +1506,7 @@ export class GameSystem extends createSystem({
     e.addComponent(PokeInteractable);
     e.addComponent(RayInteractable);
     if (title === '') {
-      // The caller writes on it (see addChoiceButton).
+      // The caller writes on it.
     } else if (title === T.done) {
       placeUiImage('button_done', button, [0, 0, 0.002], {
         scale: 0.9,
@@ -1516,41 +1519,9 @@ export class GameSystem extends createSystem({
     return button;
   }
 
-  /**
-   * A choice on a results screen: a coloured paper card cut to its word in
-   * cream paper letters (see CHOICE_H), the letters the same size for every
-   * choice. Returns the card and its width.
-   */
-  private addChoiceButton(choice: ButtonChoice, title: string, x: number, color: number): { button: Object3D; width: number } {
-    const button = this.addButton(choice, '', x, color, 1);
-    button.userData.choice = true;
-    button.userData.shownAt = performance.now();
-    button.userData.armed = false;
-    const l = new Label(title.toUpperCase(), { height: CHOICE_TEXT_H, card: false, ink: 0xfff8ec });
-    // The label's own width already holds a little paper either side of its letters.
-    const width = l.mesh.scale.x + 2 * CHOICE_PAD;
-    const sx = width / BUTTON_W;
-    const sy = CHOICE_H / BUTTON_H;
-    button.scale.set(sx, sy, 1);
-    button.position.y = CHOICE_H / 2;
-    // In a holder that undoes the card's uneven scale, so the letters keep their shape.
-    const holder = new Group();
-    holder.position.set(0, 0, 0.002);
-    holder.scale.set(1 / sx, 1 / sy, 1);
-    holder.add(l.mesh);
-    button.add(holder);
-    return { button, width };
-  }
-
-  /** Results choices side by side, centred, CHOICE_SPACE apart. */
-  private addChoiceRow(choices: [ButtonChoice, string, number][]): void {
-    const made = choices.map(([choice, title, color]) => this.addChoiceButton(choice, title, 0, color));
-    const total = made.reduce((sum, m) => sum + m.width, 0) + CHOICE_SPACE * (made.length - 1);
-    let left = -total / 2;
-    for (const m of made) {
-      m.button.position.x = left + m.width / 2;
-      left += m.width + CHOICE_SPACE;
-    }
+  /** A results screen's choices: desk menu chips in one line in the front middle. */
+  private resultsChips(cells: MenuCell[]): void {
+    this.menuChips(cells, RESULTS_AT, cells.length, undefined, true);
   }
 
   /** A results choice takes a press only once up a while and approached from outside (see CHOICE_GRACE_MS). */
@@ -1877,9 +1848,9 @@ export class GameSystem extends createSystem({
         duration_ms: performance.now() - this.playStartedAt,
       });
     }
-    this.addChoiceRow([
-      ['build', T.build, 0xe0a33c],
-      ['done', T.done, 0x3469c4],
+    this.resultsChips([
+      ['build', 'house', T.build, 'plain'],
+      ['done', 'check', T.done, 'accent'],
     ]);
     void this.landmarkNews(saved);
   }
@@ -1942,11 +1913,11 @@ export class GameSystem extends createSystem({
       this.labels.add(l.mesh);
       this.practiceCards.push(l.mesh);
     }
-    this.addChoiceRow([
-      ['again', T.again, 0x3fb6a0],
-      ['games', T.otherGame, 0xe8b64c],
-      ['build', T.build, 0xe0a33c],
-      ['done', T.done, 0x3469c4],
+    this.resultsChips([
+      ['again', 'replay', T.again, 'plain'],
+      ['games', 'envelope', T.otherGame, 'plain'],
+      ['build', 'house', T.build, 'plain'],
+      ['done', 'check', T.done, 'accent'],
     ]);
     void this.landmarkNews(saved);
   }
@@ -2775,7 +2746,7 @@ export class GameSystem extends createSystem({
         if (page >= model.view().lands.length) lines.push([t.landmarkWaits(page + 1), 0.016]);
         lines.forEach(([text, height], i) => {
           const l = new Label(text, { height: height * textScale(), ink: 0xb07a12 });
-          l.mesh.position.set(0, CHOICE_H + 0.03 - i * 0.022, ENVELOPE_Z);
+          l.mesh.position.set(0, NEWS_Y - i * 0.022, ENVELOPE_Z);
           desk.add(l.mesh);
           this.labels.add(l.mesh);
           this.practiceCards.push(l.mesh);
@@ -2939,7 +2910,7 @@ export class GameSystem extends createSystem({
   /** Names the desk menu cell under the pointer or a fingertip, over the cell. */
   private showTip(): void {
     let over: Object3D | undefined;
-    if (this.phase === 'menu') {
+    if (this.phase === 'menu' || this.phase === 'recap') {
       for (const e of this.queries.buttons.entities) {
         const obj = e.object3D;
         if (obj?.userData.hovered && typeof obj.userData.tip === 'string') {
