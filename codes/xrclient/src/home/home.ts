@@ -279,6 +279,44 @@ const store = {
   },
 };
 
+/** The paper hand's marks that a how-to was seen: one per game, and the desk menu's. */
+const seenHowto = (k: string) => k.startsWith('numeria.howto.') || k === 'numeria.menuHintSeen';
+/** Where SHOW THE HOW-TO AGAIN keeps the marks it took away, so OFF can give them back. */
+const HOWTO_AGAIN = 'numeria.howtoAgain';
+
+/** The how-to is waiting to show again: asked for, and no game has shown it since. */
+function howtoPending(): boolean {
+  try {
+    if (localStorage.getItem(HOWTO_AGAIN) === null) return false;
+    if (!Object.keys(localStorage).some(seenHowto)) return true;
+    // A game has shown its how-to again, so the ask is used up.
+    localStorage.removeItem(HOWTO_AGAIN);
+  } catch {
+    // Without storage the how-to shows every time anyway.
+  }
+  return false;
+}
+
+/** ON takes away the marks (kept aside); OFF before any game used them puts them back. */
+function setHowtoPending(on: boolean): void {
+  try {
+    if (on) {
+      const kept: Record<string, string> = {};
+      for (const k of Object.keys(localStorage).filter(seenHowto)) {
+        kept[k] = localStorage.getItem(k) ?? '1';
+        localStorage.removeItem(k);
+      }
+      localStorage.setItem(HOWTO_AGAIN, JSON.stringify(kept));
+    } else {
+      const kept = JSON.parse(localStorage.getItem(HOWTO_AGAIN) ?? '{}') as Record<string, string>;
+      for (const [k, v] of Object.entries(kept)) localStorage.setItem(k, v);
+      localStorage.removeItem(HOWTO_AGAIN);
+    }
+  } catch {
+    // Without storage the how-to shows every time anyway.
+  }
+}
+
 /** Line icons for the header's buttons, in the accessibility chip's blue (or the text colour). */
 const ICON = (paths: string[], size = 22, color = '#3469c4') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths
@@ -898,20 +936,24 @@ export class Home {
         paint();
       });
     }
-    // Shows the paper hand's how-to again on each game's next first creature.
+    // Shows the paper hand's how-to again on each game's next first creature:
+    // ON until the hand has shown one again, then OFF the next time this opens.
     const again = el('button', 'btn wide shadow', body);
-    again.appendChild(paperText(t.howtoAgain, 17, INK));
-    again.setAttribute('aria-label', t.howtoAgain);
     const done = el('p', '', body);
+    const paintAgain = () => {
+      const on = howtoPending();
+      const word = `${t.howtoAgain}: ${t.onOff(on)}`;
+      again.innerHTML = '';
+      again.style.background = on ? COLORS.teal : PAPER;
+      again.appendChild(paperText(word, 17, on ? PAPER : INK));
+      again.setAttribute('aria-pressed', String(on));
+      again.setAttribute('aria-label', word);
+      done.textContent = on ? t.howtoReset : '';
+    };
+    paintAgain();
     again.addEventListener('click', () => {
-      try {
-        for (const k of Object.keys(localStorage)) {
-          if (k.startsWith('numeria.howto.') || k === 'numeria.menuHintSeen') localStorage.removeItem(k);
-        }
-      } catch {
-        // Without storage the how-to shows every time anyway.
-      }
-      done.textContent = t.howtoReset;
+      setHowtoPending(!howtoPending());
+      paintAgain();
     });
     el('p', '', body).textContent = t.soonBody.accessibility;
     this.actions(body, veil);
