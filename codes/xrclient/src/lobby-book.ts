@@ -49,7 +49,7 @@ const TEXT = {
     city: 'CITY BUILDER',
     loading: 'Finding your places...',
     offline: 'Places show when online.',
-    signIn: "Sign in with I'M IN A CLASS to join the leaderboards.",
+    signIn: 'Sign in to your class to join the leaderboards.',
   },
   id: {
     best: 'TERBAIKKU',
@@ -71,7 +71,7 @@ const TEXT = {
     city: 'CITY BUILDER',
     loading: 'Mencari peringkatmu...',
     offline: 'Peringkat tampil saat online.',
-    signIn: 'Masuk lewat AKU DI KELAS untuk masuk papan peringkat.',
+    signIn: 'Masuk ke kelasmu untuk ikut papan peringkat.',
   },
 };
 type Words = (typeof TEXT)['en'];

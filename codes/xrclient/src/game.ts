@@ -247,12 +247,8 @@ const GAME_TINT: Record<MenuChoice, string> = {
 };
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-/**
- * The Fold Town sticker: in the browser standing by the book's front left corner; in
- * the headset lying back like the chips, left of the games, where the desk is free.
- */
-const TOWN_AT = new Vector3(-0.53, 0.0, 0.0);
-const TOWN_XR_AT = new Vector3(-0.34, 0.0, 0.12);
+/** The Fold Town sticker, lying back like the chips left of the games, where the desk is free. */
+const TOWN_AT = new Vector3(-0.34, 0.0, 0.12);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
@@ -1312,14 +1308,8 @@ export class GameSystem extends createSystem({
     const sticker = new Group();
     sticker.name = 'menu-town';
     sticker.add(plane);
-    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
-      sticker.position.copy(TOWN_AT);
-      // Turned a little towards the reader, like a card propped on the desk.
-      sticker.rotation.y = 0.35;
-    } else {
-      sticker.position.copy(TOWN_XR_AT);
-      sticker.rotation.x = MENU_LEAN;
-    }
+    sticker.position.copy(TOWN_AT);
+    sticker.rotation.x = MENU_LEAN;
     const e = this.add(sticker);
     e.addComponent(MenuButton, { game: 'town' });
     e.addComponent(PokeInteractable);
@@ -2072,7 +2062,7 @@ export class GameSystem extends createSystem({
     this.score.set(T.title);
     this.backToMenu();
     if (note && this.phase === 'menu' && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
-      this.pop(note, QUESTION_INK, undefined, TOWN_XR_AT.clone().add(new Vector3(0, 0.12, -0.04)), 0.022);
+      this.pop(note, QUESTION_INK, undefined, TOWN_AT.clone().add(new Vector3(0, 0.12, -0.04)), 0.022);
     }
   }
 
