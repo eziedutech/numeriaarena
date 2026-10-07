@@ -32,48 +32,46 @@ const TEXT = {
   en: {
     best: 'MY BEST',
     pts: 'PTS',
-    bestAbout: 'Your best game on this device.',
+    bestAbout: 'Best on this device.',
     noBest: 'No best yet.',
-    noBestAbout: 'Finish a game to set your best score.',
+    noBestAbout: 'Finish a game to set one.',
     raceBest: 'BEST RACE',
-    pick: 'Pick a game to start.',
+    pick: 'Pick a game!',
     me: 'ME',
     guest: 'GUEST',
     guestAbout: 'Playing on this device.',
     seat: (label: string, n: number) => `${label}, seat ${String(n).padStart(2, '0')}`,
     folds: 'FOLDS',
     buildings: 'BUILDINGS',
-    place: 'PLACE',
     myClass: 'CLASS',
     world: 'WORLD',
     strike: 'HIGH STRIKE',
     city: 'CITY BUILDER',
-    loading: 'Looking up your places...',
-    offline: 'Your places show when you are online.',
-    signIn: "Sign in with I'M IN A CLASS on the home page to get on the leaderboards.",
+    loading: 'Finding your places...',
+    offline: 'Places show when online.',
+    signIn: "Sign in with I'M IN A CLASS to join the leaderboards.",
   },
   id: {
     best: 'TERBAIKKU',
     pts: 'POIN',
-    bestAbout: 'Permainan terbaikmu di perangkat ini.',
+    bestAbout: 'Terbaik di perangkat ini.',
     noBest: 'Belum ada skor terbaik.',
-    noBestAbout: 'Selesaikan satu permainan untuk mencatatnya.',
+    noBestAbout: 'Selesaikan satu permainan.',
     raceBest: 'LOMBA TERBAIK',
-    pick: 'Pilih permainan untuk mulai.',
+    pick: 'Pilih permainan!',
     me: 'SAYA',
     guest: 'TAMU',
     guestAbout: 'Bermain di perangkat ini.',
     seat: (label: string, n: number) => `${label}, kursi ${String(n).padStart(2, '0')}`,
     folds: 'FOLDS',
     buildings: 'BANGUNAN',
-    place: 'PERINGKAT',
     myClass: 'KELAS',
     world: 'DUNIA',
     strike: 'HIGH STRIKE',
     city: 'CITY BUILDER',
     loading: 'Mencari peringkatmu...',
-    offline: 'Peringkatmu tampil saat online.',
-    signIn: 'Masuk lewat AKU DI KELAS di beranda untuk masuk papan peringkat.',
+    offline: 'Peringkat tampil saat online.',
+    signIn: 'Masuk lewat AKU DI KELAS untuk masuk papan peringkat.',
   },
 };
 type Words = (typeof TEXT)['en'];
@@ -82,7 +80,7 @@ type Words = (typeof TEXT)['en'];
 const W = 1024;
 const H = 1434;
 /** Drawn this much taller than wide: the page is seen from a slant, in the headset and on screen. */
-const STRETCH = 1.5;
+const STRETCH = 1.8;
 const INK = 'rgba(58, 63, 75, 0.94)';
 const SOFT = 'rgba(58, 63, 75, 0.7)';
 const TEAL = '#2f8f7d';
@@ -158,15 +156,15 @@ class Pen {
 
   /** A heading with its underline. */
   head(text: string, y: number): void {
-    const w = this.text(text, this.left, y, 78, 800);
-    this.line(this.left, y + 22, this.left + w, 6, TEAL);
+    const w = this.text(text, this.left, y, 96, 800);
+    this.line(this.left, y + 24, this.left + w, 7, TEAL);
   }
 
   /** A label on the left and its value on the right, a faint dotted line between. */
   row(label: string, value: string, y: number): void {
-    const lw = this.text(label, this.left, y, 50, 700, SOFT);
-    const vw = this.width(value, 64, 800);
-    this.text(value, this.right, y, 64, 800, INK, 'right');
+    const lw = this.text(label, this.left, y, 62, 800, SOFT);
+    const vw = this.width(value, 84, 800);
+    this.text(value, this.right, y, 84, 800, INK, 'right');
     const from = this.left + lw + 24;
     const to = this.right - vw - 24;
     if (to > from)
@@ -221,51 +219,47 @@ class Pen {
 }
 
 function leftPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.best, 120);
-  let y = 330;
+  pen.head(t.best, 110);
   if (f.best) {
-    const n = String(f.best.points);
-    const w = pen.text(n, pen.left, y, 190, 800, TEAL);
-    pen.text(t.pts, pen.left + w + 22, y, 64, 800);
-    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 44 + i * 104, y + 90, 40, i < f.best.stars);
-    y = pen.para(t.bestAbout, y + 210, 50, 600, 64, SOFT);
+    const w = pen.text(String(f.best.points), pen.left, 330, 230, 800, TEAL);
+    pen.text(t.pts, pen.left + w + 24, 330, 84, 800);
+    for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 440, 52, i < f.best.stars);
+    pen.text(t.bestAbout, pen.left, 560, 62, 700, SOFT);
   } else {
-    y = pen.para(t.noBest, 260, 64, 800, 78);
-    y = pen.para(t.noBestAbout, y, 50, 600, 64, SOFT);
+    pen.para(t.noBest, 260, 84, 800, 96);
+    pen.para(t.noBestAbout, 470, 62, 700, 76, SOFT);
   }
-  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest} ${t.pts}`, y + 50);
-  pen.text(t.pick, pen.left, 880, 54, 700);
-  pen.line(pen.left, 902, pen.left + pen.width(t.pick, 54, 700), 4, SOFT);
+  if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 660);
+  const w = pen.text(t.pick, pen.left, 765, 72, 800);
+  pen.line(pen.left, 788, pen.left + w, 5, SOFT);
 }
 
 function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
-  pen.head(t.me, 120);
-  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 250, 96, 800, TEAL);
-  pen.text(f.seat ? t.seat(f.seat.classLabel, f.seat.seat) : t.guestAbout, pen.left, 320, 50, 600, SOFT);
-  let y = 430;
+  pen.head(t.me, 110);
+  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 240, 116, 800, TEAL);
+  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 315, 60, 700, SOFT);
+  let y = f.seat ? 400 : 380;
   if (f.folds !== undefined) {
     pen.row(t.folds, String(f.folds), y);
-    pen.row(t.buildings, String(f.buildings ?? 0), y + 80);
-    y += 190;
+    pen.row(t.buildings, String(f.buildings ?? 0), y + 95);
+    y += 205;
   }
-  if (!f.seat) return void pen.para(t.signIn, y, 50, 600, 64);
-  if (f.places !== 'ready') return void pen.para(f.places === 'offline' ? t.offline : t.loading, y, 50, 600, 64, SOFT);
+  if (!f.seat) return void pen.para(t.signIn, y, 62, 700, 76);
+  if (f.places !== 'ready') return void pen.para(f.places === 'offline' ? t.offline : t.loading, y, 62, 700, 76, SOFT);
   // A small table: the seat's place in its class and in the world, on two boards.
-  const col = [pen.right - 230, pen.right];
-  pen.text(t.place, pen.left, y, 44, 700, SOFT);
-  pen.text(t.myClass, col[0], y, 44, 700, SOFT, 'right');
-  pen.text(t.world, col[1], y, 44, 700, SOFT, 'right');
+  const col = [pen.right - 250, pen.right];
+  pen.text(t.myClass, col[0], y, 52, 800, SOFT, 'right');
+  pen.text(t.world, col[1], y, 52, 800, SOFT, 'right');
   const place = (n?: number) => (n ? `#${n}` : '-');
   const rows: [string, keyof Places][] = [
     [t.strike, 'strike'],
     [t.city, 'city'],
   ];
   rows.forEach(([label, key], i) => {
-    const at = y + 90 + i * 84;
-    pen.text(label, pen.left, at, 50, 700, INK, 'left', col[0] - 150 - pen.left);
-    pen.text(place(f.classPlace?.[key]), col[0], at, 60, 800, INK, 'right');
-    pen.text(place(f.worldPlace?.[key]), col[1], at, 60, 800, INK, 'right');
-    if (i === 0) pen.line(pen.left, at + 26, pen.right, 3, 'rgba(58, 63, 75, 0.3)');
+    const at = y + 75 + i * 80;
+    pen.text(label, pen.left, at, 58, 800, INK, 'left', col[0] - 170 - pen.left);
+    pen.text(place(f.classPlace?.[key]), col[0], at, 76, 800, TEAL, 'right');
+    pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 800, TEAL, 'right');
   });
 }
 

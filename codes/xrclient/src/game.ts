@@ -247,7 +247,7 @@ const GAME_TINT: Record<MenuChoice, string> = {
 };
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-const TOWN_AT = new Vector3(-0.42, 0.0, -0.08);
+const TOWN_AT = new Vector3(-0.49, 0.0, -0.08);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
@@ -310,10 +310,10 @@ const LINE_SCALE = 0.85;
  * a game starting eases them back to the size its layout is made for.
  * Under the home page the book is HOME_BOOK, the size its camera is set for.
  */
-const LOBBY_BOOK = 1.75;
+const LOBBY_BOOK = 2.1;
 const HOME_BOOK = 1.3;
 const LOBBY_LINE_SCALE = 1.2;
-const LOBBY_LINE_Z = -0.47;
+const LOBBY_LINE_Z = -0.55;
 /** The leaderboard places on the book are asked again after this long. */
 const PLACES_FOR_MS = 60_000;
 /** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
