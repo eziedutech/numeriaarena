@@ -247,9 +247,11 @@ const GAME_TINT: Record<MenuChoice, string> = {
 };
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
-/** The Fold Town sticker, lying back like the chips left of the games, where the desk is free. */
-const TOWN_AT = new Vector3(-0.34, 0.0, 0.12);
-const TOWN_W = 0.19;
+/** The Fold Town sticker, lying back like the chips left of the games and lifted off the desk like them. */
+const TOWN_AT = new Vector3(-0.33, 0.026, 0.118);
+const TOWN_W = 0.17;
+/** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
+const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
  * First time a game appears on this device the paper hand shows how to play
@@ -1305,9 +1307,27 @@ export class GameSystem extends createSystem({
       new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: DoubleSide }),
     );
     plane.position.y = h / 2;
+    const shade = document.createElement('canvas');
+    shade.width = 256;
+    shade.height = 160;
+    const sc = shade.getContext('2d')!;
+    sc.filter = 'blur(12px)';
+    sc.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    sc.beginPath();
+    sc.ellipse(128, 86, 96, 52, 0, 0, Math.PI * 2);
+    sc.fill();
+    const shadeTex = new CanvasTexture(shade);
+    shadeTex.colorSpace = SRGBColorSpace;
+    const shadow = new Mesh(
+      new PlaneGeometry(TOWN_W * 1.05, h * 1.05),
+      new MeshBasicMaterial({ map: shadeTex, transparent: true, depthWrite: false }),
+    );
+    shadow.position.set(TOWN_SHADOW.x, h / 2 + TOWN_SHADOW.y, TOWN_SHADOW.z);
+    shadow.renderOrder = 9;
+    plane.renderOrder = 10;
     const sticker = new Group();
     sticker.name = 'menu-town';
-    sticker.add(plane);
+    sticker.add(shadow, plane);
     sticker.position.copy(TOWN_AT);
     sticker.rotation.x = MENU_LEAN;
     const e = this.add(sticker);
