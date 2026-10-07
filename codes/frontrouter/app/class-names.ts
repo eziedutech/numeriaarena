@@ -63,6 +63,11 @@ export async function writeNames(classId: string, names: Record<number, string>)
   });
 }
 
+/** Forgets every name of one class, as when it is deleted. */
+export async function clearNames(classId: string): Promise<void> {
+  await run("readwrite", (s) => s.delete(range(classId)));
+}
+
 const cell = (v: string) => (/[",\n\r]/u.test(v) ? `"${v.replace(/"/gu, '""')}"` : v);
 
 /** seat,pseudonym,name, one line per seat. */

@@ -550,7 +550,11 @@ pub(crate) async fn change_seat(
             "DELETE FROM ai_insights WHERE class_id = $1 AND seat = $2",
             "DELETE FROM ai_practice WHERE class_id = $1 AND seat = $2",
         ] {
-            sqlx::query(sql).bind(id).bind(number).execute(&mut *tx).await?;
+            sqlx::query(sql)
+                .bind(id)
+                .bind(number)
+                .execute(&mut *tx)
+                .await?;
         }
     }
     let picture = new_picture();
@@ -666,6 +670,52 @@ pub(crate) async fn archive(db: &PgPool, owner: i64, id: &str) -> Result<Value, 
     audit(&mut tx, owner, "class.archive", id, json!({})).await?;
     tx.commit().await?;
     Ok(json!({ "archived": id }))
+}
+
+/// Deletes the class for good, active or archived: its seats and everything
+/// they hold go with it, and so do the races in its rooms. Only a line that it
+/// was deleted stays in the audit log.
+pub(crate) async fn delete_class(db: &PgPool, owner: i64, id: &str) -> Result<Value, ApiError> {
+    let mut tx = db.begin().await?;
+    let found: Option<String> =
+        sqlx::query_scalar("SELECT id FROM classes WHERE id = $1 AND owner = $2 FOR UPDATE")
+            .bind(id)
+            .bind(owner)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if found.is_none() {
+        return Err(err(StatusCode::NOT_FOUND, "class_not_found"));
+    }
+    // Its rooms would only lose the class, so they go first, with their matches
+    // and answers; the class then takes its seats, plays, towns and AI notes.
+    let rooms = sqlx::query("DELETE FROM rooms WHERE class_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    let seats = sqlx::query("DELETE FROM class_seats WHERE class_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    sqlx::query("DELETE FROM classes WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM audit_log WHERE target = $1")
+        .bind(format!("class:{id}"))
+        .execute(&mut *tx)
+        .await?;
+    audit(
+        &mut tx,
+        owner,
+        "class.delete",
+        id,
+        json!({ "seats": seats, "rooms": rooms }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(json!({ "deleted": id }))
 }
 
 // ------------------------------------------------------------ student side
@@ -951,6 +1001,19 @@ pub async fn remove(
 ) -> Result<Json<Value>, ApiError> {
     let user = signed_in(&state, &headers).await?;
     Ok(Json(archive(&state.db, user.id, &id).await?))
+}
+
+/// `POST /api/classes/{id}/delete`: deletes the class and all it holds, for
+/// good, and closes any room still open for it.
+pub async fn erase(
+    Extract(state): Extract<State>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let user = signed_in(&state, &headers).await?;
+    let done = delete_class(&state.db, user.id, &id).await?;
+    state.rooms.close_class(&id).await;
+    Ok(Json(done))
 }
 
 /// `POST /api/student/sign-in`: class code, seat number and picture.

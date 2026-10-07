@@ -36,10 +36,10 @@ function English() {
 
       <h2>Students and parents</h2>
       <p>
-        Ask the class teacher, who can empty a seat for a new student: that deletes its answers, results, town and AI
-        suggestions. Removing a class only archives it; to delete a class or a seat's data for good, write to {mail}
-        with the class code and seat number. No names are needed. We delete it within 30 days and reply when it is
-        done.
+        Ask the class teacher. The teacher can empty a seat for a new student, which deletes its answers, results,
+        town and AI suggestions, or delete the whole class for good under DELETE FOR GOOD on the class page, which
+        deletes every seat and all it holds at once. You can also write to {mail} with the class code and seat
+        number. No names are needed. We delete it within 30 days and reply when it is done.
       </p>
     </>
   );
@@ -72,10 +72,10 @@ function Indonesian() {
 
       <h2>Siswa dan orang tua</h2>
       <p>
-        Minta guru kelas, yang bisa mengosongkan kursi untuk siswa baru: itu menghapus jawaban, hasil, kota, dan saran
-        AI kursi tersebut. Menghapus kelas hanya mengarsipkannya; untuk menghapus data kelas atau kursi sama sekali, tulis
-        ke {mail} dengan kode kelas dan nomor kursi. Nama tidak diperlukan. Kami menghapusnya dalam 30 hari dan membalas
-        setelah selesai.
+        Minta guru kelas. Guru bisa mengosongkan kursi untuk siswa baru, yang menghapus jawaban, hasil, kota, dan
+        saran AI kursi itu, atau menghapus seluruh kelas lewat HAPUS SELAMANYA di halaman kelas, yang menghapus semua
+        kursi beserta isinya saat itu juga. Anda juga bisa menulis ke {mail} dengan kode kelas dan nomor kursi. Nama
+        tidak diperlukan. Kami menghapusnya dalam 30 hari dan membalas setelah selesai.
       </p>
     </>
   );

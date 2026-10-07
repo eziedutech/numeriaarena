@@ -179,8 +179,11 @@ function English() {
       <ul>
         <li>On the device: until the site's data is cleared in the browser.</li>
         <li>
-          A class: while it exists. When a teacher removes a class it is archived: its code stops working and every
-          device signs out, and the teacher can still read its reports. To delete it for good, write to us.
+          A class: while it exists. A teacher can archive a class: its code stops working and every device signs out,
+          and the teacher can still read its reports. A teacher can also delete a class for good, at once: its seats,
+          answers, results, reports, towns, AI suggestions and the races in its rooms are deleted, and so are the names
+          kept in that teacher's browser. A race FIND A RIVAL paired with another class keeps only its answers under a
+          made-up name that no longer leads to any seat.
         </li>
         <li>
           A seat emptied for a new student loses the last student's answers, results, town and AI suggestions, and gets
@@ -392,8 +395,11 @@ function Indonesian() {
       <ul>
         <li>Di perangkat: sampai data situs dihapus di browser.</li>
         <li>
-          Kelas: selama kelas itu ada. Saat guru menghapus kelas, kelas itu diarsipkan: kodenya berhenti berlaku dan semua
-          perangkat keluar, dan guru masih bisa membaca laporannya. Untuk menghapusnya sama sekali, tulis ke kami.
+          Kelas: selama kelas itu ada. Guru bisa mengarsipkan kelas: kodenya berhenti berlaku dan semua perangkat
+          keluar, dan guru masih bisa membaca laporannya. Guru juga bisa menghapus kelas selamanya, saat itu juga:
+          kursi, jawaban, hasil, laporan, kota, saran AI, dan lomba di ruangnya dihapus, begitu pula nama yang
+          tersimpan di browser guru itu. Lomba CARI LAWAN dengan kelas lain hanya menyisakan jawabannya dengan nama
+          samaran yang tidak lagi menunjuk ke kursi mana pun.
         </li>
         <li>
           Kursi yang dikosongkan untuk siswa baru kehilangan jawaban, hasil, kota, dan saran AI siswa sebelumnya, lalu

@@ -480,3 +480,130 @@ async fn a_seat_keeps_its_match_results_until_it_is_emptied() {
     assert_eq!(after["seats"][0]["other_rooms"]["matches"], 0);
     assert_eq!(after["seats"][0]["own"]["races"], 0);
 }
+
+#[tokio::test]
+async fn deleting_a_class_takes_everything_it_holds() {
+    let Some(db) = db().await else {
+        eprintln!("TEST_DATABASE_URL not set: skipped");
+        return;
+    };
+    let owner = teacher(&db, Some("approved")).await;
+    let stranger = teacher(&db, Some("approved")).await;
+    let a = allowance(&db, owner, false).await.unwrap();
+    let made = create_class(&db, owner, a, &new_class(2)).await.unwrap();
+    let id = made["class"]["id"].as_str().unwrap().to_owned();
+    let seat: i64 =
+        sqlx::query_scalar("SELECT id FROM class_seats WHERE class_id = $1 AND number = 1")
+            .bind(&id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    let (room, game) = (random_hex(), random_hex());
+    sqlx::query("INSERT INTO rooms (id, play_code, watch_code, seats, created_by, class_id) VALUES ($1, 'AAAAAA', 'BBBBBB', 3, $2, $3)")
+        .bind(&room)
+        .bind(owner)
+        .bind(&id)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO matches (id, room_id, seed, content_pack_version, fairness_params_version, seats) VALUES ($1, $2, 1, 'cp', 'fp', '[]')")
+        .bind(&game)
+        .bind(&room)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO match_seat_results (match_id, seat, class_seat_id, official, points, folded, place, stars) VALUES ($1, 0, $2, true, 50, 3, 1, 2)")
+        .bind(&game)
+        .bind(seat)
+        .execute(&db)
+        .await
+        .unwrap();
+    let practice: Play = serde_json::from_value(json!({
+        "client_id": "p1", "kind": "practice", "points": 50, "folded": 5,
+        "right": 5, "total": 6, "duration_ms": 60000
+    }))
+    .unwrap();
+    record_play(&db, seat, &practice).await.unwrap();
+    sqlx::query("INSERT INTO town_plots (class_id, class_seat_id, land_index, kind, x, y) VALUES ($1, $2, 0, 'plain', 0, 0)")
+        .bind(&id)
+        .bind(seat)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO ai_insights (class_id, seat, data_hash, value, provider, model) VALUES ($1, 1, 'h', '{}', 'p', 'm')")
+        .bind(&id)
+        .execute(&db)
+        .await
+        .unwrap();
+    // An archived class can be deleted too, but only by its teacher.
+    archive(&db, owner, &id).await.unwrap();
+    assert_eq!(
+        why(delete_class(&db, stranger, &id).await),
+        "class_not_found"
+    );
+    delete_class(&db, owner, &id).await.unwrap();
+
+    let count = |sql: &'static str, key: String| {
+        let db = db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(sql)
+                .bind(key)
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+    assert_eq!(
+        count("SELECT count(*) FROM classes WHERE id = $1", id.clone()).await,
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT count(*) FROM class_seats WHERE class_id = $1",
+            id.clone()
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT count(*) FROM town_plots WHERE class_id = $1",
+            id.clone()
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT count(*) FROM ai_insights WHERE class_id = $1",
+            id.clone()
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        count("SELECT count(*) FROM rooms WHERE id = $1", room.clone()).await,
+        0
+    );
+    assert_eq!(
+        count("SELECT count(*) FROM matches WHERE id = $1", game.clone()).await,
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT count(*) FROM seat_plays WHERE class_seat_id::text = $1",
+            seat.to_string()
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        count(
+            "SELECT count(*) FROM audit_log WHERE target = $1",
+            format!("class:{id}")
+        )
+        .await,
+        1
+    );
+    assert_eq!(why(delete_class(&db, owner, &id).await), "class_not_found");
+}

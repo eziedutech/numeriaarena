@@ -59,7 +59,7 @@ const EN = {
   fullPolicy: 'Read the full privacy policy and how to delete data',
   /** Where each footer page goes on for longer, on the site. */
   more: {
-    'How to play': 'Read the full guide, with pictures',
+    'How to play': 'Read the full guide',
     'Credits and licenses': 'See every credit and license',
     About: 'Read more about Numeria Arena',
   } as Record<string, string>,
@@ -250,7 +250,7 @@ const ID: typeof EN = {
   footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Kredit dan lisensi', 'Tentang'],
   fullPolicy: 'Baca kebijakan privasi lengkap dan cara menghapus data',
   more: {
-    'How to play': 'Baca panduan lengkap, dengan gambar',
+    'How to play': 'Baca panduan lengkap',
     'Credits and licenses': 'Lihat semua kredit dan lisensi',
     About: 'Baca selengkapnya tentang Numeria Arena',
   } as Record<string, string>,

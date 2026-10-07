@@ -7,7 +7,7 @@ import { GAME } from "./game-link";
 import { ClassLeaders } from "./class-leaders";
 import { ClassTown } from "./class-town";
 import { ClassReport } from "./class-report";
-import { namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
+import { clearNames, namesCsv, parseNamesCsv, readNames, writeName, writeNames } from "./class-names";
 import type { Lang } from "./legal";
 import { NumberField, Pick } from "./pick";
 import { Picture, PICTURE_NAMES } from "./pictures";
@@ -150,6 +150,7 @@ const TEXT = {
     howMany: "How many seats to add?",
     add: "ADD",
     archive: "ARCHIVE THE CLASS",
+    erase: "DELETE FOR GOOD",
     exportNames: "SAVE NAMES (CSV)",
     importNames: "LOAD NAMES (CSV)",
     namesNote:
@@ -163,6 +164,9 @@ const TEXT = {
     askEmpty: (n: number) =>
       `Empty seat ${n} for a new student? It gets a new pseudonym and picture, the old card stops working and its name here is cleared.`,
     askArchive: "Archive this class? Its code stops working and every student signs out. The class stays here to read.",
+    askErase:
+      "Delete this class for good? Its seats, answers, race results, reports, towns and AI notes, and the races in its rooms, are deleted from Numeria, and the names kept in this browser go too. This cannot be undone. Save the names or the report first if you need them.",
+    typeLabel: (label: string) => `Type the class name, ${label}, to delete it.`,
     yes: "YES",
     no: "NO",
     cardGame: "NUMERIA ARENA · I'M IN A CLASS",
@@ -256,6 +260,7 @@ const TEXT = {
     howMany: "Berapa kursi yang ditambah?",
     add: "TAMBAH",
     archive: "ARSIPKAN KELAS",
+    erase: "HAPUS SELAMANYA",
     exportNames: "SIMPAN NAMA (CSV)",
     importNames: "MUAT NAMA (CSV)",
     namesNote:
@@ -269,6 +274,9 @@ const TEXT = {
     askEmpty: (n: number) =>
       `Kosongkan kursi ${n} untuk siswa baru? Kursi mendapat samaran dan gambar baru, kartu lama tidak berlaku, dan namanya di sini dihapus.`,
     askArchive: "Arsipkan kelas ini? Kodenya tidak berlaku lagi dan semua siswa keluar. Kelas tetap ada di sini untuk dibaca.",
+    askErase:
+      "Hapus kelas ini selamanya? Kursi, jawaban, hasil lomba, laporan, kota, dan catatan AI-nya, serta lomba di ruangnya, dihapus dari Numeria, dan nama yang tersimpan di browser ini ikut terhapus. Ini tidak bisa dibatalkan. Simpan nama atau laporannya dulu bila masih perlu.",
+    typeLabel: (label: string) => `Ketik nama kelas, ${label}, untuk menghapusnya.`,
     yes: "YA",
     no: "TIDAK",
     cardGame: "NUMERIA ARENA · AKU DI KELAS",
@@ -490,7 +498,7 @@ function NewClass({
   );
 }
 
-type Ask = { kind: "picture" | "empty"; seat: number } | { kind: "archive" } | { kind: "add" };
+type Ask = { kind: "picture" | "empty"; seat: number } | { kind: "archive" | "erase" } | { kind: "add" };
 
 function ClassPage({
   t,
@@ -522,6 +530,7 @@ function ClassPage({
   const [ask, setAsk] = useState<Ask | null>(null);
   const [busy, setBusy] = useState(false);
   const [more, setMore] = useState("1");
+  const [typed, setTyped] = useState("");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("seat");
   const [board, setBoard] = useState(false);
@@ -570,6 +579,22 @@ function ClassPage({
         }),
       );
     else if (ask.kind === "archive") act(api(user, base, { method: "DELETE" }).then(onPrinted));
+    else if (ask.kind === "erase") {
+      setBusy(true);
+      setError("");
+      api(user, `${base}/delete`, { method: "POST" })
+        .then(() => {
+          onPrinted();
+          onChange();
+          onBack();
+          return clearNames(row.id).catch(() => undefined);
+        })
+        .catch((e) => {
+          setError(errorCode(e));
+          setBusy(false);
+          setAsk(null);
+        });
+    }
     else
       act(
         api<{ seats: Card[] }>(user, `${base}/seats`, { method: "POST", body: JSON.stringify({ count: Number(more) }) }).then((r) =>
@@ -622,7 +647,9 @@ function ClassPage({
         ? t.askEmpty(ask.seat)
         : ask.kind === "archive"
           ? t.askArchive
-          : t.howMany;
+          : ask.kind === "erase"
+            ? t.askErase
+            : t.howMany;
 
   return (
     <>
@@ -797,6 +824,17 @@ function ClassPage({
             </button>
           </>
         )}
+        <button
+          type="button"
+          className="btn small suspended"
+          disabled={busy}
+          onClick={() => {
+            setTyped("");
+            setAsk({ kind: "erase" });
+          }}
+        >
+          {t.erase}
+        </button>
       </div>
       {seats && <ClassReport lang={lang} user={user} base={base} file={fileName} heading={`${row.label} ${row.school_year}`} seats={seats} names={names} />}
       {seats && <ClassLeaders lang={lang} user={user} base={base} active={active} seats={seats} names={names} />}
@@ -808,11 +846,17 @@ function ClassPage({
             {ask.kind === "add" && (
               <NumberField label={askText} min={1} max={40} value={more} onChange={setMore} autoFocus />
             )}
+            {ask.kind === "erase" && (
+              <>
+                <label htmlFor="erase-label">{t.typeLabel(row.label)}</label>
+                <input id="erase-label" className="field" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+              </>
+            )}
             <div className="actions">
               <button type="button" className="btn" onClick={() => setAsk(null)} autoFocus={ask.kind !== "add"}>
                 {ask.kind === "add" ? t.cancel : t.no}
               </button>
-              <button type="button" className={ask.kind === "add" ? "btn blue" : "btn suspended"} onClick={confirm} disabled={busy}>
+              <button type="button" className={ask.kind === "add" ? "btn blue" : "btn suspended"} onClick={confirm} disabled={busy || (ask.kind === "erase" && typed.trim() !== row.label.trim())}>
                 {ask.kind === "add" ? t.add : t.yes}
               </button>
             </div>

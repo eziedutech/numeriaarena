@@ -356,6 +356,27 @@ impl Rooms {
         true
     }
 
+    /// Closes every room still open for class `class_id`, as when it is deleted.
+    pub async fn close_class(&self, class_id: &str) {
+        let txs: Vec<mpsc::Sender<Cmd>> = {
+            let mut map = self.codes.lock().expect("codes");
+            let gone: Vec<Arc<Hosted>> = map
+                .values()
+                .filter_map(|e| e.hosted.clone())
+                .filter(|h| h.class.as_ref().is_some_and(|c| c.id == class_id))
+                .collect();
+            gone.iter()
+                .filter_map(|h| {
+                    map.remove(&h.opened.watch_code);
+                    map.remove(&h.opened.play_code).map(|e| e.tx)
+                })
+                .collect()
+        };
+        for tx in txs {
+            let _ = tx.send(Cmd::Close).await;
+        }
+    }
+
     /// Two fresh codes, registered together so they can never collide.
     fn register(&self, tx: &mpsc::Sender<Cmd>) -> (String, String) {
         let mut map = self.codes.lock().expect("codes");

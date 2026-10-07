@@ -87,6 +87,7 @@ pub fn router(state: State) -> Router {
             "/api/classes/{id}",
             get(classes::detail).delete(classes::remove),
         )
+        .route("/api/classes/{id}/delete", post(classes::erase))
         .route("/api/classes/{id}/seats", post(classes::add))
         .route("/api/classes/{id}/seats/{n}", delete(classes::reset))
         .route(
