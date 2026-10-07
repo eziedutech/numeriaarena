@@ -1,7 +1,7 @@
 import { sharedStore, type LocalStore } from '../storage.js';
 import { online } from '../offline.js';
 import { seatKey, studentState, type Student } from '../home/student.js';
-import { Book, earningsOf, loadTownCore, townRulesNow, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
+import { Book, assetOf, earningsOf, loadTownCore, townRulesNow, type Earnings, type Landmark, type Play, type TownEvent, type TownView } from './town-core.js';
 import { guestLandmarks } from './town-landmarks.js';
 import { sampleTown } from './town-sample.js';
 
@@ -29,7 +29,12 @@ export interface TownDoc {
   landmarks: Landmark[];
   /** The server's clock less the device's, from the last sync. */
   skew_ms: number;
+  /** Buildings the player has been told went back to the shop. */
+  told?: string[];
 }
+
+/** Why a building that stood no longer fits: it takes up more tiles than it did. */
+const GREW = ['taken', 'off_land', 'nature', 'landmark_plot', 'needs_water'];
 
 const DAY_MS = 86_400_000;
 
@@ -223,6 +228,34 @@ export class TownModel {
     } finally {
       this.syncing = false;
     }
+  }
+
+  /**
+   * Buildings that stood until they grew to a new size and no longer fit
+   * where they were: back in the shop, every Fold they cost given back by
+   * the replay, and not yet told.
+   */
+  returned(): { asset: string; price: number }[] {
+    const told = new Set(this.doc.told ?? []);
+    const reasons = new Map(this.book?.refused ?? []);
+    const out: { asset: string; price: number }[] = [];
+    for (const ev of this.doc.events) {
+      const why = reasons.get(ev.event_id);
+      if (ev.type === 'town_place' && why && GREW.includes(why) && !told.has(ev.event_id)) {
+        out.push({ asset: ev.asset, price: assetOf(ev.asset)?.price ?? 0 });
+      }
+    }
+    return out;
+  }
+
+  /** The player has read which buildings went back to the shop. */
+  async toldReturned(): Promise<void> {
+    if (this.fixed) return;
+    const reasons = new Map(this.book?.refused ?? []);
+    const told = new Set(this.doc.told ?? []);
+    for (const ev of this.doc.events) if (ev.type === 'town_place' && GREW.includes(reasons.get(ev.event_id) ?? '')) told.add(ev.event_id);
+    this.doc.told = [...told];
+    await this.save();
   }
 
   /** Refusals seen: they leave the list once the player has read them. */

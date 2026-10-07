@@ -2,7 +2,7 @@
  * The shop of Fold Town, by hand: for every piece of the town asset set its
  * group, price in Folds, the buildings standing before it is sold, and its
  * name in English and Indonesian. Footprints, windows and floors come from
- * the models themselves (see town-pack.ts).
+ * the models themselves (see town-pack.ts), save the footprints in RESIZE.
  */
 
 export type Group = 'road' | 'nature' | 'decor' | 'small_house' | 'medium_house' | 'public' | 'large';
@@ -268,4 +268,52 @@ export const FLOORS: Record<string, number> = {
   shop_mall: 2,
   public_church: 1,
   public_city_hall: 2,
+};
+
+/**
+ * Footprints set by hand, [w, h, ground], where the model's own is too small
+ * for the town's ladder of sizes (a house is 1x1, a block 2x2, an airport
+ * 4x3). A model keeping its shape is scaled up to fill it; one whose sides
+ * change is scaled until it fits and stands on a pad of `ground` filling the
+ * rest, until a model of its own is made.
+ */
+export const RESIZE: Record<string, [w: number, h: number, ground?: string]> = {
+  house_apartment: [2, 2],
+  house_flats: [2, 2],
+  sport_basketball: [2, 1, 'grass'],
+  sport_tennis: [2, 1, 'grass'],
+  sport_pool: [2, 2],
+  sport_soccer: [3, 2, 'grass'],
+  sport_stadium: [3, 3],
+  zoo_aviary: [2, 1, 'grass'],
+  zoo_giraffe: [2, 2],
+  zoo_lion: [2, 2],
+  zoo_elephant: [2, 2],
+  shop_gas_station: [2, 1, 'asphalt'],
+  shop_cinema: [2, 1, 'stone'],
+  shop_market: [2, 2, 'stone'],
+  shop_hotel: [2, 2],
+  shop_mall: [3, 3],
+  office_glass_tower: [2, 2],
+  office_stepped: [2, 2],
+  office_round: [2, 2],
+  office_helipad: [2, 2],
+  office_spire: [2, 2],
+  office_campus: [3, 2, 'grass'],
+  office_twin: [3, 2, 'stone'],
+  industry_factory: [3, 2, 'asphalt'],
+  public_school: [2, 2],
+  public_library: [2, 1, 'stone'],
+  public_mosque: [2, 2],
+  public_church: [2, 2],
+  public_temple: [2, 2],
+  public_police: [2, 1, 'asphalt'],
+  public_fire_station: [2, 1, 'asphalt'],
+  public_bus_terminal: [3, 2, 'asphalt'],
+  public_train_station: [3, 2, 'stone'],
+  public_hospital: [3, 2, 'stone'],
+  public_city_hall: [2, 2, 'stone'],
+  public_university: [3, 3],
+  public_power_plant: [3, 3],
+  public_airport: [4, 3, 'asphalt'],
 };

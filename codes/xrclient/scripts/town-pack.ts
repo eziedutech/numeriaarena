@@ -22,7 +22,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
-import { ALIASES, FLOORS, LANDMARKS, SHELVES, SHOP, type Group } from './town-shop.ts';
+import { ALIASES, FLOORS, LANDMARKS, RESIZE, SHELVES, SHOP, type Group } from './town-shop.ts';
 
 const SRC = resolve(process.argv[2] ?? '');
 const ROOT = resolve(import.meta.dir, '..');
@@ -30,6 +30,11 @@ const OUT = join(ROOT, 'public', 'town');
 /** Positions are kept in 1/Q of a tile. */
 const Q = 8192;
 const THUMB = 128;
+/** No piece stands taller than this many tiles once scaled up. */
+const MAX_TOP = 3;
+/** A pad lies this far up, and the model on it this much higher. */
+const PAD_Y = 0.002;
+const LIFT = 0.004;
 
 interface Entry {
   name: string;
@@ -268,11 +273,37 @@ const packs = new Map<string, Packed>();
 const pieces: PieceInfo[] = [];
 const derived = new Map<string, { w: number; h: number; windows: [number, number]; floors: number }>();
 
+/**
+ * The model made to fill a footprint from RESIZE: scaled the same on every
+ * side until it fits, never taller than MAX_TOP, centred, and with a pad of
+ * ground under it where it leaves tiles bare.
+ */
+function resized(mesh: Mesh, e: Entry, [w, h, ground]: [number, number, string?]): { mesh: Mesh; top: number } {
+  const [ow, oh] = e.footprint;
+  const s = Math.min(w / ow, h / oh);
+  const sy = Math.min(s, Math.max(1, MAX_TOP / e.bounds.max[1]));
+  const lift = ground ? LIFT : 0;
+  const tris: Mesh['tris'] = mesh.tris.map(([x, y, z, c]) => [x * s, y * sy + lift, z * s, c]);
+  const bare = ow * s < w - 1e-6 || oh * s < h - 1e-6;
+  if (bare) {
+    if (!ground) throw new Error(`${e.name}: ${w}x${h} leaves tiles bare and needs a ground`);
+    const c = palette.findIndex((p) => p.name === ground);
+    if (c < 0) throw new Error(`${e.name}: no colour ${ground}`);
+    const [x0, x1, z0, z1] = [-w / 2, w / 2, -h / 2, h / 2];
+    // Two triangles facing up.
+    tris.unshift([x0, PAD_Y, z0, c], [x0, PAD_Y, z1, c], [x1, PAD_Y, z1, c], [x0, PAD_Y, z0, c], [x1, PAD_Y, z1, c], [x1, PAD_Y, z0, c]);
+  }
+  return { mesh: { tris, glass: mesh.glass }, top: Math.round((e.bounds.max[1] * sy + lift) * 100) / 100 };
+}
+
 function add(id: string, model: string, shelf: string): Mesh {
   const e = byName.get(model);
   if (!e) throw new Error(`no model ${model} in the asset set`);
   const mesh = bake(e.file);
-  const p = share(mesh);
+  const size = RESIZE[id];
+  const made = size ? resized(mesh, e, size) : { mesh, top: Math.round(e.bounds.max[1] * 100) / 100 };
+  const [w, h] = size ?? e.footprint;
+  const p = share(made.mesh);
   const name = packOf(shelf);
   const pack = packs.get(name) ?? { positions: [], colours: [], indices: [] };
   packs.set(name, pack);
@@ -281,7 +312,7 @@ function add(id: string, model: string, shelf: string): Mesh {
   pack.positions.push(...p.positions);
   pack.colours.push(...p.colours);
   pack.indices.push(...p.indices);
-  pieces.push({ id, pack: name, shelf, v: [v0, p.colours.length], i: [i0, p.indices.length], w: e.footprint[0], h: e.footprint[1], top: Math.round(e.bounds.max[1] * 100) / 100 });
+  pieces.push({ id, pack: name, shelf, v: [v0, p.colours.length], i: [i0, p.indices.length], w, h, top: made.top });
   return mesh;
 }
 
@@ -303,11 +334,14 @@ for (const [id, group] of SHOP) {
     floors = top < 0.95 ? Math.max(1, w.rows) : w.rows > 2 ? w.rows : Math.max(2, Math.round((top - 0.04) / 0.25));
     floors = FLOORS[id] ?? floors;
   }
-  derived.set(id, { w: e.footprint[0], h: e.footprint[1], windows, floors });
+  const [w, h] = RESIZE[id] ?? e.footprint;
+  derived.set(id, { w, h, windows, floors });
 }
 const shopIds = new Set(SHOP.map((r) => r[0]));
 const missed = manifest.filter((e) => shelfOf.has(e.sheet) && !shopIds.has(e.name)).map((e) => e.name);
 if (missed.length) throw new Error(`not in the shop: ${missed.join(', ')}`);
+const stray = Object.keys(RESIZE).filter((id) => !shopIds.has(id));
+if (stray.length) throw new Error(`resized but not in the shop: ${stray.join(', ')}`);
 
 for (const [landmark, model] of LANDMARKS) {
   for (const t of [1, 2, 3]) add(`${landmark}_t${t}`, `${model}_t${t}`, 'landmarks');

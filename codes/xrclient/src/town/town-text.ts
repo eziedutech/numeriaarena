@@ -57,6 +57,9 @@ const EN = {
   landClosed: (used: number, need: number) => `Build on ${need} tiles of this land to open a new one (${used} so far).`,
   refusedTitle: 'NOT KEPT',
   refusedNote: 'These changes could not be kept by the server, so your town is as the server has it:',
+  returnedTitle: 'BACK IN THE SHOP',
+  returnedNote: 'Some buildings now take up more tiles, as they would in a real town. These no longer fit where they stood, so they are back in the shop and every Fold they cost is yours again:',
+  returnedItem: (name: string, n: number) => `${name}: ${n} Folds back`,
   ok: 'OK',
   offline: 'Offline: your changes wait on this device and go when you are back online.',
   howBody: [
@@ -178,6 +181,9 @@ const ID: typeof EN = {
   landClosed: (used: number, need: number) => `Bangun di ${need} petak lahan ini untuk membuka lahan baru (baru ${used}).`,
   refusedTitle: 'TIDAK DISIMPAN',
   refusedNote: 'Perubahan ini tidak bisa disimpan server, jadi kotamu mengikuti yang ada di server:',
+  returnedTitle: 'KEMBALI KE TOKO',
+  returnedNote: 'Beberapa bangunan kini memakai lebih banyak petak, seperti di kota sungguhan. Bangunan ini tidak muat lagi di tempatnya, jadi kembali ke toko dan semua Folds-nya kembali kepadamu:',
+  returnedItem: (name: string, n: number) => `${name}: ${n} Folds kembali`,
   ok: 'OKE',
   offline: 'Offline: perubahanmu menunggu di perangkat ini dan terkirim saat online lagi.',
   howBody: [

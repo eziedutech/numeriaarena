@@ -247,7 +247,8 @@ class TownPage {
       void model.sync();
       void this.loadMap();
     }
-    if (model.doc.refused.length) this.showRefused();
+    if (model.returned().length) this.showReturned();
+    else if (model.doc.refused.length) this.showRefused();
   }
 
   /** Leaves this town for the other one: the sample, or the player's own. */
@@ -959,6 +960,25 @@ class TownPage {
     const ok = el('button', 'btn go', row);
     ok.textContent = t.ok;
     ok.addEventListener('click', () => this.closeCover());
+    ok.focus();
+  }
+
+  /** Buildings that grew and no longer fit, back in the shop with their Folds; then any refusals. */
+  private showReturned(): void {
+    const model = this.model!;
+    const t = this.t;
+    const sheet = this.openCover(t.returnedTitle);
+    el('p', '', sheet).textContent = t.returnedNote;
+    const list = el('ul', '', sheet);
+    for (const r of model.returned().slice(0, 20)) el('li', '', list).textContent = t.returnedItem(this.name(r.asset), r.price);
+    const row = el('div', 'row', sheet);
+    const ok = el('button', 'btn go', row);
+    ok.textContent = t.ok;
+    ok.addEventListener('click', () => {
+      void model.toldReturned();
+      this.closeCover();
+      if (model.doc.refused.length) this.showRefused();
+    });
     ok.focus();
   }
 
