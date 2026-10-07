@@ -81,8 +81,8 @@ const W = 1024;
 const H = 1434;
 /** Drawn this much taller than wide: the page is seen from a slant, in the headset and on screen. */
 const STRETCH = 1.8;
-const INK = 'rgba(58, 63, 75, 0.94)';
-const SOFT = 'rgba(58, 63, 75, 0.7)';
+const INK = 'rgba(48, 52, 62, 0.96)';
+const SOFT = 'rgba(58, 63, 75, 0.82)';
 const TEAL = '#2f8f7d';
 const GOLD = '#f2c14e';
 const FONT = "'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif";
@@ -156,15 +156,15 @@ class Pen {
 
   /** A heading with its underline. */
   head(text: string, y: number): void {
-    const w = this.text(text, this.left, y, 96, 800);
+    const w = this.text(text, this.left, y, 96, 700);
     this.line(this.left, y + 24, this.left + w, 7, TEAL);
   }
 
   /** A label on the left and its value on the right, a faint dotted line between. */
   row(label: string, value: string, y: number): void {
-    const lw = this.text(label, this.left, y, 62, 800, SOFT);
-    const vw = this.width(value, 84, 800);
-    this.text(value, this.right, y, 84, 800, INK, 'right');
+    const lw = this.text(label, this.left, y, 62, 400, SOFT);
+    const vw = this.width(value, 84, 700);
+    this.text(value, this.right, y, 84, 700, INK, 'right');
     const from = this.left + lw + 24;
     const to = this.right - vw - 24;
     if (to > from)
@@ -221,35 +221,35 @@ class Pen {
 function leftPage(pen: Pen, t: Words, f: LobbyFacts): void {
   pen.head(t.best, 170);
   if (f.best) {
-    const w = pen.text(String(f.best.points), pen.left, 385, 230, 800, TEAL);
-    pen.text(t.pts, pen.left + w + 24, 385, 84, 800);
+    const w = pen.text(String(f.best.points), pen.left, 385, 230, 700, TEAL);
+    pen.text(t.pts, pen.left + w + 24, 385, 84, 700);
     for (let i = 0; i < 3; i += 1) pen.star(pen.left + 58 + i * 132, 488, 52, i < f.best.stars);
-    pen.text(t.bestAbout, pen.left, 595, 62, 700, SOFT);
+    pen.text(t.bestAbout, pen.left, 595, 66, 400, SOFT);
   } else {
-    pen.para(t.noBest, 320, 84, 800, 96);
-    pen.para(t.noBestAbout, 520, 62, 700, 76, SOFT);
+    pen.para(t.noBest, 320, 84, 700, 96);
+    pen.para(t.noBestAbout, 520, 66, 400, 80, SOFT);
   }
   if (f.raceBest !== undefined) pen.row(t.raceBest, `${f.raceBest}`, 685);
-  const w = pen.text(t.pick, pen.left, 770, 72, 800);
+  const w = pen.text(t.pick, pen.left, 770, 72, 700);
   pen.line(pen.left, 790, pen.left + w, 5, SOFT);
 }
 
 function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
   pen.head(t.me, 170);
-  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 290, 116, 800, TEAL);
-  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 355, 60, 700, SOFT);
+  pen.text(f.seat ? f.seat.name.toUpperCase() : t.guest, pen.left, 290, 116, 700, TEAL);
+  if (f.seat) pen.text(t.seat(f.seat.classLabel, f.seat.seat), pen.left, 355, 64, 400, SOFT);
   let y = f.seat ? 440 : 420;
   if (f.folds !== undefined) {
     pen.row(t.folds, String(f.folds), y);
     pen.row(t.buildings, String(f.buildings ?? 0), y + 90);
     y += 190;
   }
-  if (!f.seat) return void pen.para(t.signIn, y, 62, 700, 76);
-  if (f.places !== 'ready') return void pen.para(f.places === 'offline' ? t.offline : t.loading, y, 62, 700, 76, SOFT);
+  if (!f.seat) return void pen.para(t.signIn, y, 66, 400, 80);
+  if (f.places !== 'ready') return void pen.para(f.places === 'offline' ? t.offline : t.loading, y, 66, 400, 80, SOFT);
   // A small table: the seat's place in its class and in the world, on two boards.
   const col = [pen.right - 250, pen.right];
-  pen.text(t.myClass, col[0], y, 52, 800, SOFT, 'right');
-  pen.text(t.world, col[1], y, 52, 800, SOFT, 'right');
+  pen.text(t.myClass, col[0], y, 52, 400, SOFT, 'right');
+  pen.text(t.world, col[1], y, 52, 400, SOFT, 'right');
   const place = (n?: number) => (n ? `#${n}` : '-');
   const rows: [string, keyof Places][] = [
     [t.strike, 'strike'],
@@ -257,9 +257,9 @@ function rightPage(pen: Pen, t: Words, f: LobbyFacts): void {
   ];
   rows.forEach(([label, key], i) => {
     const at = y + 70 + i * 76;
-    pen.text(label, pen.left, at, 58, 800, INK, 'left', col[0] - 170 - pen.left);
-    pen.text(place(f.classPlace?.[key]), col[0], at, 76, 800, TEAL, 'right');
-    pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 800, TEAL, 'right');
+    pen.text(label, pen.left, at, 58, 400, INK, 'left', col[0] - 170 - pen.left);
+    pen.text(place(f.classPlace?.[key]), col[0], at, 76, 700, TEAL, 'right');
+    pen.text(place(f.worldPlace?.[key]), col[1], at, 76, 700, TEAL, 'right');
   });
 }
 

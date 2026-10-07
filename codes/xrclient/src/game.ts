@@ -248,11 +248,11 @@ const GAME_TINT: Record<MenuChoice, string> = {
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
 /**
- * The Fold Town sticker: in the browser standing just left of the book; in
+ * The Fold Town sticker: in the browser standing by the book's front left corner; in
  * the headset lying back like the chips, left of the games, where the desk is free.
  */
-const TOWN_AT = new Vector3(-0.44, 0.0, -0.08);
-const TOWN_XR_AT = new Vector3(-0.34, 0.0, 0.1);
+const TOWN_AT = new Vector3(-0.53, 0.0, 0.0);
+const TOWN_XR_AT = new Vector3(-0.34, 0.0, 0.12);
 const TOWN_W = 0.19;
 const HINT_SEEN = 'numeria.menuHintSeen';
 /**
@@ -315,10 +315,10 @@ const LINE_SCALE = 0.85;
  * a game starting eases them back to the size its layout is made for.
  * Under the home page the book is HOME_BOOK, the size its camera is set for.
  */
-const LOBBY_BOOK = 2.1;
+const LOBBY_BOOK = 2.4;
 const HOME_BOOK = 1.3;
 const LOBBY_LINE_SCALE = 1.2;
-const LOBBY_LINE_Z = -0.55;
+const LOBBY_LINE_Z = -0.62;
 /** The leaderboard places on the book are asked again after this long. */
 const PLACES_FOR_MS = 60_000;
 /** The book's middle in the desk's frame, its front edge at z 0 (see desk.ts). */
@@ -1526,6 +1526,18 @@ export class GameSystem extends createSystem({
     });
   }
 
+  /**
+   * In the headset the desk menu has no line of animals: they come out of
+   * the book in a game, and behind the large book they would only sometimes fit on the table.
+   */
+  private hideLobbyLine(): void {
+    const show = !this.lobby || this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+    for (const a of this.line) {
+      const obj = a.entity.object3D;
+      if (obj && obj.visible !== show) obj.visible = show;
+    }
+  }
+
   /** The size the book is eased to last. */
   private bookSize = 1;
 
@@ -1535,6 +1547,8 @@ export class GameSystem extends createSystem({
     const s = !this.lobby ? 1 : this.homeWasShown ? HOME_BOOK : LOBBY_BOOK;
     if (!book || s === this.bookSize) return;
     this.bookSize = s;
+    // Only the newest ease: an older one still running would win every frame.
+    for (let i = this.tweens.length - 1; i >= 0; i -= 1) if (this.tweens[i].obj === book) this.tweens.splice(i, 1);
     this.tween(book, new Vector3(0, 0, BOOK_MID_Z * s), 0.5, 0, s);
   }
 
@@ -3420,6 +3434,7 @@ export class GameSystem extends createSystem({
     const desk = this.deskEntity();
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     this.runHome();
+    this.hideLobbyLine();
     const onHome = this.home.visible;
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
