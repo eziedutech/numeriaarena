@@ -13,6 +13,7 @@ import {
   type Intersection,
   type Object3D,
 } from '@iwsdk/core';
+import { boardUp, setBoard } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
@@ -172,7 +173,9 @@ const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
-const OBJECT_AT = new Vector3(0, 0, -0.12);
+const OBJECT_AT = new Vector3(0, 0, -0.2);
+/** A paper object is drawn this much larger than its centimetres say, to be seen and reached; its threads still read the centimetres of the question. A real thing is never scaled. */
+const PAPER_SCALE = 1.5;
 const OBJECT_MARGIN = 0.02;
 /** On a paper polygon a pin goes only this near a corner, and onto it; the foot of a triangle's height this near a side. */
 const CORNER_REACH_M = 0.06;
@@ -285,6 +288,8 @@ export class MeasureDesk {
   private offer?: HuntOffer;
   private cards: Entity[] = [];
   private panel?: Mesh;
+  private lines: [string, number, string][] = [];
+  private onBoard = false;
   private status: Label;
   private paper?: PaperObject;
   private real: Group;
@@ -462,6 +467,7 @@ export class MeasureDesk {
     if (o.source === 'paper') {
       this.paper = paperObject(o.shape, o.size ?? {}, o.keys ?? []);
       this.paper.root.position.copy(OBJECT_AT);
+      this.paper.root.scale.setScalar(PAPER_SCALE);
       this.metric.add(this.paper.root);
     }
     this.hint = this.steps(o);
@@ -612,6 +618,7 @@ export class MeasureDesk {
       this.panel.scale.setScalar(1 + PANEL_PULSE * k);
     }
     this.hands.update(delta);
+    if (boardUp() !== this.onBoard && this.lines.length > 0) this.show();
     for (const side of SIDES) this.readTip(side, delta);
     if (this.step === 'verdict') {
       this.verdictLeft -= delta;
@@ -937,7 +944,7 @@ export class MeasureDesk {
       if (!this.cornerNear(world, this.k2) && !this.nearSide(world)) return false;
     } else if (this.paper) {
       this.paper.spin.getWorldPosition(this.u);
-      if (world.distanceTo(this.u) > this.paper.radius + OBJECT_MARGIN) return false;
+      if (world.distanceTo(this.u) > this.paper.radius * PAPER_SCALE + OBJECT_MARGIN) return false;
     } else {
       this.u.copy(world);
       this.metric.worldToLocal(this.u);
@@ -1356,7 +1363,7 @@ export class MeasureDesk {
         if (this.pulls.has(side) || !this.turnStart(side)) continue;
         if (!this.tip(side, true, this.w) || this.nearestPin(this.w, GRAB_M)) continue;
         paper.spin.getWorldPosition(this.u);
-        if (this.w.distanceTo(this.u) > paper.radius + OBJECT_MARGIN) continue;
+        if (this.w.distanceTo(this.u) > paper.radius * PAPER_SCALE + OBJECT_MARGIN) continue;
         this.metric.worldToLocal(this.w);
         this.turnGoal = undefined;
         this.turns.set(side, { side, last: Math.atan2(this.w.x - centre.x, this.w.z - centre.z) });
@@ -1469,7 +1476,20 @@ export class MeasureDesk {
 
   /** The words over the desk, in a paper panel turned to the player. */
   private say(lines: [string, number, string][]): void {
+    this.lines = lines;
+    this.show();
+  }
+
+  /** The words go on the room's chalkboard when it has one, else on a panel over the desk. */
+  private show(): void {
+    const lines = this.lines;
     this.dropPanel();
+    this.onBoard = boardUp();
+    if (this.onBoard) {
+      setBoard(lines.map(([text, size, ink]) => ({ text, size, ink })));
+      return;
+    }
+    setBoard(undefined);
     const panel: PanelLine[] = lines.map(([text, size, ink]) => ({ text, size, ink }));
     const { mesh } = textPanel(panel, 0.56, 0.3, 0.02, 0, 0.02, 'home');
     mesh.position.copy(HEADER);
@@ -1509,6 +1529,7 @@ export class MeasureDesk {
     this.clearShape();
     this.clearCards();
     this.dropPanel();
+    setBoard(undefined);
     this.core?.dispose();
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();

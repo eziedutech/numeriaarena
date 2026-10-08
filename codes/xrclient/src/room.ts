@@ -1,5 +1,6 @@
 import { type Entity, Mesh, MeshStandardMaterial, VisibilityState, createSystem } from '@iwsdk/core';
 
+import { BoardWriter } from './art/board.js';
 import { buildRoom, type VirtualRoom } from './art/rooms.js';
 import { BedroomLife } from './bedroom-life.js';
 import { ClassroomLife } from './classroom-life.js';
@@ -41,6 +42,8 @@ export class RoomSystem extends createSystem({
   /** The shown room is the emulator's stand-in for the real room. */
   private standIn = false;
   private tint?: MeshStandardMaterial;
+  /** The question of Measure Hunt, in chalk on the stand-in's board. */
+  private writer?: BoardWriter;
   /** The rivals, classmates, teacher, board and clock in the classroom; the robot posters in the bedroom. */
   private life?: ClassroomLife | BedroomLife;
   /** What the shown room was built for; rebuilt when any of it changes. */
@@ -73,6 +76,7 @@ export class RoomSystem extends createSystem({
       obj.rotation.y === this.ry;
     if (same) {
       this.life?.update(Math.min(delta, 0.1));
+      this.writer?.update();
       return;
     }
     // Built once per placement: the book is put down once per session.
@@ -86,6 +90,8 @@ export class RoomSystem extends createSystem({
       group.traverse((o) => {
         if (o instanceof Mesh && o.name.endsWith('-paper')) o.material = this.tint!;
       });
+      this.writer = new BoardWriter();
+      group.add(this.writer.group);
     } else {
       this.life = room === 'classroom' ? new ClassroomLife(group) : new BedroomLife(group);
     }
@@ -107,6 +113,8 @@ export class RoomSystem extends createSystem({
     this.shown.object3D?.traverse((o) => (o as Mesh).geometry?.dispose());
     this.tint?.dispose();
     this.tint = undefined;
+    this.writer?.dispose();
+    this.writer = undefined;
     this.shown.dispose({ disposeResources: false });
     this.shown = undefined;
     console.info('[room] virtual room hidden');
