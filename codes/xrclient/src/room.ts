@@ -10,6 +10,9 @@ import { type Room, getRoom } from './settings.js';
 /** A real desk top lower or higher than this is drawn at the nearest of them. */
 const DESK_TOP_MIN_M = 0.45;
 const DESK_TOP_MAX_M = 1.1;
+/** Before the book is put down the stand-in classroom stands round a desk of this height, this far ahead. */
+const WAITING_TOP_M = 0.75;
+const WAITING_Z_M = -0.45;
 
 /**
  * The browser's XR emulator has no real room, only a grey scan in which the
@@ -61,19 +64,17 @@ export class RoomSystem extends createSystem({
     for (const e of this.queries.desks.entities) desk = e;
     const obj = desk?.object3D;
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
-    if (room === 'here' || !immersive || !obj || !desk?.getValue(DeskRoot, 'placed')) {
+    const placed = !!desk?.getValue(DeskRoot, 'placed');
+    // The emulator's stand-in shows from the start, before the book is put down (a real room needs the desk seen first).
+    if (room === 'here' || !immersive || !obj || (!placed && !standIn)) {
       this.hide();
       return;
     }
-    const top = Math.min(Math.max(obj.position.y, DESK_TOP_MIN_M), DESK_TOP_MAX_M);
-    const same =
-      this.shown &&
-      room === this.room &&
-      standIn === this.standIn &&
-      obj.position.x === this.x &&
-      top === this.top &&
-      obj.position.z === this.z &&
-      obj.rotation.y === this.ry;
+    const top = placed ? Math.min(Math.max(obj.position.y, DESK_TOP_MIN_M), DESK_TOP_MAX_M) : WAITING_TOP_M;
+    const x = placed ? obj.position.x : 0;
+    const z = placed ? obj.position.z : WAITING_Z_M;
+    const ry = placed ? obj.rotation.y : 0;
+    const same = this.shown && room === this.room && standIn === this.standIn && x === this.x && top === this.top && z === this.z && ry === this.ry;
     if (same) {
       this.life?.update(Math.min(delta, 0.1));
       this.writer?.update();
@@ -83,8 +84,8 @@ export class RoomSystem extends createSystem({
     this.hide();
     const group = buildRoom(room as VirtualRoom, top);
     // The floor stays at the real floor (local-floor: y = 0) under the book.
-    group.position.set(obj.position.x, 0, obj.position.z);
-    group.rotation.set(0, obj.rotation.y, 0);
+    group.position.set(x, 0, z);
+    group.rotation.set(0, ry, 0);
     if (standIn) {
       this.tint = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true, color: STAND_IN_TINT });
       group.traverse((o) => {
@@ -98,10 +99,10 @@ export class RoomSystem extends createSystem({
     this.shown = this.world.createTransformEntity(group);
     this.room = room;
     this.standIn = standIn;
-    this.x = obj.position.x;
+    this.x = x;
     this.top = top;
-    this.z = obj.position.z;
-    this.ry = obj.rotation.y;
+    this.z = z;
+    this.ry = ry;
     console.info(`[room] ${room} around the desk (top ${top.toFixed(2)} m)`);
   }
 
