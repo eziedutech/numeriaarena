@@ -559,7 +559,8 @@ function classroom(deskTop: number): Group {
   chair(b, -0.9, -2.95, Math.PI, 0x3469c4);
   prints.push({ x: -0.9, z: -2.95, w: 0.42, d: 0.4 });
   // The player's desk under the book, at the real desk's height; no chair (they sit on their own).
-  classDesk(b, prints, 0, -0.03, 1.15, 0.66, deskTop - 0.003);
+  // As big as the bedroom's, so the book and the cards on it lie inside the desk, not over its far edge.
+  classDesk(b, prints, 0, -0.18, 1.2, 0.8, deskTop - 0.003);
   // Three rows of three desks, a little lower than the player's, the row
   // ahead lower still. Beside the player, a classmate at work at each desk;
   // their own chairs come with them.
