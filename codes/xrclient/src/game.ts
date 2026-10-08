@@ -87,6 +87,7 @@ import { TOWN_TEXT } from './town/town-text.js';
 import { measureBanner } from './home/measure-banner.js';
 import { isMeasureChoice, MeasureDesk, type MeasureChoice, type MeasureHost } from './measure/measure-desk.js';
 import { MEASURE_TEXT } from './measure/measure-text.js';
+import { HandMenu, type MenuTarget } from './hand-menu.js';
 import type { HandAdapters } from './measure/hands.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork, online } from './offline.js';
@@ -543,6 +544,8 @@ export class GameSystem extends createSystem({
   private quitLabel?: Label;
   private quitAskedAt = 0;
   private wasControllers = false;
+  /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
+  private handMenu?: HandMenu;
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
   private shownAt = 0;
@@ -686,6 +689,15 @@ export class GameSystem extends createSystem({
     this.labels.add(this.timerBar);
     steadyAim(this.player.raySpaces.left);
     steadyAim(this.player.raySpaces.right);
+    this.handMenu = new HandMenu({
+      adapters: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
+      active: () => this.world.visibilityState.peek() !== VisibilityState.NonImmersive && !this.controllersOnly(),
+      targets: () => this.handTargets(),
+      alwaysShow: () => this.phase !== 'playing',
+      pinchTaps: emulatedHands,
+      parent: this.world.scene,
+    });
+    this.cleanupFuncs.push(() => this.handMenu?.dispose());
     // In the headset sounds come from where they happen: the head is the listener.
     setEars((pos, forward, up) => {
       if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return false;
@@ -3270,6 +3282,25 @@ export class GameSystem extends createSystem({
     this.tip.mesh.position.copy(over.position).addScaledVector(MENU_UP, lift).addScaledVector(MENU_FACING, 0.012);
   }
 
+  /** The cards a hand's ray may light and tap: every menu button, and the emulator's SIT card. */
+  private handTargets(): MenuTarget[] {
+    const out: MenuTarget[] = [];
+    for (const e of this.queries.buttons.entities) {
+      const obj = e.object3D;
+      if (!obj?.visible) continue;
+      out.push({
+        object: obj,
+        press: () => {
+          if (e.active) this.pressButton(e, true);
+        },
+      });
+    }
+    const seat = this.world.scene.getObjectByName('dev-seat-card');
+    const touch = seat?.userData.onTouch as (() => void) | undefined;
+    if (seat?.visible && touch) out.push({ object: seat, press: touch });
+    return out;
+  }
+
   private hoverTargets(delta: number): void {
     const step = Math.min(1, delta * HOVER_RATE);
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
@@ -3308,7 +3339,9 @@ export class GameSystem extends createSystem({
         // A crystal under a controller's ray is hovered through its box (addRayTarget);
         // with hands only the one crystal they are on, the right hand's first.
         const rayTarget = obj.userData.rayTarget as Entity | undefined;
-        if (immersive && !controllers) on = e === this.crystalFocus;
+        // A card is lit by the hand's dot alone, never by a fingertip near it.
+        if (e.hasComponent(MenuButton) && this.handMenu?.isActive()) on = obj.userData.handHover === true;
+        else if (immersive && !controllers) on = e === this.crystalFocus;
         else on = e.hasComponent(Hovered) || !!rayTarget?.hasComponent(Hovered) || near(obj);
       }
       obj.userData.hovered = on;
@@ -3643,6 +3676,16 @@ export class GameSystem extends createSystem({
     this.runTimer();
     this.runPops(delta);
     this.runDemo(delta);
+    this.handMenu?.update(delta);
+    // IWSDK's own ray is drawn only where ours is not, so a hand never shows two. Put on each pointer
+    // that has none yet: they may be made again when a session begins.
+    for (const side of SIDES) {
+      const pointer = this.input.xr.multiPointers[side] as unknown as { shouldHideRay(): boolean; menuHidesRay?: boolean };
+      if (pointer.menuHidesRay) continue;
+      const own = pointer.shouldHideRay.bind(pointer);
+      pointer.shouldHideRay = () => !!this.handMenu?.takesRay(side) || own();
+      pointer.menuHidesRay = true;
+    }
     this.hoverTargets(delta);
     this.floatBalloons(delta);
     if (this.race) this.updateRace(delta);

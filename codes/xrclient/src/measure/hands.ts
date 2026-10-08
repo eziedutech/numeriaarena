@@ -37,6 +37,8 @@ export class Hand {
   readonly thumb = new Vector3();
   readonly wrist = new Vector3();
   readonly middle = new Vector3();
+  /** The index finger's knuckle (its proximal joint), where the finger bends. */
+  readonly knuckle = new Vector3();
   /** Halfway between thumb and index tip. */
   readonly pinchAt = new Vector3();
   /** The pinch point's smoothed velocity, m/s. */
@@ -83,7 +85,7 @@ export class Hand {
       out.setFromMatrixPosition(JOINT.premultiply(grip.matrixWorld));
       return true;
     };
-    const ok = at('index-finger-tip', this.tip) && at('thumb-tip', this.thumb) && at('wrist', this.wrist) && at('middle-finger-tip', this.middle);
+    const ok = at('index-finger-tip', this.tip) && at('thumb-tip', this.thumb) && at('wrist', this.wrist) && at('middle-finger-tip', this.middle) && at('index-finger-phalanx-proximal', this.knuckle);
     if (!ok) {
       this.tracked = false;
       return;

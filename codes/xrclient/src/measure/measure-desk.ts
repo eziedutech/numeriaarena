@@ -304,6 +304,8 @@ export class MeasureDesk {
   private panel?: Mesh;
   /** The controller holding the board's magnifier down: the board is close while it does. */
   private boardHeld?: Side;
+  /** A hand's tap has brought the board close, and the next tap sends it back. */
+  private boardOn = false;
   /** The magnifier card beside the tools: held, it brings the board close. */
   private zoomCard?: Entity;
   private lines: [string, number, string][] = [];
@@ -610,6 +612,13 @@ export class MeasureDesk {
       case 'me_done':
         if (this.step === 'recap') this.host.closed();
         return;
+      case 'me_zoom':
+        // A controller holds the card down (see magnify); a hand taps it on and taps it off.
+        if (!this.host.controllers()) {
+          this.boardOn = !this.boardOn;
+          setBoardNear(this.boardOn);
+        }
+        return;
       case 'me_back':
         if (this.step === 'grade' || this.step === 'recap') this.host.closed();
         else if (this.step === 'group') {
@@ -725,31 +734,24 @@ export class MeasureDesk {
     const card = this.zoomCard.object3D;
     if (!card) return;
     card.getWorldPosition(this.t2);
+    // Hands tap the card on and off (press); only a controller holds it.
+    if (!this.host.controllers()) return;
     for (const side of SIDES) {
-      const controllers = this.host.controllers();
       const edges = this.grabEdges(side);
-      const holding = controllers ? this.triggerHeld[side] : this.hands.get(side).pinching;
       if (this.boardHeld === side) {
-        if (!holding) {
+        if (!this.triggerHeld[side]) {
           this.boardHeld = undefined;
           setBoardNear(false);
         }
         continue;
       }
       if (!edges.start || this.boardHeld) continue;
-      let on = false;
-      if (controllers) {
-        const ray = this.host.ray(side);
-        ray.getWorldPosition(this.o2);
-        ray.getWorldDirection(this.d2).negate();
-        this.t1.copy(this.t2).sub(this.o2);
-        const along = this.t1.dot(this.d2);
-        on = along > 0 && this.t1.addScaledVector(this.d2, -along).length() < MAGNIFIER_REACH_M;
-      } else {
-        const h = this.hands.get(side);
-        on = h.tracked && h.pinchAt.distanceTo(this.t2) < MAGNIFIER_REACH_M;
-      }
-      if (on) {
+      const ray = this.host.ray(side);
+      ray.getWorldPosition(this.o2);
+      ray.getWorldDirection(this.d2).negate();
+      this.t1.copy(this.t2).sub(this.o2);
+      const along = this.t1.dot(this.d2);
+      if (along > 0 && this.t1.addScaledVector(this.d2, -along).length() < MAGNIFIER_REACH_M) {
         this.boardHeld = side;
         setBoardNear(true);
         sfx('grab');
@@ -1641,6 +1643,7 @@ export class MeasureDesk {
     this.dropPanel();
     setBoard(undefined);
     setBoardNear(false);
+    this.boardOn = false;
     if (this.zoomCard?.active) this.host.remove(this.zoomCard);
     this.core?.dispose();
     if (this.root.active) this.host.remove(this.root);
