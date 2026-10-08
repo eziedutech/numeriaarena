@@ -278,7 +278,7 @@ const BANNER_W = TOWN_W;
 const BANNER_H = TOWN_H;
 const BANNER_AT = new Vector3(-0.33, 0.014, 0.19);
 /** The Fold Town sticker, lower right: in front of the settings, towards the player. */
-const TOWN_AT = new Vector3(0.33, 0.014, 0.16);
+const TOWN_AT = new Vector3(0.37, 0.014, 0.16);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**
@@ -1480,6 +1480,21 @@ export class GameSystem extends createSystem({
     shadow.position.set(TOWN_SHADOW.x, h / 2 + TOWN_SHADOW.y, TOWN_SHADOW.z);
     shadow.renderOrder = 9;
     plane.renderOrder = 10;
+    // Only its oval takes a ray: the corners of its plane, and its shadow, are empty, and lay over the chips beside it.
+    const planeHit = plane.raycast.bind(plane);
+    plane.raycast = (raycaster, out) => {
+      const found: Parameters<Mesh['raycast']>[1] = [];
+      planeHit(raycaster, found);
+      for (const hit of found) {
+        if (!hit.uv) continue;
+        const { x, y } = hit.uv;
+        // Its oval (low in the picture) and the buildings standing up from it.
+        const inOval = ((x - 0.5) / 0.34) ** 2 + ((y - 0.3) / 0.27) ** 2 <= 1;
+        const inBuildings = Math.abs(x - 0.5) <= 0.28 && y >= 0.3 && y <= 0.9;
+        if (inOval || inBuildings) out.push(hit);
+      }
+    };
+    shadow.raycast = () => {};
     const sticker = new Group();
     sticker.name = 'menu-town';
     sticker.add(shadow, plane);

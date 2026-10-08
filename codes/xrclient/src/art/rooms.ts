@@ -70,8 +70,8 @@ const CLASS_COLUMN_X = 2.75;
  * How much lower than the player's the other desks are: a little beside and
  * behind, more ahead, so the desks ahead do not stand up into the view of the board.
  */
-const CLASS_DESK_DROP = 0.08;
-const CLASS_FRONT_DESK_DROP = 0.2;
+const CLASS_DESK_DROP = 0.02;
+const CLASS_FRONT_DESK_DROP = 0.05;
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0, y: 1.55, w: 3.28, h: 1.2 };
