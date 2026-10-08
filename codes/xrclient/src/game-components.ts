@@ -77,6 +77,19 @@ const Games = {
   TownRoom: 'town_room',
   /** The toolbar's MUSIC: the music on or off, as the menu's MUSIC card. */
   TownMusic: 'town_music',
+  /** The lands' toolbar: the land before or after, NEW LAND, and how Folds come. */
+  TownLandBack: 'town_land_back',
+  TownLandNext: 'town_land_next',
+  TownLandNew: 'town_land_new',
+  TownHow: 'town_how',
+  /** BACK among the kinds of a new land: no new land after all. */
+  TownKindsBack: 'town_kinds_back',
+  /** OK on the notice of buildings sent back or changes refused. */
+  TownNotice: 'town_notice',
+  /** The grade a finished building's maths is written for, played alone. */
+  TownGrade4: 'town_grade_4',
+  TownGrade5: 'town_grade_5',
+  TownGrade6: 'town_grade_6',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

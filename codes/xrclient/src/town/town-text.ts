@@ -130,6 +130,14 @@ const EN = {
     shelfHint: 'Pinch a piece and carry it onto the page.',
     page: (n: number, of: number) => `${n} / ${of}`,
     lockedShort: (n: number) => `AFTER ${n}`,
+    landBack: 'BACK',
+    landNext: 'NEXT',
+    newLand: 'NEW LAND',
+    how: 'GET FOLDS',
+    landOf: (n: number, of: number, kind: string) => `LAND ${n} OF ${of} · ${kind}`,
+    landShown: (n: number) => `LAND ${n}`,
+    onlyLand: 'This is your only land. Open a NEW LAND to have another.',
+    chooseBack: 'BACK',
   },
 };
 
@@ -259,6 +267,14 @@ const ID: typeof EN = {
     shelfHint: 'Cubit satu potongan lalu bawa ke halaman.',
     page: (n: number, of: number) => `${n} / ${of}`,
     lockedShort: (n: number) => `SETELAH ${n}`,
+    landBack: 'MUNDUR',
+    landNext: 'MAJU',
+    newLand: 'LAHAN BARU',
+    how: 'CARI FOLDS',
+    landOf: (n: number, of: number, kind: string) => `LAHAN ${n} DARI ${of} · ${kind}`,
+    landShown: (n: number) => `LAHAN ${n}`,
+    onlyLand: 'Ini satu-satunya lahanmu. Buka LAHAN BARU untuk menambah.',
+    chooseBack: 'KEMBALI',
   },
 };
 

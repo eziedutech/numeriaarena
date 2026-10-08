@@ -18,6 +18,7 @@ import { Label } from '../art/label.js';
 import { type PanelLine, softShadow, textPanel, ToolButton, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { townMaterial } from '../art/town/kit.js';
 import { getLang, getRoom, musicOn, ROOMS, setMusic, setRoom } from '../settings.js';
+import { online } from '../offline.js';
 import { sfx } from '../audio.js';
 import { T } from '../text.js';
 import { assetOf, footprint, isSmall, LAND_KINDS, quarterAt, spotMiddle, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
@@ -25,14 +26,15 @@ import { TownModel } from './town-model.js';
 import { SHELF_NAMES } from './town-names.js';
 import { loadPieceIndex, loadShelf, pieceInfo } from './town-pieces.js';
 import { buildPage, foldUp, Ghost, loadPage, pieceObject, type PageScene } from './town-scene.js';
-import { factsOf, finishQuestion, type Question } from './town-facts.js';
+import { factsOf, finishQuestion, GRADES, type Question } from './town-facts.js';
 import { skillTitle, unmarked } from './town-landmarks.js';
-import { gradeOf, hasFacts, pageTiles, RETRY_MS, shapeOf, tries } from './town-maths.js';
+import { gradeOf, GRADE_KEY, hasFacts, pageTiles, RETRY_MS, shapeOf, tries } from './town-maths.js';
 import { TOWN_TEXT, waitText } from './town-text.js';
 
 /**
- * MY FOLD TOWN in the headset: the desk is cleared and the town's newest land
- * lies on it alone, the shop's shelf standing on its right like a screen. As
+ * MY FOLD TOWN in the headset: the desk is cleared and one land of the town
+ * lies on it alone (the newest at first; BACK and NEXT at its front left show
+ * the others), the shop's shelf standing on its right like a screen. As
  * with the game's crystals, a controller's grip held on a piece (on the shelf
  * or the land) takes it into the hand, and a hand's pinch does the same; it
  * is carried with its ray over a tile, which shows a green or orange shadow,
@@ -64,7 +66,16 @@ export type TownChoice =
   | 'town_shelf_big'
   | 'town_shelf_show'
   | 'town_room'
-  | 'town_music';
+  | 'town_music'
+  | 'town_land_back'
+  | 'town_land_next'
+  | 'town_land_new'
+  | 'town_kinds_back'
+  | 'town_how'
+  | 'town_notice'
+  | 'town_grade_4'
+  | 'town_grade_5'
+  | 'town_grade_6';
 
 export function isTownChoice(choice: string): choice is TownChoice {
   return choice.startsWith('town_');
@@ -285,6 +296,18 @@ export class TownDesk {
   private folds: Label;
   private status: Label;
   private land = 0;
+  /** How many lands the town had at the last drawing: one more means a land just opened, and it is shown. */
+  private landCount = 0;
+  /** NEW LAND was pressed: the four kinds stand in front of the land, the toolbars hidden. */
+  private choosing = false;
+  /** The lands' own toolbar at the land's front left while no piece is chosen: back, next, a new land and how Folds come. */
+  private landRow?: Entity;
+  private landName?: Label;
+  private landBackButton?: ToolButton;
+  private landNextButton?: ToolButton;
+  private newLandButton?: ToolButton;
+  /** The notice card open on the town's opening: buildings sent back, or changes the server refused. */
+  private notice: '' | 'returned' | 'refused' = '';
   private carry?: Carry;
   private card?: Card;
   private rot = 0;
@@ -352,9 +375,13 @@ export class TownDesk {
     this.folds = this.text('', 0.026, header, 0.05);
     this.status = this.text('', 0.02, header, 0.012);
     for (const it of model.view().items) if (it.ready) this.readySeen.add(it.id);
+    this.landCount = model.view().lands.length;
+    this.land = Math.max(0, this.landCount - 1);
     this.unlisten = model.onChange(() => this.redraw());
     this.redraw();
     this.fillShelf(this.shelfOn);
+    if (model.returned().length) this.showNotice('returned');
+    else if (model.doc.refused.length) this.showNotice('refused');
     if (model.seat) void model.sync();
     console.info(`[town] opened in the headset: ${model.view().lands.length} land(s), ${model.view().balance} Folds`);
   }
@@ -373,9 +400,16 @@ export class TownDesk {
     if (this.gone) return;
     const v = this.model.view();
     this.folds.set(this.t.folds(v.balance));
-    this.land = Math.max(0, v.lands.length - 1);
+    // A land just opened is shown; otherwise the one being looked at stays.
+    if (v.lands.length > this.landCount) {
+      this.land = v.lands.length - 1;
+      this.choosing = false;
+      this.showPieceRow(this.viewRow?.object3D, true);
+    }
+    this.landCount = v.lands.length;
+    this.land = Math.min(this.land, Math.max(0, v.lands.length - 1));
     const kind = v.lands[this.land];
-    this.showKinds(!kind || v.land_closed === null);
+    this.showKinds(!kind || this.choosing);
     if (!kind) {
       this.say(this.t.xr.pickLandXr, 0);
       return;
@@ -384,7 +418,14 @@ export class TownDesk {
     const key = `${v.balance}|${v.buildings}`;
     if (key !== this.shelfKey) this.drawShelf(v.balance, v.buildings);
     this.shelfKey = key;
-    if (!this.message) this.say(this.t.xr.hint, 0);
+    this.refreshLandRow();
+    if (!this.message) this.say(this.choosing ? this.t.newLand : this.hint(), 0);
+  }
+
+  /** The line under the title at rest: the hint, and while a class seat is offline, that changes wait on this device. */
+  private hint(): string {
+    const m = this.model;
+    return m.seat && (m.syncNote === 'offline' || !online()) ? `${this.t.xr.hint} ${this.t.offline}` : this.t.xr.hint;
   }
 
   private drawPage(kind: LandKind, items: Placed[]): void {
@@ -399,6 +440,7 @@ export class TownDesk {
       this.view = { x: r.cols / 2, z: r.rows / 2 };
       this.viewRow = this.host.add(this.viewButtons(), true);
       this.pieceRow = this.host.add(this.pieceButtons(), true);
+      this.landRow = this.host.add(this.landButtons(), true);
     }
     const h = this.holder.object3D!;
     if (this.page) h.remove(this.page.root);
@@ -600,9 +642,16 @@ export class TownDesk {
     this.kindCaption?.mesh.removeFromParent();
     this.kindCaption = undefined;
     if (!on) return;
+    const first = !this.model.view().lands.length;
     LAND_KINDS.forEach((k, i) => {
-      this.kindRow.push(this.host.button(`town_${k}` as TownChoice, this.t.kinds[k][0], -0.27 + i * 0.18, 0.13, KIND_COLOR[k]));
+      this.kindRow.push(this.host.button(`town_${k}` as TownChoice, this.t.kinds[k][0], -0.36 + i * 0.18, 0.13, KIND_COLOR[k]));
     });
+    // A new land may be let be; the very first has nothing to go back to, so EXIT stands there.
+    this.kindRow.push(
+      first
+        ? this.host.button('town_done', this.t.xr.done, 0.36, 0.13, CARD_ACCENT)
+        : this.host.button('town_kinds_back', this.t.xr.chooseBack, 0.36, 0.13, CARD_ACCENT),
+    );
     const caption = new Label(this.model.view().lands.length ? this.t.newLand : this.t.pickLand, { height: 0.022 });
     caption.mesh.position.set(0, 0.1, 0.13);
     this.root.object3D!.add(caption.mesh);
@@ -626,6 +675,30 @@ export class TownDesk {
     }
     if (choice === 'town_card') {
       this.closeCard();
+      return;
+    }
+    if (choice === 'town_land_back' || choice === 'town_land_next') {
+      this.stepLand(choice === 'town_land_next' ? 1 : -1);
+      return;
+    }
+    if (choice === 'town_land_new') {
+      this.newLand();
+      return;
+    }
+    if (choice === 'town_kinds_back') {
+      this.choose(false);
+      return;
+    }
+    if (choice === 'town_how') {
+      this.showHow();
+      return;
+    }
+    if (choice === 'town_notice') {
+      this.noticeRead();
+      return;
+    }
+    if (choice === 'town_grade_4' || choice === 'town_grade_5' || choice === 'town_grade_6') {
+      this.setGrade(Number(choice.slice('town_grade_'.length)));
       return;
     }
     if (choice === 'town_zoom_in' || choice === 'town_zoom_out') {
@@ -701,7 +774,7 @@ export class TownDesk {
 
   update(delta: number): void {
     if (this.gone) return;
-    if (this.message && (this.messageLeft -= delta) <= 0) this.say(this.carry ? this.note : this.t.xr.hint, 0);
+    if (this.message && (this.messageLeft -= delta) <= 0) this.say(this.carry ? this.note : this.choosing ? this.t.newLand : this.hint(), 0);
     this.folding = this.folding.filter((f) => {
       f.t += delta / f.s;
       foldUp(f.obj, Math.min(1, f.t));
@@ -841,6 +914,101 @@ export class TownDesk {
     row.add(this.pieceName.mesh);
     this.showPieceRow(row, false);
     return row;
+  }
+
+  /**
+   * The lands' toolbar, the same chips at the same place as the chosen piece's,
+   * shown while no piece is chosen: BACK and NEXT through the lands, NEW LAND
+   * and GET FOLDS, with which land this is written over it.
+   */
+  private landButtons(): Group {
+    const r = townRulesNow();
+    const t = this.t.xr;
+    const tools: [TownChoice, ToolIcon, string, ToolLook][] = [
+      ['town_land_back', 'back', t.landBack, 'plain'],
+      ['town_land_next', 'next', t.landNext, 'plain'],
+      ['town_land_new', 'plus', t.newLand, 'plain'],
+      ['town_how', 'help', t.how, 'plain'],
+    ];
+    const w = this.rowW(tools.length);
+    const row = new Group();
+    row.name = 'town-lands';
+    row.position.set(-(r.cols / 2 + PAPER) * TILE + w / 2, 0.025, PAGE_Z + (r.rows / 2 + PAPER) * TILE + 0.05);
+    row.rotation.x = TOOL_LEAN;
+    this.chips(row, 'town-lands', tools).forEach((b, i) => {
+      const choice = tools[i][0];
+      if (choice === 'town_land_back') this.landBackButton = b;
+      if (choice === 'town_land_next') this.landNextButton = b;
+      if (choice === 'town_land_new') this.newLandButton = b;
+    });
+    this.landName = new Label(' ', { height: 0.016 });
+    this.landName.mesh.position.set(0, TOOL_H / 2 + 0.014, 0.0015);
+    (this.landName.mesh as Object3D & { pointerEvents?: string }).pointerEvents = 'none';
+    row.add(this.landName.mesh);
+    return row;
+  }
+
+  /** The land toolbar's words and looks as the town is now, and which of the two toolbars at the front left shows. */
+  private refreshLandRow(): void {
+    const v = this.model.view();
+    const kind = v.lands[this.land];
+    if (kind) this.landName?.set(this.t.xr.landOf(this.land + 1, v.lands.length, this.t.kinds[kind][0]));
+    const one = v.lands.length < 2;
+    this.landBackButton?.set('back', one ? 'off' : 'plain');
+    this.landNextButton?.set('next', one ? 'off' : 'plain');
+    this.newLandButton?.set('plus', v.land_closed ? 'off' : 'plain');
+    this.placeMark();
+  }
+
+  /** The land before or after this one, round from the last to the first. */
+  private stepLand(step: number): void {
+    const v = this.model.view();
+    if (v.lands.length < 2) {
+      this.say(this.t.xr.onlyLand);
+      return;
+    }
+    this.showLand((this.land + step + v.lands.length) % v.lands.length);
+  }
+
+  /** Shows land `i`, whatever was chosen on the last let be; its pieces fill in as their models arrive. */
+  private showLand(i: number): void {
+    this.closeCard();
+    this.land = i;
+    const v = this.model.view();
+    console.info(`[town] land ${i + 1} of ${v.lands.length} shown in the headset`);
+    this.redraw();
+    this.say(this.t.xr.landShown(i + 1));
+    void loadPage(i, v.items, this.model.doc.landmarks[i]).then(
+      () => {
+        if (!this.gone && this.land === i) this.redraw();
+      },
+      (error: unknown) => console.warn(`[town] pieces: ${String(error)}`),
+    );
+  }
+
+  /** NEW LAND: why not yet, while the last land is not built enough, or the four kinds to choose from. */
+  private newLand(): void {
+    const v = this.model.view();
+    if (v.land_closed && v.lands.length) {
+      this.say(this.closedText(v.land_closed, v.lands.length - 1), MESSAGE_S * 2);
+      return;
+    }
+    this.choose(true);
+  }
+
+  /** The four kinds of land standing in front of the land, the toolbars and the card out of their way, or back as they were. */
+  private choose(on: boolean): void {
+    this.choosing = on;
+    this.closeCard();
+    this.showPieceRow(this.viewRow?.object3D, !on);
+    this.redraw();
+    this.say(on ? this.t.newLand : this.hint(), on ? 0 : MESSAGE_S);
+  }
+
+  private closedText(code: string, last: number): string {
+    if (code !== 'land_not_full') return this.reason(code);
+    const { free, used } = pageTiles(this.model, last);
+    return this.t.landClosed(used, Math.ceil((free * townRulesNow().full_tenths) / 10));
   }
 
   private showPieceRow(row: Object3D | undefined, on: boolean): void {
@@ -1184,7 +1352,7 @@ export class TownDesk {
       return;
     }
     this.redraw();
-    this.say(this.t.xr.hint, 0);
+    this.say(this.hint(), 0);
   }
 
   // ------------------------------------------------------------ the card
@@ -1213,7 +1381,13 @@ export class TownDesk {
         this.wrap(q.prompt, lines);
       }
     }
-    const entity = this.cardPanel(lines, q ? q.choices.map((c, i) => [`town_a${i}` as TownChoice, c, 'on'] as Cell) : []);
+    // Played alone, the grade its maths is written for is chosen here, as on the computer.
+    const grade = gradeOf(this.model);
+    const grades =
+      it.ready && hasFacts(it.asset) && !this.model.seat
+        ? GRADES.map((g) => [`town_grade_${g}` as TownChoice, `${t.grade} ${g}`, g === grade ? 'accent' : 'on'] as Cell)
+        : [];
+    const entity = this.cardPanel(lines, q ? q.choices.map((c, i) => [`town_a${i}` as TownChoice, c, 'on'] as Cell) : grades);
     this.card = { id: it.id, entity, q, attempt: tried.attempt, answered: false, ready: it.ready };
     this.selected = it.id;
     this.placeMark();
@@ -1233,6 +1407,66 @@ export class TownDesk {
     const entity = this.cardPanel(lines, [['town_card', t.close, 'accent']]);
     this.card = { id: '', entity, attempt: 0, answered: true, ready: true };
     console.info(`[town] card of the landmark ${lm.landmark}`);
+  }
+
+  /** GET FOLDS: how Folds are earned, and what this player has earned so far. */
+  private showHow(): void {
+    this.closeCard();
+    const t = this.t;
+    const lines: Line[] = [[t.how, 0.02]];
+    for (const line of t.howBody) this.wrap(line, lines);
+    lines.push(['', 0.006]);
+    lines.push([t.earned(this.model.earnings()), 0.013, CARD_ACCENT]);
+    const entity = this.cardPanel(lines, [['town_card', t.ok, 'accent']]);
+    this.card = { id: '', entity, attempt: 0, answered: true, ready: true };
+    console.info('[town] how Folds are earned, shown');
+  }
+
+  /** On opening: buildings that grew and no longer fit, back in the shop with their Folds; or the changes the server refused. */
+  private showNotice(kind: 'returned' | 'refused'): void {
+    this.closeCard();
+    const t = this.t;
+    const m = this.model;
+    const lines: Line[] = [];
+    if (kind === 'returned') {
+      lines.push([t.returnedTitle, 0.02]);
+      this.wrap(t.returnedNote, lines);
+      for (const r of m.returned().slice(0, 8)) lines.push([t.returnedItem(this.name(r.asset), r.price), 0.012, CARD_ACCENT]);
+    } else {
+      lines.push([t.refusedTitle, 0.02]);
+      this.wrap(t.refusedNote, lines);
+      for (const r of m.doc.refused.slice(-8)) {
+        const ev = r.event;
+        const what = ev.type === 'town_place' ? this.name(ev.asset) : ev.type === 'town_land' ? t.kinds[ev.kind][0] : ev.type.replace('town_', '');
+        lines.push([`${what}: ${this.reason(r.reason)}`, 0.012, CARD_ACCENT]);
+      }
+    }
+    const entity = this.cardPanel(lines, [['town_notice', t.ok, 'accent']]);
+    this.card = { id: '', entity, attempt: 0, answered: true, ready: true };
+    this.notice = kind;
+    console.info(`[town] notice: ${kind}`);
+  }
+
+  /** The notice's OK: it is not said again, and after the buildings sent back come the refusals, if any. */
+  private noticeRead(): void {
+    const kind = this.notice;
+    this.closeCard();
+    if (kind === 'returned') {
+      void this.model.toldReturned();
+      if (this.model.doc.refused.length) this.showNotice('refused');
+    } else if (kind === 'refused') void this.model.clearRefused();
+  }
+
+  /** The grade a finished building's maths is written for, played alone; its card is drawn again with it. */
+  private setGrade(g: number): void {
+    try {
+      localStorage.setItem(GRADE_KEY, String(g));
+    } catch {
+      // Without storage the grade stays as it was.
+    }
+    console.info(`[town] grade ${g}`);
+    const it = this.model.view().items.find((i) => i.id === this.card?.id);
+    if (it) this.showCard(it, true);
   }
 
   /** A line of body text; the panel cuts it to its width. */
@@ -1281,6 +1515,7 @@ export class TownDesk {
   private closeCard(): void {
     const e = this.card?.entity;
     this.card = undefined;
+    this.notice = '';
     if (e?.active) {
       this.spare(e.object3D);
       this.host.remove(e);
@@ -1295,6 +1530,7 @@ export class TownDesk {
     const it = this.selected ? this.model.view().items.find((i) => i.id === this.selected && i.land === this.land) : undefined;
     const chosen = !!h && !!it && it.id !== this.carry?.placeId;
     this.showPieceRow(this.pieceRow?.object3D, chosen);
+    this.showPieceRow(this.landRow?.object3D, !chosen && !this.choosing);
     if (!h || !it || !chosen) {
       if (this.mark) this.mark.visible = false;
       return;
@@ -1402,7 +1638,8 @@ export class TownDesk {
     this.spare(this.shelf?.object3D);
     this.spare(this.viewRow?.object3D);
     this.spare(this.pieceRow?.object3D);
-    for (const e of [this.root, this.holder, this.shelf, this.viewRow, this.pieceRow, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
+    this.spare(this.landRow?.object3D);
+    for (const e of [this.root, this.holder, this.shelf, this.viewRow, this.pieceRow, this.landRow, ...this.kindRow, ...this.buttons.values()]) if (e?.active) this.host.remove(e);
     this.restoreDesk();
   }
 }
