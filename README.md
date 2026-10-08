@@ -29,16 +29,70 @@ Status: early development. No public build yet; the link will be added here when
 
 ## What it is
 
-Many schools own headsets that sit unused because there is little math content for
-them that fits a lesson. Numeria Arena is built for that classroom:
+Numeria Arena is an **immersive mathematics game** for primary school, grades 4 to 6. It runs in the Meta Quest browser through WebXR, so there is nothing to install. In mixed reality the game lives on the player's own real desk: the headset finds the table, a pop-up paper book opens on it, and every question becomes something to reach for, pinch, poke and place with the hands. The same game also opens in an ordinary browser window for computers and classroom smartboards.
 
-1. **The book lands on your desk.** The headset finds the real table and opens a pop-up paper book on it. With no table in view, the player places it with a pinch.
-2. **Origami creatures wander out.** Each one carries a number. Answering it with the hands (forging number orbs, popping balloons, building fraction bridges, balancing scales, measuring the real table) folds it back into a paper bird that flies home.
-3. **Everyone plays at their own level.** The Fairness Engine gives each child problems they should get right about three times in four, so a strong and a weak student earn points at the same pace.
-4. **Nobody plays alone.** A solo player races two clearly labelled robot rivals; in class, up to three headsets share one match while students without a headset support them from the classroom screen.
+### Math Edu Game
 
-Answers are never typed in by a person or written by an AI model. Every item comes
-from a template, and the answer is computed by one piece of code.
+The maths is the action, not a quiz with 3D decoration around it. 28 skills common to most curricula (place value, multiplication and division, fractions, decimals and measurement) come from 206 validated question templates. Every answer is computed by one exact fraction engine, so `0.1 + 0.2` is `0.3`, and no answer is ever typed in by a person or written by an AI model. Everything is in English and Indonesian.
+
+### Learn
+
+Math Lessons offers step-by-step paper lessons for grades 4 to 6, which can also be viewed in VR. Each game opens with a skippable 10-second tutorial in which a paper hand shows the first move without giving the answer away. A wrong answer earns a soft paper "boing" and a second try, never a buzzer. A teacher's report links every weak skill to the matching lesson.
+
+### Play
+
+Origami creatures walk out of the book on the desk, each carrying a problem, and the child answers in space:
+
+- **Orb Forge:** grab two number crystals and merge them into an orb of exactly the right value.
+- **Balloon Burst:** poke the balloon that holds the right answer.
+- **Factory Sort:** carry each creature from the conveyor to the right gate.
+- **Bridge Builder:** lay fraction and decimal planks until the gap is exactly spanned.
+- **Balance Gate:** place number weights until the scale balances.
+
+Children can practise alone, race two clearly labelled robot rivals through three timed waves and a final, race their classmates (up to six desks per match, with robots filling empty seats), find a rival of the same grade, or race side by side at one smartboard. Hands work from start to finish, and controllers work too. Play is seated with no artificial movement, so it stays comfortable.
+
+### Create
+
+Right answers earn **Folds**, which build the child's own **Fold Town** on the desk. The child pinches one of 214 pieces from a paper shop shelf, from roads and trees to houses, a stadium and an airport, and places it on the land in mixed reality. A finished land (plain, river, hills or coast) opens the next one. Every building carries a maths card fitted to the child's grade, showing area, perimeter, volume and fractions of the land, and a FINISH NOW question completes it at once. Skill landmarks cannot be bought: they grow only from skill stars, so the town tells the story of what the child has learned.
+
+### Accessibility friendly
+
+- **NO TIMER** removes the clock and the speed bonus from every game.
+- **BIG NUMBERS**, **HIGH CONTRAST** and **READ ALOUD** (English or Indonesian) help children who see or read less easily.
+- **STEADY AIM** smooths shaky hands and controller rays, and every game can be played one-handed.
+- Right and wrong are always shown by shape and motion, never by colour alone, and text uses the Atkinson Hyperlegible typeface.
+
+### Fairness and integrity
+
+The **Fairness Engine** gives every child problems they should answer correctly about three times in four, and scores each right answer against that expectation. A strong and a weak student therefore earn points at nearly the same pace (5.8% apart in a 1000-student simulation), so classmates can race each other without prior ability deciding the race. Robots never pretend to be people.
+
+Because every answer is an action on objects in space, each round is **action-based authentic assessment**. Class races are judged by the server against a clock the server keeps, which leaves little room for copied text, instant AI answers or switching to another device. Teachers get a more honest, valid and consistent picture of what each child can actually do.
+
+### AI analysis for teachers
+
+On top of the rule-based report, which always works (STRONG, MIDDLE, NEEDS PRACTICE, NOT ENOUGH DATA), the teacher can ask for an **AI class insight** and an **AI practice plan** for each student, in English or Indonesian. The insight names what the class does well, what needs work and what to do next. The practice plan picks the one to three skills most worth practising first, explains what the answers show, and gives one next step for each.
+
+- The model only sees numbers: seat numbers, skill titles, counts and misconception codes, never a name or any text from a child.
+- Every answer is checked against those numbers before the teacher sees it, and it is labelled as made by AI. If a check fails, the rule-based insight is shown instead.
+- Children never talk to an AI, and AI never writes questions or answers.
+- The admin chooses the provider (any OpenAI-compatible service or Amazon Bedrock). API keys are stored encrypted on the server, and a monthly budget falls back to rule-based text when it runs out.
+
+### Teacher-managed class races
+
+The teacher runs the race, not the game. From the class page the teacher opens a race room and chooses the games, the number of rounds, the seconds per round and the level of the questions (adaptive, easier or harder). The room gets a play code for the children and a watch code for the **class screen** on the projector. Children join from their headsets, press I'M READY, and the teacher starts the match for every desk at once.
+
+- A large class races in groups of six desks, and the class screen calls each group in turn.
+- Robots marked BOT fill empty desks, and a robot helper keeps a desk busy if a child steps away, earning no points.
+- The class screen shows waves, the boss round, results and highlights, but never a child's question. The teacher can send cheers to every desk.
+- With few headsets, the teacher can start a **smartboard race** for up to three children at one touch screen and save the results in the class report.
+
+### Made for the classroom
+
+**MY CLASSES** gives each class up to 100 seats, each with a fixed pseudonym and a picture password, along with printable sign-in cards and groups for taking turns. Reports show each skill and each seat by first tries, the most-missed questions and the most common misconceptions. Leaderboards cover the class and the world, and a class town map shows every student's land. Anyone can open a sample teacher page without an account.
+
+### Safe for children and ready offline
+
+Children never enter a name or an email. Real names stay in the teacher's browser, and camera, room and voice data never leave the device. Practice and robot races keep working offline after the first visit.
 
 ## Who it is for
 
