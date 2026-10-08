@@ -11,6 +11,16 @@ const DESK_TOP_MIN_M = 0.45;
 const DESK_TOP_MAX_M = 1.1;
 
 /**
+ * The browser's XR emulator has no real room, only a grey scan in which the
+ * desk cannot be told. There "my room" shows the paper classroom instead, so
+ * the desk and the floor are seen. A real headset never does: IWER, which
+ * only the emulator injects, is what tells the two apart.
+ */
+function emulated(): boolean {
+  return !!(window as unknown as { IWER_DEVICE?: unknown }).IWER_DEVICE;
+}
+
+/**
  * The room around the desk in the headset. "My room" is the real one through
  * passthrough; a virtual room covers it, lined up with the real desk so the
  * book still lies on it and the hands meet the real top. It shows only once
@@ -31,7 +41,8 @@ export class RoomSystem extends createSystem({
   private ry = 0;
 
   update(delta: number): void {
-    const room = getRoom();
+    const chosen = getRoom();
+    const room: Room = chosen === 'here' && emulated() ? 'classroom' : chosen;
     let desk: Entity | undefined;
     for (const e of this.queries.desks.entities) desk = e;
     const obj = desk?.object3D;
