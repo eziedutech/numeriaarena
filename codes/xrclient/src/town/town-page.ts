@@ -87,6 +87,8 @@ const CSS = `
 #town .tools .btn { box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
 #town .view { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 6px; }
 #town .view .btn { min-width: 44px; font-size: 20px; padding: 6px 10px; box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
+#town .view .btn.reset { font-size: 15px; padding: 6px 14px; }
+#town .view .btn:disabled { opacity: 0.45; cursor: default; }
 #town .keys { font-size: 13px; color: #7a6f5c; padding: 4px 16px 8px; background: ${PAPER}; }
 #town .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: ${INK}; color: ${PAPER}; padding: 10px 16px;
   font-size: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
@@ -151,6 +153,8 @@ class TownPage {
   private folding: { obj: Group; start: number; ms: number }[] = [];
   /** How near the camera is, 1 for the whole page, and the point of the page it looks at. */
   private zoom = 1;
+  /** RESET, pressable only while zoomed in. */
+  private resetButton?: HTMLButtonElement;
   private look = new Vector3();
   /** Pointers down on the page, and the press they began: a drag pans, two fingers pinch. */
   private pointers = new Map<number, { x: number; y: number }>();
@@ -313,6 +317,7 @@ class TownPage {
     this.camera.position.set(this.look.x, reach * 1.05, this.look.z + reach * 0.95);
     this.camera.lookAt(this.look);
     this.camera.updateMatrixWorld();
+    if (this.resetButton) this.resetButton.disabled = this.zoom <= 1;
   }
 
   /** Zooms by `by`, keeping the point of the page under (cx, cy) where it is on screen. */
@@ -340,11 +345,12 @@ class TownPage {
     this.aimCamera();
   }
 
-  /** +, − and the whole page again, at the bottom left of the page. */
+  /** +, − and RESET for the whole page again, at the bottom left of the page. */
   private viewButtons(): void {
     const bar = el('div', 'view', this.stage);
     const add = (text: string, tip: string, act: () => void) => {
       const b = el('button', 'btn', bar);
+      b.type = 'button';
       b.textContent = text;
       b.dataset.tip = tip;
       b.setAttribute('aria-label', tip);
@@ -352,10 +358,13 @@ class TownPage {
         act();
         this.canvas.focus();
       });
+      return b;
     };
     add('+', `${this.t.zoomIn} (+)`, () => this.zoomBy(ZOOM_STEP));
     add('−', `${this.t.zoomOut} (−)`, () => this.zoomBy(1 / ZOOM_STEP));
-    add('⤢', `${this.t.wholePage} (0)`, () => this.wholePage());
+    this.resetButton = add(this.t.reset, `${this.t.wholePage} (0)`, () => this.wholePage());
+    this.resetButton.classList.add('reset');
+    this.resetButton.disabled = this.zoom <= 1;
   }
 
   private wholePage(): void {
