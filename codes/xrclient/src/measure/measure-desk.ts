@@ -159,6 +159,13 @@ const TIP_M = 0.05;
 const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
+/**
+ * A controller picks a pin by the cone of its ray, not by where the ray ends:
+ * a pin within RAY_PIN_M of the ray, and a little more for each metre along it,
+ * is the one pointed at. The nearest to the ray's line wins.
+ */
+const RAY_PIN_M = 0.02;
+const RAY_PIN_SLOPE = 0.05;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
 /** A ray or pinch this near the magnifier card is on it, and where the card stands. */
 const MAGNIFIER_REACH_M = 0.05;
@@ -177,7 +184,7 @@ const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
-const OBJECT_AT = new Vector3(0, 0, -0.14);
+const OBJECT_AT = new Vector3(0, 0, -0.1);
 /** A paper object is drawn this much larger than its centimetres say, to be seen and reached; its threads still read the centimetres of the question. A real thing is never scaled. */
 const PAPER_SCALE = 1.5;
 const OBJECT_MARGIN = 0.02;
@@ -193,7 +200,7 @@ const STATUS = new Vector3(0, 0.135, -0.45);
 const PANEL_PULSE = 0.05;
 const PANEL_PULSE_S = 1.1;
 /** The choices along the front of the desk, the tools on its right. */
-const CARD_Z = 0.11;
+const CARD_Z = 0.13;
 const CHOICE_STEP = 0.13;
 const TOOLS_X = 0.4;
 /** After an answer, the next task comes this much later. */
@@ -238,6 +245,8 @@ const pinGeo = new SphereGeometry(0.008, 16, 12);
 // A pin with no thread is red, one with a thread green; the point a controller is about to drop is blue.
 const pinMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6 });
 const greenMat = new MeshStandardMaterial({ color: 0x2fa84f, roughness: 0.6 });
+// The pin a ray points at, to start a thread from or to end one on.
+const hoverMat = new MeshStandardMaterial({ color: 0xffc940, roughness: 0.5, emissive: 0x7a5a00 });
 const threadGeo = new CylinderGeometry(0.0015, 0.0015, 1, 8).translate(0, 0.5, 0);
 const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8 });
 const ghostGeo = new SphereGeometry(0.012, 16, 12);
@@ -658,11 +667,42 @@ export class MeasureDesk {
 
   /** A pin with a thread (or one being pulled from) is green, one without is red. */
   private paintPins(): void {
+    const pointed = new Set<Pin>();
+    for (const side of SIDES) {
+      const pull = this.pulls.get(side);
+      const pin = this.pinAtRay(side, pull?.from);
+      if (pin) pointed.add(pin);
+    }
     for (const p of this.pins) {
       const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
-      const m = used ? greenMat : pinMat;
+      const hover = pointed.has(p);
+      const m = hover ? hoverMat : used ? greenMat : pinMat;
       if (p.mesh.material !== m) p.mesh.material = m;
+      const k = hover ? 1.5 : 1;
+      if (p.mesh.scale.x !== k) p.mesh.scale.setScalar(k);
     }
+  }
+
+  /** The pin a controller's ray points at (other than `except`), by the cone of the ray. */
+  private pinAtRay(side: Side, except?: Pin): Pin | undefined {
+    if (!this.host.controllers() || this.pins.length === 0) return undefined;
+    const ray = this.host.ray(side);
+    ray.getWorldPosition(this.o2);
+    ray.getWorldDirection(this.d2).negate();
+    let best: Pin | undefined;
+    let bestScore = 1;
+    for (const p of this.pins) {
+      if (p === except) continue;
+      p.mesh.getWorldPosition(this.k1).sub(this.o2);
+      const along = this.k1.dot(this.d2);
+      if (along <= 0) continue;
+      const score = this.k1.addScaledVector(this.d2, -along).length() / (RAY_PIN_M + RAY_PIN_SLOPE * along);
+      if (score < bestScore) {
+        best = p;
+        bestScore = score;
+      }
+    }
+    return best;
   }
 
   /**
@@ -722,7 +762,7 @@ export class MeasureDesk {
     let keep = false;
     for (const side of SIDES) {
       if (this.tip(side, false, this.t1)) {
-        const pin = this.nearestPin(this.t1, ACTIVE_M);
+        const pin = this.pinAtRay(side) ?? this.nearestPin(this.t1, ACTIVE_M);
         if (pin && !near) near = pin;
         if (this.active && !pin) {
           this.active.mesh.getWorldPosition(this.t2);
@@ -1063,7 +1103,7 @@ export class MeasureDesk {
     if (this.host.controllers()) {
       const press = this.grabEdges(side).start;
       if (!this.tip(side, false, this.v)) return;
-      const onPin = this.nearestPin(this.v, GRAB_M) !== undefined;
+      const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
       const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
       // The mark shows the corner it will go onto.
       if (free && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
@@ -1149,8 +1189,11 @@ export class MeasureDesk {
     const pull = this.pulls.get(side);
     if (!pull) {
       if (!edges.start || this.turns.has(side)) return;
-      if (!this.tip(side, true, this.v)) return;
-      const from = this.nearestPin(this.v, GRAB_M);
+      const through = this.pinAtRay(side);
+      const touched = this.tip(side, true, this.v);
+      if (!through && !touched) return;
+      if (through) through.mesh.getWorldPosition(this.v);
+      const from = through ?? this.nearestPin(this.v, GRAB_M);
       if (!from) return;
       const mesh = new Mesh(threadGeo, threadMat);
       const label = new Label('', { height: 0.026 });
@@ -1162,6 +1205,9 @@ export class MeasureDesk {
       return;
     }
     this.tip(side, true, this.v);
+    // The thread's end clings to the pin the ray points at, so it is seen to catch before it is let go.
+    const catches = this.pinAtRay(side, pull.from);
+    if (catches) catches.mesh.getWorldPosition(this.v);
     this.w.copy(this.v);
     this.frame().worldToLocal(this.w);
     this.lay(pull.mesh, pull.label, pull.from.mesh.position, this.w);
