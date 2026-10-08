@@ -158,19 +158,25 @@ const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
-const TRASH_SIZE = 0.026;
+const TRASH_SIZE = 0.03;
 const TRASH_LIFT = 0.012;
 /** How far outside the pin, along the floor, the bin floats. */
-const TRASH_OUT = 0.05;
+const TRASH_OUT = 0.04;
 const ACTIVE_M = 0.05;
-const KEEP_M = 0.08;
-const TRASH_HIT_M = 0.03;
-const TRASH_GRACE_S = 0.5;
+const KEEP_M = 0.1;
+const TRASH_HIT_M = 0.035;
+/** A ray this near the bin is on it, and no pin goes within this of it. */
+const BIN_RAY_M = 0.022;
+const TRASH_AVOID_M = 0.05;
+const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
 const OBJECT_AT = new Vector3(0, 0, -0.12);
-const OBJECT_MARGIN = 0.04;
+const OBJECT_MARGIN = 0.02;
+/** On a paper polygon a pin goes only this near a corner, and onto it; the foot of a triangle's height this near a side. */
+const CORNER_REACH_M = 0.06;
+const SIDE_REACH_M = 0.025;
 /** The real thing may be anywhere this near the desk's middle. */
 const REAL_REACH = 1.0;
 /** The words over the desk, and the time and points under them. */
@@ -257,6 +263,8 @@ export class MeasureDesk {
   private active?: Pin;
   private activeFor = 0;
   private t1 = new Vector3();
+  private k1 = new Vector3();
+  private k2 = new Vector3();
   private t2 = new Vector3();
   private o2 = new Vector3();
   private d2 = new Vector3();
@@ -681,16 +689,29 @@ export class MeasureDesk {
       const ray = this.host.ray(side);
       ray.getWorldPosition(this.o2);
       ray.getWorldDirection(this.d2).negate();
-      this.caster.set(this.o2, this.d2);
-      this.caster.far = AIM_FAR_M;
-      this.hits.length = 0;
-      this.caster.intersectObject(this.trash, false, this.hits);
-      return this.hits.length > 0;
+      return this.nearBin(this.o2, this.d2);
     }
     const h = this.hands.get(side);
     if (!h.tracked) return false;
     this.trash.getWorldPosition(this.t2);
     return h.pinchAt.distanceTo(this.t2) < TRASH_HIT_M || h.tip.distanceTo(this.t2) < TRASH_HIT_M;
+  }
+
+  /** Whether a ray passes within reach of the bin: a small bin is hard to hit exactly, so near it is on it. */
+  private nearBin(origin: Vector3, dir: Vector3): boolean {
+    this.trash.getWorldPosition(this.t2);
+    this.u.copy(this.t2).sub(origin);
+    const along = Math.max(0, this.u.dot(dir));
+    if (this.u.addScaledVector(dir, -along).length() >= BIN_RAY_M) return false;
+    // A ray that ends on the paper or a pin before the bin's depth is aimed at that, not at the bin behind it.
+    this.targets.length = 0;
+    if (this.paper) this.targets.push(this.paper.root);
+    for (const pin of this.pins) this.targets.push(pin.mesh);
+    this.caster.set(origin, dir);
+    this.caster.far = along;
+    this.hits.length = 0;
+    this.caster.intersectObjects(this.targets, true, this.hits);
+    return !this.hits.some((h) => h.distance < along - 0.012);
   }
 
   /** A press on the bin takes its pin away, and the threads of that pin with it. */
@@ -764,6 +785,8 @@ export class MeasureDesk {
    * False when the ray is on a card: that is a press, not a pin.
    */
   private aim(origin: Vector3, dir: Vector3): boolean {
+    // A ray at the bin presses the bin; it drops no pin.
+    if (this.trash.visible && this.nearBin(origin, dir)) return false;
     this.caster.set(origin, dir);
     this.caster.far = AIM_FAR_M;
     this.targets.length = 0;
@@ -842,9 +865,59 @@ export class MeasureDesk {
     this.paper.frame.localToWorld(world);
   }
 
+  /** Whether the paper object is a polygon: its pins sit on its corners (a circle or ball takes a pin anywhere round it). */
+  private polygon(): boolean {
+    const o = this.offer;
+    return !!this.paper && !!o?.keys?.length && ['square', 'rectangle', 'triangle', 'cube', 'cuboid'].includes(o.shape);
+  }
+
+  /** The corner of a paper polygon nearest a world point, in `out` (world), if one is within reach. */
+  private cornerNear(world: Vector3, out: Vector3): boolean {
+    const keys = this.offer?.keys;
+    if (!this.paper || !keys || !this.polygon()) return false;
+    this.k1.copy(world);
+    this.paper.frame.worldToLocal(this.k1);
+    let best = -1;
+    let bestD = CORNER_REACH_M;
+    keys.forEach(([x, y, z], i) => {
+      const d = Math.hypot(this.k1.x - x / 100, this.k1.y - y / 100, this.k1.z - z / 100);
+      if (d < bestD) {
+        best = i;
+        bestD = d;
+      }
+    });
+    if (best < 0) return false;
+    const [x, y, z] = keys[best];
+    out.set(x / 100, y / 100, z / 100);
+    this.paper.frame.localToWorld(out);
+    return true;
+  }
+
+  /** Whether a world point is close to a side of the paper triangle: where the foot of its height may go. */
+  private nearSide(world: Vector3): boolean {
+    const o = this.offer;
+    if (!this.paper || o?.shape !== 'triangle' || o.task !== 'area' || !o.keys) return false;
+    this.k1.copy(world);
+    this.paper.frame.worldToLocal(this.k1);
+    const k = o.keys.slice(0, 3);
+    for (let i = 0; i < k.length; i += 1) {
+      const a = k[i];
+      const b = k[(i + 1) % k.length];
+      const abx = (b[0] - a[0]) / 100;
+      const abz = (b[2] - a[2]) / 100;
+      const len2 = abx * abx + abz * abz;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((this.k1.x - a[0] / 100) * abx + (this.k1.z - a[2] / 100) * abz) / len2)) : 0;
+      if (Math.hypot(this.k1.x - (a[0] / 100 + abx * t), this.k1.z - (a[2] / 100 + abz * t)) < SIDE_REACH_M && Math.abs(this.k1.y) < SIDE_REACH_M) return true;
+    }
+    return false;
+  }
+
   /** A world point near enough to be pinned. */
   private pinnable(world: Vector3): boolean {
-    if (this.paper) {
+    if (this.paper && this.polygon()) {
+      // A flat shape or a box is pinned at its corners (and a triangle's height foot on a side): nowhere else near, nor far.
+      if (!this.cornerNear(world, this.k2) && !this.nearSide(world)) return false;
+    } else if (this.paper) {
       this.paper.spin.getWorldPosition(this.u);
       if (world.distanceTo(this.u) > this.paper.radius + OBJECT_MARGIN) return false;
     } else {
@@ -854,7 +927,7 @@ export class MeasureDesk {
     }
     if (this.trash.visible) {
       this.trash.getWorldPosition(this.u);
-      if (this.u.distanceTo(world) < TRASH_HIT_M) return false;
+      if (this.u.distanceTo(world) < TRASH_AVOID_M) return false;
     }
     for (const c of this.cards) {
       c.object3D?.getWorldPosition(this.u);
@@ -906,6 +979,8 @@ export class MeasureDesk {
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.nearestPin(this.v, GRAB_M) !== undefined;
       const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
+      // The mark shows the corner it will go onto.
+      if (free && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
       // A small mark where the ray points, so the pin is seen before it drops.
       if (free || onPin) {
         ghost.visible = true;
@@ -915,6 +990,7 @@ export class MeasureDesk {
       }
       if (press && free) this.addPin(this.v);
       else if (press && !onPin && this.pins.length >= this.maxPins() && this.pinnable(this.v)) this.tell(this.t.allPins(this.maxPins()));
+      else if (press && !onPin && this.pins.length < this.maxPins() && !this.pinnable(this.v)) this.tell(this.t.farPin);
       return;
     }
     const h = this.hands.get(side);
@@ -948,7 +1024,14 @@ export class MeasureDesk {
     this.addPin(this.dwellAt[side]);
   }
 
-  private addPin(world: Vector3): Pin {
+  private addPin(spot: Vector3): Pin {
+    // A pin placed near a corner goes onto the corner, or is the pin already there.
+    let world = spot;
+    if (this.cornerNear(spot, this.k2)) {
+      const there = this.nearestPin(this.k2, 0.012);
+      if (there) return there;
+      world = this.k2.clone();
+    }
     const mesh = new Mesh(pinGeo, pinMat);
     mesh.name = 'measure-pin';
     mesh.position.copy(world);
