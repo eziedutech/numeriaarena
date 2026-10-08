@@ -265,15 +265,20 @@ const TICK_FROM_S = 10;
 const TOWN_W = 0.145;
 /** The games block's columns: the race and five practice games. Measure Hunt has a banner of its own. */
 const GAME_COLS = 3;
-/** Measure Hunt's banner: a wide card leaning in front of the chips, touching their front edge. */
-const BANNER_W = 0.3;
-const BANNER_H = 0.075;
-const BANNER_AT = new Vector3(0, 0.012, 0.215);
+
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
 /** Its buildings drawn leaning left this much, so from the player's seat they stand straight. */
 const TOWN_SLANT = 0.45;
-const TOWN_AT = new Vector3(GAMES_AT.x - (GAME_COLS * CHIP_W + (GAME_COLS - 1) * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
+/**
+ * Measure Hunt's card stands where the Fold Town sticker stood, left of the
+ * games, as tall as their two rows; the sticker moved to the lower right.
+ */
+const BANNER_W = TOWN_W;
+const BANNER_H = TOWN_H;
+const BANNER_AT = new Vector3(GAMES_AT.x - (GAME_COLS * CHIP_W + (GAME_COLS - 1) * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
+/** The Fold Town sticker, lower right: below the settings, towards the player. */
+const TOWN_AT = new Vector3(0.2, 0.012, 0.24);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**
@@ -1399,15 +1404,15 @@ export class GameSystem extends createSystem({
   }
 
   /** The Fold Town sticker standing beside the book, the same one as on the home page. */
-  /** The banner for Measure Hunt, apart from the games' chips, breathing gently to be seen. */
+  /** The card for Measure Hunt, apart from the games' chips, breathing gently to be seen. */
   private measureBanner?: Group;
 
   private addMeasureBanner(): void {
     const t = MEASURE_TEXT[getLang()];
     const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
     const canvas = document.createElement('canvas');
-    canvas.width = 1120;
-    canvas.height = 280;
+    canvas.width = 900;
+    canvas.height = 600;
     const tex = new CanvasTexture(canvas);
     tex.colorSpace = SRGBColorSpace;
     const img = new Image();
