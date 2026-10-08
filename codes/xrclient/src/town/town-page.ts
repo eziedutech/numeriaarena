@@ -24,6 +24,11 @@ import { TOWN_TEXT, waitText, type TownText } from './town-text.js';
 
 /** What `selected` holds while the page's landmark is chosen. */
 const LANDMARK = '#landmark';
+/** The nearest the camera comes, times the whole page's view, and one + or − step. */
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.4;
+/** Pixels a press moves before it is a drag that pans the page. */
+const DRAG_PX = 6;
 
 /**
  * MY FOLD TOWN on a computer or phone: the page of the town drawn in its own
@@ -80,6 +85,8 @@ const CSS = `
 #town .item.off .name, #town .item.off .price { opacity: 0.6; }
 #town .tools { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; }
 #town .tools .btn { box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
+#town .view { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 6px; }
+#town .view .btn { min-width: 44px; font-size: 20px; padding: 6px 10px; box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
 #town .keys { font-size: 13px; color: #7a6f5c; padding: 4px 16px 8px; background: ${PAPER}; }
 #town .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: ${INK}; color: ${PAPER}; padding: 10px 16px;
   font-size: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
@@ -142,6 +149,13 @@ class TownPage {
   private page?: PageScene;
   private ghost = new Ghost();
   private folding: { obj: Group; start: number; ms: number }[] = [];
+  /** How near the camera is, 1 for the whole page, and the point of the page it looks at. */
+  private zoom = 1;
+  private look = new Vector3();
+  /** Pointers down on the page, and the press they began: a drag pans, two fingers pinch. */
+  private pointers = new Map<number, { x: number; y: number }>();
+  private pressAt?: { x: number; y: number; dragged: boolean; e: PointerEvent };
+  private pinch = 0;
   private frame = 0;
   private tick = 0;
 
@@ -211,6 +225,7 @@ class TownPage {
     this.toast = el('div', 'toast', this.stage);
     this.toast.setAttribute('aria-live', 'polite');
     this.tools = el('div', 'tools', this.stage);
+    this.viewButtons();
     this.shelf = el('div', 'shelf', this.root);
     el('div', 'keys', this.root).textContent = this.sample ? this.t.sampleKeys : this.t.keys;
 
@@ -229,7 +244,11 @@ class TownPage {
     this.scene.add(this.ghost.root);
 
     this.canvas.addEventListener('pointermove', (e) => this.hover(e));
-    this.canvas.addEventListener('pointerdown', (e) => this.press(e));
+    this.canvas.addEventListener('pointerdown', (e) => this.down(e));
+    this.canvas.addEventListener('pointerup', (e) => this.up(e));
+    this.canvas.addEventListener('pointercancel', (e) => this.up(e, true));
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     this.canvas.addEventListener('pointerleave', () => {
       if (this.mode.kind === 'idle') this.ghost.hide();
     });
@@ -279,13 +298,69 @@ class TownPage {
     const h = Math.max(1, this.stage.clientHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    const r = townRulesNow();
-    const centre = new Vector3(r.cols / 2, 0, r.rows / 2);
-    // Far enough back that the whole page shows on a narrow screen too.
-    const reach = Math.max(r.rows * 1.15, (r.cols * 1.1) / Math.max(0.5, this.camera.aspect));
-    this.camera.position.set(centre.x, reach * 1.05, centre.z + reach * 0.95);
-    this.camera.lookAt(centre);
     this.camera.updateProjectionMatrix();
+    this.aimCamera();
+  }
+
+  /** The camera looking at `look` from as near as `zoom` says, never past the page's edges. */
+  private aimCamera(): void {
+    const r = townRulesNow();
+    if (this.zoom <= 1) this.look.set(r.cols / 2, 0, r.rows / 2);
+    this.look.x = Math.min(r.cols, Math.max(0, this.look.x));
+    this.look.z = Math.min(r.rows, Math.max(0, this.look.z));
+    // At 1, far enough back that the whole page shows on a narrow screen too.
+    const reach = Math.max(r.rows * 1.15, (r.cols * 1.1) / Math.max(0.5, this.camera.aspect)) / this.zoom;
+    this.camera.position.set(this.look.x, reach * 1.05, this.look.z + reach * 0.95);
+    this.camera.lookAt(this.look);
+    this.camera.updateMatrixWorld();
+  }
+
+  /** Zooms by `by`, keeping the point of the page under (cx, cy) where it is on screen. */
+  private zoomBy(by: number, cx?: number, cy?: number): void {
+    const box = this.canvas.getBoundingClientRect();
+    const px = cx ?? box.left + box.width / 2;
+    const py = cy ?? box.top + box.height / 2;
+    const before = this.groundAt(px, py);
+    this.zoom = Math.min(ZOOM_MAX, Math.max(1, this.zoom * by));
+    this.aimCamera();
+    const after = this.groundAt(px, py);
+    if (before && after && this.zoom > 1) {
+      this.look.add(before.sub(after));
+      this.aimCamera();
+    }
+  }
+
+  /** Moves the view so the page's point under one screen point comes under another. */
+  private panBy(fromX: number, fromY: number, toX: number, toY: number): void {
+    if (this.zoom <= 1) return;
+    const a = this.groundAt(fromX, fromY);
+    const b = this.groundAt(toX, toY);
+    if (!a || !b) return;
+    this.look.add(a.sub(b));
+    this.aimCamera();
+  }
+
+  /** +, − and the whole page again, at the bottom left of the page. */
+  private viewButtons(): void {
+    const bar = el('div', 'view', this.stage);
+    const add = (text: string, tip: string, act: () => void) => {
+      const b = el('button', 'btn', bar);
+      b.textContent = text;
+      b.dataset.tip = tip;
+      b.setAttribute('aria-label', tip);
+      b.addEventListener('click', () => {
+        act();
+        this.canvas.focus();
+      });
+    };
+    add('+', `${this.t.zoomIn} (+)`, () => this.zoomBy(ZOOM_STEP));
+    add('−', `${this.t.zoomOut} (−)`, () => this.zoomBy(1 / ZOOM_STEP));
+    add('⤢', `${this.t.wholePage} (0)`, () => this.wholePage());
+  }
+
+  private wholePage(): void {
+    this.zoom = 1;
+    this.aimCamera();
   }
 
   private loop = (time: number) => {
@@ -656,16 +731,22 @@ class TownPage {
 
   // ------------------------------------------------------------ input
 
-  /** The tile under a pointer, by where its ray meets the page, and the quarter of it. */
-  private tileAt(e: PointerEvent): { x: number; y: number; q: number } | null {
+  /** Where the ray through a point of the screen meets the page's ground. */
+  private groundAt(cx: number, cy: number): Vector3 | null {
     const box = this.canvas.getBoundingClientRect();
-    const nx = ((e.clientX - box.left) / box.width) * 2 - 1;
-    const ny = -((e.clientY - box.top) / box.height) * 2 + 1;
+    const nx = ((cx - box.left) / box.width) * 2 - 1;
+    const ny = -((cy - box.top) / box.height) * 2 + 1;
     const p = new Vector3(nx, ny, 0.5).unproject(this.camera);
     const dir = p.sub(this.camera.position).normalize();
     if (dir.y >= 0) return null;
     const s = -this.camera.position.y / dir.y;
-    const hit = this.camera.position.clone().addScaledVector(dir, s);
+    return this.camera.position.clone().addScaledVector(dir, s);
+  }
+
+  /** The tile under a pointer, by where its ray meets the page, and the quarter of it. */
+  private tileAt(e: PointerEvent): { x: number; y: number; q: number } | null {
+    const hit = this.groundAt(e.clientX, e.clientY);
+    if (!hit) return null;
     const r = townRulesNow();
     const x = Math.floor(hit.x);
     const y = Math.floor(hit.z);
@@ -692,7 +773,55 @@ class TownPage {
     };
   }
 
+  private down(e: PointerEvent): void {
+    this.canvas.focus();
+    this.canvas.setPointerCapture(e.pointerId);
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pointers.size === 2) {
+      // A second finger: a pinch, never a press.
+      const [a, b] = [...this.pointers.values()];
+      this.pinch = Math.hypot(a.x - b.x, a.y - b.y);
+      this.pressAt = undefined;
+      return;
+    }
+    // The left button or a finger presses unless it drags; the other buttons only pan.
+    this.pressAt = { x: e.clientX, y: e.clientY, dragged: e.button !== 0, e };
+  }
+
+  private up(e: PointerEvent, cancelled = false): void {
+    this.pointers.delete(e.pointerId);
+    const p = this.pressAt;
+    this.pressAt = undefined;
+    if (p && !p.dragged && !cancelled) this.press(p.e);
+  }
+
+  private wheel(e: WheelEvent): void {
+    e.preventDefault();
+    this.zoomBy(Math.exp(-Math.sign(e.deltaY) * 0.15), e.clientX, e.clientY);
+  }
+
   private hover(e: PointerEvent): void {
+    const last = this.pointers.get(e.pointerId);
+    if (last) {
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.pointers.size === 2) {
+        const [a, b] = [...this.pointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        // The middle of the two fingers moved by half of this one's step.
+        this.panBy(midX - (e.clientX - last.x) / 2, midY - (e.clientY - last.y) / 2, midX, midY);
+        if (this.pinch > 0 && d > 0) this.zoomBy(d / this.pinch, midX, midY);
+        this.pinch = d;
+        return;
+      }
+      const p = this.pressAt;
+      if (p && !p.dragged && Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRAG_PX) p.dragged = true;
+      if (p?.dragged) {
+        this.panBy(last.x, last.y, e.clientX, e.clientY);
+        return;
+      }
+    }
     const tile = this.tileAt(e);
     if (!tile || this.mode.kind === 'idle') return;
     this.aim(tile);
@@ -701,7 +830,6 @@ class TownPage {
   }
 
   private press(e: PointerEvent): void {
-    this.canvas.focus();
     const tile = this.tileAt(e);
     if (!tile) return;
     this.aim(tile);
@@ -781,6 +909,9 @@ class TownPage {
       }
       return;
     }
+    if ((e.key === '+' || e.key === '=') && onCanvas) return this.zoomBy(ZOOM_STEP);
+    if ((e.key === '-' || e.key === '_') && onCanvas) return this.zoomBy(1 / ZOOM_STEP);
+    if (e.key === '0' && onCanvas) return this.wholePage();
     if ((e.key === 'r' || e.key === 'R') && m.kind !== 'idle') {
       this.turnHeld();
       return;
