@@ -173,7 +173,7 @@ const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
-const OBJECT_AT = new Vector3(0, 0, -0.2);
+const OBJECT_AT = new Vector3(0, 0, -0.14);
 /** A paper object is drawn this much larger than its centimetres say, to be seen and reached; its threads still read the centimetres of the question. A real thing is never scaled. */
 const PAPER_SCALE = 1.5;
 const OBJECT_MARGIN = 0.02;
