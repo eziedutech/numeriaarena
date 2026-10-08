@@ -78,7 +78,7 @@ const CSS = `
 #town .item.on { background: ${TEAL}; color: #fff; }
 #town .item.off img { filter: grayscale(0.8); opacity: 0.55; }
 #town .item.off .name, #town .item.off .price { opacity: 0.6; }
-#town .tools { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 8px; }
+#town .tools { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; }
 #town .tools .btn { box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.25); }
 #town .keys { font-size: 13px; color: #7a6f5c; padding: 4px 16px 8px; background: ${PAPER}; }
 #town .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: ${INK}; color: ${PAPER}; padding: 10px 16px;
@@ -533,21 +533,21 @@ class TownPage {
     }
   }
 
-  /** TURN and CANCEL over the page while a piece is being placed or moved. */
+  /** TURN and DONE at the top right of the page while a piece is being placed or moved. */
   private drawTools(): void {
     this.tools.innerHTML = '';
     if (this.mode.kind === 'idle') return;
-    const turn = el('button', 'btn go', this.tools);
+    const turn = el('button', 'btn', this.tools);
     turn.textContent = `↻ ${this.t.turn}`;
     turn.dataset.tip = `${this.t.turn} (R)`;
     turn.addEventListener('click', () => {
       this.turnHeld();
       this.canvas.focus();
     });
-    const cancel = el('button', 'btn', this.tools);
-    cancel.textContent = this.t.cancel;
-    cancel.dataset.tip = `${this.t.cancel} (Esc)`;
-    cancel.addEventListener('click', () => {
+    const stop = el('button', 'btn go', this.tools);
+    stop.textContent = `✓ ${this.t.stop}`;
+    stop.dataset.tip = `${this.t.stop} (Esc)`;
+    stop.addEventListener('click', () => {
       this.mode = { kind: 'idle' };
       this.redraw();
     });
@@ -574,9 +574,11 @@ class TownPage {
   private drawCard(items: Placed[]): void {
     const it = items.find((i) => i.id === this.selected);
     const lm = this.selected === LANDMARK ? this.landmarkHere() : undefined;
-    this.card.hidden = !it && !lm;
+    // The card gives the top right to TURN and DONE while a piece is held.
+    this.card.hidden = (!it && !lm) || this.mode.kind !== 'idle';
     this.card.innerHTML = '';
     const t = this.t;
+    if (this.card.hidden) return;
     if (lm) {
       el('h3', '', this.card).textContent = this.name(lm.landmark);
       const facts = el('ul', '', this.card);
