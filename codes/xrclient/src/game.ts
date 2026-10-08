@@ -84,6 +84,9 @@ import { skillTitle, unmarked } from './town/town-landmarks.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
 import { openTown } from './town/town-page.js';
 import { TOWN_TEXT } from './town/town-text.js';
+import { isMeasureChoice, MeasureDesk, type MeasureChoice, type MeasureHost } from './measure/measure-desk.js';
+import { MEASURE_TEXT } from './measure/measure-text.js';
+import type { HandAdapters } from './measure/hands.js';
 import { syncAnswers } from './answer-sync.js';
 import { onNetwork, online } from './offline.js';
 import { LobbyBook, type LobbyFacts } from './lobby-book.js';
@@ -231,24 +234,26 @@ const ACCESS_CHIPS: [AccessChoice, Access, ToolIcon][] = [
   ['steady_aim', 'steadyAim', 'crosshair'],
 ];
 /** Each game's picture. */
-const GAME_ICON: Record<MenuChoice, ToolIcon> = {
+const GAME_ICON: Record<MenuGame, ToolIcon> = {
   race: 'flag',
   balloon_burst: 'balloon',
   orb_forge: 'orb',
   factory_sort: 'factory',
   bridge_builder: 'bridge',
   balance_gate: 'balance',
+  measure_hunt: 'ruler',
 };
 /** A desk menu cell: what it does, its picture, its name when hovered, its look, its tint. */
 type MenuCell = [ButtonChoice, ToolIcon, string, ToolLook, string?];
 /** Each game's colour, for its envelope. */
-const GAME_TINT: Record<MenuChoice, string> = {
+const GAME_TINT: Record<MenuGame, string> = {
   race: '#3fb6a0',
   balloon_burst: '#f2716b',
   orb_forge: '#3469c4',
   factory_sort: '#9b6bc2',
   bridge_builder: '#e0a33c',
   balance_gate: '#5aa469',
+  measure_hunt: '#e07a3c',
 };
 /** The last ten seconds of a round tick; the last three higher. */
 const TICK_FROM_S = 10;
@@ -257,11 +262,13 @@ const TICK_FROM_S = 10;
  * as tall as their two rows and centred on them, TOWN_GAP clear of their left edge.
  */
 const TOWN_W = 0.145;
+/** The games block's columns: the race and five practice games, then Measure Hunt. */
+const GAME_COLS = 4;
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
 /** Its buildings drawn leaning left this much, so from the player's seat they stand straight. */
 const TOWN_SLANT = 0.45;
-const TOWN_AT = new Vector3(GAMES_AT.x - (3 * CHIP_W + 2 * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
+const TOWN_AT = new Vector3(GAMES_AT.x - (GAME_COLS * CHIP_W + (GAME_COLS - 1) * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**
@@ -443,7 +450,7 @@ interface Tween {
   done?: () => void;
 }
 
-type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap' | 'town';
+type Phase = 'loading' | 'menu' | 'playing' | 'between' | 'recap' | 'town' | 'measure';
 /** A row of a seat's leaderboard (see leaders.ts): its own has `me`. */
 interface SeatRow {
   place: number;
@@ -467,8 +474,10 @@ interface Drift {
 }
 
 type MenuChoice = GameKind | 'race';
+/** A game on the desk menu: Measure Hunt is played on its own desk, not as a practice. */
+type MenuGame = MenuChoice | 'measure_hunt';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | AccessChoice | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice;
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | AccessChoice | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice | 'measure_hunt' | MeasureChoice;
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -599,6 +608,7 @@ export class GameSystem extends createSystem({
   private labels = new Set<Mesh>();
   /** MY FOLD TOWN on the desk, while it is open. */
   private town?: TownDesk;
+  private measure?: MeasureDesk;
   private tweens: Tween[] = [];
   private head = new Vector3();
   private a = new Vector3();
@@ -808,6 +818,7 @@ export class GameSystem extends createSystem({
       this.world.visibilityState.subscribe((state) => {
         // The headset town has no page on a computer screen: back to the home page.
         if (this.phase === 'town' && state === VisibilityState.NonImmersive) this.closeTown();
+        if (this.phase === 'measure' && state === VisibilityState.NonImmersive) this.closeMeasure();
         // The desk menu has the room setting in the headset only.
         if (this.phase === 'menu' && this.queries.buttons.entities.size > 0) {
           this.clearMenu();
@@ -846,6 +857,11 @@ export class GameSystem extends createSystem({
     if (this.phase === 'town') {
       const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
       if (isTownChoice(pressed)) this.town?.press(pressed);
+      return;
+    }
+    if (this.phase === 'measure') {
+      const pressed = e.getValue(MenuButton, 'game') as ButtonChoice;
+      if (isMeasureChoice(pressed)) this.measure?.press(pressed);
       return;
     }
     if (this.phase === 'recap') {
@@ -944,8 +960,12 @@ export class GameSystem extends createSystem({
       this.openTown();
       return;
     }
+    if (pressed === 'measure_hunt') {
+      this.openMeasure();
+      return;
+    }
     // PRACTICE AGAIN and Done belong to results, the town's cards to the town; a late touch from them does nothing here.
-    if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit' || pressed === 'build' || isTownChoice(pressed)) return;
+    if (pressed === 'again' || pressed === 'games' || pressed === 'done' || pressed === 'quit' || pressed === 'build' || isTownChoice(pressed) || isMeasureChoice(pressed)) return;
     this.start(pressed);
   }
 
@@ -1196,18 +1216,21 @@ export class GameSystem extends createSystem({
     }
     this.showTitle();
     // The race first; a practice has no race, and its five games fill the block from the front left.
-    const games = MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race');
+    // Measure Hunt last: it needs the headset, and in the browser its name says so.
+    const tip = (caption: string, value: string) => `${caption}: ${value}`;
+    const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+    const games: MenuGame[] = [...MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race'), 'measure_hunt'];
+    const gameWord = (game: MenuGame) =>
+      game === 'race' ? T.race : game === 'measure_hunt' && browser ? `${T.gameName[game]} · ${MEASURE_TEXT[getLang()].xrOnly}` : T.gameName[game];
     this.menuChips(
-      games.map((game) => [game, GAME_ICON[game], game === 'race' ? T.race : T.gameName[game], 'plain', GAME_TINT[game]]),
+      games.map((game) => [game, GAME_ICON[game], gameWord(game), 'plain', GAME_TINT[game]]),
       GAMES_AT,
-      3,
+      GAME_COLS,
       T.gameType,
     );
     // The settings sit beside the games, so the headset never has to come
     // off for them; HOME ends the session (or the game in the browser) for the home page.
     // The room is the headset's only: in the browser its place stays empty.
-    const tip = (caption: string, value: string) => `${caption}: ${value}`;
-    const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
     const anyAccess = bigText() || ACCESS_CHIPS.some(([, a]) => accessOn(a));
     const settings: (MenuCell | null)[] = this.accessOpen ? [
       ['access_back', 'back', T.back, 'plain'],
@@ -2132,6 +2155,83 @@ export class GameSystem extends createSystem({
       },
       emulated: emulatedHands,
       closed: (note) => this.closeTown(note),
+    };
+  }
+
+  /**
+   * MEASURE HUNT: on its own desk in the headset, the real room showing. On a
+   * computer it cannot be played (it measures with the hands), and says so.
+   */
+  private openMeasure(): void {
+    if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      this.pop(MEASURE_TEXT[getLang()].needHeadset, QUESTION_INK, undefined, GAMES_AT.clone().add(new Vector3(0, 0.12, -0.04)), 0.018);
+      return;
+    }
+    console.info('[measure] opening on the desk');
+    this.clearMenu();
+    this.phase = 'measure';
+    this.showTitle();
+    this.score.mesh.visible = false;
+    try {
+      this.measure = new MeasureDesk(this.measureHost());
+    } catch (error) {
+      console.warn(`[measure] could not open: ${String(error)}`);
+      this.closeMeasure(MEASURE_TEXT[getLang()].failed);
+    }
+  }
+
+  /** Back from Measure Hunt to the menu; `note` is said over the games. */
+  private closeMeasure(note?: string): void {
+    const desk = this.measure;
+    this.measure = undefined;
+    desk?.dispose();
+    this.clear(this.queries.buttons);
+    this.score.set(T.title);
+    this.backToMenu();
+    if (note && this.phase === 'menu' && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
+      this.pop(note, QUESTION_INK, undefined, GAMES_AT.clone().add(new Vector3(0, 0.12, -0.04)), 0.022);
+    }
+  }
+
+  private measureHost(): MeasureHost {
+    const town = this.townHost();
+    return {
+      add: (obj) => this.add(obj),
+      remove: (e) => this.remove(e),
+      billboard: (mesh) => this.labels.add(mesh),
+      clearDesk: town.clearDesk,
+      button: (choice, title, x, z, color) => {
+        const b = this.addButton(choice, title, x, color, 1, 0.016);
+        b.position.z = z;
+        for (const e of this.queries.buttons.entities) if (e.object3D === b) return e;
+        throw new Error(`no entity for ${b.name}`);
+      },
+      pop: (text, ink, at) => this.pop(text, ink, undefined, at, 0.024),
+      ray: town.ray,
+      select: town.select,
+      squeeze: town.squeeze,
+      grip: town.grip,
+      controllers: town.controllers,
+      hands: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
+      grade: () => studentState()?.grade,
+      player: () => {
+        const s = studentState();
+        return s ? seatKey(s) : 'guest';
+      },
+      save: (events, send) => {
+        const s = studentState();
+        const seat = s ? seatKey(s) : undefined;
+        const store = this.store;
+        if (events.length > 0 && !store) this.unsaved.push({ events, mode: 'practice', seat });
+        if (!store) return;
+        const saved = events.length > 0 ? store.record(events, 'practice', seat) : Promise.resolve(0);
+        if (send && seat) void saved.then(() => syncAnswers(store));
+      },
+      played: (points, right, total, ms) => {
+        noteGuestPlay(points);
+        reportPlay({ kind: 'practice', game: 'measure_hunt', points, folded: right, right, total, duration_ms: ms });
+      },
+      closed: (note) => this.closeMeasure(note),
     };
   }
 
@@ -3314,7 +3414,7 @@ export class GameSystem extends createSystem({
 
   private next(): void {
     // A creature's (or its bird's) way out that ends after a quit or the results: nothing comes next.
-    if (this.phase === 'menu' || this.phase === 'recap' || this.phase === 'town') return;
+    if (this.phase === 'menu' || this.phase === 'recap' || this.phase === 'town' || this.phase === 'measure') return;
     this.clearPrompt();
     this.offer = undefined;
     if (this.race) {
@@ -3453,9 +3553,10 @@ export class GameSystem extends createSystem({
     }
 
     if (this.phase === 'town') this.town?.update(delta);
+    if (this.phase === 'measure') this.measure?.update(delta);
     this.clickAimedBalloon();
-    // In the town a pinch belongs to the piece it takes, not to a card the other hand's ray is on.
-    if (this.phase !== 'town') this.emulatorPinch();
+    // In the town a pinch belongs to the piece it takes, not to a card the other hand's ray is on; in Measure Hunt to its pin.
+    if (this.phase !== 'town' && this.phase !== 'measure') this.emulatorPinch();
     this.runPull(delta);
     if (this.phase !== 'playing' || this.kind !== 'orb_forge' || !this.offer) return;
     const creature = this.creature();

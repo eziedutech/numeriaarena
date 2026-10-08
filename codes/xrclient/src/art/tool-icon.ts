@@ -62,7 +62,7 @@ const ICONS = {
   // The home page's accessibility figure, filled, not stroked.
   access: ['M15.2 5a3.2 3.2 0 1 0-6.4 0a3.2 3.2 0 1 0 6.4 0', 'M3 9h18v3h-6v10h-3v-6h0v6H9V12H3z'],
   // The games, one picture each: a race flag, a balloon, an orb on its stand,
-  // a factory, an arched bridge and a balance.
+  // a factory, an arched bridge, a balance and a ruler.
   flag: ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'],
   balloon: ['M12 16c3.3 0 6-3.1 6-7a6 6 0 0 0-12 0c0 3.9 2.7 7 6 7z', 'M11 16l-1 2h4l-1-2z', 'M12 18c0 2-2 2-1 4', 'M9 7.5a3.5 3.5 0 0 1 2-2'],
   orb: ['M19 11a7 7 0 1 0-14 0a7 7 0 1 0 14 0', 'M8.5 9.5a4 4 0 0 1 2.5-3', 'M7 21h10', 'M9 17.2L8 21', 'M15 17.2l1 3.8'],
@@ -72,6 +72,7 @@ const ICONS = {
     'M12 18h1',
     'M7 18h1',
   ],
+  ruler: ['M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z', 'M14.5 12.5l2-2', 'M11.5 9.5l2-2', 'M8.5 6.5l2-2', 'M17.5 15.5l2-2'],
   bridge: ['M2 8h20v12h-3v-2a7 7 0 0 0-14 0v2H2z', 'M2 12h20', 'M7 8v4', 'M12 8v4', 'M17 8v4'],
   balance: [
     'M16 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z',

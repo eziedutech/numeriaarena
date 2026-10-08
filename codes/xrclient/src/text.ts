@@ -84,6 +84,7 @@ export const EN = {
     factory_sort: 'Factory Sort',
     bridge_builder: 'Bridge Builder',
     balance_gate: 'Balance Gate',
+    measure_hunt: 'Measure Hunt',
   },
   /** First time on the desk menu: what to do, under the hand that shows it. */
   /** The heading in the games block's empty cell, over two lines. */
@@ -192,6 +193,7 @@ export const ID: Text = {
     factory_sort: 'Factory Sort',
     bridge_builder: 'Bridge Builder',
     balance_gate: 'Balance Gate',
+    measure_hunt: 'Buru Ukur',
   },
   gameType: 'JENIS\nGAME',
   language: (lang: string) => `BAHASA ${lang}`,
