@@ -1039,6 +1039,7 @@ export class MeasureDesk {
     this.frame().add(mesh);
     const pin = { mesh };
     this.pins.push(pin);
+    console.info(`[measure] pin ${this.pins.length} at ${[mesh.position.x, mesh.position.y, mesh.position.z].map((v) => (v * 100).toFixed(1)).join(', ')} cm`);
     sfx('place', { at: world });
     this.changed();
     return pin;
@@ -1290,7 +1291,10 @@ export class MeasureDesk {
     if (!o || !this.core || this.step !== 'measure') return;
     const ring = this.order();
     const spots = ring ? ring.map((p): Spot => ({ pin: p, at: p.mesh.position.clone() })) : this.fromEdges();
-    if (!spots) return;
+    if (!spots) {
+      console.info(`[measure] waiting: ${this.pins.length} pins, ${this.threads.length} threads`);
+      return;
+    }
     const points = spots.map((sp): P3 => [sp.at.x * 100, sp.at.y * 100, sp.at.z * 100]);
     const r = this.core.measure(o.offer_id, points);
     console.info(`[measure] read ${o.offer_id}: ${r.ok ? `ok, ${r.process_points} points for the measuring` : r.problem}`, points);
