@@ -6,6 +6,7 @@ pub mod dsl;
 pub mod error;
 pub mod fairness;
 pub mod format;
+pub mod measure;
 pub mod protocol;
 pub mod race;
 pub mod rational;

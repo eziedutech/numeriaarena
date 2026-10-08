@@ -2223,6 +2223,259 @@
         "en": "Rounds up when it should round down, or down when it should round up.",
         "id": "Membulatkan ke atas padahal seharusnya ke bawah, atau sebaliknya."
       }
+    },
+    {
+      "code": "counted_a_side_twice",
+      "title": {
+        "en": "Counted a side twice",
+        "id": "Menghitung satu sisi dua kali"
+      },
+      "note": {
+        "en": "Adds one side again when going round the shape.",
+        "id": "Menjumlahkan satu sisi lagi saat mengelilingi bangun."
+      }
+    },
+    {
+      "code": "used_one_side",
+      "title": {
+        "en": "Used one side twice",
+        "id": "Memakai satu sisi dua kali"
+      },
+      "note": {
+        "en": "Multiplies the length by itself instead of by the width.",
+        "id": "Mengalikan panjang dengan dirinya sendiri, bukan dengan lebar."
+      }
+    },
+    {
+      "code": "halved_twice",
+      "title": {
+        "en": "Halved twice",
+        "id": "Membagi dua dua kali"
+      },
+      "note": {
+        "en": "Divides by two again after halving base times height.",
+        "id": "Membagi dua lagi setelah alas kali tinggi dibagi dua."
+      }
+    },
+    {
+      "code": "used_radius",
+      "title": {
+        "en": "Used the radius for the diameter",
+        "id": "Memakai jari-jari sebagai diameter"
+      },
+      "note": {
+        "en": "Uses the radius where the diameter belongs, so the result is half.",
+        "id": "Memakai jari-jari di tempat diameter, sehingga hasilnya separuh."
+      }
+    },
+    {
+      "code": "gave_diameter",
+      "title": {
+        "en": "Gave the diameter",
+        "id": "Memberi diameter"
+      },
+      "note": {
+        "en": "Gives the width across the circle instead of the length around it.",
+        "id": "Memberi lebar melintang lingkaran, bukan panjang kelilingnya."
+      }
+    },
+    {
+      "code": "pi_as_three",
+      "title": {
+        "en": "Took pi as 3",
+        "id": "Menganggap pi 3"
+      },
+      "note": {
+        "en": "Rounds pi to 3 instead of using 3.14.",
+        "id": "Membulatkan pi menjadi 3, bukan 3,14."
+      }
+    },
+    {
+      "code": "used_diameter",
+      "title": {
+        "en": "Used the diameter for the radius",
+        "id": "Memakai diameter sebagai jari-jari"
+      },
+      "note": {
+        "en": "Uses the diameter where the radius belongs.",
+        "id": "Memakai diameter di tempat jari-jari."
+      }
+    },
+    {
+      "code": "forgot_to_square",
+      "title": {
+        "en": "Forgot to square the radius",
+        "id": "Lupa mengkuadratkan jari-jari"
+      },
+      "note": {
+        "en": "Multiplies pi by the radius once instead of by the radius squared.",
+        "id": "Mengalikan pi dengan jari-jari sekali, bukan dengan kuadratnya."
+      }
+    },
+    {
+      "code": "one_face_edges",
+      "title": {
+        "en": "Counted one face's edges",
+        "id": "Menghitung rusuk satu sisi"
+      },
+      "note": {
+        "en": "Adds only the four edges of one face.",
+        "id": "Hanya menjumlahkan empat rusuk satu sisi."
+      }
+    },
+    {
+      "code": "counted_vertices",
+      "title": {
+        "en": "Counted the corners",
+        "id": "Menghitung titik sudut"
+      },
+      "note": {
+        "en": "Uses the number of corners (8) instead of edges (12).",
+        "id": "Memakai banyak titik sudut (8), bukan rusuk (12)."
+      }
+    },
+    {
+      "code": "counted_faces",
+      "title": {
+        "en": "Counted the faces",
+        "id": "Menghitung sisi"
+      },
+      "note": {
+        "en": "Uses the number of faces (6) instead of edges (12).",
+        "id": "Memakai banyak sisi (6), bukan rusuk (12)."
+      }
+    },
+    {
+      "code": "one_edge_each",
+      "title": {
+        "en": "One edge of each kind",
+        "id": "Satu rusuk tiap jenis"
+      },
+      "note": {
+        "en": "Adds length, width and height once instead of four times each.",
+        "id": "Menjumlahkan panjang, lebar, dan tinggi sekali, bukan masing-masing empat kali."
+      }
+    },
+    {
+      "code": "half_the_edges",
+      "title": {
+        "en": "Half the edges",
+        "id": "Separuh rusuk"
+      },
+      "note": {
+        "en": "Counts each kind of edge twice instead of four times.",
+        "id": "Menghitung tiap jenis rusuk dua kali, bukan empat kali."
+      }
+    },
+    {
+      "code": "forgot_height",
+      "title": {
+        "en": "Forgot the height",
+        "id": "Lupa tinggi"
+      },
+      "note": {
+        "en": "Leaves out the upright edges.",
+        "id": "Tidak menghitung rusuk tegak."
+      }
+    },
+    {
+      "code": "all_edges_same",
+      "title": {
+        "en": "Treated every edge as the longest",
+        "id": "Menganggap semua rusuk sama panjang"
+      },
+      "note": {
+        "en": "Takes all twelve edges as long as the length.",
+        "id": "Menganggap kedua belas rusuk sepanjang panjang balok."
+      }
+    },
+    {
+      "code": "gave_face_area",
+      "title": {
+        "en": "Gave the area of one face",
+        "id": "Memberi luas satu sisi"
+      },
+      "note": {
+        "en": "Stops at the area of the base and does not multiply by the height.",
+        "id": "Berhenti di luas alas dan tidak mengalikan dengan tinggi."
+      }
+    },
+    {
+      "code": "gave_surface",
+      "title": {
+        "en": "Gave the surface area",
+        "id": "Memberi luas permukaan"
+      },
+      "note": {
+        "en": "Adds the areas of the faces instead of finding the space inside.",
+        "id": "Menjumlahkan luas sisi-sisi, bukan mencari isi ruang di dalamnya."
+      }
+    },
+    {
+      "code": "gave_edges",
+      "title": {
+        "en": "Gave the edge length",
+        "id": "Memberi panjang rusuk"
+      },
+      "note": {
+        "en": "Adds the edges instead of finding the area or volume.",
+        "id": "Menjumlahkan rusuk, bukan mencari luas atau volume."
+      }
+    },
+    {
+      "code": "gave_volume",
+      "title": {
+        "en": "Gave the volume",
+        "id": "Memberi volume"
+      },
+      "note": {
+        "en": "Multiplies three lengths where an area or length was asked.",
+        "id": "Mengalikan tiga ukuran padahal yang ditanya luas atau panjang."
+      }
+    },
+    {
+      "code": "four_faces_only",
+      "title": {
+        "en": "Counted four faces",
+        "id": "Menghitung empat sisi"
+      },
+      "note": {
+        "en": "Leaves out the top and the bottom.",
+        "id": "Tidak menghitung sisi atas dan bawah."
+      }
+    },
+    {
+      "code": "three_faces_only",
+      "title": {
+        "en": "Counted three faces",
+        "id": "Menghitung tiga sisi"
+      },
+      "note": {
+        "en": "Adds each different face once instead of twice.",
+        "id": "Menjumlahkan tiap sisi yang berbeda sekali, bukan dua kali."
+      }
+    },
+    {
+      "code": "six_same_faces",
+      "title": {
+        "en": "Took all faces as the largest",
+        "id": "Menganggap semua sisi sama dengan yang terbesar"
+      },
+      "note": {
+        "en": "Multiplies the largest face by six.",
+        "id": "Mengalikan sisi terbesar dengan enam."
+      }
+    },
+    {
+      "code": "near_value",
+      "title": {
+        "en": "Picked a nearby number",
+        "id": "Memilih angka yang berdekatan"
+      },
+      "note": {
+        "en": "Chose a value close to the answer, often from a careless sum or a misread thread.",
+        "id": "Memilih nilai yang dekat dengan jawaban, sering karena hitungan tergesa atau salah membaca benang."
+      }
     }
   ]
 }

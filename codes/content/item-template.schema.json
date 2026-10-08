@@ -136,7 +136,12 @@
         },
         "measure_hunt": {
           "type": "object", "additionalProperties": false,
-          "properties": { "convert_to": { "enum": ["mm", "cm", "m"] } }
+          "properties": {
+            "convert_to": { "enum": ["mm", "cm", "m"] },
+            "shape": { "enum": ["square", "rectangle", "triangle", "circle", "cube", "cuboid", "cylinder", "sphere"], "description": "Bangun yang diukur anak dengan pin dan benang; nama parameter mengikuti bangun (lihat backrust/core/src/measure.rs)" },
+            "task": { "enum": ["perimeter", "area", "edges", "volume", "surface"] },
+            "unit": { "enum": ["cm", "cm2", "cm3"], "description": "Satuan jawaban yang ditampilkan" }
+          }
         }
       }
     },

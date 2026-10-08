@@ -747,6 +747,18 @@ impl CompiledTemplate {
         let env = self
             .sample_valid(&mut rng, 200)
             .map_err(InstantiateError::Sample)?;
+        self.item_for(env, &mut rng, seed)
+    }
+
+    /// One item from parameters given rather than drawn, such as the sides a
+    /// child measured in Measure Hunt. The parameters' ranges and the
+    /// constraints are not checked: a real table is as wide as it is.
+    pub fn instantiate_with(&self, env: Env, seed: u64) -> Result<Item, InstantiateError> {
+        let mut rng = Rng::new(seed);
+        self.item_for(env, &mut rng, seed)
+    }
+
+    fn item_for(&self, env: Env, rng: &mut Rng, seed: u64) -> Result<Item, InstantiateError> {
         let prompt = self.render_prompt(&env).map_err(InstantiateError::Eval)?;
         // Rounded so logged events read -0.1, not -0.09999999999999998.
         let b =
@@ -779,7 +791,7 @@ impl CompiledTemplate {
                     .unwrap_or(10);
                 for _ in 0..wave {
                     let x = self
-                        .sample_pool_item(&env, &mut rng)
+                        .sample_pool_item(&env, rng)
                         .map_err(InstantiateError::Sample)?;
                     let (gate, _) = self.gate_for(&env, x).map_err(InstantiateError::Eval)?;
                     let gate = gate.ok_or(InstantiateError::NoGate(x.to_string()))?;

@@ -474,3 +474,83 @@ pub fn skill_stars(answers_json: &str, grade: u8, now_ms: f64) -> Result<String,
     serde_json::to_string(&serde_json::json!({ "stars": stars, "landmarks": landmarks }))
         .map_err(js)
 }
+
+/// Measure Hunt for the headset: pins and threads on the real desk. Every
+/// call returns JSON.
+#[wasm_bindgen]
+pub struct MeasureHunt {
+    inner: crate::measure::Hunt,
+    rejected: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl MeasureHunt {
+    /// `templates_json`: array of item templates (the others are ignored).
+    /// `config_json`: HuntConfig.
+    #[wasm_bindgen(constructor)]
+    pub fn new(templates_json: &str, config_json: &str) -> Result<MeasureHunt, JsError> {
+        let templates: Vec<ItemTemplate> = serde_json::from_str(templates_json).map_err(js)?;
+        let cfg: crate::measure::HuntConfig = serde_json::from_str(config_json).map_err(js)?;
+        let (inner, rejected) = crate::measure::Hunt::new(
+            templates,
+            cfg,
+            crate::fairness::FairnessParams::default(),
+        )
+        .map_err(js)?;
+        Ok(MeasureHunt { inner, rejected })
+    }
+
+    pub fn rejected(&self) -> String {
+        serde_json::to_string(&self.rejected).unwrap_or_default()
+    }
+
+    /// The questions of the grade, flat shapes or solids.
+    pub fn tasks(&self, solid: bool) -> String {
+        serde_json::to_string(&self.inner.tasks(solid)).unwrap_or_default()
+    }
+
+    /// `template_id` from `tasks`, or "" for a random one. `source`: "paper" or "real".
+    pub fn next(
+        &mut self,
+        template_id: &str,
+        solid: bool,
+        source: &str,
+        now_ms: f64,
+    ) -> Result<String, JsError> {
+        let source: crate::measure::Source =
+            serde_json::from_str(&format!("\"{source}\"")).map_err(js)?;
+        let offer = self
+            .inner
+            .next(template_id, solid, source, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&offer).map_err(js)
+    }
+
+    /// `pins_json`: `{"points": [[x, y, z], ...]}` in cm.
+    pub fn measure(&mut self, offer_id: u32, pins_json: &str) -> Result<String, JsError> {
+        let pins: crate::measure::Pins = serde_json::from_str(pins_json).map_err(js)?;
+        serde_json::to_string(&self.inner.measure(offer_id, &pins).map_err(js)?).map_err(js)
+    }
+
+    pub fn answer(&mut self, offer_id: u32, index: u32, now_ms: f64) -> Result<String, JsError> {
+        let v = self
+            .inner
+            .answer(offer_id, index as usize, now_ms)
+            .map_err(js)?;
+        serde_json::to_string(&v).map_err(js)
+    }
+
+    pub fn close(&mut self, offer_id: u32) -> bool {
+        self.inner.close(offer_id)
+    }
+
+    #[wasm_bindgen(js_name = drainEvents)]
+    pub fn drain_events(&mut self) -> String {
+        serde_json::to_string(&self.inner.drain_events()).unwrap_or_default()
+    }
+
+    #[wasm_bindgen(js_name = totalPoints)]
+    pub fn total_points(&self) -> u32 {
+        self.inner.total_points()
+    }
+}

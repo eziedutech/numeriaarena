@@ -36,7 +36,8 @@
     { "code": "DC.PERCENT", "grades": [6], "title": { "en": "Percent", "id": "Persen" } },
     { "code": "ME.EST", "grades": [4, 5, 6], "title": { "en": "Estimate length", "id": "Menaksir panjang" } },
     { "code": "ME.CONVERT", "grades": [4, 5], "title": { "en": "Convert mm, cm, m", "id": "Mengubah mm, cm, m" } },
-    { "code": "ME.PERIM", "grades": [4, 5], "title": { "en": "Perimeter", "id": "Keliling" } },
-    { "code": "ME.AREA", "grades": [4, 5, 6], "title": { "en": "Area of rectangles", "id": "Luas persegi panjang" } }
+    { "code": "ME.PERIM", "grades": [4, 5, 6], "title": { "en": "Perimeter", "id": "Keliling" } },
+    { "code": "ME.AREA", "grades": [4, 5, 6], "title": { "en": "Area of flat shapes", "id": "Luas bangun datar" } },
+    { "code": "ME.VOL", "grades": [4, 5, 6], "title": { "en": "Solids: edges, volume and surface area", "id": "Bangun ruang: rusuk, volume, dan luas permukaan" } }
   ]
 }

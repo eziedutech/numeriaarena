@@ -1,0 +1,68 @@
+{
+  "id": "tpl.me.hunt_square_perim.v1",
+  "version": 1,
+  "skill": "ME.PERIM",
+  "grades": [
+    4,
+    5
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "s": {
+      "type": "int",
+      "min": 12,
+      "max": 30
+    }
+  },
+  "answer": {
+    "expr": "4 * s",
+    "format": "decimal",
+    "decimal_places": 2
+  },
+  "difficulty": {
+    "base": -1.0
+  },
+  "distractors": [
+    {
+      "expr": "s * s",
+      "misconception": "gave_area"
+    },
+    {
+      "expr": "2 * s",
+      "misconception": "two_sides_only"
+    },
+    {
+      "expr": "3 * s",
+      "misconception": "forgot_a_side"
+    },
+    {
+      "expr": "8 * s",
+      "misconception": "doubled"
+    }
+  ],
+  "prompt": {
+    "en": "Measure the square. Its perimeter?",
+    "id": "Ukur persegi ini. Kelilingnya?"
+  },
+  "visual_model": "ruler",
+  "game_adapters": {
+    "measure_hunt": {
+      "shape": "square",
+      "task": "perimeter",
+      "unit": "cm"
+    }
+  },
+  "tags": [
+    "measurement",
+    "passthrough",
+    "real_world",
+    "hands"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-10-08-hunt",
+    "created_at": "2026-10-08T10:00:00Z"
+  }
+}
