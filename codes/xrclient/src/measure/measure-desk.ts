@@ -229,6 +229,12 @@ export class MeasureDesk {
   private t = MEASURE_TEXT[getLang()];
   private root: Entity;
   private group: Group;
+  /**
+   * What is measured, at its true size: the desk is drawn larger in the
+   * headset to be read from further away, but a 17 cm paper square must be
+   * 17 cm in the room, and a thread on a real book its real length.
+   */
+  private metric: Group;
   private restoreDesk: () => void;
   private room: Room;
   private hands: Hands;
@@ -301,9 +307,12 @@ export class MeasureDesk {
     this.group = new Group();
     this.group.name = 'measure-desk';
     this.root = host.add(this.group);
+    this.metric = new Group();
+    this.metric.name = 'measure-true-size';
+    this.group.add(this.metric);
     this.real = new Group();
     this.real.name = 'measure-real';
-    this.group.add(this.real);
+    this.metric.add(this.real);
     this.status = new Label('', { height: 0.022 });
     this.status.mesh.position.copy(STATUS);
     this.group.add(this.status.mesh);
@@ -311,7 +320,7 @@ export class MeasureDesk {
     const ghost = () => {
       const g = new Mesh(ghostGeo, ghostMat);
       g.visible = false;
-      this.group.add(g);
+      this.metric.add(g);
       return g;
     };
     this.ghosts = { left: ghost(), right: ghost() };
@@ -409,7 +418,7 @@ export class MeasureDesk {
     if (o.source === 'paper') {
       this.paper = paperObject(o.shape, o.size ?? {}, o.keys ?? []);
       this.paper.root.position.copy(OBJECT_AT);
-      this.group.add(this.paper.root);
+      this.metric.add(this.paper.root);
     }
     this.hint = this.steps(o);
     this.message = '';
@@ -552,6 +561,8 @@ export class MeasureDesk {
 
   update(delta: number): void {
     if (this.gone) return;
+    this.group.getWorldScale(this.n);
+    if (this.n.x > 0) this.metric.scale.setScalar(1 / this.n.x);
     this.hands.update(delta);
     for (const side of SIDES) this.readTip(side, delta);
     if (this.step === 'verdict') {
@@ -650,8 +661,8 @@ export class MeasureDesk {
       return true;
     }
     // The desk's top, under the paper object.
-    this.group.getWorldPosition(this.u);
-    this.group.getWorldQuaternion(this.q);
+    this.metric.getWorldPosition(this.u);
+    this.metric.getWorldQuaternion(this.q);
     this.deskPlane.setFromNormalAndCoplanarPoint(this.n.copy(UP).applyQuaternion(this.q), this.u);
     if (!this.caster.ray.intersectPlane(this.deskPlane, this.u)) return false;
     if (this.u.distanceTo(origin) > AIM_FAR_M) return false;
@@ -714,7 +725,7 @@ export class MeasureDesk {
       if (world.distanceTo(this.u) > this.paper.radius + OBJECT_MARGIN) return false;
     } else {
       this.u.copy(world);
-      this.group.worldToLocal(this.u);
+      this.metric.worldToLocal(this.u);
       if (this.u.length() > REAL_REACH || this.u.y < -0.05) return false;
     }
     for (const c of this.cards) {
@@ -769,7 +780,7 @@ export class MeasureDesk {
       if (free || onPin) {
         ghost.visible = true;
         ghost.position.copy(this.v);
-        this.group.worldToLocal(ghost.position);
+        this.metric.worldToLocal(ghost.position);
         ghost.scale.setScalar(onPin ? 0.8 : 0.5);
       }
       if (press && free) this.addPin(this.v);
@@ -794,7 +805,7 @@ export class MeasureDesk {
     this.dwell[side] += delta;
     ghost.visible = true;
     ghost.position.copy(this.dwellAt[side]);
-    this.group.worldToLocal(ghost.position);
+    this.metric.worldToLocal(ghost.position);
     ghost.scale.setScalar(0.4 + 0.6 * Math.min(1, this.dwell[side] / DWELL_S));
     if (this.dwell[side] < DWELL_S) return;
     this.dwell[side] = 0;
@@ -999,7 +1010,7 @@ export class MeasureDesk {
     if (!paper?.solid) return;
     const spin = paper.spin;
     spin.getWorldPosition(this.v);
-    const centre = this.group.worldToLocal(this.v);
+    const centre = this.metric.worldToLocal(this.v);
     for (const side of SIDES) {
       const held = this.turns.get(side);
       if (!held) {
@@ -1007,7 +1018,7 @@ export class MeasureDesk {
         if (!this.tip(side, true, this.w) || this.nearestPin(this.w, GRAB_M)) continue;
         paper.spin.getWorldPosition(this.u);
         if (this.w.distanceTo(this.u) > paper.radius + OBJECT_MARGIN) continue;
-        this.group.worldToLocal(this.w);
+        this.metric.worldToLocal(this.w);
         this.turnGoal = undefined;
         this.turns.set(side, { side, last: Math.atan2(this.w.x - centre.x, this.w.z - centre.z) });
         this.flicking = false;
@@ -1025,8 +1036,8 @@ export class MeasureDesk {
       // Two hands: a wheel turning about the line to the player, and pulled apart a box opens.
       this.tip('left', true, this.w);
       this.tip('right', true, this.u);
-      this.group.worldToLocal(this.w);
-      this.group.worldToLocal(this.u);
+      this.metric.worldToLocal(this.w);
+      this.metric.worldToLocal(this.u);
       const angle = Math.atan2(this.u.y - this.w.y, this.u.x - this.w.x);
       const apart = this.u.distanceTo(this.w);
       if (!this.wheel) this.wheel = { last: angle, apart };
@@ -1049,7 +1060,7 @@ export class MeasureDesk {
       // One hand: round the desk's up, following the hand about the solid's middle.
       const held = holding[0];
       this.tip(held.side, true, this.w);
-      this.group.worldToLocal(this.w);
+      this.metric.worldToLocal(this.w);
       const angle = Math.atan2(this.w.x - centre.x, this.w.z - centre.z);
       const da = wrap(angle - held.last);
       held.last = angle;
