@@ -1,0 +1,93 @@
+{
+  "id": "tpl.me.area_cut_corner.v1",
+  "version": 1,
+  "skill": "ME.AREA",
+  "grades": [
+    5,
+    6
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 6,
+      "max": 15
+    },
+    "b": {
+      "type": "int",
+      "min": 5,
+      "max": 12
+    },
+    "c": {
+      "type": "int",
+      "min": 2,
+      "max": "a - 2"
+    },
+    "d": {
+      "type": "int",
+      "min": 2,
+      "max": "b - 2"
+    }
+  },
+  "answer": {
+    "expr": "a * b - c * d",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": 1.3,
+    "features": [
+      {
+        "when": "a * b >= 100",
+        "add": 0.2,
+        "note": "larger rectangle"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "a * b",
+      "misconception": "forgot_the_cut"
+    },
+    {
+      "expr": "a * b + c * d",
+      "misconception": "added_the_cut"
+    },
+    {
+      "expr": "2 * (a + b)",
+      "misconception": "gave_perimeter"
+    }
+  ],
+  "prompt": {
+    "en": "{a}x{b} cm rectangle, {c}x{d} cm corner cut off. Area?",
+    "id": "Persegi panjang {a}x{b} cm, pojok {c}x{d} cm dipotong. Luas?"
+  },
+  "visual_model": "area_grid",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    },
+    "bridge_builder": {
+      "max_planks": 3,
+      "decoys": 3
+    }
+  },
+  "tags": [
+    "measurement",
+    "area",
+    "hard"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-10-08-a",
+    "created_at": "2026-10-08T00:00:00Z"
+  }
+}

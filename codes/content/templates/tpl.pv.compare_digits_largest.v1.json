@@ -1,0 +1,91 @@
+{
+  "id": "tpl.pv.compare_digits_largest.v1",
+  "version": 1,
+  "skill": "PV.COMPARE",
+  "grades": [
+    4
+  ],
+  "status": "draft",
+  "answer_kind": "value",
+  "params": {
+    "a": {
+      "type": "int",
+      "min": 0,
+      "max": 6
+    },
+    "b": {
+      "type": "int",
+      "min": "a + 1",
+      "max": 7
+    },
+    "c": {
+      "type": "int",
+      "min": "b + 1",
+      "max": 8
+    },
+    "d": {
+      "type": "int",
+      "min": "c + 1",
+      "max": 9
+    }
+  },
+  "answer": {
+    "expr": "1000 * d + 100 * c + 10 * b + a",
+    "format": "int"
+  },
+  "difficulty": {
+    "base": 0.7,
+    "features": [
+      {
+        "when": "a == 0",
+        "add": 0.2,
+        "note": "zero digit"
+      }
+    ]
+  },
+  "distractors": [
+    {
+      "expr": "1000 * b + 100 * d + 10 * a + c",
+      "misconception": "kept_given_order"
+    },
+    {
+      "expr": "1000 * d + 100 * c + 10 * a + b",
+      "misconception": "swapped_digits"
+    },
+    {
+      "expr": "1000 * a + 100 * b + 10 * c + d",
+      "misconception": "picked_smallest"
+    }
+  ],
+  "prompt": {
+    "en": "Largest number using {b}, {d}, {a}, {c} once each?",
+    "id": "Bilangan terbesar dari angka {b}, {d}, {a}, {c}?"
+  },
+  "visual_model": "blocks",
+  "game_adapters": {
+    "orb_forge": {
+      "ops": [
+        "+"
+      ],
+      "max_crystals": 2,
+      "decoys": 3
+    },
+    "balloon_burst": {
+      "choices": 4
+    },
+    "bridge_builder": {
+      "max_planks": 3,
+      "decoys": 3
+    }
+  },
+  "tags": [
+    "compare",
+    "order"
+  ],
+  "provenance": {
+    "source": "ai",
+    "model": "claude-opus-5-5",
+    "batch_id": "batch-2026-10-08-a",
+    "created_at": "2026-10-08T00:00:00Z"
+  }
+}

@@ -102,6 +102,17 @@
       }
     },
     {
+      "code": "added_instead_of_subtracting",
+      "title": {
+        "en": "Added instead of subtracting",
+        "id": "Menjumlah, bukan mengurangi"
+      },
+      "note": {
+        "en": "Adds the numbers when the sign asks to subtract.",
+        "id": "Menjumlahkan bilangan padahal tandanya meminta pengurangan."
+      }
+    },
+    {
       "code": "added_one",
       "title": {
         "en": "Added one",
@@ -143,6 +154,39 @@
       "note": {
         "en": "Adds length and width for the area instead of multiplying.",
         "id": "Menjumlahkan panjang dan lebar untuk luas, bukan mengalikan."
+      }
+    },
+    {
+      "code": "added_the_cut",
+      "title": {
+        "en": "Added the cut-out",
+        "id": "Menambahkan bagian yang dipotong"
+      },
+      "note": {
+        "en": "Adds the cut-out's area instead of taking it away.",
+        "id": "Menambahkan luas bagian yang dipotong, padahal seharusnya dikurangi."
+      }
+    },
+    {
+      "code": "added_the_digits",
+      "title": {
+        "en": "Added the digits",
+        "id": "Menjumlahkan angkanya"
+      },
+      "note": {
+        "en": "Adds the digits together instead of putting each in its place.",
+        "id": "Menjumlahkan angka-angkanya, bukan menaruh tiap angka di tempatnya."
+      }
+    },
+    {
+      "code": "added_the_gap",
+      "title": {
+        "en": "Added the gap",
+        "id": "Menambahkan celahnya"
+      },
+      "note": {
+        "en": "Adds the gap to the perimeter instead of taking it away.",
+        "id": "Menambahkan celah ke keliling, padahal seharusnya dikurangi."
       }
     },
     {
@@ -297,6 +341,17 @@
       "note": {
         "en": "Writes the given numerator as the missing part of a whole.",
         "id": "Menulis pembilang yang diberikan sebagai bagian yang hilang dari satu utuh."
+      }
+    },
+    {
+      "code": "count_not_length",
+      "title": {
+        "en": "Gave the count, not the length",
+        "id": "Memberi banyaknya, bukan panjangnya"
+      },
+      "note": {
+        "en": "Gives how many units there are instead of how long they are together.",
+        "id": "Menyebut banyaknya satuan, bukan panjang seluruhnya."
       }
     },
     {
@@ -542,6 +597,17 @@
       }
     },
     {
+      "code": "first_digit_only",
+      "title": {
+        "en": "Compared first digits only",
+        "id": "Hanya membandingkan angka pertama"
+      },
+      "note": {
+        "en": "Compares the first digits and ignores how many digits each number has.",
+        "id": "Membandingkan angka pertama saja tanpa melihat banyaknya angka tiap bilangan."
+      }
+    },
+    {
       "code": "forget_carry",
       "title": {
         "en": "Forgot to carry",
@@ -641,6 +707,28 @@
       }
     },
     {
+      "code": "forgot_the_cut",
+      "title": {
+        "en": "Forgot the cut-out",
+        "id": "Lupa bagian yang dipotong"
+      },
+      "note": {
+        "en": "Gives the area of the whole rectangle and does not take the cut-out away.",
+        "id": "Memberi luas persegi panjang utuh tanpa mengurangi bagian yang dipotong."
+      }
+    },
+    {
+      "code": "forgot_the_gap",
+      "title": {
+        "en": "Forgot the gap",
+        "id": "Lupa celahnya"
+      },
+      "note": {
+        "en": "Gives the whole perimeter and does not take the gap away.",
+        "id": "Memberi keliling penuh tanpa mengurangi celahnya."
+      }
+    },
+    {
       "code": "forgot_the_whole",
       "title": {
         "en": "Lost the whole",
@@ -718,6 +806,17 @@
       }
     },
     {
+      "code": "gave_largest_rounding",
+      "title": {
+        "en": "Gave the largest instead",
+        "id": "Memberi yang terbesar"
+      },
+      "note": {
+        "en": "Gives the largest number that rounds this way instead of the smallest.",
+        "id": "Memberi bilangan terbesar yang dibulatkan ke nilai itu, bukan yang terkecil."
+      }
+    },
+    {
       "code": "gave_lcm",
       "title": {
         "en": "Gave a multiple, not a factor",
@@ -726,6 +825,17 @@
       "note": {
         "en": "Finds a common multiple when the greatest common factor was asked.",
         "id": "Mencari kelipatan persekutuan padahal yang diminta faktor persekutuan terbesar."
+      }
+    },
+    {
+      "code": "gave_length_not_count",
+      "title": {
+        "en": "Gave the length, not the count",
+        "id": "Memberi panjang, bukan banyaknya"
+      },
+      "note": {
+        "en": "Gives the length in centimetres instead of how many steps fit in it.",
+        "id": "Menyebut panjang dalam cm, bukan berapa langkah yang muat."
       }
     },
     {
@@ -762,6 +872,17 @@
       }
     },
     {
+      "code": "gave_the_difference",
+      "title": {
+        "en": "Copied the number shown",
+        "id": "Menyalin bilangan yang tertulis"
+      },
+      "note": {
+        "en": "Gives the result already shown instead of the missing number.",
+        "id": "Memberi hasil yang sudah tertulis, bukan bilangan yang hilang."
+      }
+    },
+    {
       "code": "gave_the_number",
       "title": {
         "en": "Gave the number itself",
@@ -795,6 +916,17 @@
       }
     },
     {
+      "code": "gave_value_not_digit",
+      "title": {
+        "en": "Gave the value, not the digit",
+        "id": "Memberi nilai, bukan angkanya"
+      },
+      "note": {
+        "en": "Gives what the digit is worth instead of the digit itself.",
+        "id": "Menyebut nilai angka itu, bukan angkanya sendiri."
+      }
+    },
+    {
       "code": "half_guess",
       "title": {
         "en": "Guessed from half",
@@ -803,6 +935,17 @@
       "note": {
         "en": "Guesses near half of a number instead of finding a factor.",
         "id": "Menebak sekitar setengah bilangan, bukan mencari faktornya."
+      }
+    },
+    {
+      "code": "half_rounds_down",
+      "title": {
+        "en": "Thought halfway rounds down",
+        "id": "Mengira tepat setengah dibulatkan ke bawah"
+      },
+      "note": {
+        "en": "Thinks a number exactly halfway rounds down, so starts one past it.",
+        "id": "Mengira bilangan yang tepat di tengah dibulatkan ke bawah, jadi mulai satu sesudahnya."
       }
     },
     {
@@ -916,6 +1059,17 @@
       }
     },
     {
+      "code": "kept_given_order",
+      "title": {
+        "en": "Kept the given order",
+        "id": "Memakai urutan yang diberikan"
+      },
+      "note": {
+        "en": "Writes the digits in the order they were given instead of largest first.",
+        "id": "Menulis angka sesuai urutan yang diberikan, bukan dari yang terbesar."
+      }
+    },
+    {
       "code": "kept_millimetres",
       "title": {
         "en": "Kept the millimetres",
@@ -949,6 +1103,17 @@
       }
     },
     {
+      "code": "left_out_a_number",
+      "title": {
+        "en": "Left out a number",
+        "id": "Melewatkan satu bilangan"
+      },
+      "note": {
+        "en": "Adds two of the numbers and forgets the third.",
+        "id": "Menjumlahkan dua bilangan dan lupa bilangan ketiga."
+      }
+    },
+    {
       "code": "left_to_right",
       "title": {
         "en": "Worked left to right",
@@ -957,6 +1122,17 @@
       "note": {
         "en": "Does the operations in reading order instead of multiplying first.",
         "id": "Mengerjakan operasi sesuai urutan baca, bukan perkalian dulu."
+      }
+    },
+    {
+      "code": "lined_up_left",
+      "title": {
+        "en": "Lined up from the left",
+        "id": "Disejajarkan dari kiri"
+      },
+      "note": {
+        "en": "Writes the shorter number under the first digits instead of under the ones.",
+        "id": "Menulis bilangan yang lebih pendek di bawah angka depan, bukan di bawah satuan."
       }
     },
     {
@@ -979,6 +1155,28 @@
       "note": {
         "en": "Thinks the decimal with the most digits is the largest.",
         "id": "Mengira desimal dengan angka paling banyak adalah yang terbesar."
+      }
+    },
+    {
+      "code": "lost_regrouped_hundred",
+      "title": {
+        "en": "Lost the regrouped hundred",
+        "id": "Kehilangan seratus hasil tukar"
+      },
+      "note": {
+        "en": "Turns ten tens into a hundred but then leaves that hundred out.",
+        "id": "Menukar sepuluh puluhan menjadi seratus, lalu seratus itu tidak dihitung."
+      }
+    },
+    {
+      "code": "lost_the_zero",
+      "title": {
+        "en": "Lost the zero",
+        "id": "Kehilangan nol"
+      },
+      "note": {
+        "en": "Works with the tens digits and forgets the zero, so the answer is ten times too small.",
+        "id": "Menghitung angka puluhannya saja dan lupa nolnya, jadi jawabannya sepuluh kali terlalu kecil."
       }
     },
     {
@@ -1554,6 +1752,17 @@
       }
     },
     {
+      "code": "rounded_down",
+      "title": {
+        "en": "Always rounded down",
+        "id": "Selalu membulatkan ke bawah"
+      },
+      "note": {
+        "en": "Drops the ones digit, so every number is rounded down.",
+        "id": "Membuang angka satuan, jadi setiap bilangan dibulatkan ke bawah."
+      }
+    },
+    {
       "code": "rounded_to_hundreds",
       "title": {
         "en": "Rounded to hundreds",
@@ -1598,6 +1807,17 @@
       }
     },
     {
+      "code": "rounded_to_whole",
+      "title": {
+        "en": "Rounded to a whole",
+        "id": "Membulatkan ke satuan"
+      },
+      "note": {
+        "en": "Rounds to the nearest whole number when tenths were asked.",
+        "id": "Membulatkan ke bilangan bulat terdekat padahal yang diminta persepuluhan."
+      }
+    },
+    {
       "code": "rounded_up",
       "title": {
         "en": "Rounded the quotient up",
@@ -1606,6 +1826,17 @@
       "note": {
         "en": "Counts the remainder as one more whole group.",
         "id": "Menghitung sisa sebagai satu kelompok utuh tambahan."
+      }
+    },
+    {
+      "code": "rounded_up_always",
+      "title": {
+        "en": "Always rounded up",
+        "id": "Selalu membulatkan ke atas"
+      },
+      "note": {
+        "en": "Rounds every number up, even when it should round down.",
+        "id": "Membulatkan setiap bilangan ke atas, padahal ada yang seharusnya ke bawah."
       }
     },
     {
@@ -1642,6 +1873,17 @@
       }
     },
     {
+      "code": "sides_miscounted",
+      "title": {
+        "en": "Miscounted the sides",
+        "id": "Salah menghitung sisi"
+      },
+      "note": {
+        "en": "Multiplies the side by one side too few or too many.",
+        "id": "Mengalikan panjang sisi dengan banyak sisi yang kurang atau lebih satu."
+      }
+    },
+    {
       "code": "skipped_one",
       "title": {
         "en": "Skipped a multiple",
@@ -1661,6 +1903,17 @@
       "note": {
         "en": "In each column subtracts the smaller digit from the larger instead of borrowing.",
         "id": "Di tiap kolom mengurangi angka yang lebih kecil dari yang lebih besar, bukan meminjam."
+      }
+    },
+    {
+      "code": "stopped_at_side",
+      "title": {
+        "en": "Stopped at the side",
+        "id": "Berhenti di sisi"
+      },
+      "note": {
+        "en": "Finds the side from the area but does not go on to the perimeter.",
+        "id": "Menemukan sisi dari luas tetapi tidak lanjut menghitung keliling."
       }
     },
     {
@@ -1727,6 +1980,17 @@
       "note": {
         "en": "Subtracts the divisor once instead of finding how many groups fit.",
         "id": "Mengurangi pembagi sekali saja, bukan mencari berapa kelompok yang muat."
+      }
+    },
+    {
+      "code": "swapped_digits",
+      "title": {
+        "en": "Swapped two digits",
+        "id": "Menukar dua angka"
+      },
+      "note": {
+        "en": "Puts two digits in each other's places.",
+        "id": "Menaruh dua angka di tempat satu sama lain."
       }
     },
     {
@@ -1870,6 +2134,28 @@
       "note": {
         "en": "Divides by the denominator but does not multiply by the numerator.",
         "id": "Membagi dengan penyebut tetapi tidak mengalikan dengan pembilang."
+      }
+    },
+    {
+      "code": "units_not_converted",
+      "title": {
+        "en": "Did not convert the units",
+        "id": "Tidak mengubah satuan"
+      },
+      "note": {
+        "en": "Uses the number as it is and does not change between metres, centimetres and millimetres.",
+        "id": "Memakai bilangannya apa adanya tanpa mengubah antara meter, sentimeter, dan milimeter."
+      }
+    },
+    {
+      "code": "used_four_sides",
+      "title": {
+        "en": "Used four sides",
+        "id": "Memakai empat sisi"
+      },
+      "note": {
+        "en": "Multiplies by 4 as if every shape were a square.",
+        "id": "Mengalikan dengan 4 seolah setiap bangun adalah persegi."
       }
     },
     {
