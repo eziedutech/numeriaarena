@@ -27,7 +27,7 @@ export interface Offer {
   /** Orb Forge's orb, Bridge Builder's gap, the number Factory Sort's creature carries. */
   target?: NumberView;
   /** Balloons, or Balance Gate's weights. */
-  balloons: { text: string; misconception?: string }[];
+  balloons: { text: string }[];
   /** Crystals, or Bridge Builder's planks. */
   crystals: NumberView[];
   max_crystals: number;

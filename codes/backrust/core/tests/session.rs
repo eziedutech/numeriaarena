@@ -406,3 +406,12 @@ fn the_how_to_shows_one_right_answer_per_game_and_only_before_an_answer() {
     assert_eq!(s.how_to_key(bridge.offer_id), s.answer_key(bridge.offer_id));
     assert!(s.how_to_key(bridge.offer_id).is_none());
 }
+
+#[test]
+fn an_offer_on_the_wire_does_not_mark_the_answer() {
+    let mut s = session(2);
+    let offer = s.next(GameType::BalloonBurst).unwrap();
+    assert!(offer.balloons.iter().any(|b| b.misconception.is_some()));
+    let wire = serde_json::to_string(&offer).unwrap();
+    assert!(!wire.contains("misconception"), "{wire}");
+}

@@ -60,7 +60,8 @@ pub struct NumberView {
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct BalloonView {
     pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Kept on this side only: sent, it would mark the one balloon without it as the answer.
+    #[serde(skip)]
     pub misconception: Option<String>,
 }
 
