@@ -1,7 +1,8 @@
 //! TRY THE TEACHER PAGE: anyone (a judge, a curious teacher) gets their own
 //! sample teacher without signing up, with a class of six seats that has
 //! already raced and practised, so the class page, its report and its
-//! insights show something at once. Each visitor's sample is theirs alone and
+//! insights show something at once, and five of its seats have a small town
+//! on the class map (the first, the visitor's own card, picks its land). Each visitor's sample is theirs alone and
 //! is gone after a day. Its token stands in for a sign-in token.
 
 use axum::Json;
@@ -9,6 +10,7 @@ use axum::extract::State as Extract;
 use axum::http::StatusCode;
 use foldlings_core::fairness::FairnessParams;
 use foldlings_core::rng::Rng;
+use foldlings_core::town::{COLS, LandKind, ROWS, Town, TownEvent, asset_by_id};
 use serde_json::{Value, json};
 use sqlx::{PgPool, Postgres, Transaction};
 
@@ -17,6 +19,7 @@ use crate::auth::Adult;
 use crate::classes::{Allowance, NewClass, create_class, token_hash};
 use crate::organizer::ApiError;
 use crate::rooms::{Content, random_code, random_hex, random_u64};
+use crate::town::{Plot, place_first, take};
 
 /// A token of a sample teacher starts with this, so it is never sent to Firebase.
 pub(crate) const PREFIX: &str = "demo_";
@@ -32,6 +35,25 @@ const RACES: usize = 3;
 const RACE_ANSWERS: usize = 8;
 const PRACTICES: usize = 2;
 const PRACTICE_ANSWERS: usize = 6;
+/// The towns on the class map: a seat (after the first), its cell and its land.
+const TOWNS: [(usize, u8, u8, LandKind); 5] = [
+    (1, 2, 2, LandKind::Plain),
+    (2, 5, 1, LandKind::River),
+    (3, 7, 3, LandKind::Hills),
+    (4, 3, 5, LandKind::Beach),
+    (5, 6, 6, LandKind::Plain),
+];
+/// What each of those towns has built, about 110 Folds: less than any seat earned.
+const BUILT: [&str; 8] = [
+    "house_hut",
+    "house_cottage",
+    "house_hut",
+    "tree_round",
+    "tree_round",
+    "tree_pine",
+    "people_man",
+    "animal_cat",
+];
 
 /// The sample teacher a token belongs to, while it lasts.
 pub(crate) async fn adult(db: &PgPool, token: &str) -> Result<Option<Adult>, ApiError> {
@@ -337,6 +359,72 @@ async fn seed(
     Ok(())
 }
 
+/// A few houses and trees for the seats in TOWNS, each on the first tile it
+/// fits from the middle of its page, taken the way a student's town is.
+async fn towns(db: &PgPool, class: &str, seats: &[(i64, String)]) -> Result<(), ApiError> {
+    let start = sqlx::query_scalar::<_, i64>(
+        "SELECT (extract(epoch FROM now() - interval '2 days') * 1000)::bigint",
+    )
+    .fetch_one(db)
+    .await?;
+    for (n, (seat, cx, cy, kind)) in TOWNS.into_iter().enumerate() {
+        let Some((id, _)) = seats.get(seat) else {
+            continue;
+        };
+        let plot = Plot {
+            x: cx,
+            y: cy,
+            kind: kind.code().to_owned(),
+        };
+        place_first(db, class, *id, &plot).await?;
+        let mut town = Town::default();
+        let mut events = vec![TownEvent::TownLand {
+            event_id: format!("sample-{n}-land"),
+            at_ms: start,
+            kind,
+        }];
+        town.apply(&events[0], u32::MAX).ok();
+        // The middle tiles first, so the town sits in view.
+        let mut tiles: Vec<(u8, u8)> = (0..ROWS)
+            .flat_map(|y| (0..COLS).map(move |x| (x, y)))
+            .collect();
+        tiles.sort_by_key(|&(x, y)| {
+            (i16::from(x) * 2 - 11).abs() + (i16::from(y) * 2 - 6).abs() * 2
+        });
+        for (k, asset) in BUILT.iter().enumerate() {
+            let Some(a) = asset_by_id(asset) else {
+                continue;
+            };
+            let Some(&(x, y)) = tiles
+                .iter()
+                .find(|&&(x, y)| town.fits(a, 0, x, y, 0, None).is_ok())
+            else {
+                continue;
+            };
+            let ev = TownEvent::TownPlace {
+                event_id: format!("sample-{n}-{k}"),
+                at_ms: start + (k as i64 + 1) * 60_000,
+                asset: (*asset).to_owned(),
+                land: 0,
+                x,
+                y,
+                rot: 0,
+                cols: Some(COLS),
+                spot: None,
+            };
+            if town.apply(&ev, u32::MAX).is_ok() {
+                events.push(ev);
+            }
+        }
+        let batch: Vec<Value> = events
+            .iter()
+            .filter_map(|e| serde_json::to_value(e).ok())
+            .collect();
+        take(db, class, *id, i16::from(GRADE), &batch).await?;
+    }
+    Ok(())
+}
+
 /// Makes one sample teacher with a class that has played: the token, and the
 /// class's code and first seat card so the visitor can sign in to the game too.
 pub(crate) async fn make(db: &PgPool, content: &Content) -> Result<Value, ApiError> {
@@ -403,6 +491,7 @@ pub(crate) async fn make(db: &PgPool, content: &Content) -> Result<Value, ApiErr
     let mut tx = db.begin().await?;
     seed(&mut tx, content, user, &class, &seats).await?;
     tx.commit().await?;
+    towns(db, &class, &seats).await?;
     Ok(json!({
         "token": token,
         "hours": HOURS,

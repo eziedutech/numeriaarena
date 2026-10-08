@@ -59,6 +59,17 @@ async fn a_sample_has_played_signs_in_and_is_gone_after_its_day() {
         .await
         .unwrap();
     assert_eq!(rooms, RACES as i64);
+    let map = crate::town::teacher_map(&db, user, class).await.unwrap();
+    let cells = map["cells"].as_array().unwrap();
+    assert_eq!(cells.len(), TOWNS.len());
+    for cell in cells {
+        assert!(
+            cell["seat"].as_i64().unwrap() > 1,
+            "the first seat picks its own land"
+        );
+        assert!(cell["town"]["homes"].as_u64().unwrap() >= 3, "{cell}");
+        assert!(cell["town"]["trees"].as_u64().unwrap() >= 3, "{cell}");
+    }
 
     // A day later the sample, its class, rooms and races are gone.
     sqlx::query("UPDATE demo_teachers SET expires_at = now() WHERE user_id = $1")
