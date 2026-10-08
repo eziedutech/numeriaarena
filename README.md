@@ -10,7 +10,7 @@
 
 Built for the **Meta VR Start Developer Competition 2026** (Devpost), Gaming track, New Experience division.
 
-Status: early development. No public build yet; the link will be added here when it is deployed.
+Status: playable today at **https://numeria.eziedutech.dev** in the Meta Quest browser (WebXR, nothing to install) and in any desktop browser. Practice and robot races also work offline after the first visit.
 
 ## Table of Contents
 
@@ -105,12 +105,15 @@ Children never enter a name or an email. Real names stay in the teacher's browse
 
 ## How to test
 
-There is nothing to test in a headset yet. What runs today:
+Open **https://numeria.eziedutech.dev**. No sign-in or test account is needed. The full path takes about five minutes.
 
-1. Start the game in the browser emulator (see [Running locally](#running-locally)) and open `https://localhost:3322`.
-2. Enter XR with hand input on the Meta Quest 3 preset in the `living_room` environment. A test button and a crystal appear on the detected table: poke the button, pinch and move the crystal.
-3. The browser console shows the Rust core running as WebAssembly: exact sums such as `0.1 + 0.2 = 0.3`, and one concrete fraction item.
-4. Validate the example templates and run the fairness simulation with `content-cli` (commands below).
+1. In the Meta Quest browser, choose **META QUEST (XR)** and sit at a real table. The headset finds the table and a pop-up paper book opens on it. If no table is found, place the book with a pinch.
+2. Touch an envelope on the desk to pick a game, for example Balloon Burst, then choose **PRACTICE ON MY OWN**. A paper animal brings a question: reach out and touch the balloon with the right answer. Hands work from start to finish, and controllers work too.
+3. Back at the desk, choose **RACE THE ROBOTS** to play three timed waves and a final against two robot rivals, followed by a recap with stars.
+4. Open **MY FOLD TOWN**. Pinch a piece from the shop shelf, carry it over your land and let go. Point at a building to see its maths card.
+5. For the teacher side, open https://numeria.eziedutech.dev/manage in any browser and press **TRY THE TEACHER PAGE**. It creates a sample teacher with a class of six who have already played, with reports, AI insights, a leaderboard, a class town map and race rooms. It needs no account and is removed after 24 hours.
+
+Without a headset, choose **THIS COMPUTER** on the home page to play the same games in the browser, or run the game in the Immersive Web SDK browser emulator (see [Running locally](#running-locally)). The accessibility options (BIG NUMBERS, NO TIMER, HIGH CONTRAST, READ ALOUD, STEADY AIM) and the language switch (English or Indonesian) are on the home page.
 
 ## Architecture
 
