@@ -12,7 +12,7 @@ import { getLang, type Lang } from '../settings.js';
 import { sfx } from '../audio.js';
 import { el, hoverTips, paperText } from '../home/paper.js';
 import { online } from '../offline.js';
-import { assetOf, footprint, LAND_KINDS, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
+import { assetOf, footprint, isSmall, LAND_KINDS, quarterAt, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
 import { classMap, takeCell, TownModel, type ClassMap } from './town-model.js';
 import { buildPage, foldUp, Ghost, loadPage, type PageScene } from './town-scene.js';
 import { loadPieceIndex, loadShelf, pieceInfo } from './town-pieces.js';
@@ -129,7 +129,8 @@ class TownPage {
   private model?: TownModel;
   private land = 0;
   private mode: Mode = { kind: 'idle' };
-  private cursor = { x: 0, y: 0 };
+  /** The tile aimed at, and for a small piece the quarter of it. */
+  private cursor: { x: number; y: number; spot?: number } = { x: 0, y: 0 };
   private selected = '';
   private map?: ClassMap;
   /** Items known to be finished, to fold up those that finish while watching. */
@@ -564,7 +565,7 @@ class TownPage {
   /** Turns a standing piece a quarter round where it is. */
   private async turnPlaced(it: Placed): Promise<void> {
     const rot = (it.rot + 90) % 360;
-    const reason = await this.model!.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot });
+    const reason = await this.model!.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot, spot: it.spot });
     if (reason) return this.say(this.reason(reason));
     this.selected = it.id;
     this.redraw();
@@ -607,7 +608,7 @@ class TownPage {
     move.textContent = t.move;
     move.addEventListener('click', () => {
       this.mode = { kind: 'move', id: it.id, asset: it.asset, rot: it.rot };
-      this.cursor = { x: it.x, y: it.y };
+      this.cursor = { x: it.x, y: it.y, spot: it.spot };
       this.redraw();
       this.canvas.focus();
     });
@@ -628,8 +629,13 @@ class TownPage {
   private showGhost(): void {
     const m = this.mode;
     if (m.kind === 'idle' || !this.page) return this.ghost.hide();
-    const fits = this.model!.fits(m.asset, this.land, this.cursor.x, this.cursor.y, m.rot, m.kind === 'move' ? m.id : '');
-    this.ghost.show(m.asset, this.cursor.x, this.cursor.y, m.rot, fits === '');
+    const { x, y } = this.cursor;
+    const ignore = m.kind === 'move' ? m.id : '';
+    const asked = this.cursor.spot ?? -1;
+    const fits = this.model!.fits(m.asset, this.land, x, y, m.rot, ignore, asked);
+    // A small piece over the quarter it would take, or the one aimed at when it does not fit.
+    const spot = isSmall(m.asset) ? this.model!.spotFor(m.asset, this.land, x, y, m.rot, ignore, asked) : -1;
+    this.ghost.show(m.asset, x, y, m.rot, fits === '', isSmall(m.asset) ? (spot >= 0 ? spot : Math.max(0, asked)) : undefined);
     const held = m.kind === 'move' ? this.page.items.get(m.id) : undefined;
     for (const g of this.page.items.values()) g.visible = g !== held;
   }
@@ -648,8 +654,8 @@ class TownPage {
 
   // ------------------------------------------------------------ input
 
-  /** The tile under a pointer, by where its ray meets the page. */
-  private tileAt(e: PointerEvent): { x: number; y: number } | null {
+  /** The tile under a pointer, by where its ray meets the page, and the quarter of it. */
+  private tileAt(e: PointerEvent): { x: number; y: number; q: number } | null {
     const box = this.canvas.getBoundingClientRect();
     const nx = ((e.clientX - box.left) / box.width) * 2 - 1;
     const ny = -((e.clientY - box.top) / box.height) * 2 + 1;
@@ -661,14 +667,18 @@ class TownPage {
     const r = townRulesNow();
     const x = Math.floor(hit.x);
     const y = Math.floor(hit.z);
-    return x >= 0 && y >= 0 && x < r.cols && y < r.rows ? { x, y } : null;
+    return x >= 0 && y >= 0 && x < r.cols && y < r.rows ? { x, y, q: quarterAt(hit.x, hit.z) } : null;
   }
 
   /** Places the footprint so the pointer is near its middle. */
-  private aim(tile: { x: number; y: number }): void {
+  private aim(tile: { x: number; y: number; q?: number }): void {
     const m = this.mode;
     if (m.kind === 'idle') {
-      this.cursor = tile;
+      this.cursor = { x: tile.x, y: tile.y };
+      return;
+    }
+    if (isSmall(m.asset)) {
+      this.cursor = { x: tile.x, y: tile.y, spot: tile.q };
       return;
     }
     const a = assetOf(m.asset)!;
@@ -693,12 +703,12 @@ class TownPage {
     const tile = this.tileAt(e);
     if (!tile) return;
     this.aim(tile);
-    if (this.mode.kind === 'idle') this.select(tile.x, tile.y);
+    if (this.mode.kind === 'idle') this.select(tile.x, tile.y, tile.q);
     else void this.commit();
   }
 
-  private select(x: number, y: number): void {
-    const it = this.itemAt(x, y);
+  private select(x: number, y: number, q?: number): void {
+    const it = this.itemAt(x, y, q);
     this.selected = it?.id ?? (this.onPlot(x, y) && this.landmarkHere() ? LANDMARK : '');
     this.redraw();
     if (it) this.say(`${this.name(it.asset)}. ${it.ready ? this.t.status.ready : ''}`);
@@ -727,14 +737,16 @@ class TownPage {
     console.info(`[town] landmark ${lm.landmark} rises, from ${lm.skill}`);
   }
 
-  private itemAt(x: number, y: number): Placed | undefined {
-    return this.model!.view().items.find((it) => {
+  /** What stands on a tile: the small piece on quarter `q` first, then the whole tile's, then any small one. */
+  private itemAt(x: number, y: number, q?: number): Placed | undefined {
+    const here = this.model!.view().items.filter((it) => {
       if (it.land !== this.land) return false;
       const a = assetOf(it.asset);
       if (!a) return false;
       const [fw, fh] = footprint(a, it.rot);
       return x >= it.x && x < it.x + fw && y >= it.y && y < it.y + fh;
     });
+    return here.find((it) => q !== undefined && it.spot === q) ?? here.find((it) => it.spot === undefined) ?? here[0];
   }
 
   private key(e: KeyboardEvent): void {
@@ -802,7 +814,8 @@ class TownPage {
     const m = this.mode;
     const { x, y } = this.cursor;
     if (m.kind === 'place') {
-      const reason = await model.act({ type: 'town_place', asset: m.asset, land: this.land, x, y, rot: m.rot });
+      const spot = isSmall(m.asset) ? this.cursor.spot : undefined;
+      const reason = await model.act({ type: 'town_place', asset: m.asset, land: this.land, x, y, rot: m.rot, spot });
       if (reason) return this.say(this.reason(reason));
       sfx('place');
       this.say(this.t.placed(this.name(m.asset)));
@@ -811,7 +824,8 @@ class TownPage {
       if (a.price > model.view().balance || !['road', 'nature', 'decor'].includes(a.group)) this.mode = { kind: 'idle' };
       this.redraw();
     } else if (m.kind === 'move') {
-      const reason = await model.act({ type: 'town_move', place_id: m.id, land: this.land, x, y, rot: m.rot });
+      const spot = isSmall(m.asset) ? this.cursor.spot : undefined;
+      const reason = await model.act({ type: 'town_move', place_id: m.id, land: this.land, x, y, rot: m.rot, spot });
       if (reason) return this.say(this.reason(reason));
       sfx('place');
       this.say(this.t.moved(this.name(m.asset)));

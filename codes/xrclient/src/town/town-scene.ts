@@ -2,7 +2,7 @@ import { BufferGeometry, Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Obj
 import { Kit, TOWN, townMaterial } from '../art/town/kit.js';
 import { hill, plot, sand, water } from '../art/town/land.js';
 import { foldUp, scaffoldGeometry } from '../art/town/pieces.js';
-import { assetOf, footprint, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
+import { assetOf, footprint, spotMiddle, townRulesNow, type Landmark, type LandKind, type Placed } from './town-core.js';
 import { loadPieces, pieceGeometry, pieceGeometryAsync, pieceInfo } from './town-pieces.js';
 
 /**
@@ -45,10 +45,17 @@ function landGeometry(mark: string, seed: number): BufferGeometry | undefined {
   return g;
 }
 
-/** Puts a piece where a placed item stands, turned about its footprint's middle. */
-export function standAt(obj: Object3D, w: number, h: number, x: number, y: number, rot: number): void {
+/**
+ * Puts a piece where a placed item stands, turned about its footprint's
+ * middle, or about the middle of its quarter for a small piece.
+ */
+export function standAt(obj: Object3D, w: number, h: number, x: number, y: number, rot: number, spot?: number): void {
   const [fw, fh] = footprint({ w, h }, rot);
-  obj.position.set(x + fw / 2, 0, y + fh / 2);
+  if (spot === undefined) obj.position.set(x + fw / 2, 0, y + fh / 2);
+  else {
+    const [mx, mz] = spotMiddle(x, y, spot);
+    obj.position.set(mx, 0, mz);
+  }
   obj.rotation.y = -(rot * Math.PI) / 180;
 }
 
@@ -138,7 +145,7 @@ export function buildPage(kind: LandKind, land: number, items: Placed[], landmar
     const a = assetOf(it.asset);
     if (!a) continue;
     const g = it.ready ? pieceObject(a.id) : frameObject(a.w, a.h, frameHeight(a.id));
-    standAt(g, a.w, a.h, it.x, it.y, it.rot);
+    standAt(g, a.w, a.h, it.x, it.y, it.rot, it.spot);
     g.userData.placeId = it.id;
     root.add(g);
     map.set(it.id, g);
@@ -190,7 +197,8 @@ export class Ghost {
     this.root.visible = false;
   }
 
-  show(asset: string, x: number, y: number, rot: number, fits: boolean): void {
+  /** `spot` is the quarter a small piece would take. */
+  show(asset: string, x: number, y: number, rot: number, fits: boolean, spot?: number): void {
     const a = assetOf(asset);
     if (!a) return;
     if (asset !== this.id) {
@@ -201,9 +209,15 @@ export class Ghost {
     }
     const [fw, fh] = footprint(a, rot);
     this.shadow.material = fits ? ghostOk : ghostNo;
-    this.shadow.scale.set(fw, 1, fh);
-    this.shadow.position.set(x + fw / 2, 0.02, y + fh / 2);
-    standAt(this.piece!, a.w, a.h, x, y, rot);
+    if (spot === undefined) {
+      this.shadow.scale.set(fw, 1, fh);
+      this.shadow.position.set(x + fw / 2, 0.02, y + fh / 2);
+    } else {
+      const [mx, mz] = spotMiddle(x, y, spot);
+      this.shadow.scale.set(0.5, 1, 0.5);
+      this.shadow.position.set(mx, 0.02, mz);
+    }
+    standAt(this.piece!, a.w, a.h, x, y, rot, spot);
     this.piece!.position.y = 0.04;
     this.root.visible = true;
   }

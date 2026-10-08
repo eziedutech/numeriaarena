@@ -323,6 +323,8 @@ pub fn town_rules() -> String {
     serde_json::json!({
         "catalog": &CATALOG[..],
         "aliases": &ALIASES[..],
+        "small": &SMALL[..],
+        "spots": SPOTS,
         "cols": COLS,
         "rows": ROWS,
         "full_tenths": FULL_TENTHS,
@@ -396,15 +398,59 @@ impl TownBook {
     }
 
     /// Whether an asset fits: "" or the reason, for the placing shadow.
-    pub fn fits(&self, asset: &str, land: u16, x: u8, y: u8, rot: u16, ignore: &str) -> String {
-        let Some(a) = crate::town::asset_by_id(asset) else {
-            return crate::town::Refusal::UnknownAsset.code().to_string();
-        };
-        let ignore = (!ignore.is_empty()).then_some(ignore);
-        match self.town.fits(a, land, x, y, rot, ignore) {
-            Ok(()) => String::new(),
+    /// `spot` is the quarter asked for a small piece, -1 for any.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fits(
+        &self,
+        asset: &str,
+        land: u16,
+        x: u8,
+        y: u8,
+        rot: u16,
+        spot: i16,
+        ignore: &str,
+    ) -> String {
+        match self.fits_at(asset, land, x, y, rot, spot, ignore) {
+            Ok(_) => String::new(),
             Err(r) => r.code().to_string(),
         }
+    }
+
+    /// The quarter a small piece would stand on there, -1 when it is not
+    /// small or does not fit.
+    #[wasm_bindgen(js_name = spotFor)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn spot_for(
+        &self,
+        asset: &str,
+        land: u16,
+        x: u8,
+        y: u8,
+        rot: u16,
+        spot: i16,
+        ignore: &str,
+    ) -> i16 {
+        match self.fits_at(asset, land, x, y, rot, spot, ignore) {
+            Ok(Some(s)) => i16::from(s),
+            _ => -1,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fits_at(
+        &self,
+        asset: &str,
+        land: u16,
+        x: u8,
+        y: u8,
+        rot: u16,
+        spot: i16,
+        ignore: &str,
+    ) -> Result<Option<u8>, crate::town::Refusal> {
+        let a = crate::town::asset_by_id(asset).ok_or(crate::town::Refusal::UnknownAsset)?;
+        let ignore = (!ignore.is_empty()).then_some(ignore);
+        let spot = u8::try_from(spot).ok();
+        self.town.fits_at(a, land, x, y, rot, spot, ignore)
     }
 
     pub fn view(&self, now_ms: f64) -> String {

@@ -4,11 +4,13 @@ import { assetOf, Book, type Landmark, type LandKind, type TownEvent } from './t
  * A sample town to look at, never to change: three pages of land built the
  * way a town grows over many weeks of play, with a landmark on each and its
  * streets busy with people and cars, for a visitor who has not earned the
- * Folds to see where it can go. Its events are checked by the same core as
+ * Folds to see where it can go. Roads along a row are turned 90, cars keep
+ * to the left lane, and small pieces share tiles a quarter each. Its events are checked by the same core as
  * a real town; any it refuses are dropped.
  */
 
-type Plan = [asset: string, x: number, y: number, rot?: number];
+/** A piece to place; `spot` is the quarter of the tile for a small one (0 and 1 at the back, 2 and 3 at the front). */
+type Plan = [asset: string, x: number, y: number, rot?: number, spot?: number];
 
 const row = (asset: string, y: number, from: number, to: number, rot = 0): Plan[] =>
   Array.from({ length: to - from + 1 }, (_, i) => [asset, from + i, y, rot]);
@@ -19,11 +21,11 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
   {
     kind: 'plain',
     plan: [
-      ...row('road_straight', 3, 0, 3),
+      ...row('road_straight', 3, 0, 3, 90),
       ['road_cross', 4, 3],
-      ...row('road_straight', 3, 5, 9),
-      ...col('road_straight', 4, 0, 2, 90),
-      ...col('road_straight', 4, 4, 6, 90),
+      ...row('road_straight', 3, 5, 9, 90),
+      ...col('road_straight', 4, 0, 2),
+      ...col('road_straight', 4, 4, 6),
       ['house_hut', 0, 0],
       ['house_cottage', 1, 0],
       ['house_basic', 2, 0],
@@ -32,26 +34,37 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
       ['house_bungalow', 1, 1],
       ['house_garden', 2, 1],
       ['house_minimalist', 3, 1],
-      ['tree_round', 0, 2],
-      ['prop_street_lamp', 1, 2],
-      ['prop_bench', 2, 2],
-      ['plant_flower_bed', 3, 2],
+      ['tree_round', 0, 2, 0, 0],
+      ['plant_bush', 0, 2, 0, 3],
+      ['prop_street_lamp', 1, 2, 0, 3],
+      ['people_woman', 1, 2, 0, 0],
+      ['prop_bench', 2, 2, 0, 2],
+      ['people_sitting', 2, 2, 0, 3],
+      ['plant_flower_bed', 3, 2, 0, 0],
+      ['plant_flower_pot', 3, 2, 0, 3],
       ['public_school', 5, 0],
       ['public_library', 7, 0],
       ['public_clinic', 9, 0],
-      ['tree_pine', 10, 0],
+      ['tree_pine', 10, 0, 0, 0],
+      ['tree_pine', 10, 0, 0, 3],
       ['shop_general', 7, 1],
-      ['tree_pine', 10, 1],
+      ['tree_pine', 10, 1, 0, 1],
+      ['tree_pine', 10, 1, 0, 2],
       ['shop_cafe', 5, 2],
       ['office_shophouse', 6, 2],
-      ['prop_fountain', 7, 2],
-      ['tree_sakura', 8, 2],
-      ['prop_street_lamp', 9, 2],
-      ['plant_flower_bush', 10, 2],
+      ['prop_fountain', 7, 2, 0, 0],
+      ['people_child', 7, 2, 0, 3],
+      ['tree_sakura', 8, 2, 0, 0],
+      ['tree_sakura', 8, 2, 0, 3],
+      ['prop_street_lamp', 9, 2, 0, 3],
+      ['plant_flower_bush', 10, 2, 0, 0],
+      ['plant_flower_bush', 10, 2, 0, 3],
       ['sport_stadium', 0, 4],
-      ['tree_round', 3, 4],
-      ['prop_bench', 3, 5],
-      ['prop_mailbox', 3, 6],
+      ['tree_round', 3, 4, 0, 0],
+      ['people_man', 3, 4, 0, 3],
+      ['prop_bench', 3, 5, 270, 1],
+      ['people_elderly', 3, 5, 0, 2],
+      ['prop_mailbox', 3, 6, 0, 1],
       ['office_glass_tower', 5, 4],
       ['shop_bank', 7, 4],
       ['shop_minimarket', 8, 4],
@@ -64,26 +77,27 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
       ['house_gadang', 6, 6],
       ['plant_hedge', 7, 6],
       ['house_colonial', 8, 6],
-      ['vehicle_sedan', 1, 3, 90],
+      ['vehicle_sedan', 1, 3, 90, 2],
+      ['vehicle_motorcycle', 2, 3, 90, 3],
       ['vehicle_bus', 6, 3, 90],
-      ['vehicle_taxi', 8, 3, 270],
-      ['people_child', 4, 1],
-      ['people_man', 4, 5],
-      ['people_student', 2, 3],
+      ['vehicle_taxi', 8, 3, 270, 1],
+      ['vehicle_bicycle', 4, 1, 0, 1],
+      ['vehicle_hatchback', 4, 5, 180, 0],
+      ['people_student', 3, 2, 0, 1],
     ],
   },
   {
     kind: 'river',
     plan: [
       ...[2, 4].flatMap((y) => [
-        ...row('road_straight', y, 0, 1),
+        ...row('road_straight', y, 0, 1, 90),
         ['road_cross', 2, y] as Plan,
-        ...row('road_straight', y, 3, 7),
+        ...row('road_straight', y, 3, 7, 90),
         ['road_cross', 8, y] as Plan,
-        ['road_straight', 9, y] as Plan,
+        ['road_straight', 9, y, 90] as Plan,
       ]),
-      ['bridge_road', 2, 3, 90],
-      ['bridge_road', 8, 3, 90],
+      ['bridge_road', 2, 3],
+      ['bridge_road', 8, 3],
       ['house_stilt', 0, 0],
       ['house_basic', 1, 0],
       ['house_cottage', 2, 0],
@@ -93,11 +107,13 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
       ['shop_hotel', 8, 0],
       ['tree_palm', 10, 0],
       ['house_two_storey', 0, 1],
-      ['tree_round', 1, 1],
+      ['tree_round', 1, 1, 0, 0],
+      ['tree_round', 1, 1, 0, 3],
       ['house_bungalow', 2, 1],
       ['public_post_office', 5, 1],
       ['house_garden', 6, 1],
-      ['plant_bamboo', 7, 1],
+      ['plant_bamboo', 7, 1, 0, 0],
+      ['plant_bamboo', 7, 1, 0, 1],
       ['tree_pine', 10, 1],
       ['shop_market', 0, 5],
       ['house_hut', 2, 5],
@@ -106,22 +122,25 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
       ['house_flats', 7, 5],
       ['shop_cinema', 9, 5],
       ['house_cottage', 2, 6],
-      ['prop_bench', 3, 6],
+      ['prop_bench', 3, 6, 0, 0],
+      ['people_umbrella', 3, 6, 0, 3],
       ['house_villa_pool', 9, 6],
       ['vehicle_school_bus', 5, 2, 90],
-      ['vehicle_motorcycle', 0, 4, 90],
-      ['vehicle_becak', 6, 4, 270],
-      ['people_hijab', 3, 2],
-      ['animal_bird', 9, 4],
+      ['vehicle_motorcycle', 0, 4, 90, 2],
+      ['vehicle_becak', 6, 4, 270, 1],
+      ['people_hijab', 7, 1, 0, 2],
+      ['people_student', 7, 1, 0, 3],
+      ['animal_cat', 1, 1, 0, 1],
     ],
   },
   {
     kind: 'beach',
     plan: [
-      ...row('road_straight', 3, 0, 9),
+      ...row('road_straight', 3, 0, 9, 90),
       ['house_hut', 0, 2],
       ['house_hut', 1, 2],
-      ['tree_round', 2, 2],
+      ['tree_round', 2, 2, 0, 0],
+      ['plant_bush', 2, 2, 0, 3],
       ['office_shophouse', 3, 2],
       ['shop_restaurant', 4, 2],
       ['shop_hotel', 5, 1],
@@ -129,28 +148,34 @@ const PAGES: { kind: LandKind; plan: Plan[] }[] = [
       ['house_cottage', 1, 4],
       ['house_cottage', 2, 4],
       ['tree_palm', 3, 4],
-      ['prop_street_lamp', 4, 4],
+      ['prop_street_lamp', 4, 4, 0, 1],
+      ['people_jogger', 4, 4, 90, 2],
       ['house_two_storey', 5, 4],
       ['shop_cafe', 6, 4],
       ['tree_coconut', 7, 4],
-      ['prop_beach_umbrella', 8, 4],
+      ['prop_beach_umbrella', 8, 4, 0, 0],
+      ['people_sitting', 8, 4, 0, 3],
       ['tree_palm', 9, 4],
       ['tree_coconut', 0, 5],
-      ['prop_bench', 1, 5],
-      ['people_jogger', 2, 5],
-      ['animal_bird', 3, 5],
-      ['prop_beach_umbrella', 4, 5],
-      ['people_sitting', 5, 5],
-      ['plant_flower_pot', 6, 5],
+      ['prop_bench', 1, 5, 0, 0],
+      ['people_woman', 1, 5, 0, 1],
+      ['people_child', 2, 5, 0, 2],
+      ['animal_bird', 2, 5, 0, 1],
+      ['prop_beach_umbrella', 4, 5, 0, 0],
+      ['prop_beach_umbrella', 4, 5, 0, 3],
+      ['people_sitting', 5, 5, 0, 1],
+      ['animal_bird', 5, 5, 0, 2],
+      ['plant_flower_pot', 6, 5, 0, 2],
       ['tree_palm', 7, 5],
-      ['vehicle_van', 7, 3, 90],
-      ['vehicle_bicycle', 1, 3, 90],
+      ['vehicle_van', 7, 3, 90, 2],
+      ['vehicle_bicycle', 1, 3, 270, 1],
+      ['vehicle_becak', 4, 3, 90, 3],
     ],
   },
 ];
 
 /** Tiles left free on a full page, filled with trees before the next page opens. */
-const FILL: Plan[] = Array.from({ length: 70 }, (_, i) => [i % 2 ? 'tree_pine' : 'tree_round', i % 10, Math.floor(i / 10)]);
+const FILL: Plan[] = Array.from({ length: 70 }, (_, i) => [i % 2 ? 'tree_pine' : 'tree_round', i % 10, Math.floor(i / 10), 0, (i * 3) % 4]);
 
 const LANDMARKS: Omit<Landmark, 'at_ms'>[] = [
   { mission: 'place_value', landmark: 'landmark_number_hall', tier: 3, skill: 'PV.READ' },
@@ -182,9 +207,9 @@ export function sampleTown(now = Date.now()): Sample {
     if (!reason) events.push(ev);
     return reason;
   };
-  const place = ([asset, x, y, rot = 0]: Plan, land: number, quiet: boolean) => {
+  const place = ([asset, x, y, rot = 0, spot]: Plan, land: number, quiet: boolean) => {
     const n = events.length;
-    const reason = tryEvent({ type: 'town_place', event_id: `sample-${n}`, at_ms: start + n * 60_000, asset, land, x, y, rot });
+    const reason = tryEvent({ type: 'town_place', event_id: `sample-${n}`, at_ms: start + n * 60_000, asset, land, x, y, rot, spot });
     if (!reason) spent += assetOf(asset)?.price ?? 0;
     else if (!quiet) dropped.push(`${asset} at ${land}:${x},${y} ${reason}`);
   };

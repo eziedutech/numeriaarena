@@ -143,8 +143,12 @@ export class TownModel {
     return this.book!.view(this.now());
   }
 
-  fits(asset: string, land: number, x: number, y: number, rot: number, ignore = ''): string {
-    return this.book!.fits(asset, land, x, y, rot, ignore);
+  fits(asset: string, land: number, x: number, y: number, rot: number, ignore = '', spot = -1): string {
+    return this.book!.fits(asset, land, x, y, rot, ignore, spot);
+  }
+
+  spotFor(asset: string, land: number, x: number, y: number, rot: number, ignore = '', spot = -1): number {
+    return this.book!.spotFor(asset, land, x, y, rot, ignore, spot);
   }
 
   /** Tries a change; "" when it is made (and saved), else why not. */

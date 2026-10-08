@@ -20,6 +20,7 @@ pub const SESSION_BONUS: u32 = 10;
 pub const STREAK_STEP: u32 = 5;
 pub const STREAK_MAX: u32 = 25;
 /// Given once, so the first house and its road are bought in the first session.
+// TEMP LOCAL TEST, never commit: 40 + 5000 for Zia to try the town; set back to 40.
 pub const WELCOME_FOLDS: u32 = 40;
 /// Folds a day from plays the device reports (practice, races with the
 /// robots); plays the server judged have no limit.
@@ -310,6 +311,81 @@ pub use crate::town_catalog::{ALIASES, CATALOG};
 /// The only piece that stands on water.
 pub const BRIDGE: &str = "bridge_road";
 
+/// Pieces small enough for a quarter of a tile (their models are at most
+/// 0.3 of a tile across): up to four stand on one tile, people, animals and
+/// cars also on a road's tile.
+pub const SMALL: [&str; 62] = [
+    "people_man",
+    "people_woman",
+    "people_child",
+    "people_student",
+    "people_hijab",
+    "people_elderly",
+    "people_jogger",
+    "people_sitting",
+    "people_umbrella",
+    "people_office_worker",
+    "people_cyclist",
+    "people_police",
+    "people_doctor",
+    "people_worker",
+    "vehicle_bicycle",
+    "vehicle_sedan",
+    "vehicle_hatchback",
+    "vehicle_motorcycle",
+    "vehicle_becak",
+    "vehicle_bajaj",
+    "vehicle_taxi",
+    "vehicle_suv",
+    "vehicle_pickup",
+    "vehicle_van",
+    "vehicle_police",
+    "vehicle_ambulance",
+    "animal_cat",
+    "animal_bird",
+    "animal_cow",
+    "animal_monkey",
+    "animal_penguin",
+    "animal_zebra",
+    "animal_giraffe",
+    "animal_lioness",
+    "animal_lion",
+    "tree_round",
+    "tree_pine",
+    "plant_bush",
+    "plant_flower_bush",
+    "plant_flower_pot",
+    "plant_flower_bed",
+    "tree_cypress",
+    "plant_cactus",
+    "plant_bamboo",
+    "tree_sakura",
+    "prop_bench",
+    "prop_street_lamp",
+    "prop_trash_bins",
+    "prop_mailbox",
+    "prop_fountain",
+    "prop_traffic_light",
+    "prop_stop_sign",
+    "prop_warning_sign",
+    "prop_direction_sign",
+    "prop_hydrant",
+    "prop_cafe_table",
+    "prop_beach_umbrella",
+    "prop_phone_booth",
+    "prop_vending_machine",
+    "prop_flagpole",
+    "prop_statue",
+    "billboard_standing",
+];
+
+/// Quarters of a tile: 0 and 1 along its back half, 2 and 3 along its front.
+pub const SPOTS: u8 = 4;
+
+pub fn is_small(a: &Asset) -> bool {
+    SMALL.contains(&a.id)
+}
+
 /// A piece by its id, or by an id the town once used for it.
 pub fn asset_by_id(id: &str) -> Option<&'static Asset> {
     let id = ALIASES
@@ -351,6 +427,9 @@ pub enum TownEvent {
         /// COLS when `x` counts on the page as wide as it is now; none from before.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cols: Option<u8>,
+        /// The quarter a small piece stands on; none for the first free one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        spot: Option<u8>,
     },
     /// Moves a building; a frame keeps building where it goes.
     TownMove {
@@ -363,6 +442,8 @@ pub enum TownEvent {
         rot: u16,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cols: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        spot: Option<u8>,
     },
     /// Takes a building away and gives back every Fold it cost.
     TownRemove {
@@ -437,6 +518,8 @@ pub enum Refusal {
     LandNotFull,
     TooManyLands,
     AlreadyBuilt,
+    /// A quarter of a tile asked for a piece that is not small, or off the tile.
+    BadSpot,
 }
 
 impl Refusal {
@@ -457,6 +540,7 @@ impl Refusal {
             Refusal::LandNotFull => "land_not_full",
             Refusal::TooManyLands => "too_many_lands",
             Refusal::AlreadyBuilt => "already_built",
+            Refusal::BadSpot => "bad_spot",
         }
     }
 }
@@ -473,6 +557,9 @@ pub struct Placed {
     pub x: u8,
     pub y: u8,
     pub rot: u16,
+    /// The quarter of its tile a small piece stands on; none for the rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spot: Option<u8>,
     pub placed_at_ms: i64,
     /// Done before its time by a right answer to FINISH NOW.
     pub finished_at_ms: Option<i64>,
@@ -587,6 +674,22 @@ impl Town {
         rot: u16,
         ignore: Option<&str>,
     ) -> Result<(), Refusal> {
+        self.fits_at(a, land, x, y, rot, None, ignore).map(|_| ())
+    }
+
+    /// As `fits`, for a small piece on quarter `spot` (or the first free one
+    /// when none): the quarter it would take, none for any other piece.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fits_at(
+        &self,
+        a: &Asset,
+        land: u16,
+        x: u8,
+        y: u8,
+        rot: u16,
+        spot: Option<u8>,
+        ignore: Option<&str>,
+    ) -> Result<Option<u8>, Refusal> {
         if !rot.is_multiple_of(90) || rot >= 360 {
             return Err(Refusal::BadRotation);
         }
@@ -600,6 +703,12 @@ impl Town {
             return Err(Refusal::OffLand);
         }
         let bridge = a.id == BRIDGE;
+        let small = is_small(a);
+        if spot.is_some_and(|s| !small || s >= SPOTS) {
+            return Err(Refusal::BadSpot);
+        }
+        // Quarters already taken on the tile, for a small piece.
+        let mut quarters = [false; SPOTS as usize];
         for ty in y..y + h {
             for tx in x..x + w {
                 match kind.tile(tx, ty) {
@@ -609,21 +718,50 @@ impl Town {
                     Tile::Plot => return Err(Refusal::LandmarkPlot),
                     _ => return Err(Refusal::Nature),
                 }
-                // One road and one person, vehicle or animal may share a tile.
-                let shares = |b: &Asset| {
-                    matches!(
-                        (a.group, b.group),
-                        (Group::Decor, Group::Road) | (Group::Road, Group::Decor)
-                    )
-                };
-                if self.items.iter().any(|i| {
-                    Some(i.id.as_str()) != ignore && i.covers(land, tx, ty) && !shares(i.spec())
-                }) {
-                    return Err(Refusal::Taken);
+                for i in &self.items {
+                    if Some(i.id.as_str()) == ignore || !i.covers(land, tx, ty) {
+                        continue;
+                    }
+                    let b = i.spec();
+                    let shares = match (a.group, b.group) {
+                        // A road takes people, animals and vehicles: small
+                        // ones side by side, or one large vehicle alone.
+                        (Group::Road, Group::Decor) => true,
+                        (Group::Decor, Group::Road) => {
+                            small || !self.has_small_at(land, tx, ty, ignore)
+                        }
+                        _ if small && is_small(b) => {
+                            quarters[usize::from(i.spot.unwrap_or(0))] = true;
+                            true
+                        }
+                        _ => false,
+                    };
+                    // Small ones beside a large vehicle would stand in it.
+                    let crowded = small && b.group == Group::Decor && !is_small(b);
+                    if !shares || crowded {
+                        return Err(Refusal::Taken);
+                    }
                 }
             }
         }
-        Ok(())
+        if !small {
+            return Ok(None);
+        }
+        match spot {
+            Some(s) if quarters[usize::from(s)] => Err(Refusal::Taken),
+            Some(s) => Ok(Some(s)),
+            None => (0..SPOTS)
+                .find(|s| !quarters[usize::from(*s)])
+                .map(Some)
+                .ok_or(Refusal::Taken),
+        }
+    }
+
+    /// Whether a small piece stands on the tile.
+    fn has_small_at(&self, land: u16, x: u8, y: u8, ignore: Option<&str>) -> bool {
+        self.items
+            .iter()
+            .any(|i| Some(i.id.as_str()) != ignore && i.covers(land, x, y) && is_small(i.spec()))
     }
 
     /// Applies one event, or says why not and leaves the town as it was.
@@ -646,13 +784,14 @@ impl Town {
                 y,
                 rot,
                 cols,
+                spot,
             } => {
                 let a = asset_by_id(asset).ok_or(Refusal::UnknownAsset)?;
                 if !self.is_unlocked(a) {
                     return Err(Refusal::Locked);
                 }
                 let x = page_x(*x, *cols);
-                self.fits(a, *land, x, *y, *rot, None)?;
+                let spot = self.fits_at(a, *land, x, *y, *rot, *spot, None)?;
                 if self.balance(earned) < i64::from(a.price) {
                     return Err(Refusal::NotEnoughFolds);
                 }
@@ -664,6 +803,7 @@ impl Town {
                     x,
                     y: *y,
                     rot: *rot,
+                    spot,
                     placed_at_ms: *at_ms,
                     finished_at_ms: None,
                 });
@@ -675,11 +815,21 @@ impl Town {
                 y,
                 rot,
                 cols,
+                spot,
                 ..
             } => {
-                let a = self.item(place_id).ok_or(Refusal::UnknownPlace)?.spec();
+                let it = self.item(place_id).ok_or(Refusal::UnknownPlace)?;
+                let a = it.spec();
                 let x = page_x(*x, *cols);
-                self.fits(a, *land, x, *y, *rot, Some(place_id))?;
+                // Turned where it stands, a small piece keeps its quarter if it can.
+                let same = it.land == *land && it.x == x && it.y == *y;
+                let keep = spot.or(if same { it.spot } else { None });
+                let spot = match self.fits_at(a, *land, x, *y, *rot, keep, Some(place_id)) {
+                    Err(Refusal::Taken) if spot.is_none() && keep.is_some() => {
+                        self.fits_at(a, *land, x, *y, *rot, None, Some(place_id))?
+                    }
+                    r => r?,
+                };
                 let item = self
                     .items
                     .iter_mut()
@@ -689,6 +839,7 @@ impl Town {
                 item.x = x;
                 item.y = *y;
                 item.rot = *rot;
+                item.spot = spot;
             }
             TownEvent::TownRemove { place_id, .. } => {
                 let at = self
@@ -809,6 +960,7 @@ mod tests {
             y,
             rot,
             cols: Some(COLS),
+            spot: None,
         }
     }
 
@@ -942,8 +1094,14 @@ mod tests {
             .unwrap();
         t.apply(&place("m", "people_man", 0, 0, 2, 0), 1000)
             .unwrap();
+        // Small ones share the road's tile, a quarter each.
+        t.apply(&place("w", "people_woman", 0, 0, 2, 0), 1000)
+            .unwrap();
+        assert_eq!(t.item("m").unwrap().spot, Some(0));
+        assert_eq!(t.item("w").unwrap().spot, Some(1));
+        // A bench is no road's: small, but not on the road.
         assert_eq!(
-            t.apply(&place("w", "people_woman", 0, 0, 2, 0), 1000),
+            t.apply(&place("be", "plant_bush", 0, 0, 2, 0), 1000),
             Err(Refusal::Taken)
         );
         assert_eq!(
@@ -975,6 +1133,128 @@ mod tests {
         assert_eq!(Refusal::NeedsWater.code(), "needs_water");
     }
 
+    fn place_on(id: &str, asset: &str, x: u8, y: u8, spot: Option<u8>) -> TownEvent {
+        match place(id, asset, 0, x, y, 0) {
+            TownEvent::TownPlace {
+                event_id,
+                at_ms,
+                asset,
+                land,
+                x,
+                y,
+                rot,
+                cols,
+                ..
+            } => TownEvent::TownPlace {
+                event_id,
+                at_ms,
+                asset,
+                land,
+                x,
+                y,
+                rot,
+                cols,
+                spot,
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn small_pieces_take_a_quarter_of_a_tile_and_large_ones_the_whole() {
+        let mut t = Town::default();
+        t.apply(&land("l0"), 1000).unwrap();
+        // Six huts open the shelves of buses.
+        for x in 0..6 {
+            t.apply(&place_on(&format!("hut{x}"), "house_hut", x, 6, None), 1000)
+                .unwrap();
+        }
+        // Four small ones on a tile, in the quarters asked for or the first free.
+        t.apply(&place_on("a", "people_man", 0, 0, Some(3)), 1000)
+            .unwrap();
+        t.apply(&place_on("b", "vehicle_bicycle", 0, 0, None), 1000)
+            .unwrap();
+        t.apply(&place_on("c", "plant_flower_pot", 0, 0, None), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place_on("d", "animal_cat", 0, 0, Some(3)), 1000),
+            Err(Refusal::Taken)
+        );
+        t.apply(&place_on("d", "animal_cat", 0, 0, None), 1000)
+            .unwrap();
+        let spots: Vec<_> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|i| t.item(i).unwrap().spot)
+            .collect();
+        assert_eq!(spots, [Some(3), Some(0), Some(1), Some(2)]);
+        assert_eq!(
+            t.apply(&place_on("e", "people_woman", 0, 0, None), 1000),
+            Err(Refusal::Taken)
+        );
+        assert_eq!(t.used_tiles(0), 7);
+        // A house wants the whole tile; a large piece no quarter.
+        assert_eq!(
+            t.apply(&place_on("h", "house_hut", 0, 0, None), 1000),
+            Err(Refusal::Taken)
+        );
+        assert_eq!(
+            t.apply(&place_on("h", "house_hut", 1, 0, Some(0)), 1000),
+            Err(Refusal::BadSpot)
+        );
+        assert_eq!(
+            t.apply(&place_on("s", "people_man", 1, 0, Some(4)), 1000),
+            Err(Refusal::BadSpot)
+        );
+        t.apply(&place_on("h", "house_hut", 1, 0, None), 1000)
+            .unwrap();
+        assert_eq!(t.item("h").unwrap().spot, None);
+        assert_eq!(
+            t.apply(&place_on("f", "people_man", 1, 0, None), 1000),
+            Err(Refusal::Taken)
+        );
+        // Turned where it stands, a small one keeps its quarter.
+        t.apply(
+            &TownEvent::TownMove {
+                event_id: "t".into(),
+                at_ms: 2_000,
+                place_id: "a".into(),
+                land: 0,
+                x: 0,
+                y: 0,
+                rot: 90,
+                cols: Some(COLS),
+                spot: None,
+            },
+            1000,
+        )
+        .unwrap();
+        assert_eq!(t.item("a").unwrap().spot, Some(3));
+        // A bus on a road is alone there; small ones stay out of it.
+        t.apply(&place_on("r", "road_straight", 2, 0, None), 1000)
+            .unwrap();
+        t.apply(&place_on("bus", "vehicle_bus", 2, 0, None), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place_on("g", "people_man", 2, 0, None), 1000),
+            Err(Refusal::Taken)
+        );
+        t.apply(&place_on("r2", "road_straight", 3, 0, None), 1000)
+            .unwrap();
+        t.apply(&place_on("car", "vehicle_sedan", 3, 0, None), 1000)
+            .unwrap();
+        assert_eq!(
+            t.apply(&place_on("bus2", "vehicle_bus", 3, 0, None), 1000),
+            Err(Refusal::Taken)
+        );
+        // Old events, without quarters, still read.
+        let old: TownEvent = serde_json::from_str(
+            r#"{"type":"town_place","event_id":"o","at_ms":1,"asset":"people_man","land":0,"x":4,"y":0,"rot":0,"cols":12}"#,
+        )
+        .unwrap();
+        t.apply(&old, 1000).unwrap();
+        assert_eq!(t.item("o").unwrap().spot, Some(0));
+    }
+
     #[test]
     fn removing_gives_back_every_fold_and_moving_keeps_the_timer() {
         let mut t = Town::default();
@@ -991,6 +1271,7 @@ mod tests {
             y: 5,
             rot: 90,
             cols: Some(COLS),
+            spot: None,
         };
         t.apply(&mv, 100).unwrap();
         assert_eq!(t.item("h").unwrap().ready_at_ms(), 1_000 + 120_000);

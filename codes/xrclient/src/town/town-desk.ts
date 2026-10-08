@@ -20,7 +20,7 @@ import { townMaterial } from '../art/town/kit.js';
 import { getLang, getRoom, musicOn, ROOMS, setMusic, setRoom } from '../settings.js';
 import { sfx } from '../audio.js';
 import { T } from '../text.js';
-import { assetOf, footprint, LAND_KINDS, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
+import { assetOf, footprint, isSmall, LAND_KINDS, quarterAt, spotMiddle, townRulesNow, type Asset, type LandKind, type Placed } from './town-core.js';
 import { TownModel } from './town-model.js';
 import { SHELF_NAMES } from './town-names.js';
 import { loadPieceIndex, loadShelf, pieceInfo } from './town-pieces.js';
@@ -258,6 +258,8 @@ interface Carry {
   over: boolean;
   x: number;
   y: number;
+  /** The quarter of the tile aimed at, for a small piece. */
+  spot?: number;
   fits: string;
   /** Taken by a controller's grip: let go when the grip opens. */
   grip: boolean;
@@ -1025,11 +1027,14 @@ export class TownDesk {
           if (!this.onPage(from)) return false;
           const x = Math.floor(this.p.x);
           const y = Math.floor(this.p.z);
-          const under = v.items.find((i) => {
+          const q = quarterAt(this.p.x, this.p.z);
+          const here = v.items.filter((i) => {
             if (i.land !== this.land) return false;
             const [w, h] = footprint(assetOf(i.asset)!, i.rot);
             return x >= i.x && x < i.x + w && y >= i.y && y < i.y + h;
           });
+          // The small piece on that quarter first, then the whole tile's.
+          const under = here.find((i) => i.spot === q) ?? here.find((i) => i.spot === undefined) ?? here[0];
           return under ? this.take(from, under.asset, under.id, under.rot, grip) : false;
         }
       }
@@ -1114,14 +1119,17 @@ export class TownDesk {
       return;
     }
     const [w, h] = footprint(a, c.rot);
-    const x = Math.round(this.p.x - w / 2);
-    const y = Math.round(this.p.z - h / 2);
-    if (c.over && x === c.x && y === c.y) return;
+    const small = isSmall(c.asset);
+    const x = small ? Math.floor(this.p.x) : Math.round(this.p.x - w / 2);
+    const y = small ? Math.floor(this.p.z) : Math.round(this.p.z - h / 2);
+    const spot = small ? quarterAt(this.p.x, this.p.z) : undefined;
+    if (c.over && x === c.x && y === c.y && spot === c.spot) return;
     c.over = true;
     c.x = x;
     c.y = y;
-    c.fits = this.model.fits(c.asset, this.land, x, y, c.rot, c.placeId);
-    this.ghost.show(c.asset, x, y, c.rot, !c.fits);
+    c.spot = spot;
+    c.fits = this.model.fits(c.asset, this.land, x, y, c.rot, c.placeId, spot ?? -1);
+    this.ghost.show(c.asset, x, y, c.rot, !c.fits, spot);
     this.ghost.root.traverse(this.toClip);
     this.carryNote(c.fits ? this.reason(c.fits) : this.t.xr.carry(this.name(c.asset)));
   }
@@ -1157,7 +1165,7 @@ export class TownDesk {
       if (it) this.showCard(it);
     };
     const was = c.placeId ? this.model.view().items.find((i) => i.id === c.placeId) : undefined;
-    if (was && c.over && c.x === was.x && c.y === was.y && c.rot === was.rot) {
+    if (was && c.over && c.x === was.x && c.y === was.y && c.rot === was.rot && c.spot === was.spot) {
       // Let go where it stood: its card instead of a move.
       this.redraw();
       this.showCard(was);
@@ -1165,7 +1173,7 @@ export class TownDesk {
     }
     if (c.over && !Number.isNaN(c.x)) {
       if (c.fits) return done(c.fits, '');
-      const at = { land: this.land, x: c.x, y: c.y, rot: c.rot };
+      const at = { land: this.land, x: c.x, y: c.y, rot: c.rot, spot: c.spot };
       if (c.placeId) void this.model.act({ type: 'town_move', place_id: c.placeId, ...at }).then((r) => done(r, this.t.moved(name)));
       else void this.model.act({ type: 'town_place', asset: c.asset, ...at }).then((r) => done(r, this.t.placed(name)));
       return;
@@ -1300,8 +1308,14 @@ export class TownDesk {
     }
     if (this.mark.parent !== h) h.add(this.mark);
     const [w, d] = footprint(assetOf(it.asset)!, it.rot);
-    this.mark.scale.set(w + 0.15, 1, d + 0.15);
-    this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
+    if (it.spot === undefined) {
+      this.mark.scale.set(w + 0.15, 1, d + 0.15);
+      this.mark.position.set(it.x + w / 2, 0.012, it.y + d / 2);
+    } else {
+      const [mx, mz] = spotMiddle(it.x, it.y, it.spot);
+      this.mark.scale.set(0.6, 1, 0.6);
+      this.mark.position.set(mx, 0.012, mz);
+    }
     this.mark.visible = true;
   }
 
@@ -1310,7 +1324,7 @@ export class TownDesk {
     const it = this.model.view().items.find((i) => i.id === this.selected);
     if (!it) return;
     const rot = (it.rot + step) % 360;
-    const reason = await this.model.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot });
+    const reason = await this.model.act({ type: 'town_move', place_id: it.id, land: it.land, x: it.x, y: it.y, rot, spot: it.spot });
     console.info(`[town] ${it.id} turned to ${rot}°: ${reason || 'done'}`);
     if (reason) return this.say(this.reason(reason));
     this.say(`${this.t.turn} ${rot}°`);

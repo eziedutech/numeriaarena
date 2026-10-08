@@ -26,6 +26,9 @@ export interface Rules {
   catalog: Asset[];
   /** Ids the town once used, with the piece each names now. */
   aliases: [string, string][];
+  /** Pieces that stand on a quarter of a tile, up to `spots` on one. */
+  small: string[];
+  spots: number;
   cols: number;
   rows: number;
   full_tenths: number;
@@ -56,8 +59,8 @@ export interface Play {
 
 export type TownEvent =
   | { type: 'town_land'; event_id: string; at_ms: number; kind: LandKind }
-  | { type: 'town_place'; event_id: string; at_ms: number; asset: string; land: number; x: number; y: number; rot: number; cols?: number }
-  | { type: 'town_move'; event_id: string; at_ms: number; place_id: string; land: number; x: number; y: number; rot: number; cols?: number }
+  | { type: 'town_place'; event_id: string; at_ms: number; asset: string; land: number; x: number; y: number; rot: number; cols?: number; spot?: number }
+  | { type: 'town_move'; event_id: string; at_ms: number; place_id: string; land: number; x: number; y: number; rot: number; cols?: number; spot?: number }
   | { type: 'town_remove'; event_id: string; at_ms: number; place_id: string }
   | { type: 'town_finish'; event_id: string; at_ms: number; place_id: string };
 
@@ -69,6 +72,8 @@ export interface Placed {
   x: number;
   y: number;
   rot: number;
+  /** The quarter of its tile a small piece stands on: 0 and 1 at the back, 2 and 3 at the front. */
+  spot?: number;
   placed_at_ms: number;
   finished_at_ms: number | null;
   ready_at_ms: number;
@@ -118,6 +123,22 @@ export function footprint(a: { w: number; h: number }, rot: number): [number, nu
   return rot % 180 === 90 ? [a.h, a.w] : [a.w, a.h];
 }
 
+/** Whether a piece stands on a quarter of a tile rather than the whole. */
+export function isSmall(id: string): boolean {
+  const a = assetOf(id);
+  return !!a && townRulesNow().small.includes(a.id);
+}
+
+/** The quarter of tile (floor x, floor z) a point on the page is in. */
+export function quarterAt(x: number, z: number): number {
+  return (x - Math.floor(x) >= 0.5 ? 1 : 0) + (z - Math.floor(z) >= 0.5 ? 2 : 0);
+}
+
+/** The middle of quarter `spot` of tile (x, y). */
+export function spotMiddle(x: number, y: number, spot: number): [number, number] {
+  return [x + 0.25 + (spot % 2) * 0.5, y + 0.25 + Math.floor(spot / 2) * 0.5];
+}
+
 export function earningsOf(plays: Play[]): Earnings {
   return JSON.parse(townEarnings(JSON.stringify(plays))) as Earnings;
 }
@@ -138,8 +159,14 @@ export class Book {
     return this.book.apply(JSON.stringify(ev));
   }
 
-  fits(asset: string, land: number, x: number, y: number, rot: number, ignore = ''): string {
-    return this.book.fits(asset, land, x, y, rot, ignore);
+  /** "" or why not; `spot` is the quarter asked for a small piece, -1 for the first free. */
+  fits(asset: string, land: number, x: number, y: number, rot: number, ignore = '', spot = -1): string {
+    return this.book.fits(asset, land, x, y, rot, spot, ignore);
+  }
+
+  /** The quarter a small piece would stand on there, -1 when it is not small or does not fit. */
+  spotFor(asset: string, land: number, x: number, y: number, rot: number, ignore = '', spot = -1): number {
+    return this.book.spotFor(asset, land, x, y, rot, spot, ignore);
   }
 
   view(nowMs: number): TownView {

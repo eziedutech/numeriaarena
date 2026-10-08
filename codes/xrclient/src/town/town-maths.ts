@@ -68,14 +68,16 @@ export function pageTiles(model: TownModel, land: number): Page {
   const v = model.view();
   const layout = townRulesNow().lands.find((l) => l.kind === v.lands[land])?.layout ?? [];
   const free = layout.join('').split('').filter((c) => c === '.').length;
-  let used = 0;
+  const used = new Set<string>();
   for (const it of v.items) {
     if (it.land !== land) continue;
     const a = assetOf(it.asset);
-    // People and cars stand on a road's tile, a bridge on the water.
-    if (a && a.group !== 'decor' && a.id !== 'bridge_road') used += a.w * a.h;
+    // People and cars stand on a road's tile, a bridge on the water; small pieces share a tile.
+    if (!a || a.group === 'decor' || a.id === 'bridge_road') continue;
+    const [w, h] = footprint(a, it.rot);
+    for (let y = it.y; y < it.y + h; y++) for (let x = it.x; x < it.x + w; x++) used.add(`${x},${y}`);
   }
-  return { free, used };
+  return { free, used: used.size };
 }
 
 /** Roads, nature, people and cars have no maths card. */
