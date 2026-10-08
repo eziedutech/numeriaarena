@@ -276,7 +276,7 @@ const TOWN_SLANT = -0.55;
  */
 const BANNER_W = TOWN_W;
 const BANNER_H = TOWN_H;
-const BANNER_AT = new Vector3(-0.36, 0.014, 0.21);
+const BANNER_AT = new Vector3(-0.33, 0.014, 0.19);
 /** The Fold Town sticker, lower right: in front of the settings, towards the player. */
 const TOWN_AT = new Vector3(0.33, 0.014, 0.22);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
