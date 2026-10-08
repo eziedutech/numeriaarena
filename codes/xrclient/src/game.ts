@@ -307,16 +307,12 @@ const NEWS_Y = 0.088;
 const DEMO_S = 10;
 const BEST_KEY = 'numeria.best';
 /**
- * The QUIT card during a game in the headset: just over the race card on the
- * right, turned to the player like it, away from the balloons and crystals
- * (the same place in a practice). The first press (touch, trigger or click)
- * asks, a second within QUIT_ASK_MS leaves to the desk menu.
+ * The QUIT card during a game in the headset: a chip leaning on the desk at its
+ * right, within a hand's or a controller's reach and away from the balloons and
+ * crystals, as Measure Hunt's. The first press (tap, trigger or click) asks, a
+ * second within QUIT_ASK_MS leaves to the desk menu.
  */
-const QUIT_POS = new Vector3(0.395, 0.345, 0.08);
-const QUIT_YAW = -0.65;
-/** A small card for one word: narrower than it is scaled tall, its word kept 2 cm high. */
-const QUIT_SCALE = { x: 0.6, y: 0.5 };
-const QUIT_TEXT_H = 0.02;
+const QUIT_AT = new Vector3(0.42, 0, 0.14);
 const QUIT_ASK_MS = 4000;
 /** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
 const RAY_VISIBLE = 1;
@@ -541,7 +537,6 @@ export class GameSystem extends createSystem({
   private store?: LocalStore;
   private unsaved: { events: unknown[]; mode: string; seat?: string }[] = [];
   private phase: Phase = 'loading';
-  private quitLabel?: Label;
   private quitAskedAt = 0;
   private wasControllers = false;
   /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
@@ -2282,7 +2277,7 @@ export class GameSystem extends createSystem({
   }
 
   /** A Measure Hunt card: a desk menu chip with its word under the icon, or an answer's number alone. */
-  private measureCard(choice: MeasureChoice, icon: ToolIcon | undefined, word: string, x: number, z: number, look: ToolLook, tint: string): Entity {
+  private measureCard(choice: ButtonChoice, icon: ToolIcon | undefined, word: string, x: number, z: number, look: ToolLook, tint: string): Entity {
     const w = icon ? MEASURE_CARD_W : MEASURE_ANSWER_W;
     const h = icon ? MEASURE_CARD_H : MEASURE_ANSWER_H;
     const b = icon
@@ -2303,6 +2298,7 @@ export class GameSystem extends createSystem({
     b.mesh.userData.card = shadow.userData.card = true;
     const cell = new Group();
     cell.name = `menu-${choice}`;
+    cell.userData.toolButton = b;
     cell.add(shadow, b.mesh);
     // Leaning back on the desk as the menu's chips, its lower edge on the top.
     cell.position.set(x, (h / 2) * Math.sin(-MENU_LEAN) + 0.002, z);
@@ -2390,26 +2386,17 @@ export class GameSystem extends createSystem({
     return Boolean(pads.right?.getSelecting() || pads.left?.getSelecting());
   }
 
-  /** A QUIT card over the race card while a game is on in the headset (see QUIT_POS). */
+  /** A QUIT chip on the desk while a game is on in the headset (see QUIT_AT). */
   private addQuitCard(): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     this.removeQuitCard();
-    const button = this.addButton('quit', '', 0, 0xfff8ec, 1);
-    button.position.copy(QUIT_POS);
-    button.rotation.y = QUIT_YAW;
-    button.scale.set(QUIT_SCALE.x, QUIT_SCALE.y, 1);
+    const e = this.measureCard('quit', 'exit', T.quit, QUIT_AT.x, QUIT_AT.z, 'accent', '#ffffff');
+    const button = e.object3D;
+    if (!button) return;
     // Approached from outside and up a while before it takes a press, like the results choices.
     button.userData.choice = true;
     button.userData.shownAt = performance.now();
     button.userData.armed = false;
-    this.quitLabel = new Label(T.quit, { height: QUIT_TEXT_H, card: false });
-    // In a holder that undoes the card's uneven scale, so the letters keep their shape
-    // (the label sizes itself with its own mesh scale).
-    const holder = new Group();
-    holder.position.set(0, 0, 0.002);
-    holder.scale.set(1 / QUIT_SCALE.x, 1 / QUIT_SCALE.y, 1);
-    holder.add(this.quitLabel.mesh);
-    button.add(holder);
     this.quitAskedAt = 0;
   }
 
@@ -2425,7 +2412,6 @@ export class GameSystem extends createSystem({
 
   private removeQuitCard(): void {
     for (const e of [...this.queries.buttons.entities]) if (e.getValue(MenuButton, 'game') === 'quit') this.remove(e);
-    this.quitLabel = undefined;
   }
 
   /** First press asks (SURE?), a second within QUIT_ASK_MS leaves the game for the desk menu. */
@@ -2439,12 +2425,13 @@ export class GameSystem extends createSystem({
       this.quitAskedAt = now;
       // The same finger has to come in again for the second press.
       obj.userData.armed = false;
-      this.quitLabel?.set(T.quitSure);
+      const chip = obj.userData.toolButton as ToolButton | undefined;
+      chip?.set(undefined, 'accent', T.quitSure);
       obj.getWorldPosition(this.a);
       this.pop(T.quitAgain, QUESTION_INK, undefined, this.a.clone().add(new Vector3(0, 0.07, 0)), 0.02);
       const asked = this.quitAskedAt;
       setTimeout(() => {
-        if (this.quitAskedAt === asked) this.quitLabel?.set(T.quit);
+        if (this.quitAskedAt === asked) chip?.set(undefined, 'accent', T.quit);
       }, QUIT_ASK_MS);
       return;
     }
