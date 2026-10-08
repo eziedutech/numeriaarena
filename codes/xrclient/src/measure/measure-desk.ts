@@ -1095,6 +1095,7 @@ export class MeasureDesk {
       const label = new Label('', { height: 0.026 });
       this.frame().add(mesh, label.mesh);
       this.host.billboard(label.mesh);
+      onTop(label);
       this.pulls.set(side, { side, from, mesh, label });
       sfx('grab', { at: this.v });
       return;
@@ -1131,6 +1132,7 @@ export class MeasureDesk {
     const label = new Label('', { height: 0.026 });
     this.frame().add(mesh, label.mesh);
     this.host.billboard(label.mesh);
+    onTop(label);
     const th = { a, b, mesh, label };
     this.threads.push(th);
     this.lay(mesh, label, a.mesh.position, b.mesh.position);
@@ -1535,6 +1537,12 @@ export class MeasureDesk {
     this.restoreDesk();
     setRoom(this.room);
   }
+}
+
+/** A thread's length is drawn over the paper object, so no face of a solid hides half of it. */
+function onTop(l: Label): void {
+  (l.mesh.material as MeshBasicMaterial).depthTest = false;
+  l.mesh.renderOrder = 20;
 }
 
 function dropLabel(l: Label): void {
