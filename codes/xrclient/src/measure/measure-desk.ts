@@ -13,7 +13,7 @@ import {
   type Intersection,
   type Object3D,
 } from '@iwsdk/core';
-import { boardUp, setBoard } from '../art/board.js';
+import { boardUp, rayNearBoardButton, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
@@ -159,6 +159,8 @@ const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
+/** A ray this near the board's magnifier is on it (it hangs far off, so a wide reach). */
+const MAGNIFIER_REACH_M = 0.25;
 const TRASH_SIZE = 0.03;
 const TRASH_LIFT = 0.012;
 /** How far outside the pin, along the floor, the bin floats. */
@@ -288,6 +290,8 @@ export class MeasureDesk {
   private offer?: HuntOffer;
   private cards: Entity[] = [];
   private panel?: Mesh;
+  /** The controller holding the board's magnifier down: the board is close while it does. */
+  private boardHeld?: Side;
   private lines: [string, number, string][] = [];
   private onBoard = false;
   private status: Label;
@@ -620,6 +624,7 @@ export class MeasureDesk {
     this.hands.update(delta);
     if (boardUp() !== this.onBoard && this.lines.length > 0) this.show();
     for (const side of SIDES) this.readTip(side, delta);
+    this.magnify();
     if (this.step === 'verdict') {
       this.verdictLeft -= delta;
       if (this.verdictLeft <= 0) this.nextTask();
@@ -640,7 +645,7 @@ export class MeasureDesk {
     this.paintPins();
     this.updateBin(delta);
     for (const side of SIDES) {
-      if (this.binPress(side)) continue;
+      if (this.boardHeld === side || this.binPress(side)) continue;
       this.pullThread(side);
       this.dropPin(side, delta);
     }
@@ -652,6 +657,37 @@ export class MeasureDesk {
       const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
       const m = used ? greenMat : pinMat;
       if (p.mesh.material !== m) p.mesh.material = m;
+    }
+  }
+
+  /**
+   * The magnifier beside the board: a trigger pressed with a ray on it brings
+   * the board close for as long as the trigger is held; let go, it goes back.
+   * Controllers only: a board is there in the emulator, and not in a headset.
+   */
+  private magnify(): void {
+    if (!boardUp() || !this.host.controllers()) {
+      if (this.boardHeld) setBoardNear(false);
+      this.boardHeld = undefined;
+      return;
+    }
+    for (const side of SIDES) {
+      const edges = this.grabEdges(side);
+      if (this.boardHeld === side) {
+        if (!this.triggerHeld[side]) {
+          this.boardHeld = undefined;
+          setBoardNear(false);
+        }
+      } else if (edges.start && !this.boardHeld) {
+        const ray = this.host.ray(side);
+        ray.getWorldPosition(this.o2);
+        ray.getWorldDirection(this.d2).negate();
+        if (rayNearBoardButton(this.o2, this.d2, MAGNIFIER_REACH_M)) {
+          this.boardHeld = side;
+          setBoardNear(true);
+          sfx('grab');
+        }
+      }
     }
   }
 
@@ -1532,6 +1568,7 @@ export class MeasureDesk {
     this.clearCards();
     this.dropPanel();
     setBoard(undefined);
+    setBoardNear(false);
     this.core?.dispose();
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();

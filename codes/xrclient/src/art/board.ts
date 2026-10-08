@@ -1,12 +1,25 @@
-import { Group, type MeshBasicMaterial } from '@iwsdk/core';
+import {
+  Group,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Quaternion,
+  Vector3,
+  type Object3D,
+} from '@iwsdk/core';
 import { Label } from './label.js';
 import { CLASS_BOARD, CLASS_FRONT_Z } from './rooms.js';
+import { ToolButton } from './tool-icon.js';
 
 /**
  * Writing on the classroom's chalkboard for a game that has its words to
  * say: Measure Hunt sets the lines of its question here when a board is up
  * (the emulator's stand-in for the real room), in large chalk letters, and
  * keeps them on its desk panel when there is none (a real room has no board).
+ * A magnifier on the wall beside the board brings the writing, with its
+ * green backdrop, close to the player for as long as it is held down, and
+ * lets it go back when it is let go.
  */
 
 /** A line of chalk: its words, its size as on the desk (metres) and its desk colour. */
@@ -35,10 +48,24 @@ const LINE_GAP = 1.12;
 const MOST = 1.8;
 const PULSE = 0.03;
 const PULSE_S = 1.1;
+/** The backdrop of the writing, and its frame, in metres. */
+const BACK_W = 3.2;
+const BACK_H = 1.1;
+const BACK = 0x2c4a41;
+const FRAME = 0xa87a4f;
+/** Held close, the board is this wide (metres), this far in front of the eyes. */
+const NEAR_W = 1.35;
+const NEAR_DIST = 0.85;
+const NEAR_RATE = 9;
+/** The magnifier: its size, and where it hangs, beside the board's lower right corner. */
+const BUTTON = 0.3;
+const BUTTON_AT = new Vector3(CLASS_BOARD.x + 1.78, CLASS_BOARD.y - 0.35, CLASS_FRONT_Z + 0.075);
 
 let lines: BoardLine[] | undefined;
 let version = 0;
 let up = false;
+let held = false;
+let button: Object3D | undefined;
 
 /** What the board says now (nothing clears it). */
 export function setBoard(next: BoardLine[] | undefined): void {
@@ -51,26 +78,96 @@ export function boardUp(): boolean {
   return up;
 }
 
+/** The magnifier is held: the board comes close. */
+export function setBoardNear(on: boolean): void {
+  held = on;
+}
+
+const v = new Vector3();
+
+/** Whether a ray passes within `reach` metres of the magnifier (in front of it). */
+export function rayNearBoardButton(origin: Vector3, dir: Vector3, reach: number): boolean {
+  if (!button) return false;
+  button.getWorldPosition(v);
+  v.sub(origin);
+  const along = v.dot(dir);
+  if (along <= 0) return false;
+  return v.addScaledVector(dir, -along).length() < reach;
+}
+
 export class BoardWriter {
+  /** The board and its magnifier, in the room's frame. */
   readonly group = new Group();
+  /** The backdrop and the writing: what comes close. */
+  private board = new Group();
+  private text = new Group();
   private labels: Label[] = [];
   private seen = -1;
   private fit = 1;
+  private near = 0;
+  private back: Mesh;
+  private frame: Mesh;
+  private magnifier: ToolButton;
+  private home = new Vector3(CLASS_BOARD.x, CLASS_BOARD.y + 0.02, CLASS_FRONT_Z + 0.07);
+  private target = new Vector3();
+  private local = new Vector3();
+  private qTarget = new Quaternion();
+  private qParent = new Quaternion();
+  private m = new Matrix4();
+  private up = new Vector3(0, 1, 0);
+  private eye = new Vector3();
+  private fwd = new Vector3();
 
   constructor() {
     this.group.name = 'measure-board';
-    // Just off the chalkboard, as the classroom's own chalk.
-    this.group.position.set(CLASS_BOARD.x, CLASS_BOARD.y + 0.02, CLASS_FRONT_Z + 0.07);
+    this.board.position.copy(this.home);
+    this.group.add(this.board);
+    // The frame behind the green, the green behind the chalk.
+    this.frame = new Mesh(new PlaneGeometry(BACK_W + 0.1, BACK_H + 0.1), new MeshBasicMaterial({ color: FRAME }));
+    this.frame.position.z = -0.004;
+    this.frame.renderOrder = 4;
+    this.back = new Mesh(new PlaneGeometry(BACK_W, BACK_H), new MeshBasicMaterial({ color: BACK }));
+    this.back.position.z = -0.002;
+    this.back.renderOrder = 5;
+    this.text.position.z = 0.004;
+    this.board.add(this.frame, this.back, this.text);
+    this.magnifier = new ToolButton('zoomIn', '', BUTTON, BUTTON, 'on', { alone: true, bare: true, theme: 'home', stroke: 2.4 });
+    this.magnifier.mesh.name = 'measure-board-magnifier';
+    this.magnifier.mesh.position.copy(BUTTON_AT);
+    this.group.add(this.magnifier.mesh);
+    button = this.magnifier.mesh;
     up = true;
   }
 
-  update(): void {
+  update(delta: number, camera: Object3D): void {
     if (this.seen !== version) {
       this.seen = version;
       this.write();
     }
     const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PULSE_S) * Math.PI * 2);
-    this.group.scale.setScalar(this.fit * (1 + PULSE * k));
+    this.text.scale.setScalar(this.fit * (1 + PULSE * k));
+    // Held, the board comes close and faces the eyes; let go, it goes back.
+    this.near += ((held ? 1 : 0) - this.near) * (1 - Math.exp(-NEAR_RATE * delta));
+    if (this.near < 0.002) {
+      this.near = 0;
+      this.board.position.copy(this.home);
+      this.board.quaternion.identity();
+      this.board.scale.setScalar(1);
+      return;
+    }
+    camera.getWorldPosition(this.eye);
+    camera.getWorldDirection(this.fwd);
+    this.target.copy(this.eye).addScaledVector(this.fwd, NEAR_DIST);
+    this.group.updateWorldMatrix(true, false);
+    this.local.copy(this.target).applyMatrix4(this.m.copy(this.group.matrixWorld).invert());
+    // Facing the eyes: its +Z towards them, whichever way the room is turned.
+    this.m.lookAt(this.eye, this.target, this.up);
+    this.qTarget.setFromRotationMatrix(this.m);
+    this.group.getWorldQuaternion(this.qParent).invert();
+    this.qTarget.premultiply(this.qParent);
+    this.board.position.lerpVectors(this.home, this.local, this.near);
+    this.board.quaternion.identity().slerp(this.qTarget, this.near);
+    this.board.scale.setScalar(1 + (NEAR_W / BACK_W - 1) * this.near);
   }
 
   private write(): void {
@@ -88,7 +185,7 @@ export class BoardWriter {
     for (const r of rows) {
       const label = new Label(r.text, { height: r.h, card: false, ink: r.ink });
       label.mesh.position.set(0, y - (r.h * LINE_GAP) / 2, 0);
-      this.group.add(label.mesh);
+      this.text.add(label.mesh);
       this.labels.push(label);
       widest = Math.max(widest, label.width);
       y -= r.h * LINE_GAP;
@@ -110,7 +207,13 @@ export class BoardWriter {
 
   dispose(): void {
     this.clear();
+    for (const m of [this.back, this.frame]) {
+      m.geometry.dispose();
+      (m.material as MeshBasicMaterial).dispose();
+    }
     this.group.removeFromParent();
+    held = false;
+    button = undefined;
     up = false;
   }
 }

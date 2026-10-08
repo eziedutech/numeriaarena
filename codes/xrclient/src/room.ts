@@ -77,7 +77,7 @@ export class RoomSystem extends createSystem({
     const same = this.shown && room === this.room && standIn === this.standIn && x === this.x && top === this.top && z === this.z && ry === this.ry;
     if (same) {
       this.life?.update(Math.min(delta, 0.1));
-      this.writer?.update();
+      this.writer?.update(Math.min(delta, 0.1), this.camera);
       return;
     }
     // Built once per placement: the book is put down once per session.
