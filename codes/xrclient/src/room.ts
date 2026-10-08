@@ -1,4 +1,4 @@
-import { type Entity, type Mesh, VisibilityState, createSystem } from '@iwsdk/core';
+import { type Entity, Mesh, MeshStandardMaterial, VisibilityState, createSystem } from '@iwsdk/core';
 
 import { buildRoom, type VirtualRoom } from './art/rooms.js';
 import { BedroomLife } from './bedroom-life.js';
@@ -21,6 +21,13 @@ function emulated(): boolean {
 }
 
 /**
+ * The emulator's stand-in for the real room is the paper classroom in a cool
+ * blue-grey and without its classmates and teacher, so it is never mistaken
+ * for the classroom room of the same paper.
+ */
+const STAND_IN_TINT = 0x8fa8c8;
+
+/**
  * The room around the desk in the headset. "My room" is the real one through
  * passthrough; a virtual room covers it, lined up with the real desk so the
  * book still lies on it and the hands meet the real top. It shows only once
@@ -31,6 +38,9 @@ export class RoomSystem extends createSystem({
   desks: { required: [DeskRoot] },
 }) {
   private shown?: Entity;
+  /** The shown room is the emulator's stand-in for the real room. */
+  private standIn = false;
+  private tint?: MeshStandardMaterial;
   /** The rivals, classmates, teacher, board and clock in the classroom; the robot posters in the bedroom. */
   private life?: ClassroomLife | BedroomLife;
   /** What the shown room was built for; rebuilt when any of it changes. */
@@ -42,7 +52,8 @@ export class RoomSystem extends createSystem({
 
   update(delta: number): void {
     const chosen = getRoom();
-    const room: Room = chosen === 'here' && emulated() ? 'classroom' : chosen;
+    const standIn = chosen === 'here' && emulated();
+    const room: Room = standIn ? 'classroom' : chosen;
     let desk: Entity | undefined;
     for (const e of this.queries.desks.entities) desk = e;
     const obj = desk?.object3D;
@@ -55,6 +66,7 @@ export class RoomSystem extends createSystem({
     const same =
       this.shown &&
       room === this.room &&
+      standIn === this.standIn &&
       obj.position.x === this.x &&
       top === this.top &&
       obj.position.z === this.z &&
@@ -69,9 +81,17 @@ export class RoomSystem extends createSystem({
     // The floor stays at the real floor (local-floor: y = 0) under the book.
     group.position.set(obj.position.x, 0, obj.position.z);
     group.rotation.set(0, obj.rotation.y, 0);
-    this.life = room === 'classroom' ? new ClassroomLife(group) : new BedroomLife(group);
+    if (standIn) {
+      this.tint = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true, color: STAND_IN_TINT });
+      group.traverse((o) => {
+        if (o instanceof Mesh && o.name.endsWith('-paper')) o.material = this.tint!;
+      });
+    } else {
+      this.life = room === 'classroom' ? new ClassroomLife(group) : new BedroomLife(group);
+    }
     this.shown = this.world.createTransformEntity(group);
     this.room = room;
+    this.standIn = standIn;
     this.x = obj.position.x;
     this.top = top;
     this.z = obj.position.z;
@@ -85,6 +105,8 @@ export class RoomSystem extends createSystem({
     this.life = undefined;
     // The paper materials are shared with the book and the game: only the room's own geometry goes.
     this.shown.object3D?.traverse((o) => (o as Mesh).geometry?.dispose());
+    this.tint?.dispose();
+    this.tint = undefined;
     this.shown.dispose({ disposeResources: false });
     this.shown = undefined;
     console.info('[room] virtual room hidden');
