@@ -268,17 +268,17 @@ const GAME_COLS = 3;
 
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
-/** Its buildings drawn leaning left this much, so from the player's seat they stand straight. */
-const TOWN_SLANT = 0.45;
+/** Its buildings drawn leaning this much (negative: to the right, as it lies right of the player), so from the player's seat they stand straight. */
+const TOWN_SLANT = -0.4;
 /**
- * Measure Hunt's card stands where the Fold Town sticker stood, left of the
- * games, as tall as their two rows; the sticker moved to the lower right.
+ * Measure Hunt's card stands at the lower left of the desk menu, in front of the
+ * games, as tall as their two rows; the Fold Town sticker is at the lower right.
  */
 const BANNER_W = TOWN_W;
 const BANNER_H = TOWN_H;
-const BANNER_AT = new Vector3(GAMES_AT.x - (GAME_COLS * CHIP_W + (GAME_COLS - 1) * CHIP_GAP) / 2 - TOWN_GAP - TOWN_W / 2, GAMES_AT.y, GAMES_AT.z).addScaledVector(MENU_UP, -TOWN_H / 2);
-/** The Fold Town sticker, lower right: below the settings, towards the player. */
-const TOWN_AT = new Vector3(0.2, 0.012, 0.24);
+const BANNER_AT = new Vector3(-0.39, 0.014, 0.24);
+/** The Fold Town sticker, lower right: in front of the settings, towards the player. */
+const TOWN_AT = new Vector3(0.33, 0.014, 0.25);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**

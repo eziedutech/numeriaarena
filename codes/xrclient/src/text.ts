@@ -193,7 +193,7 @@ export const ID: Text = {
     factory_sort: 'Factory Sort',
     bridge_builder: 'Bridge Builder',
     balance_gate: 'Balance Gate',
-    measure_hunt: 'Buru Ukur',
+    measure_hunt: 'Cari & Ukur',
   },
   gameType: 'JENIS\nGAME',
   language: (lang: string) => `BAHASA ${lang}`,

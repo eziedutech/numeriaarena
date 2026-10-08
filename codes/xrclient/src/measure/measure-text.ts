@@ -81,12 +81,12 @@ const EN = {
 type MeasureText = typeof EN;
 
 const ID: MeasureText = {
-  title: 'BURU UKUR',
+  title: 'CARI & UKUR',
   xrOnly: 'KHUSUS XR',
   featured: 'Ukur benda nyata dengan tanganmu',
   badge: 'BARU',
   badgeXr: 'XR',
-  needHeadset: 'Buru Ukur butuh headset: kamu mengukur meja nyata dengan tanganmu.',
+  needHeadset: 'Cari & Ukur butuh headset: kamu mengukur meja nyata dengan tanganmu.',
   pickGrade: 'KELAS BERAPA?',
   grade: (g: number) => `KELAS ${g}`,
   pickGroup: 'APA YANG AKAN DIUKUR?',
@@ -152,7 +152,7 @@ const ID: MeasureText = {
   recap: 'WAKTU HABIS!',
   recapLine: (right: number, answered: number, points: number) => `${right} dari ${answered} benar · ${points} poin`,
   unit: EN.unit,
-  failed: 'Buru Ukur tidak bisa dimulai di sini. Coba lagi.',
+  failed: 'Cari & Ukur tidak bisa dimulai di sini. Coba lagi.',
 };
 
 export const MEASURE_TEXT: Record<Lang, MeasureText> = { en: EN, id: ID };
