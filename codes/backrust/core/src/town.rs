@@ -308,8 +308,11 @@ pub(crate) const fn asset(
 
 pub use crate::town_catalog::{ALIASES, CATALOG};
 
-/// The only piece that stands on water.
+/// The only piece that stands on water: the page's own, or a stream laid on it.
 pub const BRIDGE: &str = "bridge_road";
+
+/// The shop's streams, which a bridge may cross.
+pub const STREAMS: [&str; 2] = ["nature_river_straight", "nature_river_corner"];
 
 /// Pieces small enough for a quarter of a tile (their models are under half
 /// a tile across): up to four stand on one tile, also on a road's or a
@@ -530,6 +533,8 @@ pub enum Refusal {
     LandmarkPlot,
     /// A bridge stands only on water.
     NeedsWater,
+    /// A stream with a bridge over it stays until the bridge is gone.
+    UnderBridge,
     NotEnoughFolds,
     UnknownPlace,
     /// A new page opens only once the last one is full enough.
@@ -553,6 +558,7 @@ impl Refusal {
             Refusal::Nature => "nature",
             Refusal::LandmarkPlot => "landmark_plot",
             Refusal::NeedsWater => "needs_water",
+            Refusal::UnderBridge => "under_bridge",
             Refusal::NotEnoughFolds => "not_enough_folds",
             Refusal::UnknownPlace => "unknown_place",
             Refusal::LandNotFull => "land_not_full",
@@ -732,6 +738,7 @@ impl Town {
                 match kind.tile(tx, ty) {
                     Tile::Water if bridge => {}
                     Tile::Free if !bridge => {}
+                    Tile::Free if self.stream_at(land, tx, ty, ignore) => {}
                     Tile::Free => return Err(Refusal::NeedsWater),
                     Tile::Plot => return Err(Refusal::LandmarkPlot),
                     _ => return Err(Refusal::Nature),
@@ -742,6 +749,7 @@ impl Town {
                     }
                     let b = i.spec();
                     let shares = match (a.group, b.group) {
+                        _ if bridge && STREAMS.contains(&b.id) => true,
                         // A road or footpath takes small pieces on its quarters.
                         (Group::Road, _) => is_small(b),
                         (_, Group::Road) => small,
@@ -768,6 +776,22 @@ impl Town {
                 .map(Some)
                 .ok_or(Refusal::Taken),
         }
+    }
+
+    /// Whether a stream from the shop lies on the tile.
+    fn stream_at(&self, land: u16, x: u8, y: u8, ignore: Option<&str>) -> bool {
+        self.items.iter().any(|i| {
+            Some(i.id.as_str()) != ignore && i.covers(land, x, y) && STREAMS.contains(&i.spec().id)
+        })
+    }
+
+    /// Whether a bridge stands over this stream.
+    fn bridged(&self, it: &Placed) -> bool {
+        STREAMS.contains(&it.spec().id)
+            && self
+                .items
+                .iter()
+                .any(|i| i.spec().id == BRIDGE && i.covers(it.land, it.x, it.y))
     }
 
     /// Applies one event, or says why not and leaves the town as it was.
@@ -825,6 +849,9 @@ impl Town {
                 ..
             } => {
                 let it = self.item(place_id).ok_or(Refusal::UnknownPlace)?;
+                if self.bridged(it) {
+                    return Err(Refusal::UnderBridge);
+                }
                 let a = it.spec();
                 let x = page_x(*x, *cols);
                 // Turned where it stands, a small piece keeps its quarter if it can.
@@ -853,6 +880,9 @@ impl Town {
                     .iter()
                     .position(|i| i.id == *place_id)
                     .ok_or(Refusal::UnknownPlace)?;
+                if self.bridged(&self.items[at]) {
+                    return Err(Refusal::UnderBridge);
+                }
                 self.items.remove(at);
             }
             TownEvent::TownFinish {
@@ -967,6 +997,14 @@ mod tests {
             rot,
             cols: Some(COLS),
             spot: None,
+        }
+    }
+
+    fn remove(event: &str, id: &str) -> TownEvent {
+        TownEvent::TownRemove {
+            event_id: event.into(),
+            at_ms: 1_000,
+            place_id: id.into(),
         }
     }
 
@@ -1136,6 +1174,30 @@ mod tests {
             Err(Refusal::LandmarkPlot)
         );
         assert_eq!(Refusal::NeedsWater.code(), "needs_water");
+    }
+
+    #[test]
+    fn a_bridge_crosses_a_stream_from_the_shop_which_then_stays() {
+        let mut t = Town::default();
+        t.apply(&land_of("l0", LandKind::Plain), 1000).unwrap();
+        // Six pieces open the stream.
+        for x in 0..6 {
+            t.apply(&place(&format!("t{x}"), "tree_round", 0, x, 5, 0), 1000)
+                .unwrap();
+        }
+        t.apply(&place("s", "nature_river_straight", 0, 0, 2, 0), 1000)
+            .unwrap();
+        t.apply(&place("br", "bridge_road", 0, 0, 2, 90), 1000)
+            .unwrap();
+        // Bridges need water still, and nothing else stands on one.
+        assert_eq!(
+            t.apply(&place("b2", "bridge_road", 0, 1, 2, 0), 1000),
+            Err(Refusal::NeedsWater)
+        );
+        assert_eq!(t.apply(&remove("x1", "s"), 1000), Err(Refusal::UnderBridge));
+        t.apply(&remove("x2", "br"), 1000).unwrap();
+        t.apply(&remove("x3", "s"), 1000).unwrap();
+        assert_eq!(Refusal::UnderBridge.code(), "under_bridge");
     }
 
     fn place_on(id: &str, asset: &str, x: u8, y: u8, spot: Option<u8>) -> TownEvent {
