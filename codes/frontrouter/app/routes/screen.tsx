@@ -15,7 +15,8 @@ export function meta({}: Route.MetaArgs) {
 /**
  * The class screen: a Class Match seen with its watch code, for the
  * classroom's projector. It shows every seat's points and place, what each
- * one is working on, the round's clock and the results. With the room's host
+ * one is working on (the question itself only in the demo, so nobody in the
+ * room can call out the answer), the round's clock and the results. With the room's host
  * token (after `#host=` in the address, so it never reaches a server log) it
  * also starts the match. The messages are the server's (protocol.rs in
  * codes/backrust/core); a watcher cannot answer anything.
@@ -148,6 +149,7 @@ const TEXT = {
     points: "points",
     folded: "folded",
     working: "Working on",
+    workingNow: "Working…",
     place: (n: number) => (["1ST", "2ND", "3RD"][n - 1] ?? `${n}TH`),
     highlights: {
       best_save: "Best save",
@@ -180,6 +182,7 @@ const TEXT = {
       no_class: "This room is open to anyone, so it has no groups.",
       saving: "The last results are still being saved. Try again in a moment.",
       code_length: "Write all 6 letters of the code.",
+      rate_limited: "One cheer every 10 seconds. Cheer again in a moment.",
       other: "Something went wrong.",
     } as Record<string, string>,
     toGame: "TO THE GAME",
@@ -241,6 +244,7 @@ const TEXT = {
     points: "poin",
     folded: "terlipat",
     working: "Mengerjakan",
+    workingNow: "Sedang mengerjakan…",
     place: (n: number) => `KE-${n}`,
     highlights: {
       best_save: "Penyelamatan terbaik",
@@ -273,6 +277,7 @@ const TEXT = {
       no_class: "Ruang ini terbuka untuk siapa saja, jadi tidak punya kelompok.",
       saving: "Hasil terakhir masih disimpan. Coba lagi sebentar lagi.",
       code_length: "Tulis keenam huruf kodenya.",
+      rate_limited: "Satu sorakan tiap 10 detik. Bersorak lagi sebentar lagi.",
       other: "Ada yang salah.",
     } as Record<string, string>,
     toGame: "KE GAME",
@@ -282,6 +287,8 @@ type Text = (typeof TEXT)["en"];
 
 const DEMO_CODE = "WATCHX";
 const FEED_LINES = 8;
+/** A watcher may cheer once in this long (CHEER_MS in rooms.rs). */
+const CHEER_MS = 10_000;
 /** Errors that end the watching; others are answers to START or CHEER. */
 const FATAL = ["room_not_found", "hello_first", "room_closed"];
 
@@ -394,7 +401,7 @@ function reduce(l: Live, msg: ServerMsg, feedKey: { current: number }): Live {
     case "match_committed":
       return { ...l, stored: true };
     case "cheer":
-      return { ...l, cheerAt: Date.now() };
+      return { ...l, cheerAt: Date.now(), error: l.error === "rate_limited" ? undefined : l.error };
     case "error":
       if (FATAL.includes(msg.code)) return { ...l, status: "failed", error: msg.code };
       return { ...l, error: msg.code };
@@ -530,6 +537,8 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
     const id = setInterval(() => setTick((n) => n + 1), 250);
     return () => clearInterval(id);
   }, []);
+  // The server takes one cheer a watcher every 10 s: the button waits as long.
+  const [cheeredAt, setCheeredAt] = useState(-Infinity);
   const errorText = live.error ? (t.errors[live.error] ?? t.errors.other) : "";
   if (live.status === "failed") {
     return (
@@ -541,6 +550,7 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
   }
   const v = live.view;
   const cheering = Date.now() - live.cheerAt < 2500;
+  const cheerWait = Date.now() - cheeredAt < CHEER_MS;
   return (
     <>
       <div className="arena-codes">
@@ -571,7 +581,7 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
       ) : (
         <section className="arena-board">
           <Header t={t} view={v} remaining={v.ends_at_ms === null ? null : v.ends_at_ms - now()} breakLeft={v.until_ms === undefined ? null : v.until_ms - now()} />
-          <Standings t={t} lang={lang} view={v} live={live} />
+          <Standings t={t} lang={lang} view={v} live={live} demo={code === DEMO_CODE} />
           {live.feed.length > 0 && (
             <section className="arena-history">
               <h2>{t.history}</h2>
@@ -586,7 +596,15 @@ function Watching({ t, lang, code, host, play }: { t: Text; lang: Lang; code: st
       )}
       <div className="arena-foot">
         {!host && (
-          <button type="button" className="btn" onClick={() => send({ type: "cheer" })}>
+          <button
+            type="button"
+            className="btn"
+            disabled={cheerWait}
+            onClick={() => {
+              setCheeredAt(Date.now());
+              send({ type: "cheer" });
+            }}
+          >
             {t.cheer}
           </button>
         )}
@@ -794,7 +812,7 @@ function Avatar({ name, bot = false, size }: { name: string; bot?: boolean; size
   return <span className="arena-avatar" aria-hidden="true" dangerouslySetInnerHTML={{ __html: bot ? robotSvg(size) : avatarSvg(name, size) }} />;
 }
 
-function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; live: Live }) {
+function Standings({ t, lang, view, live, demo }: { t: Text; lang: Lang; view: View; live: Live; demo: boolean }) {
   const rows = view.seats.map((s, i) => ({ s, i })).sort((a, b) => a.s.place - b.s.place || a.i - b.i);
   return (
     <ol className="arena-rows">
@@ -811,7 +829,7 @@ function Standings({ t, lang, view, live }: { t: Text; lang: Lang; view: View; l
               {s.bot && <span className="tag">{t.bot}</span>}
               {s.away && <span className="tag">{s.stand_in ? t.standIn : t.away}</span>}
               <span className="arena-work">
-                {work ? `${t.working}: ${work[lang]}` : ""}
+                {work ? (demo ? `${t.working}: ${work[lang]}` : t.workingNow) : ""}
                 {last === true ? " ✓" : last === false ? " ✗" : ""}
               </span>
             </span>
