@@ -4,14 +4,17 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Plane,
   Quaternion,
+  Raycaster,
   SphereGeometry,
   Vector3,
   type Entity,
+  type Intersection,
   type Object3D,
 } from '@iwsdk/core';
 import { Label } from '../art/label.js';
-import { textPanel, type PanelLine } from '../art/tool-icon.js';
+import { textPanel, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
@@ -34,8 +37,9 @@ import { paperObject, type PaperObject } from './paper-shapes.js';
  * settles square), turns like a wheel between two hands, and a box pulled
  * apart with both hands unfolds into its net.
  *
- * With controllers the tip of each ray is the fingertip: its trigger drops
- * a pin or, on a pin, pulls a thread; its grip turns a paper solid.
+ * With controllers each ray points as a laser does (a real thing is touched
+ * by the ray's tip): its trigger drops a pin where it points or, on a pin,
+ * pulls a thread; its grip turns a paper solid.
  */
 
 export type MeasureChoice =
@@ -71,8 +75,11 @@ export interface MeasureHost {
   billboard(mesh: Mesh): void;
   /** Hides everything else on the desk; returns what shows it again. */
   clearDesk(): () => void;
-  /** A paper card standing on the desk at (x, z), pressed like the menu's. */
-  button(choice: MeasureChoice, title: string, x: number, z: number, color: number): Entity;
+  /**
+   * A card leaning on the desk at (x, z) as the desk menu's chips, pressed
+   * like them: its icon in `tint` over its word, or (no icon) a number alone.
+   */
+  button(choice: MeasureChoice, icon: ToolIcon | undefined, word: string, x: number, z: number, look: ToolLook, tint: string): Entity;
   /** A word rising from a place on the desk (desk frame). */
   pop(text: string, ink: number, at: Vector3): void;
   ray(side: Side): Object3D;
@@ -138,6 +145,8 @@ const CANCEL_M = 0.02;
 const THROW_SPEED = 1.2;
 /** A controller's fingertip is this far along its ray. */
 const TIP_M = 0.05;
+/** A controller points this far at most. */
+const AIM_FAR_M = 2;
 /** Where the paper object stands, and how far round it a finger may pin. */
 const OBJECT_AT = new Vector3(0, 0, -0.12);
 const OBJECT_MARGIN = 0.04;
@@ -161,6 +170,20 @@ const SETTLE = 10;
 const UNFOLD_M = 0.08;
 const FOLD_M = 0.04;
 const UNFOLD_SPEED = 2;
+
+/** The icon on each card that is not an answer, a grade or QUIT. */
+const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
+  me_flat: 'shapes',
+  me_solid: 'box',
+  me_paper: 'paper',
+  me_real: 'hand',
+  me_start: 'next',
+  me_back: 'back',
+  me_clear: 'trash',
+  me_skip: 'skip',
+  me_again: 'replay',
+  me_done: 'check',
+};
 
 const TEAL = 0x3fb6a0;
 const CORAL = 0xf2716b;
@@ -252,6 +275,15 @@ export class MeasureDesk {
   private w = new Vector3();
   private u = new Vector3();
   private q = new Quaternion();
+  private n = new Vector3();
+  private caster = new Raycaster();
+  private targets: Object3D[] = [];
+  private hits: Intersection[] = [];
+  private deskPlane = new Plane();
+  /** Where each controller's ray points, and whether it points anywhere a pin may go. */
+  private aimed = { left: false, right: false };
+  private lastRay = { left: new Vector3(), right: new Vector3() };
+  private rayVel = { left: new Vector3(), right: new Vector3() };
 
   constructor(private host: MeasureHost) {
     this.restoreDesk = host.clearDesk();
@@ -558,9 +590,11 @@ export class MeasureDesk {
     if (this.host.controllers()) {
       const ray = this.host.ray(side);
       ray.getWorldPosition(this.v);
-      ray.getWorldDirection(this.w);
+      if (delta > 0) this.rayVel[side].copy(this.v).sub(this.lastRay[side]).divideScalar(delta);
+      this.lastRay[side].copy(this.v);
       // A ray space looks down its -Z.
-      this.v.addScaledVector(this.w, -TIP_M);
+      ray.getWorldDirection(this.w).negate();
+      this.aimed[side] = this.aim(this.v, this.w);
     } else {
       const h = this.hands.get(side);
       if (!h.tracked) return;
@@ -574,11 +608,47 @@ export class MeasureDesk {
   private tip(side: Side, pinch: boolean, out: Vector3): boolean {
     if (this.host.controllers()) {
       out.copy(this.lastTip[side]);
-      return true;
+      return this.aimed[side];
     }
     const h = this.hands.get(side);
     if (!h.tracked) return false;
     out.copy(pinch ? h.pinchAt : h.tip);
+    return true;
+  }
+
+  /**
+   * Where a controller's ray points, into `origin`: on the paper object or
+   * the desk it meets, as a laser pointer (the emulator's controllers can
+   * point but hardly touch); for a real thing the tip of the ray touches it.
+   * False when the ray is on a card: that is a press, not a pin.
+   */
+  private aim(origin: Vector3, dir: Vector3): boolean {
+    this.caster.set(origin, dir);
+    this.caster.far = AIM_FAR_M;
+    this.targets.length = 0;
+    for (const c of this.cards) if (c.object3D) this.targets.push(c.object3D);
+    if (this.paper) this.targets.push(this.paper.root);
+    this.hits.length = 0;
+    this.caster.intersectObjects(this.targets, true, this.hits);
+    const hit = this.hits.find((h) => (h.object as Mesh).isMesh && h.object.visible);
+    if (hit) {
+      let o: Object3D | null = hit.object;
+      while (o && o !== this.paper?.root) o = o.parent;
+      if (!o) return false;
+      origin.copy(hit.point);
+      return true;
+    }
+    if (this.source === 'real') {
+      origin.addScaledVector(dir, TIP_M);
+      return true;
+    }
+    // The desk's top, under the paper object.
+    this.group.getWorldPosition(this.u);
+    this.group.getWorldQuaternion(this.q);
+    this.deskPlane.setFromNormalAndCoplanarPoint(this.n.copy(UP).applyQuaternion(this.q), this.u);
+    if (!this.caster.ray.intersectPlane(this.deskPlane, this.u)) return false;
+    if (this.u.distanceTo(origin) > AIM_FAR_M) return false;
+    origin.copy(this.u);
     return true;
   }
 
@@ -594,7 +664,8 @@ export class MeasureDesk {
   }
 
   private speed(side: Side): number {
-    return this.host.controllers() ? this.tipVel[side].length() : this.hands.get(side).velocity.length();
+    // A controller throws with its hand: its pointed spot leaps between the paper and the desk.
+    return this.host.controllers() ? this.rayVel[side].length() : this.hands.get(side).velocity.length();
   }
 
   // ------------------------------------------------------------ pins and threads
@@ -658,10 +729,18 @@ export class MeasureDesk {
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
     if (this.host.controllers()) {
-      if (!this.grabEdges(side).start) return;
-      this.tip(side, false, this.v);
-      if (this.nearestPin(this.v, GRAB_M)) return;
-      if (this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M)) this.addPin(this.v);
+      const press = this.grabEdges(side).start;
+      if (!this.tip(side, false, this.v)) return;
+      const onPin = this.nearestPin(this.v, GRAB_M) !== undefined;
+      const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
+      // A small mark where the ray points, so the pin is seen before it drops.
+      if (free || onPin) {
+        ghost.visible = true;
+        ghost.position.copy(this.v);
+        this.group.worldToLocal(ghost.position);
+        ghost.scale.setScalar(onPin ? 0.8 : 0.5);
+      }
+      if (press && free) this.addPin(this.v);
       return;
     }
     const h = this.hands.get(side);
@@ -978,8 +1057,18 @@ export class MeasureDesk {
 
   // ------------------------------------------------------------ the desk
 
-  private card(choice: MeasureChoice, title: string, x: number, z: number, color: number): void {
-    this.cards.push(this.host.button(choice, title, x, z, color));
+  /** A card with its icon and word, as the desk menu's chips; an answer is its number alone. */
+  private card(choice: MeasureChoice, word: string, x: number, z: number, color: number): void {
+    const answer = /^me_a\d$/.test(choice);
+    const icon: ToolIcon | undefined = answer
+      ? undefined
+      : choice === 'me_back' && word === this.t.quit
+        ? 'exit'
+        : choice.startsWith('me_grade')
+          ? 'school'
+          : CARD_ICON[choice];
+    const look: ToolLook = choice === 'me_back' || choice === 'me_done' ? 'accent' : choice === 'me_start' || choice === 'me_again' ? 'on' : 'plain';
+    this.cards.push(this.host.button(choice, icon, word, x, z, look, `#${color.toString(16).padStart(6, '0')}`));
   }
 
   private clearCards(): void {

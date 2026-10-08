@@ -433,6 +433,13 @@ const WRONG_INK = 0xc62828;
 const QUESTION_INK = 0x1f4fa3;
 /** Desk cards (a results screen's choices) stand this far in front of the book's front edge (desk frame z). */
 const ENVELOPE_Z = 0.11;
+/** Measure Hunt's cards: a chip with its word, and an answer's wider card. */
+const MEASURE_CARD_W = 0.09;
+const MEASURE_CARD_H = 0.06;
+const MEASURE_WORD_H = 0.0085;
+const MEASURE_ANSWER_W = 0.11;
+const MEASURE_ANSWER_H = 0.05;
+const MEASURE_ANSWER_WORD_H = 0.012;
 const MENU_GAMES: MenuChoice[] = ['race', 'balloon_burst', 'orb_forge', 'factory_sort', 'bridge_builder', 'balance_gate'];
 
 interface Tween {
@@ -2193,6 +2200,37 @@ export class GameSystem extends createSystem({
     }
   }
 
+  /** A Measure Hunt card: a desk menu chip with its word under the icon, or an answer's number alone. */
+  private measureCard(choice: MeasureChoice, icon: ToolIcon | undefined, word: string, x: number, z: number, look: ToolLook, tint: string): Entity {
+    const w = icon ? MEASURE_CARD_W : MEASURE_ANSWER_W;
+    const h = icon ? MEASURE_CARD_H : MEASURE_ANSWER_H;
+    const b = icon
+      ? new ToolButton(icon, word, w, h, look, {
+          alone: true,
+          bare: true,
+          theme: 'home',
+          stroke: CHIP_STROKE,
+          // On a coloured card the icon keeps the card's own ink.
+          tint: look === 'plain' ? tint : undefined,
+          wash: false,
+          wordH: MEASURE_WORD_H * textScale(),
+        })
+      : new ToolButton('check', word, w, h, 'plain', { alone: true, bare: true, theme: 'home', title: true, wordH: MEASURE_ANSWER_WORD_H * textScale() });
+    const shadow = softShadow(w, h, CHIP_BLUR);
+    shadow.position.copy(CHIP_SHADOW);
+    const cell = new Group();
+    cell.name = `menu-${choice}`;
+    cell.add(shadow, b.mesh);
+    // Leaning back on the desk as the menu's chips, its lower edge on the top.
+    cell.position.set(x, (h / 2) * Math.sin(-MENU_LEAN) + 0.002, z);
+    cell.rotation.x = MENU_LEAN;
+    const e = this.add(cell);
+    e.addComponent(MenuButton, { game: choice });
+    e.addComponent(PokeInteractable);
+    e.addComponent(RayInteractable);
+    return e;
+  }
+
   private measureHost(): MeasureHost {
     const town = this.townHost();
     return {
@@ -2200,12 +2238,7 @@ export class GameSystem extends createSystem({
       remove: (e) => this.remove(e),
       billboard: (mesh) => this.labels.add(mesh),
       clearDesk: town.clearDesk,
-      button: (choice, title, x, z, color) => {
-        const b = this.addButton(choice, title, x, color, 1, 0.016);
-        b.position.z = z;
-        for (const e of this.queries.buttons.entities) if (e.object3D === b) return e;
-        throw new Error(`no entity for ${b.name}`);
-      },
+      button: (choice, icon, word, x, z, look, tint) => this.measureCard(choice, icon, word, x, z, look, tint),
       pop: (text, ink, at) => this.pop(text, ink, undefined, at, 0.024),
       ray: town.ray,
       select: town.select,
