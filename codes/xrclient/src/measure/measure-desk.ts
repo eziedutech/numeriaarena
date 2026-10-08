@@ -158,11 +158,13 @@ const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
-const TRASH_SIZE = 0.04;
-const TRASH_LIFT = 0.05;
+const TRASH_SIZE = 0.026;
+const TRASH_LIFT = 0.012;
+/** How far outside the pin, along the floor, the bin floats. */
+const TRASH_OUT = 0.05;
 const ACTIVE_M = 0.05;
 const KEEP_M = 0.08;
-const TRASH_HIT_M = 0.035;
+const TRASH_HIT_M = 0.03;
 const TRASH_GRACE_S = 0.5;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
@@ -648,9 +650,28 @@ export class MeasureDesk {
     if (this.active && !this.pins.includes(this.active)) this.active = undefined;
     this.trash.visible = this.active !== undefined;
     if (!this.active) return;
+    // Beside the pin, outside the shape: away from the object's middle (for a real thing, from its pins' middle).
+    if (this.paper) this.paper.spin.getWorldPosition(this.t1);
+    else {
+      this.t1.set(0, 0, 0);
+      for (const p of this.pins) this.t1.add(p.mesh.getWorldPosition(this.o2));
+      this.t1.divideScalar(Math.max(1, this.pins.length));
+    }
+    this.metric.worldToLocal(this.t1);
     this.active.mesh.getWorldPosition(this.t2);
     this.metric.worldToLocal(this.t2);
-    this.trash.position.set(this.t2.x, this.t2.y + TRASH_LIFT, this.t2.z);
+    let dx = this.t2.x - this.t1.x;
+    let dz = this.t2.z - this.t1.z;
+    const len = Math.hypot(dx, dz);
+    // A pin at the very middle (a circle's centre) has no outside: the bin goes to its right.
+    if (len < 0.01) {
+      dx = 1;
+      dz = 0;
+    } else {
+      dx /= len;
+      dz /= len;
+    }
+    this.trash.position.set(this.t2.x + dx * TRASH_OUT, this.t2.y + TRASH_LIFT, this.t2.z + dz * TRASH_OUT);
   }
 
   /** Whether a controller's ray is on the bin, or a hand's finger or pinch is at it. */
