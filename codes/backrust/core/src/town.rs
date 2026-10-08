@@ -311,10 +311,11 @@ pub use crate::town_catalog::{ALIASES, CATALOG};
 /// The only piece that stands on water.
 pub const BRIDGE: &str = "bridge_road";
 
-/// Pieces small enough for a quarter of a tile (their models are at most
-/// 0.3 of a tile across): up to four stand on one tile, people, animals and
-/// cars also on a road's tile.
-pub const SMALL: [&str; 62] = [
+/// Pieces small enough for a quarter of a tile (their models are under half
+/// a tile across): up to four stand on one tile, also on a road's or a
+/// footpath's. Every person, vehicle and animal, the plants but the banyan,
+/// and the street's pieces but the wide billboard.
+pub const SMALL: [&str; 79] = [
     "people_man",
     "people_woman",
     "people_child",
@@ -329,6 +330,7 @@ pub const SMALL: [&str; 62] = [
     "people_police",
     "people_doctor",
     "people_worker",
+    "people_vendor",
     "vehicle_bicycle",
     "vehicle_sedan",
     "vehicle_hatchback",
@@ -341,6 +343,12 @@ pub const SMALL: [&str; 62] = [
     "vehicle_van",
     "vehicle_police",
     "vehicle_ambulance",
+    "vehicle_bus",
+    "vehicle_school_bus",
+    "vehicle_fire_truck",
+    "vehicle_truck",
+    "vehicle_train_locomotive",
+    "vehicle_train_carriage",
     "animal_cat",
     "animal_bird",
     "animal_cow",
@@ -350,6 +358,7 @@ pub const SMALL: [&str; 62] = [
     "animal_giraffe",
     "animal_lioness",
     "animal_lion",
+    "animal_elephant",
     "tree_round",
     "tree_pine",
     "plant_bush",
@@ -360,6 +369,10 @@ pub const SMALL: [&str; 62] = [
     "plant_cactus",
     "plant_bamboo",
     "tree_sakura",
+    "tree_palm",
+    "tree_coconut",
+    "tree_acacia",
+    "plant_hedge",
     "prop_bench",
     "prop_street_lamp",
     "prop_trash_bins",
@@ -377,6 +390,11 @@ pub const SMALL: [&str; 62] = [
     "prop_flagpole",
     "prop_statue",
     "billboard_standing",
+    "prop_fence",
+    "prop_bus_stop",
+    "billboard_pole",
+    "billboard_digital",
+    "billboard_rooftop",
 ];
 
 /// Quarters of a tile: 0 and 1 along its back half, 2 and 3 along its front.
@@ -724,21 +742,16 @@ impl Town {
                     }
                     let b = i.spec();
                     let shares = match (a.group, b.group) {
-                        // A road takes people, animals and vehicles: small
-                        // ones side by side, or one large vehicle alone.
-                        (Group::Road, Group::Decor) => true,
-                        (Group::Decor, Group::Road) => {
-                            small || !self.has_small_at(land, tx, ty, ignore)
-                        }
+                        // A road or footpath takes small pieces on its quarters.
+                        (Group::Road, _) => is_small(b),
+                        (_, Group::Road) => small,
                         _ if small && is_small(b) => {
                             quarters[usize::from(i.spot.unwrap_or(0))] = true;
                             true
                         }
                         _ => false,
                     };
-                    // Small ones beside a large vehicle would stand in it.
-                    let crowded = small && b.group == Group::Decor && !is_small(b);
-                    if !shares || crowded {
+                    if !shares {
                         return Err(Refusal::Taken);
                     }
                 }
@@ -755,13 +768,6 @@ impl Town {
                 .map(Some)
                 .ok_or(Refusal::Taken),
         }
-    }
-
-    /// Whether a small piece stands on the tile.
-    fn has_small_at(&self, land: u16, x: u8, y: u8, ignore: Option<&str>) -> bool {
-        self.items
-            .iter()
-            .any(|i| Some(i.id.as_str()) != ignore && i.covers(land, x, y) && is_small(i.spec()))
     }
 
     /// Applies one event, or says why not and leaves the town as it was.
@@ -1099,11 +1105,10 @@ mod tests {
             .unwrap();
         assert_eq!(t.item("m").unwrap().spot, Some(0));
         assert_eq!(t.item("w").unwrap().spot, Some(1));
-        // A bench is no road's: small, but not on the road.
-        assert_eq!(
-            t.apply(&place("be", "plant_bush", 0, 0, 2, 0), 1000),
-            Err(Refusal::Taken)
-        );
+        // A cat shares it too, on the third quarter.
+        t.apply(&place("be", "animal_cat", 0, 0, 2, 0), 1000)
+            .unwrap();
+        assert_eq!(t.item("be").unwrap().spot, Some(2));
         assert_eq!(
             t.apply(&place("h", "house_hut", 0, 0, 2, 0), 1000),
             Err(Refusal::Taken)
@@ -1229,21 +1234,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(t.item("a").unwrap().spot, Some(3));
-        // A bus on a road is alone there; small ones stay out of it.
+        // A road takes a bus, a person, a lamp and a tree on its quarters,
+        // and nothing more; the banyan is too wide for any quarter.
         t.apply(&place_on("r", "road_straight", 2, 0, None), 1000)
             .unwrap();
-        t.apply(&place_on("bus", "vehicle_bus", 2, 0, None), 1000)
-            .unwrap();
+        for (id, asset) in [
+            ("bus", "vehicle_bus"),
+            ("g", "people_man"),
+            ("l", "prop_street_lamp"),
+            ("p", "tree_palm"),
+        ] {
+            t.apply(&place_on(id, asset, 2, 0, None), 1000).unwrap();
+        }
         assert_eq!(
-            t.apply(&place_on("g", "people_man", 2, 0, None), 1000),
+            t.apply(&place_on("cat", "animal_cat", 2, 0, None), 1000),
             Err(Refusal::Taken)
         );
         t.apply(&place_on("r2", "road_straight", 3, 0, None), 1000)
             .unwrap();
-        t.apply(&place_on("car", "vehicle_sedan", 3, 0, None), 1000)
-            .unwrap();
         assert_eq!(
-            t.apply(&place_on("bus2", "vehicle_bus", 3, 0, None), 1000),
+            t.apply(&place_on("ban", "tree_banyan", 3, 0, None), 1000),
             Err(Refusal::Taken)
         );
         // Old events, without quarters, still read.
