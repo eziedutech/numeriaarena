@@ -14,7 +14,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import { Label } from '../art/label.js';
-import { textPanel, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
+import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
@@ -157,6 +157,13 @@ const TIP_M = 0.05;
 const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
+/** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
+const TRASH_SIZE = 0.04;
+const TRASH_LIFT = 0.05;
+const ACTIVE_M = 0.05;
+const KEEP_M = 0.08;
+const TRASH_HIT_M = 0.035;
+const TRASH_GRACE_S = 0.5;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
@@ -243,6 +250,14 @@ export class MeasureDesk {
    * 17 cm in the room, and a thread on a real book its real length.
    */
   private metric: Group;
+  /** The bin that floats over the pin a tip is near; pressed, it takes the pin and its threads away. */
+  private trash: Mesh;
+  private active?: Pin;
+  private activeFor = 0;
+  private t1 = new Vector3();
+  private t2 = new Vector3();
+  private o2 = new Vector3();
+  private d2 = new Vector3();
   private restoreDesk: () => void;
   private room: Room;
   private hands: Hands;
@@ -318,6 +333,13 @@ export class MeasureDesk {
     this.metric = new Group();
     this.metric.name = 'measure-true-size';
     this.group.add(this.metric);
+    const bin = new ToolButton('trash', '', TRASH_SIZE, TRASH_SIZE, 'accent', { alone: true, bare: true, theme: 'home', stroke: 2.4 });
+    this.trash = bin.mesh;
+    this.trash.name = 'measure-trash';
+    this.trash.userData.trash = true;
+    this.trash.visible = false;
+    this.metric.add(this.trash);
+    host.billboard(this.trash);
     this.real = new Group();
     this.real.name = 'measure-real';
     this.metric.add(this.real);
@@ -579,18 +601,90 @@ export class MeasureDesk {
     }
     if (this.step === 'measure' || this.step === 'choose' || this.step === 'verdict') this.clock(delta);
     if (this.step !== 'measure' && this.step !== 'choose') {
+      this.trash.visible = false;
       for (const side of SIDES) this.ghosts[side].visible = false;
       return;
     }
     this.turnSolid(delta);
     if (this.step !== 'measure' || this.unfolded > 0) {
+      this.trash.visible = false;
+      this.active = undefined;
       for (const side of SIDES) this.ghosts[side].visible = false;
       return;
     }
+    this.updateBin(delta);
     for (const side of SIDES) {
+      if (this.binPress(side)) continue;
       this.pullThread(side);
       this.dropPin(side, delta);
     }
+  }
+
+  /** The bin wakes over the pin a tip is near, stays while a tip is round it or on it, and goes a moment after. */
+  private updateBin(delta: number): void {
+    let near: Pin | undefined;
+    let keep = false;
+    for (const side of SIDES) {
+      if (this.tip(side, false, this.t1)) {
+        const pin = this.nearestPin(this.t1, ACTIVE_M);
+        if (pin && !near) near = pin;
+        if (this.active && !pin) {
+          this.active.mesh.getWorldPosition(this.t2);
+          if (this.t1.distanceTo(this.t2) < KEEP_M) keep = true;
+        }
+      }
+      if (this.active && this.overBin(side)) keep = true;
+    }
+    if (near) {
+      this.active = near;
+      this.activeFor = 0;
+    } else if (this.active) {
+      if (keep) this.activeFor = 0;
+      else {
+        this.activeFor += delta;
+        if (this.activeFor > TRASH_GRACE_S) this.active = undefined;
+      }
+    }
+    if (this.active && !this.pins.includes(this.active)) this.active = undefined;
+    this.trash.visible = this.active !== undefined;
+    if (!this.active) return;
+    this.active.mesh.getWorldPosition(this.t2);
+    this.metric.worldToLocal(this.t2);
+    this.trash.position.set(this.t2.x, this.t2.y + TRASH_LIFT, this.t2.z);
+  }
+
+  /** Whether a controller's ray is on the bin, or a hand's finger or pinch is at it. */
+  private overBin(side: Side): boolean {
+    if (!this.trash.visible) return false;
+    if (this.host.controllers()) {
+      const ray = this.host.ray(side);
+      ray.getWorldPosition(this.o2);
+      ray.getWorldDirection(this.d2).negate();
+      this.caster.set(this.o2, this.d2);
+      this.caster.far = AIM_FAR_M;
+      this.hits.length = 0;
+      this.caster.intersectObject(this.trash, false, this.hits);
+      return this.hits.length > 0;
+    }
+    const h = this.hands.get(side);
+    if (!h.tracked) return false;
+    this.trash.getWorldPosition(this.t2);
+    return h.pinchAt.distanceTo(this.t2) < TRASH_HIT_M || h.tip.distanceTo(this.t2) < TRASH_HIT_M;
+  }
+
+  /** A press on the bin takes its pin away, and the threads of that pin with it. */
+  private binPress(side: Side): boolean {
+    const pin = this.active;
+    if (!pin || !this.trash.visible || this.pulls.has(side)) return false;
+    if (!this.grabEdges(side).start || !this.overBin(side)) return false;
+    pin.mesh.getWorldPosition(this.t2);
+    this.active = undefined;
+    this.trash.visible = false;
+    this.removePin(pin);
+    sfx('pop', { at: this.t2 });
+    this.message = '';
+    this.showTask();
+    return true;
   }
 
   private clock(delta: number): void {
@@ -654,12 +748,13 @@ export class MeasureDesk {
     this.targets.length = 0;
     for (const c of this.cards) if (c.object3D) this.targets.push(c.object3D);
     if (this.paper) this.targets.push(this.paper.root);
+    if (this.trash.visible) this.targets.push(this.trash);
     this.hits.length = 0;
     this.caster.intersectObjects(this.targets, true, this.hits);
     // Only the paper and its pins: a thread being pulled, or its length, would catch its own ray.
-    const hit = this.hits.find((h) => h.object.visible && (h.object.userData.paper === true || h.object.name === 'measure-pin' || h.object.userData.card === true));
+    const hit = this.hits.find((h) => h.object.visible && (h.object.userData.paper === true || h.object.name === 'measure-pin' || h.object.userData.card === true || h.object.userData.trash === true));
     if (hit) {
-      if (hit.object.userData.card === true) return false;
+      if (hit.object.userData.card === true || hit.object.userData.trash === true) return false;
       origin.copy(hit.point);
       this.magnet(origin);
       return true;
@@ -735,6 +830,10 @@ export class MeasureDesk {
       this.u.copy(world);
       this.metric.worldToLocal(this.u);
       if (this.u.length() > REAL_REACH || this.u.y < -0.05) return false;
+    }
+    if (this.trash.visible) {
+      this.trash.getWorldPosition(this.u);
+      if (this.u.distanceTo(world) < TRASH_HIT_M) return false;
     }
     for (const c of this.cards) {
       c.object3D?.getWorldPosition(this.u);
@@ -863,7 +962,7 @@ export class MeasureDesk {
       const from = this.nearestPin(this.v, GRAB_M);
       if (!from) return;
       const mesh = new Mesh(threadGeo, threadMat);
-      const label = new Label('', { height: 0.016 });
+      const label = new Label('', { height: 0.026 });
       this.frame().add(mesh, label.mesh);
       this.host.billboard(label.mesh);
       this.pulls.set(side, { side, from, mesh, label });
@@ -899,7 +998,7 @@ export class MeasureDesk {
   private join(a: Pin, b: Pin): void {
     if (this.threads.some((t) => (t.a === a && t.b === b) || (t.a === b && t.b === a))) return;
     const mesh = new Mesh(threadGeo, threadMat);
-    const label = new Label('', { height: 0.016 });
+    const label = new Label('', { height: 0.026 });
     this.frame().add(mesh, label.mesh);
     this.host.billboard(label.mesh);
     const th = { a, b, mesh, label };
@@ -918,7 +1017,7 @@ export class MeasureDesk {
     if (len > 1e-6) mesh.quaternion.setFromUnitVectors(UP, this.u.divideScalar(len));
     label.set(`${Math.round(len * 100)} cm`);
     label.mesh.position.copy(a).add(b).multiplyScalar(0.5);
-    label.mesh.position.y += 0.015;
+    label.mesh.position.y += 0.022;
   }
 
   private clearPins(): void {

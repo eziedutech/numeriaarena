@@ -22,7 +22,7 @@ const EN = {
   how: [
     'Point your index finger at a corner and hold still: a pin drops.',
     'Pinch a pin and pull a thread to the next corner.',
-    'Throw a pin off the desk to take it away.',
+    'Throw a pin off the desk, or point at it and press the bin that appears, to take it away.',
   ],
   howController: 'With controllers: point at a corner and press the trigger for a pin; hold it on a pin to pull a thread. A, B, X or Y turns a solid a quarter.',
   howSolid: 'Grab the paper solid to turn it, flick it to spin. Pull it apart with both hands to unfold its net.',
@@ -94,7 +94,7 @@ const ID: MeasureText = {
   how: [
     'Tunjuk sudut dengan telunjuk lalu tahan diam: pin jatuh.',
     'Cubit pin lalu tarik benang ke sudut berikutnya.',
-    'Lempar pin keluar meja untuk membuangnya.',
+    'Lempar pin keluar meja, atau arahkan ke pin lalu tekan tempat sampah yang muncul, untuk membuangnya.',
   ],
   howController: 'Dengan controller: tunjuk sudut lalu tekan trigger untuk memasang pin; tahan pada pin untuk menarik benang. A, B, X atau Y memutar bangun ruang seperempat putaran.',
   howSolid: 'Pegang bangun kertas untuk memutarnya, jentik untuk memutar cepat. Tarik dengan dua tangan untuk membuka jaring-jaringnya.',
