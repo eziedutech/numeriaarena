@@ -404,7 +404,8 @@ export class MeasureDesk {
     this.say([[this.t.title, 0.03, HEAD], [this.t.pickGrade, 0.022, INK]]);
     this.clearCards();
     [4, 5, 6].forEach((g, i) => this.card(`me_grade_${g}` as MeasureChoice, this.t.grade(g), (i - 1) * CHOICE_STEP, CARD_Z, [TEAL, BLUE, PURPLE][i]));
-    this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
+    // BACK stands beside the last choice, one step on.
+    this.card('me_back', this.t.back, CHOICE_STEP * 2, CARD_Z, CORAL);
   }
 
   private showGroups(): void {
@@ -413,7 +414,7 @@ export class MeasureDesk {
     this.clearCards();
     this.card('me_flat', this.t.flat, -0.08, CARD_Z, TEAL);
     this.card('me_solid', this.t.solid, 0.08, CARD_Z, BLUE);
-    this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
+    this.card('me_back', this.t.back, 0.08 + CHOICE_STEP, CARD_Z, CORAL);
   }
 
   private showSources(): void {
@@ -422,7 +423,7 @@ export class MeasureDesk {
     this.clearCards();
     this.card('me_paper', this.t.paper, -0.08, CARD_Z, YELLOW);
     this.card('me_real', this.t.real, 0.08, CARD_Z, PURPLE);
-    this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
+    this.card('me_back', this.t.back, 0.08 + CHOICE_STEP, CARD_Z, CORAL);
   }
 
   private showHow(): void {
@@ -434,7 +435,7 @@ export class MeasureDesk {
     this.say(lines);
     this.clearCards();
     this.card('me_start', this.t.start, 0, CARD_Z, TEAL);
-    this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
+    this.card('me_back', this.t.back, CHOICE_STEP, CARD_Z, CORAL);
   }
 
   private async begin(): Promise<void> {

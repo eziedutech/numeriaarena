@@ -269,16 +269,16 @@ const GAME_COLS = 3;
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
 /** Its buildings drawn leaning this much (negative: to the right, as it lies right of the player), so from the player's seat they stand straight. */
-const TOWN_SLANT = -0.4;
+const TOWN_SLANT = -0.55;
 /**
  * Measure Hunt's card stands at the lower left of the desk menu, in front of the
  * games, as tall as their two rows; the Fold Town sticker is at the lower right.
  */
 const BANNER_W = TOWN_W;
 const BANNER_H = TOWN_H;
-const BANNER_AT = new Vector3(-0.39, 0.014, 0.24);
+const BANNER_AT = new Vector3(-0.36, 0.014, 0.21);
 /** The Fold Town sticker, lower right: in front of the settings, towards the player. */
-const TOWN_AT = new Vector3(0.33, 0.014, 0.25);
+const TOWN_AT = new Vector3(0.33, 0.014, 0.22);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**
