@@ -930,7 +930,9 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return undefined;
     const n = this.maxPins();
-    if (this.pins.length !== n) return undefined;
+    // A box is read from any of its corners with three threads, however many pins there are.
+    const box = o.shape === 'cube' || o.shape === 'cuboid';
+    if (box ? this.pins.length < 4 : this.pins.length !== n) return undefined;
     const near = (p: Pin) => this.threads.filter((t) => t.a === p || t.b === p).map((t) => (t.a === p ? t.b : t.a));
     const loop = (ring: Pin[]): Pin[] | undefined => {
       const out = [ring[0]];
@@ -968,7 +970,7 @@ export class MeasureDesk {
           const edges = this.threeWays(corner, near(corner));
           if (edges) return [corner, ...edges];
         }
-        if (this.pins.length === n && this.threads.length >= 4) this.tell(this.t.oneCorner);
+        if (this.pins.length >= 6 && this.threads.length >= 5) this.tell(this.t.oneCorner);
         return undefined;
       }
       default: {
