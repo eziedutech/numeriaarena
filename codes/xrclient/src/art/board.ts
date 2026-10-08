@@ -31,6 +31,8 @@ const HIGHEST = 0.2;
 const MAX_W = 3.0;
 const MAX_H = 0.95;
 const LINE_GAP = 1.12;
+/** Short words are made no larger than this many times their size. */
+const MOST = 1.8;
 const PULSE = 0.03;
 const PULSE_S = 1.1;
 
@@ -76,7 +78,8 @@ export class BoardWriter {
     const rows: { text: string; h: number; ink: number }[] = [];
     for (const line of lines ?? []) {
       const h = Math.min(HIGHEST, line.size * SIZE_TO_BOARD);
-      const per = Math.max(12, Math.floor(MAX_W / (h * 0.5)));
+      // A letter is about a third of its line's height wide: break the lines to fill the board's width.
+      const per = Math.max(12, Math.floor(MAX_W / (h * 0.34)));
       for (const text of words(line.text, per)) rows.push({ text, h, ink: CHALKS[line.ink] ?? CHALK });
     }
     const total = rows.reduce((sum, r) => sum + r.h * LINE_GAP, 0);
@@ -90,7 +93,8 @@ export class BoardWriter {
       widest = Math.max(widest, label.width);
       y -= r.h * LINE_GAP;
     }
-    this.fit = Math.min(1, total > 0 ? MAX_H / total : 1, widest > 0 ? MAX_W / widest : 1);
+    // Written as large as the board allows, in height and in width.
+    this.fit = Math.min(MOST, total > 0 ? MAX_H / total : 1, widest > 0 ? MAX_W / widest : 1);
   }
 
   private clear(): void {
