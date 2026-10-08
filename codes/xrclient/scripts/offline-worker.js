@@ -27,6 +27,8 @@ const SCOPE = new URL('./', self.location.href);
 const PAGE = new URL('./', SCOPE).href;
 const NEVER = ['api/', 'version.json', 'sw.js'];
 const PAGE_WAIT_MS = 4000;
+/** A file whose fetch broke off (the server being swapped for a new build) is asked again after these waits. */
+const RETRY_MS = [500, 2000];
 /** How long a new worker waits for an open page to say the game is up. */
 const BOOT_WAIT_MS = 60000;
 /** Each cache keeps the hashes of its files here, for the next build to compare. */
@@ -134,11 +136,23 @@ async function page(event) {
   }
 }
 
+/** The network's answer, asked again when the connection broke; an answer such as 404 is never asked again. */
+async function fetchAgain(request) {
+  for (const wait of RETRY_MS) {
+    try {
+      return await fetch(request);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  return fetch(request);
+}
+
 async function file(event) {
   const cache = await caches.open(CACHE);
   const copy = await cache.match(event.request);
   if (copy) return copy;
-  const res = await fetch(event.request);
+  const res = await fetchAgain(event.request);
   // Kept while the page reads it: waiting for the whole file here would hold
   // every byte back until the last one came.
   if (res.ok && res.type === 'basic') event.waitUntil(cache.put(event.request, res.clone()).catch(() => undefined));

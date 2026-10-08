@@ -767,12 +767,19 @@ export class GameSystem extends createSystem({
       }
     });
 
-    Core.start(Date.now() >>> 0)
-      .then((core) => {
-        this.core = core;
-        this.phase = 'menu';
-      })
-      .catch((error) => console.error('[game] core failed to start', error));
+    // A file that broke off while loading (a new build being put up) is fetched again.
+    const start = (tries: number): void => {
+      Core.start(Date.now() >>> 0)
+        .then((core) => {
+          this.core = core;
+          this.phase = 'menu';
+        })
+        .catch((error) => {
+          console.error('[game] core failed to start', error);
+          if (tries > 0) setTimeout(() => start(tries - 1), 3000);
+        });
+    };
+    start(3);
 
     this.cleanupFuncs.push(
       this.queries.pressedButtons.subscribe('qualify', (e) => this.pressButton(e)),
