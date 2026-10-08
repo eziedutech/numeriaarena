@@ -109,6 +109,12 @@ interface Pin {
   mesh: Mesh;
 }
 
+/** A point the core reads: a pin, or one worked out from the threads (frame metres). */
+interface Spot {
+  pin?: Pin;
+  at: Vector3;
+}
+
 interface Thread {
   a: Pin;
   b: Pin;
@@ -930,9 +936,7 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return undefined;
     const n = this.maxPins();
-    // A box is read from any of its corners with three threads, however many pins there are.
-    const box = o.shape === 'cube' || o.shape === 'cuboid';
-    if (box ? this.pins.length < 4 : this.pins.length !== n) return undefined;
+    if (this.pins.length !== n) return undefined;
     const near = (p: Pin) => this.threads.filter((t) => t.a === p || t.b === p).map((t) => (t.a === p ? t.b : t.a));
     const loop = (ring: Pin[]): Pin[] | undefined => {
       const out = [ring[0]];
@@ -964,15 +968,9 @@ export class MeasureDesk {
         return ring ? [...ring, foot] : undefined;
       }
       case 'cube':
-      case 'cuboid': {
-        // Read once a corner has three threads going three ways (along, across, up), however many more there are.
-        for (const corner of this.pins) {
-          const edges = this.threeWays(corner, near(corner));
-          if (edges) return [corner, ...edges];
-        }
-        if (this.pins.length >= 6 && this.threads.length >= 5) this.tell(this.t.oneCorner);
+      case 'cuboid':
+        // Read from its edges (see fromEdges).
         return undefined;
-      }
       default: {
         // The thread's first end is where it was pulled from: the centre, for a circle.
         const th = this.threads[0];
@@ -981,20 +979,97 @@ export class MeasureDesk {
     }
   }
 
-  /** Three of a corner's threaded pins that go three ways square to each other, if there are. */
-  private threeWays(corner: Pin, pins: Pin[]): Pin[] | undefined {
-    if (pins.length < 3) return undefined;
-    const dirs = pins.map((p) => p.mesh.position.clone().sub(corner.mesh.position).normalize());
-    const square = (i: number, j: number) => Math.abs(dirs[i].dot(dirs[j])) < SQUARE_COS;
-    for (let a = 0; a < pins.length; a += 1) {
-      for (let b = a + 1; b < pins.length; b += 1) {
-        if (!square(a, b)) continue;
-        for (let c = b + 1; c < pins.length; c += 1) {
-          if (square(a, c) && square(b, c)) return [pins[a], pins[b], pins[c]];
+  /**
+   * Squares, rectangles and boxes need only their edges: two threads that meet
+   * at a corner, square to each other (along, across), or three that are square
+   * to each other, from one corner or end to end (along, across, up). The rest
+   * of the shape is worked out from them for the core, so a child may thread
+   * face by face, edge by edge, or a path along three edges, as they think of it.
+   */
+  private fromEdges(): Spot[] | undefined {
+    const o = this.offer;
+    if (!o) return undefined;
+    const box = o.shape === 'cube' || o.shape === 'cuboid';
+    const flat = o.shape === 'square' || o.shape === 'rectangle';
+    if (!box && !flat) return undefined;
+    const ths = this.threads;
+    if (ths.length < (box ? 3 : 2)) return undefined;
+    const dir = (t: Thread) => t.b.mesh.position.clone().sub(t.a.mesh.position);
+    const square = (x: Thread, y: Thread) => {
+      const u = dir(x);
+      const v = dir(y);
+      return u.length() > 1e-4 && v.length() > 1e-4 && Math.abs(u.normalize().dot(v.normalize())) < SQUARE_COS;
+    };
+    const has = (t: Thread, p: Pin) => t.a === p || t.b === p;
+    const other = (t: Thread, p: Pin) => (t.a === p ? t.b : t.a);
+    const share = (x: Thread, y: Thread) => [x.a, x.b].find((p) => has(y, p));
+    const spot = (p: Pin): Spot => ({ pin: p, at: p.mesh.position.clone() });
+    if (flat) {
+      for (let i = 0; i < ths.length; i += 1) {
+        for (let j = i + 1; j < ths.length; j += 1) {
+          const corner = share(ths[i], ths[j]);
+          if (!corner || !square(ths[i], ths[j])) continue;
+          const a = other(ths[i], corner);
+          const c = other(ths[j], corner);
+          if (!this.onKeys([a, corner, c])) return undefined;
+          // The fourth corner completes the rectangle.
+          const d = a.mesh.position.clone().add(c.mesh.position).sub(corner.mesh.position);
+          return [spot(a), spot(corner), spot(c), { at: d }];
+        }
+      }
+      return undefined;
+    }
+    for (let i = 0; i < ths.length; i += 1) {
+      for (let j = i + 1; j < ths.length; j += 1) {
+        for (let k = j + 1; k < ths.length; k += 1) {
+          const t = [ths[i], ths[j], ths[k]];
+          if (!square(t[0], t[1]) || !square(t[0], t[2]) || !square(t[1], t[2])) continue;
+          // The corner: the pin all three share, else the one a path of three turns on.
+          let corner = [t[0].a, t[0].b].find((p) => has(t[1], p) && has(t[2], p));
+          if (!corner) {
+            const mid = t.find((x) => t.every((y) => y === x || share(x, y)));
+            if (!mid) continue;
+            const first = t.find((y) => y !== mid)!;
+            corner = share(mid, first);
+          }
+          if (!corner) continue;
+          if (!this.onKeys(t.flatMap((x) => [x.a, x.b]))) return undefined;
+          const at = corner.mesh.position;
+          const spots: Spot[] = [spot(corner)];
+          for (const x of t) {
+            if (has(x, corner)) {
+              spots.push(spot(other(x, corner)));
+              continue;
+            }
+            // An edge elsewhere is the same edge from this corner, towards the box.
+            const v = dir(x);
+            const up = at.clone().add(v);
+            const down = at.clone().sub(v);
+            spots.push({ at: this.nearKey(down) < this.nearKey(up) ? down : up });
+          }
+          return spots;
         }
       }
     }
+    if (this.pins.length >= 6 && ths.length >= 5) this.tell(this.t.oneCorner);
     return undefined;
+  }
+
+  /** How far a point is from the paper object's nearest corner, frame metres (0 for a real thing). */
+  private nearKey(at: Vector3): number {
+    const keys = this.offer?.keys;
+    if (!keys?.length) return 0;
+    return Math.min(...keys.map(([x, y, z]) => Math.hypot(at.x - x / 100, at.y - y / 100, at.z - z / 100)));
+  }
+
+  /** Whether every pin of a paper object's edges is on a corner; says so if not. A real thing has none to check. */
+  private onKeys(pins: Pin[]): boolean {
+    const keys = this.offer?.keys;
+    if (!keys?.length) return true;
+    const snap = (this.offer?.snap_cm ?? 3) / 100;
+    if (pins.every((p) => this.nearKey(p.mesh.position) <= snap)) return true;
+    this.tell(this.t.problem.off_corner);
+    return false;
   }
 
   /** A word under the task about what to do now, said once until it changes. */
@@ -1010,9 +1085,10 @@ export class MeasureDesk {
   private changed(): void {
     const o = this.offer;
     if (!o || !this.core || this.step !== 'measure') return;
-    const pins = this.order();
-    if (!pins) return;
-    const points = pins.map((p): P3 => [p.mesh.position.x * 100, p.mesh.position.y * 100, p.mesh.position.z * 100]);
+    const ring = this.order();
+    const spots = ring ? ring.map((p): Spot => ({ pin: p, at: p.mesh.position.clone() })) : this.fromEdges();
+    if (!spots) return;
+    const points = spots.map((sp): P3 => [sp.at.x * 100, sp.at.y * 100, sp.at.z * 100]);
     const r = this.core.measure(o.offer_id, points);
     console.info(`[measure] read ${o.offer_id}: ${r.ok ? `ok, ${r.process_points} points for the measuring` : r.problem}`, points);
     if (!r.ok) {
@@ -1024,7 +1100,7 @@ export class MeasureDesk {
     }
     // The pins snap onto the corners they meant.
     r.pins.forEach((p, i) => {
-      const pin = pins[i];
+      const pin = spots[i]?.pin;
       if (!pin) return;
       pin.mesh.position.set(p[0] / 100, p[1] / 100, p[2] / 100);
       pin.mesh.material = snapMat;
