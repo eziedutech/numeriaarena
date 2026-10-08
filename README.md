@@ -101,7 +101,7 @@ Children never enter a name or an email. Real names stay in the teacher's browse
 | Players | Grades 4 to 6, ages 10 to 12 |
 | Topics | Place value, multiply and divide, fractions, decimals, measurement: 28 skills common to most curricula |
 | Languages | English, Bahasa Indonesia. Decimal point in both, no thousands separator |
-| Accounts | None for students. Pseudonyms only; real names stay in the teacher's browser |
+| Accounts | None for students: a class seat with a pseudonym and a picture password. Real names stay in the teacher's browser. Teachers sign in with Google, Facebook or email |
 
 ## How to test
 
@@ -117,96 +117,124 @@ Without a headset, choose **THIS COMPUTER** on the home page to play the same ga
 
 ## Architecture
 
-![Numeria Arena architecture: one Rust core runs as WebAssembly in the headset game and the classroom pages, natively in the game server and in the content tool. Solid boxes exist today, dashed boxes are planned.](assets/architecture.svg)
+![Numeria Arena architecture: one Rust core runs as WebAssembly in the headset game, natively in the game server and natively in the content tool. The server keeps classes, class races, sync and the class screen; AI providers are an optional layer behind it.](assets/architecture.svg)
 
 Choices worth knowing:
 
-- **One core, four places.** Item generation, the expression language, the number formatter and the Fairness Engine are written once in Rust. The headset and the classroom pages use it as WebAssembly, the server and the content tool natively. The same template and seed give the same item, byte for byte, on both.
+- **One core, three places.** Item generation, the expression language, the number formatter, the Fairness Engine, the race and Fold Town rules are written once in Rust. The headset uses the core as WebAssembly, while the server and the content tool run it natively. The same template and seed give the same item, byte for byte, everywhere.
 - **Exact fractions.** Every expression is computed with exact fractions, so `0.1 + 0.2` is `0.3` and `2/8` can still be shown as `2/8` when a skill needs it.
 - **Templates are validated before they are used.** 2000 random draws per template check constraints, answers, distractors, prompt length and difficulty, and every failure is named with an example. Distractors that collide are dropped exactly as the game drops them.
-- **The headset is designed to work without the server.** Solo play with bots will run offline, so the game stays playable if the server is down. The core already runs in the browser; the bots come next.
-- **Hands first.** Hand pinch grab is switched on explicitly; the SDK leaves it off by default.
+- **The server decides class races.** A room runs the core's class match on the server's own clock. Answers are written at the end of every wave, keyed by their event id, so a retry never counts an answer twice. What a player's headset receives never marks the right answer.
+- **The headset works without the server.** Practice and robot races run offline from a service worker after the first visit, and answers and town changes wait on the device until they can be synced.
+- **Hands first.** Every action works with hands from start to finish, and hand pinch grab is switched on explicitly because the SDK leaves it off by default.
 
 ```
 codes/
-  xrclient/        Immersive Web SDK game (TypeScript, Vite)
-  frontrouter/     React Router single page app for 2D pages
+  xrclient/        Immersive Web SDK game in the headset and on a computer (TypeScript, Vite)
+  frontrouter/     React Router pages: home, teacher, class screen, smartboard race,
+                   Math Lessons, admin, privacy and credits
   backrust/
-    core/          exact fractions, expression language, formatter, templates,
-                   validator, Fairness Engine, simulator (native and WebAssembly)
+    core/          exact fractions, expression language, formatter, templates, validator,
+                   Fairness Engine, races, class match, Fold Town (native and WebAssembly)
+    server/        axum game server: rooms and WebSocket, classes, reports, town sync,
+                   leaderboards, AI gateway, PostgreSQL migrations
     content-cli/   validate, instantiate, simulate
-  content/         skills, JSON schemas, example item templates
+  content/         skills, misconceptions, JSON schemas, 206 item templates
+  brand/           logo and icons
 assets/            diagrams
 ```
 
 ## Running locally
 
-Requires Rust (the toolchain is pinned in `rust-toolchain.toml`), Bun 1.4 and Node 24 or newer.
+Requires Rust (the toolchain is pinned in `rust-toolchain.toml`), Bun 1.4, Node 24 or newer and PostgreSQL for the server.
 For the WebAssembly build also `wasm-bindgen` CLI 0.2.129, exactly the crate version:
 
 ```bash
 cargo install wasm-bindgen-cli --version 0.2.129 --locked
 ```
 
-Core tests, template validation and the fairness simulation:
+Core and server tests (server tests that need a database run only when `TEST_DATABASE_URL` is set):
 
 ```bash
 cd codes/backrust && cargo test
 ```
 
+Template validation and the fairness simulation:
+
 ```bash
-cd codes/backrust && cargo run -p content-cli -- validate ../content/contoh/*.json
+cd codes/backrust && cargo run --release -p content-cli -- validate ../content/templates/*.json
 ```
 
 ```bash
 cd codes/backrust && cargo run --release -p content-cli -- simulate
 ```
 
-Game in the emulator:
+Game server on port 3321 (migrations run on start; `OPEN_ROOMS=1` lets anyone open a room for local tests):
+
+```bash
+cd codes/backrust && cargo run -p numeria-server
+```
+
+Game, in the browser or the emulator, on port 3322:
 
 ```bash
 cd codes/backrust && ./build-wasm.sh
 ```
 
 ```bash
-cd codes/xrclient && bun install && bun x iwsdk dev up
+cd codes/xrclient && bun install && bun run dev
 ```
 
-Classroom pages:
+Home and teacher pages on port 3320:
 
 ```bash
 cd codes/frontrouter && bun install && bun run dev
 ```
 
-Ports: frontrouter 3320, server 3321 (planned), game 3322.
+Both dev servers pass `/api` to the game server on 3321.
 
 ## Configuration
 
-Nothing to configure yet. Server settings (database, sign-in for adults, AI providers)
-will be listed here when the server exists.
-
 | Setting | Where | Purpose |
 |---|---|---|
+| `DATABASE_URL` | server | PostgreSQL connection (required) |
+| `FIREBASE_PROJECT_ID` | server | Firebase project whose sign-in tokens the server accepts for adults (required) |
+| `ADMIN_EMAILS` | server | verified emails that may open the admin page |
+| `AUTO_APPROVE_DOMAINS` | server | email domains whose teachers are approved without the proof form |
+| `AI_MASTER_KEY` | server | key that encrypts AI provider keys in the database; without it AI stays off |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REPLY_TO` | server | teacher email |
+| `PORT`, `CONTENT_DIR`, `OPEN_ROOMS` | server | port (3321), template folder (`../content`), open rooms for local tests |
+| `VITE_FIREBASE_*` | xrclient, frontrouter (`.env.local`) | Firebase web config for adult sign-in, see `codes/xrclient/.env.example` |
 | `iwsdk.config.json` | xrclient | XR features, emulator device and room, hand pinch grab |
 | `WASM_BINDGEN` | build-wasm.sh | path to a `wasm-bindgen` 0.2.129 binary if it is not on `PATH` |
+
+AI providers, their models and the monthly budget are set on the admin page, not in files.
 
 ## Results
 
 Measured, not claimed. Everything below is reproducible with the commands above.
 
+### Tests
+
+| Suite | Result |
+|---|---|
+| Rust core: unit tests and the class match, examples, fairness simulation, race and session suites | 101 passed, 1 ignored (a report printer run on demand) |
+| Rust game server | 75 passed |
+| Template validator | 206 of 206 templates pass |
+| Game client type check | no errors |
+
 ### Template validator
 
-168 templates, six for each of the 28 skills (place value, multiplication and division,
-fractions, decimals, measurement), all pass (`content-cli validate`). 158 of them are
-drafts written with an AI model and still await review by a teacher; the game uses them
-for now so every skill can be played.
+206 templates across the 28 skills (place value, multiplication and division, fractions,
+decimals, measurement) all pass `content-cli validate`. All of them are drafts written with
+an AI model and still await review by a teacher; the game uses them for now so every skill
+can be played. An AI model only wrote the templates: every answer is computed by the core.
 
 The first run failed like-fraction addition: when both numerators are 1, "adding the
 denominators" and "multiplying the numerators" give the same wrong answer, in 15.5% of
 items. The rule now matches what the game does: a distractor equal to the answer or to
 an earlier one is dropped, and at least two different distractors must remain in 90%
-of items. For 1/5 + 1/5 the balloons show 2/5, 2/10 and 3/5. That template now keeps
-two different distractors in every item.
+of items. For 1/5 + 1/5 the balloons show 2/5, 2/10 and 3/5.
 
 ### Fairness Engine simulation
 
@@ -262,41 +290,54 @@ with a mouse: clicking an envelope, a balloon, or two crystals in turn.
 
 ## What it does not claim
 
-- **No frame rate is claimed.** Nothing has been measured on a headset; the emulator runs on a desktop GPU.
-- Hand tracking has only been exercised in the emulator, which does not reproduce real tracking noise.
-- The simulation uses synthetic students and a synthetic item bank. Real students will differ.
-- It is not a curriculum and does not grade students. Skill stars are a guide for teachers.
-- The example scene still uses the SDK's starter assets; they will be replaced by the game's own paper art.
+- **No frame rate is claimed yet.** It will be measured on a Meta Quest 3 or 3S before submission; the emulator runs on a desktop GPU.
+- Hand tracking and table detection have only been exercised in the emulator, which does not reproduce real tracking noise or real rooms.
+- The simulations use synthetic students and template difficulties that are not yet calibrated on real answers. Real students will differ.
+- No classroom trial has been run yet, so no learning gain and no integrity effect are claimed; action-based assessment is the design, not a measured result.
+- It is not a curriculum and does not grade students. Skill stars and reports are a guide for teachers.
 
 ## Roadmap
 
-Planned, not built. Nothing here is a result.
+Until submission (feature freeze 13 November 2026):
 
-- **Two games playable solo with bots:** Orb Forge and Balloon Burst, then Factory Sort, Bridge Builder, Balance Gate and Measure Hunt.
-- **Class Match** on a server that decides every answer, with a class screen for the room and Book Keeper for students without a headset.
-- **Real item bank:** six templates per skill, including very easy ones, then the simulation run again on real difficulties.
-- **Accessibility:** one-handed play, head-gaze and dwell, high contrast, captions, no-timer mode.
-- **Pip, the paper owl coach**, as an optional AI layer that only receives structured data.
+- A real headset test: frame rate, hands-only play from start to end, table detection and passthrough in real rooms.
+- A server load test with bot clients.
+- The question bank reviewed by a person, with difficulties calibrated from real answers.
+- Final audio, polish, the video and the testing instructions.
+
+After the competition:
+
+- **Question bank:** 15 templates per skill, every one reviewed by a person, and content beyond grades 4 to 6.
+- **Book Keeper:** students without a headset answer on a tablet or the class screen to send help to headset players.
+- **Daily Portal:** the same daily waves for everyone, with the numbers still fitted to each child.
+- **Pip, the paper owl coach:** a short recap after each match, made from structured data only.
+- **Measure Hunt** out of beta: estimate the length of the real desk, then measure it with a virtual tape.
+- A shared class town on the class screen, a classroom local network mode for schools with weak internet, and a guardian role for parents.
 
 ## Credits and licenses
 
-- **Immersive Web SDK** (Meta Platforms, MIT) with its emulator, and **super-three** (MIT).
-- **@pmndrs/uikit** (MIT), icons from **Lucide** (ISC).
-- **React Router**, **React**, **Tailwind CSS**, **Vite** (MIT), **TypeScript** (Apache-2.0).
-- **serde**, **serde_json**, **sha2**, **wasm-bindgen** (MIT or Apache-2.0), **jsonschema** (MIT).
-- **Bun** (MIT) as package manager and script runner.
-- **Origami models** (book, paper bird, flag, partner robots) from [orimathassets](https://github.com/sayazia/orimathassets), made by the same owner for this game, CC0 1.0. Copied by `scripts/sync-assets.mjs`, which records the source commit in `public/models/manifest.json`. The folded animals, crystals, balloons, portal, stars, badges, orb, buttons and rival windows are drawn in code (`src/art/`). All eight creatures (dog, rabbit, bird, chicken, cow, fish, cat, elephant) are the project owner's own paper models (8 to 85 KB each); their panels come sorted into tones, which the game repaints evenly from the creature's colour.
+- **Immersive Web SDK** (Meta Platforms, MIT) with its emulator, **super-three** and **three.js** (MIT), **@pmndrs/uikit** and **@pmndrs/xr** (MIT), icons from **Lucide** (ISC).
+- **React**, **React Router**, **Tailwind CSS**, **Vite** (MIT), **TypeScript** (Apache-2.0), **Bun** (MIT).
+- **axum**, **tokio**, **sqlx**, **jsonwebtoken**, **lettre**, **tracing**, **serde**, **sha2**, **ring**, **rustls**, **reqwest**, **wasm-bindgen**, **jsonschema** (MIT, Apache-2.0 or ISC), with **PostgreSQL** (PostgreSQL License).
+- **Firebase** JS SDK (Apache-2.0) for adult sign-in, and **MediaPipe Tasks Vision** with the `hand_landmarker.task` model (Apache-2.0) for the optional smartboard camera, which runs on the device only.
+- Fonts: **Atkinson Hyperlegible** and **Inter** (SIL Open Font License 1.1).
+- **Origami models, the 214 Fold Town pieces, the 2D UI images, the paper glyph atlas and the icons** were made by the project owner for this game and are published as CC0 1.0 in [orimathassets](https://github.com/sayazia/orimathassets). `scripts/sync-assets.mjs` copies them and records the source commit in `public/models/manifest.json`. Crystals, balloons, the portal, stars, badges, the orb and buttons are drawn in code (`src/art/`).
+- Sound effects are synthesized at run time with the Web Audio API. The one music track, "Echo", was made by the project owner with an AI music tool.
+
+The full list, with versions, is on the game's credits page.
 
 ## How this was built
 
-A code assistant was used to speed up development and debugging. Design
-decisions, measurements and claims were checked by hand against real runs.
+Parts of this work were produced with the assistance of AI tools, under the direction and
+review of the author. Design decisions, measurements and claims were checked by hand
+against real runs, and every number in this README comes from a command above.
 
-Findings that changed the design so far:
+Findings that changed the design:
 
 - **Grab by hand is off by default in the SDK.** Without switching it on, the game would not be playable with hands alone.
 - **The simulator overruled the first load-balancing design.** A fixed spawn pace piled creatures up almost every match.
 - **Fairness depends on content, not only on the formula.** The weakest students need easy items to exist, so templates may now go easier than first planned.
+- **A wire format can give the answer away.** A balloon's misconception code once travelled to the headset, and the one balloon without a code was the right answer. It now stays on the server, and a test keeps it there.
 
 ## License
 

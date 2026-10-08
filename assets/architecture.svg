@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" role="img" aria-labelledby="title desc">
   <title id="title">Numeria Arena architecture</title>
-  <desc id="desc">One Rust core computes every answer and every fairness decision. It runs as WebAssembly in the headset game and in the 2D classroom pages, natively in the game server, and natively in the content tool that validates item templates. The headset plays solo offline with bots; the server adds class matches, sync and the class screen. AI providers are an optional layer behind the server. Solid boxes exist today; dashed boxes are planned.</desc>
+  <desc id="desc">One Rust core computes every answer and every fairness decision. It runs as WebAssembly in the headset game, natively in the game server, and natively in the content tool that validates item templates. The headset plays practice and robot races offline; the server adds teacher classes, class races on its own clock, sync and the class screen. AI providers are an optional layer behind the server.</desc>
 
   <defs>
     <style>
@@ -13,9 +13,9 @@
       .on-dark      { fill: #ffffff; }
       .on-dark-soft { fill: #f3d9cf; }
       .box  { fill: #ffffff; stroke: #dccfb8; stroke-width: 1.2; }
-      .plan { fill: #fffdf8; stroke: #c9b99c; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      .plan { fill: #ffffff; stroke: #dccfb8; stroke-width: 1.2; }
       .arr  { stroke: #8a8577; stroke-width: 1.4; fill: none; }
-      .arrp { stroke: #8a8577; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+      .arrp { stroke: #8a8577; stroke-width: 1.4; fill: none; }
       .arrk { stroke: #c8553d; stroke-width: 2.4; fill: none; stroke-dasharray: 2 5; stroke-linecap: round; }
     </style>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -33,9 +33,9 @@
   <text class="h" x="40" y="68">Headset game</text>
   <text class="m" x="40" y="86">codes/xrclient  /play</text>
   <text class="b" x="40" y="108">Immersive Web SDK on a Meta Quest</text>
-  <text class="b" x="40" y="126">Hands only: poke, pinch, grab</text>
+  <text class="b" x="40" y="126">Hands first: poke, pinch, grab</text>
   <text class="b" x="40" y="144">Book placed on the detected table</text>
-  <text class="b" x="40" y="162">Solo Squad with two bots, offline</text>
+  <text class="b" x="40" y="162">Practice and robot races, offline</text>
   <rect x="40" y="178" width="254" height="44" rx="7" fill="#1f2a44"/>
   <text class="h on-dark" x="54" y="198">core</text>
   <text class="s on-dark-soft" x="54" y="213">Rust compiled to WebAssembly</text>
@@ -44,23 +44,23 @@
   <rect class="box" x="24" y="258" width="286" height="178" rx="10"/>
   <text class="h" x="40" y="284">Classroom pages</text>
   <text class="m" x="40" y="302">codes/frontrouter  /</text>
-  <text class="b" x="40" y="324">React Router, static single page app</text>
-  <text class="b" x="40" y="342">Class screen, Book Keeper, teacher</text>
-  <text class="b" x="40" y="360">and admin pages (planned)</text>
-  <rect x="40" y="376" width="254" height="44" rx="7" fill="#1f2a44" opacity="0.85"/>
-  <text class="h on-dark" x="54" y="396">core</text>
-  <text class="s on-dark-soft" x="54" y="411">same WebAssembly package (planned)</text>
+  <text class="b" x="40" y="324">React Router single page app</text>
+  <text class="b" x="40" y="342">Teacher, class screen, smartboard</text>
+  <text class="b" x="40" y="360">race, Math Lessons, admin</text>
+  <rect class="box" x="40" y="376" width="254" height="44" rx="7"/>
+  <text class="h" x="54" y="396">Adults sign in</text>
+  <text class="s" x="54" y="411">Firebase: Google, Facebook or email</text>
 
   <!-- ============ middle: our server ============ -->
-  <rect x="352" y="42" width="300" height="394" rx="10" fill="#efe7d6" stroke="#c9b99c" stroke-width="1.2" stroke-dasharray="6 5"/>
-  <text class="s" x="364" y="60">Our server, one domain over HTTPS (planned)</text>
+  <rect x="352" y="42" width="300" height="394" rx="10" fill="#efe7d6" stroke="#c9b99c" stroke-width="1.2"/>
+  <text class="s" x="364" y="60">Our server, one domain over HTTPS</text>
 
   <rect class="plan" x="372" y="74" width="260" height="176" rx="10"/>
   <text class="h" x="388" y="100">Game server</text>
   <text class="m" x="388" y="118">codes/backrust/server  /api  /ws</text>
   <text class="b" x="388" y="140">Rooms, play and watch codes</text>
-  <text class="b" x="388" y="158">Class Match, decided on the server</text>
-  <text class="b" x="388" y="176">Event sync, bots for empty seats</text>
+  <text class="b" x="388" y="158">Class races on the server's clock</text>
+  <text class="b" x="388" y="176">Classes, reports, town sync, bots</text>
   <rect x="388" y="192" width="228" height="44" rx="7" fill="#1f2a44"/>
   <text class="h on-dark" x="402" y="212">core</text>
   <text class="s on-dark-soft" x="402" y="227">the same Rust code, native</text>
@@ -103,7 +103,7 @@
   <text class="h" x="40" y="508">Item templates</text>
   <text class="m" x="40" y="526">codes/content</text>
   <text class="b" x="40" y="548">28 skills for grades 4 to 6</text>
-  <text class="b" x="40" y="566">JSON Schema, example templates</text>
+  <text class="b" x="40" y="566">206 templates, JSON Schema</text>
   <text class="b" x="40" y="584">Answers written as expressions,</text>
   <text class="b" x="40" y="600">never as numbers</text>
 
@@ -128,18 +128,15 @@
 
   <!-- the one core -->
   <path class="arrk" d="M 294 200 L 362 200"/>
-  <path class="arrk" d="M 294 398 L 362 398"/>
   <path class="arrk" d="M 362 200 L 362 591 L 368 591"/>
   <path class="arrk" d="M 362 214 L 388 214"/>
-  <text class="lblk" x="374" y="458">one core, four places:</text>
+  <text class="lblk" x="374" y="458">one core, three places:</text>
   <text class="lblk" x="374" y="472">the answer is always computed by the same code</text>
 
   <!-- legend -->
-  <rect class="box" x="694" y="212" width="242" height="72" rx="10"/>
+  <rect class="box" x="694" y="212" width="242" height="42" rx="10"/>
   <rect x="710" y="226" width="26" height="14" rx="3" fill="#ffffff" stroke="#dccfb8" stroke-width="1.2"/>
   <text class="lbl" x="744" y="237">built</text>
-  <rect x="710" y="250" width="26" height="14" rx="3" fill="#fffdf8" stroke="#c9b99c" stroke-width="1.2" stroke-dasharray="5 4"/>
-  <text class="lbl" x="744" y="261">planned</text>
   <rect x="800" y="226" width="26" height="14" rx="3" fill="#1f2a44"/>
   <text class="lbl" x="834" y="237">shared core</text>
 </svg>
