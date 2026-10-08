@@ -180,8 +180,11 @@ const SIDE_REACH_M = 0.025;
 /** The real thing may be anywhere this near the desk's middle. */
 const REAL_REACH = 1.0;
 /** The words over the desk, and the time and points under them. */
-const HEADER = new Vector3(0, 0.24, -0.45);
-const STATUS = new Vector3(0, 0.205, -0.45);
+const HEADER = new Vector3(0, 0.17, -0.45);
+const STATUS = new Vector3(0, 0.135, -0.45);
+/** The words breathe this much, once in this many seconds. */
+const PANEL_PULSE = 0.05;
+const PANEL_PULSE_S = 1.1;
 /** The choices along the front of the desk, the tools on its right. */
 const CARD_Z = 0.11;
 const CHOICE_STEP = 0.13;
@@ -223,13 +226,14 @@ const INK = '#3a3f4b';
 const HEAD = '#3469c4';
 const ACCENT = '#c94f49';
 
-const pinGeo = new SphereGeometry(0.006, 16, 12);
-const pinMat = new MeshStandardMaterial({ color: CORAL, roughness: 0.6 });
-const snapMat = new MeshStandardMaterial({ color: TEAL, roughness: 0.6 });
+const pinGeo = new SphereGeometry(0.008, 16, 12);
+// A pin with no thread is red, one with a thread green; the point a controller is about to drop is blue.
+const pinMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6 });
+const greenMat = new MeshStandardMaterial({ color: 0x2fa84f, roughness: 0.6 });
 const threadGeo = new CylinderGeometry(0.0015, 0.0015, 1, 8).translate(0, 0.5, 0);
 const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8 });
-const ghostGeo = new SphereGeometry(0.01, 16, 12);
-const ghostMat = new MeshBasicMaterial({ color: CORAL, transparent: true, opacity: 0.45, depthWrite: false });
+const ghostGeo = new SphereGeometry(0.012, 16, 12);
+const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
 const Y = new Vector3(0, 1, 0);
 const Z = new Vector3(0, 0, 1);
@@ -603,6 +607,10 @@ export class MeasureDesk {
     if (this.gone) return;
     this.group.getWorldScale(this.n);
     if (this.n.x > 0) this.metric.scale.setScalar(1 / this.n.x);
+    if (this.panel) {
+      const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PANEL_PULSE_S) * Math.PI * 2);
+      this.panel.scale.setScalar(1 + PANEL_PULSE * k);
+    }
     this.hands.update(delta);
     for (const side of SIDES) this.readTip(side, delta);
     if (this.step === 'verdict') {
@@ -622,11 +630,21 @@ export class MeasureDesk {
       for (const side of SIDES) this.ghosts[side].visible = false;
       return;
     }
+    this.paintPins();
     this.updateBin(delta);
     for (const side of SIDES) {
       if (this.binPress(side)) continue;
       this.pullThread(side);
       this.dropPin(side, delta);
+    }
+  }
+
+  /** A pin with a thread (or one being pulled from) is green, one without is red. */
+  private paintPins(): void {
+    for (const p of this.pins) {
+      const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
+      const m = used ? greenMat : pinMat;
+      if (p.mesh.material !== m) p.mesh.material = m;
     }
   }
 
@@ -1310,7 +1328,6 @@ export class MeasureDesk {
       const pin = spots[i]?.pin;
       if (!pin) return;
       pin.mesh.position.set(p[0] / 100, p[1] / 100, p[2] / 100);
-      pin.mesh.material = snapMat;
     });
     for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
     sfx('sparkle');
