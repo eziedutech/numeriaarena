@@ -13,7 +13,7 @@ import {
   type Intersection,
   type Object3D,
 } from '@iwsdk/core';
-import { boardUp, rayNearBoardButton, setBoard, setBoardNear } from '../art/board.js';
+import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
@@ -61,7 +61,8 @@ export type MeasureChoice =
   | 'me_skip'
   | 'me_again'
   | 'me_done'
-  | 'me_back';
+  | 'me_back'
+  | 'me_zoom';
 
 export function isMeasureChoice(choice: string): choice is MeasureChoice {
   return choice.startsWith('me_');
@@ -159,8 +160,9 @@ const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
-/** A ray this near the board's magnifier is on it (it hangs far off, so a wide reach). */
-const MAGNIFIER_REACH_M = 0.25;
+/** A ray or pinch this near the magnifier card is on it, and where the card stands. */
+const MAGNIFIER_REACH_M = 0.05;
+const ZOOM_Z = -0.145;
 const TRASH_SIZE = 0.03;
 const TRASH_LIFT = 0.012;
 /** How far outside the pin, along the floor, the bin floats. */
@@ -214,6 +216,7 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_real: 'hand',
   me_start: 'next',
   me_back: 'back',
+  me_zoom: 'zoomIn',
   me_clear: 'trash',
   me_skip: 'skip',
   me_again: 'replay',
@@ -292,6 +295,8 @@ export class MeasureDesk {
   private panel?: Mesh;
   /** The controller holding the board's magnifier down: the board is close while it does. */
   private boardHeld?: Side;
+  /** The magnifier card beside the tools: held, it brings the board close. */
+  private zoomCard?: Entity;
   private lines: [string, number, string][] = [];
   private onBoard = false;
   private status: Label;
@@ -661,32 +666,52 @@ export class MeasureDesk {
   }
 
   /**
-   * The magnifier beside the board: a trigger pressed with a ray on it brings
-   * the board close for as long as the trigger is held; let go, it goes back.
-   * Controllers only: a board is there in the emulator, and not in a headset.
+   * The magnifier card beside the tools (there when a board is up, in the
+   * emulator): a trigger pressed with a ray on it, or a pinch on it, brings
+   * the board close for as long as it is held; let go, the board goes back.
    */
   private magnify(): void {
-    if (!boardUp() || !this.host.controllers()) {
+    if (!boardUp()) {
+      if (this.zoomCard?.active) this.host.remove(this.zoomCard);
+      this.zoomCard = undefined;
       if (this.boardHeld) setBoardNear(false);
       this.boardHeld = undefined;
       return;
     }
+    if (!this.zoomCard?.active) {
+      this.zoomCard = this.host.button('me_zoom', 'zoomIn', this.t.zoom, TOOLS_X, ZOOM_Z, 'plain', HEAD);
+    }
+    const card = this.zoomCard.object3D;
+    if (!card) return;
+    card.getWorldPosition(this.t2);
     for (const side of SIDES) {
+      const controllers = this.host.controllers();
       const edges = this.grabEdges(side);
+      const holding = controllers ? this.triggerHeld[side] : this.hands.get(side).pinching;
       if (this.boardHeld === side) {
-        if (!this.triggerHeld[side]) {
+        if (!holding) {
           this.boardHeld = undefined;
           setBoardNear(false);
         }
-      } else if (edges.start && !this.boardHeld) {
+        continue;
+      }
+      if (!edges.start || this.boardHeld) continue;
+      let on = false;
+      if (controllers) {
         const ray = this.host.ray(side);
         ray.getWorldPosition(this.o2);
         ray.getWorldDirection(this.d2).negate();
-        if (rayNearBoardButton(this.o2, this.d2, MAGNIFIER_REACH_M)) {
-          this.boardHeld = side;
-          setBoardNear(true);
-          sfx('grab');
-        }
+        this.t1.copy(this.t2).sub(this.o2);
+        const along = this.t1.dot(this.d2);
+        on = along > 0 && this.t1.addScaledVector(this.d2, -along).length() < MAGNIFIER_REACH_M;
+      } else {
+        const h = this.hands.get(side);
+        on = h.tracked && h.pinchAt.distanceTo(this.t2) < MAGNIFIER_REACH_M;
+      }
+      if (on) {
+        this.boardHeld = side;
+        setBoardNear(true);
+        sfx('grab');
       }
     }
   }
@@ -1569,6 +1594,7 @@ export class MeasureDesk {
     this.dropPanel();
     setBoard(undefined);
     setBoardNear(false);
+    if (this.zoomCard?.active) this.host.remove(this.zoomCard);
     this.core?.dispose();
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();

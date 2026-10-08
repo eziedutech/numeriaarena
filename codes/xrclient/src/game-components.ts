@@ -110,6 +110,7 @@ const Games = {
   MeAgain: 'me_again',
   MeDone: 'me_done',
   MeBack: 'me_back',
+  MeZoom: 'me_zoom',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

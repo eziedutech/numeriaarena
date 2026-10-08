@@ -10,16 +10,15 @@ import {
 } from '@iwsdk/core';
 import { Label } from './label.js';
 import { CLASS_BOARD, CLASS_FRONT_Z } from './rooms.js';
-import { ToolButton } from './tool-icon.js';
 
 /**
  * Writing on the classroom's chalkboard for a game that has its words to
  * say: Measure Hunt sets the lines of its question here when a board is up
  * (the emulator's stand-in for the real room), in large chalk letters, and
  * keeps them on its desk panel when there is none (a real room has no board).
- * A magnifier on the wall beside the board brings the writing, with its
- * green backdrop, close to the player for as long as it is held down, and
- * lets it go back when it is let go.
+ * While the player holds the magnifier card on the desk (setBoardNear), the
+ * writing, with its green backdrop, comes close to the eyes, and it goes back
+ * when it is let go.
  */
 
 /** A line of chalk: its words, its size as on the desk (metres) and its desk colour. */
@@ -57,15 +56,11 @@ const FRAME = 0xa87a4f;
 const NEAR_W = 1.35;
 const NEAR_DIST = 0.85;
 const NEAR_RATE = 9;
-/** The magnifier: its size, and where it hangs, beside the board's lower right corner. */
-const BUTTON = 0.3;
-const BUTTON_AT = new Vector3(CLASS_BOARD.x + 1.78, CLASS_BOARD.y - 0.35, CLASS_FRONT_Z + 0.075);
 
 let lines: BoardLine[] | undefined;
 let version = 0;
 let up = false;
 let held = false;
-let button: Object3D | undefined;
 
 /** What the board says now (nothing clears it). */
 export function setBoard(next: BoardLine[] | undefined): void {
@@ -78,25 +73,13 @@ export function boardUp(): boolean {
   return up;
 }
 
-/** The magnifier is held: the board comes close. */
+/** The magnifier card is held: the board comes close. */
 export function setBoardNear(on: boolean): void {
   held = on;
 }
 
-const v = new Vector3();
-
-/** Whether a ray passes within `reach` metres of the magnifier (in front of it). */
-export function rayNearBoardButton(origin: Vector3, dir: Vector3, reach: number): boolean {
-  if (!button) return false;
-  button.getWorldPosition(v);
-  v.sub(origin);
-  const along = v.dot(dir);
-  if (along <= 0) return false;
-  return v.addScaledVector(dir, -along).length() < reach;
-}
-
 export class BoardWriter {
-  /** The board and its magnifier, in the room's frame. */
+  /** The board, in the room's frame. */
   readonly group = new Group();
   /** The backdrop and the writing: what comes close. */
   private board = new Group();
@@ -107,7 +90,6 @@ export class BoardWriter {
   private near = 0;
   private back: Mesh;
   private frame: Mesh;
-  private magnifier: ToolButton;
   private home = new Vector3(CLASS_BOARD.x, CLASS_BOARD.y + 0.02, CLASS_FRONT_Z + 0.07);
   private target = new Vector3();
   private local = new Vector3();
@@ -123,19 +105,14 @@ export class BoardWriter {
     this.board.position.copy(this.home);
     this.group.add(this.board);
     // The frame behind the green, the green behind the chalk.
-    this.frame = new Mesh(new PlaneGeometry(BACK_W + 0.1, BACK_H + 0.1), new MeshBasicMaterial({ color: FRAME }));
+    this.frame = new Mesh(new PlaneGeometry(BACK_W + 0.1, BACK_H + 0.1), new MeshBasicMaterial({ color: FRAME, depthWrite: false }));
     this.frame.position.z = -0.004;
     this.frame.renderOrder = 4;
-    this.back = new Mesh(new PlaneGeometry(BACK_W, BACK_H), new MeshBasicMaterial({ color: BACK }));
+    this.back = new Mesh(new PlaneGeometry(BACK_W, BACK_H), new MeshBasicMaterial({ color: BACK, depthWrite: false }));
     this.back.position.z = -0.002;
     this.back.renderOrder = 5;
     this.text.position.z = 0.004;
     this.board.add(this.frame, this.back, this.text);
-    this.magnifier = new ToolButton('zoomIn', '', BUTTON, BUTTON, 'on', { alone: true, bare: true, theme: 'home', stroke: 2.4 });
-    this.magnifier.mesh.name = 'measure-board-magnifier';
-    this.magnifier.mesh.position.copy(BUTTON_AT);
-    this.group.add(this.magnifier.mesh);
-    button = this.magnifier.mesh;
     up = true;
   }
 
@@ -213,7 +190,6 @@ export class BoardWriter {
     }
     this.group.removeFromParent();
     held = false;
-    button = undefined;
     up = false;
   }
 }
