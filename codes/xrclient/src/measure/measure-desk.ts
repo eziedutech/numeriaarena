@@ -784,6 +784,7 @@ export class MeasureDesk {
         ghost.scale.setScalar(onPin ? 0.8 : 0.5);
       }
       if (press && free) this.addPin(this.v);
+      else if (press && !onPin && this.pins.length >= this.maxPins() && this.pinnable(this.v)) this.tell(this.t.allPins(this.maxPins()));
       return;
     }
     const h = this.hands.get(side);
@@ -792,6 +793,9 @@ export class MeasureDesk {
     if (!this.armed[side]) {
       if (tip.distanceTo(this.lastPin[side]) > REARM_M) this.armed[side] = true;
       else return;
+    }
+    if (this.pins.length >= this.maxPins() && h.pointing() && h.still() && this.pinnable(tip) && !this.nearestPin(tip, PIN_GAP_M)) {
+      this.tell(this.t.allPins(this.maxPins()));
     }
     const can = h.pointing() && h.still() && this.pins.length < this.maxPins() && this.pinnable(tip) && !this.nearestPin(tip, PIN_GAP_M);
     if (!can) {
@@ -955,8 +959,10 @@ export class MeasureDesk {
       }
       case 'cube':
       case 'cuboid': {
-        if (this.threads.length !== 3) return undefined;
         const corner = this.pins.find((p) => near(p).length === 3);
+        // Threads round a face are not a corner's three edges: say how it goes.
+        if (!corner && this.threads.length >= 3) this.tell(this.t.oneCorner);
+        if (this.threads.length !== 3) return undefined;
         return corner ? [corner, ...near(corner)] : undefined;
       }
       default: {
@@ -965,6 +971,15 @@ export class MeasureDesk {
         return this.threads.length === 1 && th ? [th.a, th.b] : undefined;
       }
     }
+  }
+
+  /** A word under the task about what to do now, said once until it changes. */
+  private tell(text: string): void {
+    if (this.message === text) return;
+    this.message = text;
+    this.messageInk = ACCENT;
+    this.showTask();
+    sfx('wrong');
   }
 
   /** The pins or threads changed: once they make the shape, the core reads them. */
