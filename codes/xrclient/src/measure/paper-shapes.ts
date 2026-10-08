@@ -61,6 +61,8 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
   const owned: { geometry: BufferGeometry }[] = [];
   const add = (parent: Group, geometry: BufferGeometry, mat: Material = paperMat, edges = true) => {
     const mesh = new Mesh(geometry, mat);
+    // The paper itself: what a controller's ray points on.
+    mesh.userData.paper = true;
     parent.add(mesh);
     owned.push(mesh);
     if (edges) {

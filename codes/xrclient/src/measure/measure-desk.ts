@@ -85,6 +85,8 @@ export interface MeasureHost {
   ray(side: Side): Object3D;
   /** This frame's select (trigger) edges of a controller. */
   select(side: Side): { start: boolean; end: boolean };
+  /** A controller's A, B, X or Y pressed this frame. */
+  turn(side: Side): boolean;
   /** This frame's grip edges of a controller. */
   squeeze(side: Side): { start: boolean; end: boolean };
   grip(side: Side): Object3D;
@@ -147,6 +149,8 @@ const THROW_SPEED = 1.2;
 const TIP_M = 0.05;
 /** A controller points this far at most. */
 const AIM_FAR_M = 2;
+/** A controller's pointed spot this near a paper corner goes onto it. */
+const MAGNET_M = 0.025;
 /** Where the paper object stands, and how far round it a finger may pin. */
 const OBJECT_AT = new Vector3(0, 0, -0.12);
 const OBJECT_MARGIN = 0.04;
@@ -206,6 +210,7 @@ const ghostMat = new MeshBasicMaterial({ color: CORAL, transparent: true, opacit
 const UP = new Vector3(0, 1, 0);
 const Y = new Vector3(0, 1, 0);
 const Z = new Vector3(0, 0, 1);
+const X = new Vector3(1, 0, 0);
 
 /** The 24 ways a box can stand square, for a solid let go to settle into. */
 const SQUARE: Quaternion[] = (() => {
@@ -257,6 +262,8 @@ export class MeasureDesk {
   private spinVel = 0;
   private flicking = false;
   private unfoldTo = 0;
+  /** Where a button's quarter turn is taking the solid. */
+  private turnGoal?: Quaternion;
   private unfolded = 0;
   private hint = '';
   private message = '';
@@ -630,12 +637,12 @@ export class MeasureDesk {
     if (this.paper) this.targets.push(this.paper.root);
     this.hits.length = 0;
     this.caster.intersectObjects(this.targets, true, this.hits);
-    const hit = this.hits.find((h) => (h.object as Mesh).isMesh && h.object.visible);
+    // Only the paper and its pins: a thread being pulled, or its length, would catch its own ray.
+    const hit = this.hits.find((h) => h.object.visible && (h.object.userData.paper === true || h.object.name === 'measure-pin' || h.object.userData.card === true));
     if (hit) {
-      let o: Object3D | null = hit.object;
-      while (o && o !== this.paper?.root) o = o.parent;
-      if (!o) return false;
+      if (hit.object.userData.card === true) return false;
       origin.copy(hit.point);
+      this.magnet(origin);
       return true;
     }
     if (this.source === 'real') {
@@ -673,6 +680,31 @@ export class MeasureDesk {
   /** Where pins go: the paper object's own frame, or the desk's for a real thing. */
   private frame(): Object3D {
     return this.paper?.frame ?? this.real;
+  }
+
+  /**
+   * A controller's pointed spot this near a corner of the paper object (or
+   * its centre) is drawn onto it: a ray from the seat cannot be held as
+   * still as a fingertip. Hands are never helped, so their placing is theirs.
+   */
+  private magnet(world: Vector3): void {
+    const keys = this.offer?.keys;
+    if (!this.paper || !keys || this.unfolded > 0) return;
+    this.n.copy(world);
+    this.paper.frame.worldToLocal(this.n);
+    let best = -1;
+    let bestD = MAGNET_M;
+    keys.forEach(([x, y, z], i) => {
+      const d = Math.hypot(this.n.x - x / 100, this.n.y - y / 100, this.n.z - z / 100);
+      if (d < bestD) {
+        best = i;
+        bestD = d;
+      }
+    });
+    if (best < 0) return;
+    const [x, y, z] = keys[best];
+    world.set(x / 100, y / 100, z / 100);
+    this.paper.frame.localToWorld(world);
   }
 
   /** A world point near enough to be pinned. */
@@ -976,6 +1008,7 @@ export class MeasureDesk {
         paper.spin.getWorldPosition(this.u);
         if (this.w.distanceTo(this.u) > paper.radius + OBJECT_MARGIN) continue;
         this.group.worldToLocal(this.w);
+        this.turnGoal = undefined;
         this.turns.set(side, { side, last: Math.atan2(this.w.x - centre.x, this.w.z - centre.z) });
         this.flicking = false;
         sfx('grab', { at: this.u });
@@ -1027,8 +1060,16 @@ export class MeasureDesk {
       this.spinVel *= Math.exp(-SPIN_DRAG * delta);
       if (Math.abs(this.spinVel) < SPIN_STOP) this.flicking = false;
     } else {
+      // A controller's buttons turn it a quarter: A or B round the desk's up, X or Y over towards the player.
+      for (const side of SIDES) {
+        if (this.unfoldTo > 0 || !this.host.turn(side)) continue;
+        const from = this.turnGoal ?? nearestSquare(spin.quaternion);
+        this.turnGoal = this.q.setFromAxisAngle(side === 'right' ? Y : X, Math.PI / 2).clone().multiply(from);
+        sfx('fold');
+      }
+      if (this.turnGoal && spin.quaternion.angleTo(this.turnGoal) < 0.01) this.turnGoal = undefined;
       // Let go, it settles to stand square; opening, it first comes upright.
-      const target = this.unfoldTo > 0 ? SQUARE[0] : nearestSquare(spin.quaternion);
+      const target = this.unfoldTo > 0 ? SQUARE[0] : (this.turnGoal ?? nearestSquare(spin.quaternion));
       spin.quaternion.slerp(target, 1 - Math.exp(-SETTLE * delta));
       this.spinVel = 0;
     }

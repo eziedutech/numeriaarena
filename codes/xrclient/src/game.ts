@@ -2218,6 +2218,8 @@ export class GameSystem extends createSystem({
       : new ToolButton('check', word, w, h, 'plain', { alone: true, bare: true, theme: 'home', title: true, wordH: MEASURE_ANSWER_WORD_H * textScale() });
     const shadow = softShadow(w, h, CHIP_BLUR);
     shadow.position.copy(CHIP_SHADOW);
+    // A ray on a card presses it and drops no pin.
+    b.mesh.userData.card = shadow.userData.card = true;
     const cell = new Group();
     cell.name = `menu-${choice}`;
     cell.add(shadow, b.mesh);
@@ -2243,6 +2245,7 @@ export class GameSystem extends createSystem({
       ray: town.ray,
       select: town.select,
       squeeze: town.squeeze,
+      turn: town.turn,
       grip: town.grip,
       controllers: town.controllers,
       hands: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
