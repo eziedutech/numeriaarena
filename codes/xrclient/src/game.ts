@@ -84,6 +84,7 @@ import { skillTitle, unmarked } from './town/town-landmarks.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
 import { openTown } from './town/town-page.js';
 import { TOWN_TEXT } from './town/town-text.js';
+import { measureBanner } from './home/measure-banner.js';
 import { isMeasureChoice, MeasureDesk, type MeasureChoice, type MeasureHost } from './measure/measure-desk.js';
 import { MEASURE_TEXT } from './measure/measure-text.js';
 import type { HandAdapters } from './measure/hands.js';
@@ -262,8 +263,12 @@ const TICK_FROM_S = 10;
  * as tall as their two rows and centred on them, TOWN_GAP clear of their left edge.
  */
 const TOWN_W = 0.145;
-/** The games block's columns: the race and five practice games, then Measure Hunt. */
-const GAME_COLS = 4;
+/** The games block's columns: the race and five practice games. Measure Hunt has a banner of its own. */
+const GAME_COLS = 3;
+/** Measure Hunt's banner: a wide card leaning in front of the chips, touching their front edge. */
+const BANNER_W = 0.3;
+const BANNER_H = 0.075;
+const BANNER_AT = new Vector3(0, 0.012, 0.215);
 const TOWN_H = (TOWN_W * 2) / 3;
 const TOWN_GAP = 0.025;
 /** Its buildings drawn leaning left this much, so from the player's seat they stand straight. */
@@ -1225,10 +1230,10 @@ export class GameSystem extends createSystem({
     }
     this.showTitle();
     // The race first; a practice has no race, and its five games fill the block from the front left.
-    // Measure Hunt last: it needs the headset, and in the browser its name says so.
+    // Measure Hunt has its banner (it needs the headset, and in the browser the banner says so).
     const tip = (caption: string, value: string) => `${caption}: ${value}`;
     const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
-    const games: MenuGame[] = [...MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race'), 'measure_hunt'];
+    const games: MenuGame[] = MENU_GAMES.filter((g) => only !== 'practice' || g !== 'race');
     const gameWord = (game: MenuGame) =>
       game === 'race' ? T.race : game === 'measure_hunt' && browser ? `${T.gameName[game]} · ${MEASURE_TEXT[getLang()].xrOnly}` : T.gameName[game];
     this.menuChips(
@@ -1257,6 +1262,7 @@ export class GameSystem extends createSystem({
     const set = settings.filter((c): c is MenuCell => c !== null);
     this.menuChips(set, SETTINGS_AT, set.length);
     this.addTownSticker();
+    this.addMeasureBanner();
     this.showBest();
   }
 
@@ -1266,6 +1272,7 @@ export class GameSystem extends createSystem({
   /** Clears the desk menu: its buttons, envelopes and the writing on the book. */
   private clearMenu(): void {
     this.clear(this.queries.buttons);
+    this.measureBanner = undefined;
     for (const e of this.menuTrays) this.remove(e);
     this.menuTrays = [];
     this.lobbyAsk += 1;
@@ -1392,6 +1399,46 @@ export class GameSystem extends createSystem({
   }
 
   /** The Fold Town sticker standing beside the book, the same one as on the home page. */
+  /** The banner for Measure Hunt, apart from the games' chips, breathing gently to be seen. */
+  private measureBanner?: Group;
+
+  private addMeasureBanner(): void {
+    const t = MEASURE_TEXT[getLang()];
+    const browser = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1120;
+    canvas.height = 280;
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    const img = new Image();
+    img.onload = () => {
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      tex.needsUpdate = true;
+    };
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(measureBanner(T.gameName.measure_hunt.toUpperCase(), t.featured, browser ? t.badgeXr : t.badge))}`;
+    const plane = new Mesh(
+      new PlaneGeometry(BANNER_W, BANNER_H),
+      new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: DoubleSide }),
+    );
+    plane.position.y = BANNER_H / 2;
+    plane.renderOrder = 10;
+    const banner = new Group();
+    banner.name = 'menu-measure_hunt';
+    banner.userData.tip = browser ? `${T.gameName.measure_hunt} · ${t.xrOnly}` : T.gameName.measure_hunt;
+    banner.userData.tipH = BANNER_H;
+    banner.userData.choice = true;
+    banner.userData.shownAt = performance.now();
+    banner.userData.armed = false;
+    banner.add(plane);
+    banner.position.copy(BANNER_AT);
+    banner.rotation.x = MENU_LEAN;
+    const e = this.add(banner);
+    e.addComponent(MenuButton, { game: 'measure_hunt' });
+    e.addComponent(PokeInteractable);
+    e.addComponent(RayInteractable);
+    this.measureBanner = banner;
+  }
+
   private addTownSticker(): void {
     const canvas = document.createElement('canvas');
     canvas.width = 600;
@@ -3584,6 +3631,11 @@ export class GameSystem extends createSystem({
     // the browser camera outside it).
     this.camera.getWorldPosition(this.head);
     for (const m of this.labels) if (m.parent) m.lookAt(this.head);
+    // Measure Hunt's banner breathes on the menu, so the eye finds it.
+    if (this.measureBanner?.parent) {
+      const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PROMPT_PULSE_S) * Math.PI * 2);
+      this.measureBanner.scale.setScalar(1 + 0.03 * k);
+    }
     // The question breathes while it waits, so the eye finds it.
     if (this.prompt && this.phase === 'playing') {
       const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PROMPT_PULSE_S) * Math.PI * 2);

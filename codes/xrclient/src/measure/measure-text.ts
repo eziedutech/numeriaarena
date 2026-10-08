@@ -6,6 +6,9 @@ import type { Shape } from './measure-core.js';
 const EN = {
   title: 'MEASURE HUNT',
   xrOnly: 'XR ONLY',
+  featured: 'Measure real things with your hands',
+  badge: 'NEW',
+  badgeXr: 'XR',
   needHeadset: 'Measure Hunt needs the headset: it measures your real desk with your hands.',
   pickGrade: 'WHICH GRADE?',
   grade: (g: number) => `GRADE ${g}`,
@@ -80,6 +83,9 @@ type MeasureText = typeof EN;
 const ID: MeasureText = {
   title: 'BURU UKUR',
   xrOnly: 'KHUSUS XR',
+  featured: 'Ukur benda nyata dengan tanganmu',
+  badge: 'BARU',
+  badgeXr: 'XR',
   needHeadset: 'Buru Ukur butuh headset: kamu mengukur meja nyata dengan tanganmu.',
   pickGrade: 'KELAS BERAPA?',
   grade: (g: number) => `KELAS ${g}`,
