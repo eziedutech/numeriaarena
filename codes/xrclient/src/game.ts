@@ -705,6 +705,8 @@ export class GameSystem extends createSystem({
       const onKey = (ev: KeyboardEvent) => {
         if (ev.repeat) return;
         if (ev.code === 'KeyT') this.emulatorTouch();
+        // Measure Hunt has its own desk: the dev keys below would lay the zoo over it or press its cards.
+        if (this.phase === 'measure') return;
         // 1 to 6: open that menu envelope, in or out of XR.
         const pick = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(ev.code);
         // From the home page the keys start a game straight away, in this view.
