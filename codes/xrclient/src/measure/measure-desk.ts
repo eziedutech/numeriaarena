@@ -151,6 +151,8 @@ const TIP_M = 0.05;
 const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
+/** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
+const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
 const OBJECT_AT = new Vector3(0, 0, -0.12);
 const OBJECT_MARGIN = 0.04;
@@ -756,9 +758,11 @@ export class MeasureDesk {
     switch (o.shape) {
       case 'square':
       case 'rectangle':
+        return 4;
       case 'cube':
       case 'cuboid':
-        return 4;
+        // Its corners, as many as the child pins: face by face, a shared corner pinned once.
+        return 8;
       case 'triangle':
         return o.task === 'area' ? 4 : 3;
       default:
@@ -959,11 +963,13 @@ export class MeasureDesk {
       }
       case 'cube':
       case 'cuboid': {
-        const corner = this.pins.find((p) => near(p).length === 3);
-        // Threads round a face are not a corner's three edges: say how it goes.
-        if (!corner && this.threads.length >= 3) this.tell(this.t.oneCorner);
-        if (this.threads.length !== 3) return undefined;
-        return corner ? [corner, ...near(corner)] : undefined;
+        // Read once a corner has three threads going three ways (along, across, up), however many more there are.
+        for (const corner of this.pins) {
+          const edges = this.threeWays(corner, near(corner));
+          if (edges) return [corner, ...edges];
+        }
+        if (this.pins.length === n && this.threads.length >= 4) this.tell(this.t.oneCorner);
+        return undefined;
       }
       default: {
         // The thread's first end is where it was pulled from: the centre, for a circle.
@@ -971,6 +977,22 @@ export class MeasureDesk {
         return this.threads.length === 1 && th ? [th.a, th.b] : undefined;
       }
     }
+  }
+
+  /** Three of a corner's threaded pins that go three ways square to each other, if there are. */
+  private threeWays(corner: Pin, pins: Pin[]): Pin[] | undefined {
+    if (pins.length < 3) return undefined;
+    const dirs = pins.map((p) => p.mesh.position.clone().sub(corner.mesh.position).normalize());
+    const square = (i: number, j: number) => Math.abs(dirs[i].dot(dirs[j])) < SQUARE_COS;
+    for (let a = 0; a < pins.length; a += 1) {
+      for (let b = a + 1; b < pins.length; b += 1) {
+        if (!square(a, b)) continue;
+        for (let c = b + 1; c < pins.length; c += 1) {
+          if (square(a, c) && square(b, c)) return [pins[a], pins[b], pins[c]];
+        }
+      }
+    }
+    return undefined;
   }
 
   /** A word under the task about what to do now, said once until it changes. */
