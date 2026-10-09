@@ -170,6 +170,7 @@ const RAY_PIN_SLOPE = 0.05;
 /** A ray or pinch this near the magnifier card is on it, and where the card stands. */
 const MAGNIFIER_REACH_M = 0.05;
 const ZOOM_Z = -0.145;
+const ZOOM_X = 0.26;
 const TRASH_SIZE = 0.03;
 const TRASH_LIFT = 0.012;
 /** How far outside the pin, along the floor, the bin floats. */
@@ -496,7 +497,8 @@ export class MeasureDesk {
     this.step = 'measure';
     this.showTask();
     this.clearCards();
-    this.card('me_clear', this.t.clear, TOOLS_X, -0.06, YELLOW);
+    // The tools step back as they stand further off, so each is within reach: CLEAR left of SKIP, READ left of CLEAR.
+    this.card('me_clear', this.t.clear, TOOLS_X - 0.07, -0.06, YELLOW);
     this.card('me_skip', this.t.skip, TOOLS_X, 0.025, BLUE);
     this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
     sfx('unfold');
@@ -729,7 +731,7 @@ export class MeasureDesk {
       return;
     }
     if (!this.zoomCard?.active) {
-      this.zoomCard = this.host.button('me_zoom', 'zoomIn', this.t.zoom, TOOLS_X, ZOOM_Z, 'plain', HEAD);
+      this.zoomCard = this.host.button('me_zoom', 'zoomIn', this.t.zoom, ZOOM_X, ZOOM_Z, 'plain', HEAD);
     }
     const card = this.zoomCard.object3D;
     if (!card) return;

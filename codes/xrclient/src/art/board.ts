@@ -56,6 +56,8 @@ const FRAME = 0xa87a4f;
 const NEAR_W = 1.35;
 const NEAR_DIST = 0.85;
 const NEAR_RATE = 9;
+/** The board is held no lower than this far below level (sine of about 15 degrees). */
+const NEAR_LOWEST = 0.26;
 
 let lines: BoardLine[] | undefined;
 let version = 0;
@@ -134,6 +136,13 @@ export class BoardWriter {
     }
     camera.getWorldPosition(this.eye);
     camera.getWorldDirection(this.fwd);
+    // Where the eyes face, but no lower than a little under level: looking down at the desk, the board would
+    // otherwise come down to the desk with them and lie out of reading.
+    const flat = Math.hypot(this.fwd.x, this.fwd.z);
+    if (flat > 1e-3 && this.fwd.y < -NEAR_LOWEST) {
+      const down = NEAR_LOWEST;
+      this.fwd.set((this.fwd.x / flat) * Math.sqrt(1 - down * down), -down, (this.fwd.z / flat) * Math.sqrt(1 - down * down));
+    }
     this.target.copy(this.eye).addScaledVector(this.fwd, NEAR_DIST);
     this.group.updateWorldMatrix(true, false);
     this.local.copy(this.target).applyMatrix4(this.m.copy(this.group.matrixWorld).invert());
