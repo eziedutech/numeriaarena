@@ -29,7 +29,7 @@ function English() {
         <li>
           A paper animal walks out of the book with a question. Answer with your hand: a ray and a dot show where you
           point, the dot only lights a card, and the tap of your index finger chooses it. With a controller, aim and
-          press the trigger. In some rooms the question is written on the classroom board.
+          press the index-finger button. In some rooms the question is written on the classroom board.
         </li>
       </ol>
       <ul>
@@ -96,7 +96,7 @@ function English() {
         </li>
         <li>
           In the headset, press ENTER VR. The sheet stands in front of you as a large paper panel, the step before and
-          after wait at either side, and paper digits drift around you. Point and pull the trigger, or pinch, to move
+          after wait at either side, and paper digits drift around you. Point and press the index-finger button, or pinch, to move
           through it.
         </li>
       </ol>
@@ -111,7 +111,7 @@ function English() {
         <li>Every game earns Folds. Open MY FOLD TOWN from the home page or from the sticker beside the book.</li>
         <li>
           In the headset your land lies on the desk and the shop's shelf stands at its right. Grab a piece with the grip
-          or the trigger, or simply pinch it, carry it over the land and let go. Press TURN while you carry it.
+          or the index-finger button, or simply pinch it, carry it over the land and let go. Press TURN while you carry it.
         </li>
         <li>
           A new building takes time to fold up. Answer a FINISH NOW question to finish it at once. Point at any building
@@ -164,7 +164,7 @@ function Indonesian() {
         </li>
         <li>
           Hewan kertas keluar dari buku membawa soal. Jawab dengan tanganmu: sinar dan titik menunjukkan arah tunjukmu,
-          titik hanya menyalakan kartu, dan tap telunjukmu memilihnya. Dengan controller, arahkan lalu tekan trigger. Di
+          titik hanya menyalakan kartu, dan tap telunjukmu memilihnya. Dengan controller, arahkan lalu tekan tombol telunjuk. Di
           beberapa ruang soalnya ditulis di papan tulis kelas.
         </li>
       </ol>
@@ -232,7 +232,7 @@ function Indonesian() {
         </li>
         <li>
           Di headset, tekan MASUK VR. Lembarnya berdiri di depanmu seperti panel kertas besar, langkah sebelum dan
-          sesudahnya menunggu di kedua sisi, dan angka-angka kertas melayang di sekelilingmu. Tunjuk lalu tarik trigger,
+          sesudahnya menunggu di kedua sisi, dan angka-angka kertas melayang di sekelilingmu. Tunjuk lalu tekan tombol telunjuk,
           atau cubit, untuk berpindah langkah.
         </li>
       </ol>
@@ -247,7 +247,7 @@ function Indonesian() {
         <li>Setiap game memberi Folds. Buka KOTA LIPATKU dari beranda atau dari stiker di samping buku.</li>
         <li>
           Di headset, lahanmu terbentang di meja dan rak toko berdiri di kanannya. Ambil potongan dengan grip atau
-          trigger, atau cukup cubit, bawa ke atas lahan lalu lepaskan. Tekan PUTAR sambil membawanya.
+          tombol telunjuk, atau cukup cubit, bawa ke atas lahan lalu lepaskan. Tekan PUTAR sambil membawanya.
         </li>
         <li>
           Bangunan baru butuh waktu untuk terlipat. Jawab soal SELESAIKAN SEKARANG untuk menyelesaikannya seketika. Tunjuk

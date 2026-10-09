@@ -26,8 +26,8 @@ const EN = {
   },
   /** The hint on a headset, where the controller's ray and trigger pick on this page. */
   hintHeadset: {
-    xr: 'Point the controller and pull the trigger to pick. The game then opens in XR on your real desk.',
-    computer: 'The game plays flat in this window. Point the controller and pull the trigger to pick.',
+    xr: 'Point the controller and press the index-finger button to pick. The game then opens in XR on your real desk.',
+    computer: 'The game plays flat in this window. Point the controller and press the index-finger button to pick.',
   },
   noXr: 'No headset found on this device',
   noXrBody:
@@ -203,7 +203,7 @@ const EN = {
   },
   pages: {
     'How to play':
-      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. Point with your hand and tap with the index finger, or aim a controller and press the trigger. CARI & UKUR, only in the headset, asks you to measure a shape on the desk with pins and a line and then pick the answer. In MATH LESSONS, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
+      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. Point with your hand and tap with the index finger, or aim a controller and press the index-finger button. CARI & UKUR, only in the headset, asks you to measure a shape on the desk with pins and a line and then pick the answer. In MATH LESSONS, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
     'For parents':
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
@@ -236,8 +236,8 @@ const ID: typeof EN = {
     smartboard: 'Sentuh layar besar untuk bermain. BALAPAN DI SMARTBOARD menjajarkan tiga pemain.',
   },
   hintHeadset: {
-    xr: 'Arahkan controller, lalu tekan pelatuk untuk memilih. Game lalu terbuka di XR di mejamu sendiri.',
-    computer: 'Game dimainkan datar di jendela ini. Arahkan controller, lalu tekan pelatuk untuk memilih.',
+    xr: 'Arahkan controller, lalu tekan tombol telunjuk untuk memilih. Game lalu terbuka di XR di mejamu sendiri.',
+    computer: 'Game dimainkan datar di jendela ini. Arahkan controller, lalu tekan tombol telunjuk untuk memilih.',
   },
   noXr: 'Headset tidak ditemukan di perangkat ini',
   noXrBody:
@@ -410,7 +410,7 @@ const ID: typeof EN = {
   },
   pages: {
     'How to play':
-      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Tunjuk dengan tanganmu lalu tap dengan telunjuk, atau arahkan controller lalu tekan trigger. CARI & UKUR, hanya di headset, memintamu mengukur bangun di meja dengan pin dan garis lalu memilih jawabannya. Di EDUKASI MATEMATIKA, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
+      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Tunjuk dengan tanganmu lalu tap dengan telunjuk, atau arahkan controller lalu tekan tombol telunjuk. CARI & UKUR, hanya di headset, memintamu mengukur bangun di meja dengan pin dan garis lalu memilih jawabannya. Di EDUKASI MATEMATIKA, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
     'For parents':
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:
