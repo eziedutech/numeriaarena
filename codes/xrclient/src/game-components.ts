@@ -111,6 +111,11 @@ const Games = {
   MeDone: 'me_done',
   MeBack: 'me_back',
   MeZoom: 'me_zoom',
+  MeTurnLeft: 'me_tl',
+  MeTurnRight: 'me_tr',
+  MeTurnUp: 'me_tu',
+  MeTurnDown: 'me_td',
+  MeNet: 'me_net',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */

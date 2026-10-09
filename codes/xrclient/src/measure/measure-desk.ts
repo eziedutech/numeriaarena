@@ -62,7 +62,12 @@ export type MeasureChoice =
   | 'me_again'
   | 'me_done'
   | 'me_back'
-  | 'me_zoom';
+  | 'me_zoom'
+  | 'me_tl'
+  | 'me_tr'
+  | 'me_tu'
+  | 'me_td'
+  | 'me_net';
 
 export function isMeasureChoice(choice: string): choice is MeasureChoice {
   return choice.startsWith('me_');
@@ -231,6 +236,11 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_start: 'next',
   me_back: 'back',
   me_zoom: 'zoomIn',
+  me_tl: 'turnLeft',
+  me_tr: 'turnRight',
+  me_tu: 'arrowUp',
+  me_td: 'arrowDown',
+  me_net: 'box',
   me_clear: 'trash',
   me_skip: 'skip',
   me_again: 'replay',
@@ -450,9 +460,8 @@ export class MeasureDesk {
     this.step = 'how';
     const lines: [string, number, string][] = [[this.t.howTitle, 0.026, HEAD]];
     const hands = !this.host.controllers() && this.host.handsRay();
-    for (const l of hands ? this.t.howHand : this.t.how) lines.push([l, 0.017, INK]);
-    if (this.solid && this.source === 'paper') lines.push([this.t.howSolid, 0.017, INK]);
-    if (!hands) lines.push([this.t.howController, 0.014, INK]);
+    for (const l of this.host.controllers() ? this.t.howTrigger : hands ? this.t.howHand : this.t.how) lines.push([l, 0.017, INK]);
+    if (this.solid && this.source === 'paper') lines.push([hands ? this.t.howSolidHand : this.t.howSolid, 0.017, INK]);
     this.say(lines);
     this.clearCards();
     this.card('me_start', this.t.start, 0, CARD_Z, TEAL);
@@ -519,6 +528,14 @@ export class MeasureDesk {
     this.card('me_clear', this.t.clear, TOOLS_X - 0.07, -0.06, YELLOW);
     this.card('me_skip', this.t.skip, TOOLS_X, 0.025, BLUE);
     this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
+    // A paper solid turns by arrow cards (the corners behind it come to the front), and opens flat by NET.
+    if (o.source === 'paper' && this.paper?.solid) {
+      this.card('me_tl', this.t.turnLeft, -0.41, -0.1, TEAL);
+      this.card('me_tr', this.t.turnRight, -0.31, -0.1, TEAL);
+      this.card('me_tu', this.t.turnUp, -0.41, -0.02, BLUE);
+      this.card('me_td', this.t.turnDown, -0.31, -0.02, BLUE);
+      if (this.paper.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
+    }
     sfx('unfold');
   }
 
@@ -632,6 +649,21 @@ export class MeasureDesk {
       case 'me_done':
         if (this.step === 'recap') this.host.closed();
         return;
+      case 'me_tl':
+      case 'me_tr':
+        this.turnBy(Y, choice === 'me_tr' ? 1 : -1);
+        return;
+      case 'me_tu':
+      case 'me_td':
+        // Rolled away from the player (UP) or towards them (DOWN).
+        this.turnBy(X, choice === 'me_td' ? 1 : -1);
+        return;
+      case 'me_net':
+        if (this.step === 'measure' && this.paper?.unfold) {
+          this.unfoldTo = this.unfoldTo > 0 ? 0 : 1;
+          sfx(this.unfoldTo > 0 ? 'unfold' : 'fold');
+        }
+        return;
       case 'me_zoom':
         // A controller holds the card down (see magnify); a hand taps it on and taps it off.
         if (!this.host.controllers()) {
@@ -690,6 +722,12 @@ export class MeasureDesk {
     this.paintPins();
     this.showPreview();
     this.updateBin(delta);
+    // A controller's trigger works as a hand's tap does: the same running line, pin by pin.
+    if (this.host.controllers() && !this.boardHeld) {
+      for (const side of SIDES) {
+        if (this.grabEdges(side).start && this.aimRay(side, this.o2, this.d2)) this.tapAim[side] = { origin: this.o2.clone(), dir: this.d2.clone() };
+      }
+    }
     for (const side of SIDES) {
       if (this.boardHeld === side || this.binPress(side)) continue;
       this.pullThread(side);
@@ -1002,7 +1040,7 @@ export class MeasureDesk {
 
   /** A press on the bin takes its pin away, and the threads of that pin with it. */
   private binPress(side: Side): boolean {
-    if (this.handRay()) return false;
+    if (this.rayMode()) return false;
     const pin = this.active;
     if (!pin || !this.trash.visible || this.pulls.has(side)) return false;
     if (!this.grabEdges(side).start || !this.overBin(side)) return false;
@@ -1055,7 +1093,7 @@ export class MeasureDesk {
 
   /** Where a side touches: the hand's fingertip (or pinch), the controller's tip. World frame. */
   private tip(side: Side, pinch: boolean, out: Vector3): boolean {
-    if (this.rayMode()) {
+    if (this.rayMode() && !(pinch && this.handRay())) {
       out.copy(this.lastTip[side]);
       return this.aimed[side];
     }
@@ -1262,7 +1300,6 @@ export class MeasureDesk {
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
     if (this.rayMode()) {
-      const press = this.host.controllers() ? this.grabEdges(side).start : false;
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
       const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
@@ -1275,9 +1312,6 @@ export class MeasureDesk {
         this.metric.worldToLocal(ghost.position);
         ghost.scale.setScalar(onPin ? 0.8 : 0.5);
       }
-      if (press && free) this.addPin(this.v);
-      else if (press && !onPin && this.pins.length >= this.maxPins() && this.pinnable(this.v)) this.tell(this.t.allPins(this.maxPins()));
-      else if (press && !onPin && this.pins.length < this.maxPins() && !this.pinnable(this.v)) this.tell(this.t.farPin);
       return;
     }
     const h = this.hands.get(side);
@@ -1347,8 +1381,8 @@ export class MeasureDesk {
 
   /** A pinch (or trigger) on a pin pulls a thread from it until let go. */
   private pullThread(side: Side): void {
-    // Hands join pins by tapping them (see worked taps), never by pulling.
-    if (this.handRay()) return;
+    // A ray, a controller's or a hand's, draws one running line by taps (see workTaps), never by pulling.
+    if (this.rayMode()) return;
     const edges = this.grabEdges(side);
     const pull = this.pulls.get(side);
     if (!pull) {
@@ -1627,6 +1661,15 @@ export class MeasureDesk {
 
   // ------------------------------------------------------------ turning a paper solid
 
+  /** A quarter turn of the paper solid about the desk's up (Y) or sideways (X), as the controller's buttons make. */
+  private turnBy(axis: Vector3, sign: number): void {
+    const spin = this.paper?.spin;
+    if (!spin || !this.paper?.solid || this.unfoldTo > 0 || this.step !== 'measure') return;
+    const from = this.turnGoal ?? nearestSquare(spin.quaternion);
+    this.turnGoal = new Quaternion().setFromAxisAngle(axis, (sign * Math.PI) / 2).multiply(from);
+    sfx('fold');
+  }
+
   private turnSolid(delta: number): void {
     const paper = this.paper;
     if (!paper?.solid) return;
@@ -1720,6 +1763,8 @@ export class MeasureDesk {
 
   private turnStart(side: Side): boolean {
     if (this.host.controllers()) return this.host.squeeze(side).start;
+    // A hand with a ray taps; it turns the solid by the arrow cards, not by pinching it.
+    if (this.handRay()) return false;
     return this.hands.get(side).pinchStart;
   }
 

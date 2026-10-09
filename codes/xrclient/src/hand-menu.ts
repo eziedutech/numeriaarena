@@ -90,6 +90,9 @@ interface Aim {
   frozen: Vector3;
   /** Whether IWSDK's own ray was last told to hide. */
   taking?: boolean;
+  /** When the emulator's pinch began, and where. */
+  pinchT: number;
+  pinchP: Vector3;
   /** The last card the dot was on, and when. */
   lastTarget?: MenuTarget;
   lastAt: number;
@@ -125,7 +128,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, speed: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, pinchT: -1, pinchP: new Vector3(), speed: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -290,9 +293,12 @@ export class HandMenu {
     // The emulator's pinch closes the fingers and puts the ray down at once: the card it was on a moment ago.
     const lately = this.now - a.lastAt < 0.8 ? a.lastTarget : a.target;
     const closed = this.now - a.lastAt < 0.8;
-    if (this.host.pinchTaps() && h.pinchStart) {
-      a.steady = lately;
-      tapped = true;
+    if (this.host.pinchTaps()) {
+      // The tap, as the pinch closes: the solid is turned by its cards, never by pinching it.
+      if (h.pinchStart) {
+        a.steady = lately;
+        tapped = true;
+      }
     } else if (a.up && a.cooldown <= 0) {
       if (!a.rising) {
         if (a.alpha - a.base > 10 && speed > TAP_ONSET_DEG_S) {
