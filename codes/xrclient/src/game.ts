@@ -95,6 +95,8 @@ import { onNetwork, online } from './offline.js';
 import { LobbyBook, type LobbyFacts } from './lobby-book.js';
 import { PageTurn, PAGE_TURN_S } from './page-turn.js';
 import { openBoard } from './board/board.js';
+import { onPhone } from './phone-mode.js';
+import { PhoneView, PHONE_VIEW } from './phone-view.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -193,6 +195,8 @@ const CRYSTAL_TAG_LEAN = 0.55;
 const CRYSTAL_COLORS = [ACCENTS.place_value, ACCENTS.multiply_divide, ACCENTS.fractions, ACCENTS.decimals, ACCENTS.measurement];
 /** Balloon Burst question card, above the balloons so nothing hides it. */
 const PROMPT_POS = new Vector3(0, 0.36, STAND.z);
+/** How far a phone brings the question down in the games that stay low on the desk. */
+const PHONE_PROMPT_DROP = 0.1;
 /** Behind the book, where the paper bird of the old stand-in flies to. */
 const HOME = new Vector3(0, 0.023, -0.215);
 /**
@@ -537,6 +541,12 @@ export class GameSystem extends createSystem({
   private store?: LocalStore;
   private unsaved: { events: unknown[]; mode: string; seat?: string }[] = [];
   private phase: Phase = 'loading';
+  private phoneView = new PhoneView();
+
+  /** A phone held sideways, playing in the browser (never in the headset). */
+  private phonePlay(): boolean {
+    return onPhone() && this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+  }
   private wasControllers = false;
   /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
   private handMenu?: HandMenu;
@@ -2672,19 +2682,22 @@ export class GameSystem extends createSystem({
     this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK, question: true });
     this.promptSolved = false;
     this.prompt.mesh.name = 'prompt-label';
-    this.prompt.mesh.position.copy(PROMPT_POS);
+    // On a phone the question comes down for the games that fill the lower part of the desk, so the camera can come closer.
+    const at = PROMPT_POS.clone();
+    if (this.phonePlay() && !this.race && offer.game !== 'balloon_burst') at.y -= PHONE_PROMPT_DROP;
+    this.prompt.mesh.position.copy(at);
     desk.add(this.prompt.mesh);
     this.labels.add(this.prompt.mesh);
     readAloud(card);
     if (howTo) {
       this.hint = new Label(howTo, { height: 0.022 });
       this.hint.mesh.name = 'hint-label';
-      this.hint.mesh.position.set(PROMPT_POS.x, PROMPT_POS.y - 0.034, PROMPT_POS.z);
+      this.hint.mesh.position.set(at.x, at.y - 0.034, at.z);
       desk.add(this.hint.mesh);
       this.labels.add(this.hint.mesh);
     }
     if (!this.timerBar.parent) desk.add(this.timerBar);
-    this.timerBar.position.set(PROMPT_POS.x, PROMPT_POS.y + 0.034, PROMPT_POS.z);
+    this.timerBar.position.set(at.x, at.y + 0.034, at.z);
     this.timerBar.visible = false;
     this.creatureScale = boss ? 1.4 : 1;
     this.offering = undefined;
@@ -3744,6 +3757,10 @@ export class GameSystem extends createSystem({
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     this.runHome();
     const onHome = this.home.visible;
+    // A phone held sideways: the camera comes in until the part of the desk in use fills the screen.
+    if (!onHome && onPhone() && this.phase !== 'town' && this.phase !== 'measure' && this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      this.phoneView.update(this.camera, delta, this.phase === 'menu' ? PHONE_VIEW.menu : this.race ? PHONE_VIEW.race : this.kind === 'balloon_burst' ? PHONE_VIEW.balloons : this.kind === 'bridge_builder' ? PHONE_VIEW.planks : PHONE_VIEW.play);
+    }
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
       this.pendingXr = undefined;

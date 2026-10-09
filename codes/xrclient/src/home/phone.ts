@@ -1,26 +1,23 @@
+import { onPhone, upright } from '../phone-mode.js';
 import { getLang } from '../settings.js';
 import { el } from './paper.js';
 
 /**
- * A phone or a narrow screen: the home page and the desk are laid out for a
- * wide screen, so a phone gets a card saying so once a visit, and turns the
- * game sideways for itself where the browser lets a page do that. Goes by
- * the size of the screen, never by which browser or device it is.
+ * A phone is played sideways: held upright it gets a card asking to be
+ * turned, and where the browser lets a page do it (Android, after a tap, in
+ * full screen) the game turns itself. Goes by the size of the screen, never
+ * by which browser or device it is. A computer, a tablet or a headset never
+ * sees any of this.
  */
 
 /** Wide enough for the smartboard race: 1024 pixels across, or a tablet held sideways. */
 const WIDE = '(min-width: 1024px), (orientation: landscape) and (min-width: 900px) and (min-height: 600px)';
-/** A phone: its screen's short side under 600 pixels, whichever way it is held. */
-const PHONE_SIDE = 600;
-const SEEN = 'numeria.phoneCard';
 
 const TEXT = {
   en: {
-    phoneTitle: 'BEST ON A WIDE SCREEN OR HEADSET',
-    phoneBody: 'On a phone the desk and its writing are small. A laptop, tablet, smartboard or headset shows them best.',
-    turns: 'The game turns sideways and fills the screen.',
-    turnYourself: 'Turn your phone sideways for a bigger desk.',
-    continue: 'CONTINUE ANYWAY',
+    turnTitle: 'TURN YOUR PHONE SIDEWAYS',
+    turnBody: 'Numeria Arena is played with the phone held sideways.',
+    turns: 'FULL SCREEN',
     wideTitle: 'WIDE SCREEN NEEDED',
     wideBody: 'This part needs a wide screen (at least 1024 pixels). Open it on a laptop, projector or smartboard.',
     copy: 'COPY LINK',
@@ -28,11 +25,9 @@ const TEXT = {
     close: 'CLOSE',
   },
   id: {
-    phoneTitle: 'PALING NYAMAN DI LAYAR LEBAR ATAU HEADSET',
-    phoneBody: 'Di ponsel meja dan tulisannya kecil. Laptop, tablet, smartboard, atau headset menampilkannya paling baik.',
-    turns: 'Game berputar mendatar dan memenuhi layar.',
-    turnYourself: 'Putar ponselmu mendatar supaya meja lebih besar.',
-    continue: 'LANJUTKAN SAJA',
+    turnTitle: 'PUTAR PONSELMU MENDATAR',
+    turnBody: 'Numeria Arena dimainkan dengan ponsel dipegang mendatar.',
+    turns: 'LAYAR PENUH',
     wideTitle: 'BUTUH LAYAR LEBAR',
     wideBody: 'Bagian ini butuh layar lebar (paling sedikit 1024 piksel). Buka di laptop, proyektor, atau smartboard.',
     copy: 'SALIN TAUTAN',
@@ -55,16 +50,20 @@ const CSS = `
   font-family: inherit; font-weight: 700; font-size: 16px; line-height: 1.2; letter-spacing: 0.04em; box-shadow: 3px 5px 10px rgba(70, 50, 25, 0.3); }
 .screen-card .go { background: #3469c4; color: #fff8ec; }
 .screen-card .plain { background: #f1e3c4; color: #3a3f4b; }
+.screen-card-veil.turn { z-index: 40; background: #e0c780; }
+.screen-card .turn-phone { animation: turn-phone 2.4s ease-in-out infinite; transform-origin: 50% 50%; }
+@keyframes turn-phone { 0%, 25% { transform: rotate(0deg); } 65%, 100% { transform: rotate(-90deg); } }
+html.phone canvas { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+html.phone body { overscroll-behavior: none; }
 `;
 
 const ART = '<svg viewBox="0 0 64 40" aria-hidden="true"><rect x="4" y="4" width="56" height="30" rx="3"/><path d="M24 38 H40"/></svg>';
+/** An upright phone that turns onto its side, over and over. */
+const TURN_ART =
+  '<svg class="turn-phone" viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="8" width="20" height="40" rx="4"/><path d="M30 42 H34"/></svg>';
 
 export function wideEnough(): boolean {
   return window.matchMedia(WIDE).matches;
-}
-
-function onPhone(): boolean {
-  return Math.min(screen.width, screen.height) < PHONE_SIDE;
 }
 
 type Lockable = ScreenOrientation & { lock?: (o: 'landscape') => Promise<void> };
@@ -85,12 +84,15 @@ async function turnSideways(): Promise<void> {
   }
 }
 
+function ensureCss(): void {
+  if (document.getElementById('screen-card-css')) return;
+  const style = el('style', '', document.head);
+  style.id = 'screen-card-css';
+  style.textContent = CSS;
+}
+
 function card(): { veil: HTMLElement; body: HTMLElement } {
-  if (!document.getElementById('screen-card-css')) {
-    const style = el('style', '', document.head);
-    style.id = 'screen-card-css';
-    style.textContent = CSS;
-  }
+  ensureCss();
   const veil = el('div', 'screen-card-veil', document.body);
   const body = el('div', 'screen-card', veil);
   body.setAttribute('role', 'dialog');
@@ -105,41 +107,42 @@ function button(body: HTMLElement, cls: string, text: string, onClick: (b: HTMLB
   b.addEventListener('click', () => onClick(b));
 }
 
-let checked = false;
+let started = false;
 
 /**
- * On a phone, once a visit: the card saying the game is best on a wide screen,
- * whose CONTINUE ANYWAY also turns the game sideways where it can. Later in
- * the same visit (the page opened again) the first tap anywhere does that.
+ * On a phone: held upright, the card asking to turn it sideways covers the
+ * game; held sideways, the first tap anywhere also takes the full screen
+ * where the browser allows it. Started once; called again, it does nothing.
  */
 export function phoneNotice(): void {
-  if (checked || !onPhone()) return;
-  checked = true;
-  let seen = false;
-  try {
-    seen = sessionStorage.getItem(SEEN) === '1';
-  } catch {
-    // No storage: shown every time.
-  }
-  if (seen) {
-    if (canTurn()) window.addEventListener('pointerdown', () => void turnSideways(), { once: true, capture: true });
-    return;
-  }
+  if (started || !onPhone()) return;
+  started = true;
+  ensureCss();
+  document.documentElement.classList.add('phone');
   const t = TEXT[getLang()];
-  const { veil, body } = card();
-  body.setAttribute('aria-label', t.phoneTitle);
-  el('h2', '', body).textContent = t.phoneTitle;
-  el('p', '', body).textContent = t.phoneBody;
-  el('p', 'soft', body).textContent = canTurn() ? t.turns : t.turnYourself;
-  button(body, 'go', t.continue, () => {
-    try {
-      sessionStorage.setItem(SEEN, '1');
-    } catch {
-      // No storage.
+  let veil: HTMLElement | undefined;
+  const check = (): void => {
+    if (upright()) {
+      if (!veil) {
+        const made = card();
+        veil = made.veil;
+        veil.classList.add('turn');
+        made.body.setAttribute('aria-label', t.turnTitle);
+        made.body.querySelector('svg')?.remove();
+        made.body.insertAdjacentHTML('afterbegin', TURN_ART);
+        el('h2', '', made.body).textContent = t.turnTitle;
+        el('p', '', made.body).textContent = t.turnBody;
+        if (canTurn()) button(made.body, 'go', t.turns, () => void turnSideways());
+      }
+    } else if (veil) {
+      veil.remove();
+      veil = undefined;
     }
-    veil.remove();
-    void turnSideways();
-  });
+  };
+  check();
+  window.addEventListener('resize', check);
+  window.addEventListener('orientationchange', check);
+  if (canTurn()) window.addEventListener('pointerdown', () => void turnSideways(), { once: true, capture: true });
 }
 
 /** In place of a part made for a projector or smartboard on a narrow screen: where to open it, and the link to copy. */

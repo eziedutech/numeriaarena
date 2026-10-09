@@ -29,6 +29,7 @@ import { leaderboardSticker } from './leaderboard-sticker.js';
 import { bookPage } from '../lobby-book.js';
 import { townSticker } from './town-sticker.js';
 import { openTown } from '../town/town-page.js';
+import { onPhone } from '../phone-mode.js';
 import { phoneNotice, wideEnough, wideNotice } from './phone.js';
 
 /**
@@ -49,6 +50,9 @@ const COLORS = { teal: '#3fb6a0', cobalt: '#3469c4', coral: '#f2716b', violet: '
 const VERSION = 'v0.4';
 const STAGE_W = 1600;
 const STAGE_H = 900;
+/** On a phone held sideways the page is a narrower stage, scrolled up and down, so its cards and words stay readable. */
+const PHONE_W = 1000;
+const PHONE_H = 720;
 /** Where the camera looks from while the home page is up: close to the book. */
 const HOME_EYE = new Vector3(0, 1.06, 0.2);
 const HOME_AT = new Vector3(0, 0.95, -0.22);
@@ -257,6 +261,23 @@ html.contrast :is(#home, #home-back, #home-games, #leaders, #board) img { filter
   animation: home-skel 1.1s ease-in-out infinite alternate; }
 @keyframes home-skel { from { opacity: 0.45; } to { opacity: 1; } }
 body.home-open button[class*="xr" i], body.home-open #VRButton, body.home-open #ARButton { display: none !important; }
+/* A phone, held sideways: the same cards on a narrower stage that scrolls, and popups over the screen, not the stage. */
+#home.phone { pointer-events: auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#home.phone .sizer { position: relative; width: 100%; overflow: hidden; }
+#home.phone .stage { width: ${PHONE_W}px; height: ${PHONE_H}px; }
+#home.phone .title { left: 20px; top: 6px; width: 250px; transform: none; }
+#home.phone .tabs { left: 290px; top: 16px; transform: none; }
+#home.phone .chips.top { left: 500px; top: 20px; transform: none; margin-top: 0; }
+#home.phone .hint.bar { left: 20px; top: 76px; transform: none; font-size: 15px; }
+#home.phone .offline { left: 660px; top: 72px; transform: none; }
+#home.phone .head { top: 104px; }
+#home.phone .town { left: 390px; top: 112px; width: 220px; }
+#home.phone .townlabel { left: 20px; top: 134px; }
+#home.phone .town.board { left: 390px; right: auto; top: 340px; }
+#home.phone .town.board .townlabel { left: 20px; right: auto; }
+#home.phone .footer { bottom: 14px; }
+#home.phone > .veil { position: fixed; inset: 0; padding: 8px; box-sizing: border-box; overflow-y: auto; display: flex; z-index: 6; }
+#home.phone > .veil > .pop { margin: auto; }
 #home-games { position: fixed; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
   background: ${PAPER}; box-shadow: 4px 7px 12px rgba(70, 50, 25, 0.32); display: none; }
 #home-back { position: fixed; left: 16px; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
@@ -306,6 +327,8 @@ export class Home {
   private lang: Lang;
   private device: Device;
   private scale = 1;
+  /** On a phone the stage sits in a sizer as tall as the stage drawn, so the page scrolls. */
+  private sizer?: HTMLDivElement;
   private shown = false;
   /** OTHER GAME beside HOME, during a practice in the browser: back to the practice envelopes. */
   private otherGame: HTMLElement;
@@ -506,7 +529,22 @@ export class Home {
     if (show) this.otherGame.style.left = `${16 + this.back.offsetWidth + 12}px`;
   }
 
+  private get phone(): boolean {
+    return onPhone();
+  }
+
+  /** Where a popup goes: over the stage, or on a phone over the screen itself. */
+  private layer(): HTMLElement {
+    return this.phone ? this.root : this.stage;
+  }
+
   private fit(): void {
+    if (this.phone) {
+      this.scale = window.innerWidth / PHONE_W;
+      this.stage.style.transform = `scale(${this.scale})`;
+      if (this.sizer) this.sizer.style.height = `${PHONE_H * this.scale}px`;
+      return;
+    }
     this.scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
     const offX = (window.innerWidth - STAGE_W * this.scale) / 2;
     this.stage.style.transform = `translate(${offX}px, 0) scale(${this.scale})`;
@@ -515,7 +553,9 @@ export class Home {
   private render(): void {
     const t = this.t;
     this.root.innerHTML = '';
-    this.stage = el('div', 'stage', this.root);
+    this.root.classList.toggle('phone', this.phone);
+    this.sizer = this.phone ? el('div', 'sizer', this.root) : undefined;
+    this.stage = el('div', 'stage', this.sizer ?? this.root);
 
     const title = el('img', 'title', this.stage);
     title.src = `${import.meta.env.BASE_URL}ui2d/brand/title_numeria_arena.webp`;
@@ -588,7 +628,9 @@ export class Home {
     // Signed in, the book's pages are the player's (written by the game), and the hint goes over them.
     const signedIn = teacherState().kind === 'in' || studentState() !== null;
     if (signedIn) this.eraseBook();
-    if (signedIn || !this.writeOnBook(hint)) said.classList.add('bar');
+    // On a phone the stickers stand over the book, so the hint is always the bar.
+    if (signedIn || this.phone || !this.writeOnBook(hint)) said.classList.add('bar');
+    if (this.phone) this.eraseBook();
     if (!online()) {
       // No network: the games still play, and say where their results go. A row of its own,
       // under the hint, so the chips above keep their width.
@@ -608,7 +650,7 @@ export class Home {
 
     // Left: ways to play, or for a signed-in teacher the class tools.
     const left = el('div', 'head', this.stage);
-    left.style.left = '40px';
+    left.style.left = this.phone ? '20px' : '40px';
     if (teacher.kind === 'in') {
       left.appendChild(paperText(t.teach, 30, INK));
       // The class tools live on the teacher page, which opens at the right tab.
@@ -628,7 +670,7 @@ export class Home {
 
     // Right: who you are, and learning more.
     const right = el('div', 'head', this.stage);
-    right.style.left = '1210px';
+    right.style.left = this.phone ? '630px' : '1210px';
     right.appendChild(paperText(t.you, 30, INK));
     let row = 0;
     if (teacher.kind === 'in') {
@@ -683,7 +725,7 @@ export class Home {
     // The town the player builds with the Folds they earn: a small round
     // paper sticker with the town standing up on it.
     const town = el('button', 'town', this.stage);
-    town.insertAdjacentHTML('beforeend', townSticker(300));
+    town.insertAdjacentHTML('beforeend', townSticker(this.phone ? 210 : 300));
     const label = el('div', 'townlabel shadow', town);
     label.appendChild(paperText(t.town[0], 18, INK));
     el('div', 'sub', label).textContent = t.town[1];
@@ -693,7 +735,7 @@ export class Home {
 
     // Its partner on the right: the leaderboards, a podium on a sticker.
     const board = el('button', 'town board', this.stage);
-    board.insertAdjacentHTML('beforeend', leaderboardSticker(300));
+    board.insertAdjacentHTML('beforeend', leaderboardSticker(this.phone ? 210 : 300));
     const boardLabel = el('div', 'townlabel shadow', board);
     boardLabel.appendChild(paperText(t.board[0], 18, INK));
     el('div', 'sub', boardLabel).textContent = t.board[1];
@@ -746,8 +788,8 @@ export class Home {
     const card = el('button', 'card shadow', this.stage);
     card.style.border = '0';
     card.style.textAlign = 'left';
-    card.style.left = side === 'left' ? '40px' : '1210px';
-    card.style.top = `${360 + row * 90}px`;
+    card.style.left = this.phone ? (side === 'left' ? '20px' : '630px') : side === 'left' ? '40px' : '1210px';
+    card.style.top = `${(this.phone ? 150 : 360) + row * 90}px`;
     const coloured = side === 'left';
     card.style.background = coloured ? color : PAPER;
     card.style.color = coloured ? PAPER : INK;
@@ -823,7 +865,7 @@ export class Home {
   // ------------------------------------------------------------ popups
 
   private popup(title: string): { veil: HTMLElement; body: HTMLElement } {
-    const veil = el('div', 'veil', this.stage);
+    const veil = el('div', 'veil', this.layer());
     const pop = el('div', 'pop shadow', veil);
     pop.appendChild(paperText(title, 24, INK));
     pop.setAttribute('role', 'dialog');
@@ -1034,7 +1076,7 @@ export class Home {
     const t = this.t;
     const look = avatarOf(s.pseudonym);
     const name = s.pseudonym.toUpperCase();
-    const veil = el('div', 'veil', this.stage);
+    const veil = el('div', 'veil', this.layer());
     const body = el('div', 'pop shadow', veil);
     body.setAttribute('role', 'dialog');
     body.setAttribute('aria-label', t.studentHi(s.pseudonym));
