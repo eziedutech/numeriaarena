@@ -847,21 +847,28 @@ export class MeasureDesk {
         continue;
       }
       const made = this.addPin(this.v);
+      this.selectedBy = side;
       if (this.selected && made !== this.selected) this.join(this.selected, made);
-      if (this.selected) this.clearSelection();
+      // The line goes on from the new pin, until the shape has what it needs and the answers come.
+      if (this.step === 'measure') this.selected = made;
     }
   }
 
   /** A tap on a pin: it is chosen; tapped again it is let go; with another chosen, a thread joins them. */
   private choosePin(pin: Pin, side: Side): void {
+    this.selectedBy = side;
     if (!this.selected) {
       this.selected = pin;
-      this.selectedBy = side;
       sfx('grab');
       return;
     }
-    if (this.selected !== pin) this.join(this.selected, pin);
-    this.clearSelection();
+    // The same pin again lets the line go; another fixes the line to it, and the next line starts there.
+    if (this.selected === pin) {
+      this.clearSelection();
+      return;
+    }
+    this.join(this.selected, pin);
+    if (this.step === 'measure') this.selected = pin;
   }
 
   private clearSelection(): void {
@@ -870,6 +877,13 @@ export class MeasureDesk {
     this.preview.mesh.removeFromParent();
     dropLabel(this.preview.label);
     this.preview = undefined;
+  }
+
+  /** Whether a world point is in or near the paper object (or, for a real thing, anywhere on the desk). */
+  private roundPaper(world: Vector3): boolean {
+    if (!this.paper) return true;
+    this.paper.spin.getWorldPosition(this.u);
+    return world.distanceTo(this.u) < this.paper.radius * PAPER_SCALE + 0.1;
   }
 
   /** The thread from the chosen pin follows the ray, with its length on it, as a pulled thread does. */
@@ -889,9 +903,13 @@ export class MeasureDesk {
     const side = this.selectedBy;
     const through = this.pinAtRay(side, from);
     // Without an end to reach it is not shown: a thread not yet laid stands a metre tall at the middle.
+    // The line follows the hand while it points in or near the paper; its end rests on a corner it comes near.
     let ended = true;
     if (through) through.mesh.getWorldPosition(this.v);
-    else ended = this.tip(side, false, this.v);
+    else {
+      ended = this.tip(side, false, this.v) && this.roundPaper(this.v);
+      if (ended && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
+    }
     this.preview.mesh.visible = ended;
     this.preview.label.mesh.visible = ended;
     if (!ended) return;
@@ -1603,6 +1621,7 @@ export class MeasureDesk {
       this.nextTask();
       return;
     }
+    this.clearSelection();
     this.showChoices(r);
   }
 
