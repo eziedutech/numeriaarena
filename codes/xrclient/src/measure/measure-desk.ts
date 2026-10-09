@@ -95,6 +95,12 @@ export interface MeasureHost {
   /** Controllers in the hands, no tracked hand. */
   controllers(): boolean;
   hands(): HandAdapters | undefined;
+  /** A tracked hand's aim under the hand menu (its ray); false when it has none. */
+  handAim(side: Side, origin: Vector3, dir: Vector3): boolean;
+  /** Whether hands work through rays and taps now (the hand menu is on). */
+  handsRay(): boolean;
+  /** Takes the taps of a hand's index finger that land on no card; call the result to stop. */
+  handTaps(sink: (side: Side, origin: Vector3, dir: Vector3) => void): () => void;
   /** A signed-in student's grade; a guest picks one. */
   grade(): number | undefined;
   player(): string;
@@ -169,8 +175,8 @@ const RAY_PIN_SLOPE = 0.05;
 /** The bin over a pin a tip is near: its size, how high it floats, and how near a tip wakes, keeps and presses it. */
 /** A ray or pinch this near the magnifier card is on it, and where the card stands. */
 const MAGNIFIER_REACH_M = 0.05;
-const ZOOM_Z = -0.145;
-const ZOOM_X = 0.26;
+const ZOOM_Z = 0.13;
+const ZOOM_X = -0.38;
 const TRASH_SIZE = 0.03;
 const TRASH_LIFT = 0.012;
 /** How far outside the pin, along the floor, the bin floats. */
@@ -305,6 +311,12 @@ export class MeasureDesk {
   private panel?: Mesh;
   /** The controller holding the board's magnifier down: the board is close while it does. */
   private boardHeld?: Side;
+  /** A hand's tap waiting to be worked (its ray), and the pin chosen to start a thread from. */
+  private tapAim: Record<Side, { origin: Vector3; dir: Vector3 } | undefined> = { left: undefined, right: undefined };
+  private selected?: Pin;
+  private selectedBy: Side = 'right';
+  private preview?: { mesh: Mesh; label: Label };
+  private stopTaps?: () => void;
   /** A hand's tap has brought the board close, and the next tap sends it back. */
   private boardOn = false;
   /** The magnifier card beside the tools: held, it brings the board close. */
@@ -395,6 +407,9 @@ export class MeasureDesk {
     };
     this.ghosts = { left: ghost(), right: ghost() };
     this.grade = host.grade();
+    this.stopTaps = host.handTaps((side, origin, dir) => {
+      this.tapAim[side] = { origin: origin.clone(), dir: dir.clone() };
+    });
     if (this.grade === undefined) this.showGrades();
     else this.showGroups();
     console.info(`[measure] opened in the headset, grade ${this.grade ?? 'to pick'}`);
@@ -432,9 +447,10 @@ export class MeasureDesk {
   private showHow(): void {
     this.step = 'how';
     const lines: [string, number, string][] = [[this.t.howTitle, 0.026, HEAD]];
-    for (const l of this.t.how) lines.push([l, 0.017, INK]);
+    const hands = !this.host.controllers() && this.host.handsRay();
+    for (const l of hands ? this.t.howHand : this.t.how) lines.push([l, 0.017, INK]);
     if (this.solid && this.source === 'paper') lines.push([this.t.howSolid, 0.017, INK]);
-    lines.push([this.t.howController, 0.014, INK]);
+    if (!hands) lines.push([this.t.howController, 0.014, INK]);
     this.say(lines);
     this.clearCards();
     this.card('me_start', this.t.start, 0, CARD_Z, TEAL);
@@ -651,6 +667,7 @@ export class MeasureDesk {
     if (boardUp() !== this.onBoard && this.lines.length > 0) this.show();
     for (const side of SIDES) this.readTip(side, delta);
     this.magnify();
+    this.workTaps();
     if (this.step === 'verdict') {
       this.verdictLeft -= delta;
       if (this.verdictLeft <= 0) this.nextTask();
@@ -669,6 +686,7 @@ export class MeasureDesk {
       return;
     }
     this.paintPins();
+    this.showPreview();
     this.updateBin(delta);
     for (const side of SIDES) {
       if (this.boardHeld === side || this.binPress(side)) continue;
@@ -687,7 +705,7 @@ export class MeasureDesk {
     }
     for (const p of this.pins) {
       const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
-      const hover = pointed.has(p);
+      const hover = pointed.has(p) || p === this.selected;
       const m = hover ? hoverMat : used ? greenMat : pinMat;
       if (p.mesh.material !== m) p.mesh.material = m;
       const k = hover ? 1.5 : 1;
@@ -697,18 +715,43 @@ export class MeasureDesk {
 
   /** The pin a controller's ray points at (other than `except`), by the cone of the ray. */
   private pinAtRay(side: Side, except?: Pin): Pin | undefined {
-    if (!this.host.controllers() || this.pins.length === 0) return undefined;
-    const ray = this.host.ray(side);
-    ray.getWorldPosition(this.o2);
-    ray.getWorldDirection(this.d2).negate();
+    if (!this.rayMode() || this.pins.length === 0) return undefined;
+    if (!this.aimRay(side, this.o2, this.d2)) return undefined;
+    return this.pinOnRay(this.o2, this.d2, except);
+  }
+
+  /** Whether a ray aims this frame: a controller's, or a tracked hand's under the hand menu. */
+  private rayMode(): boolean {
+    return this.host.controllers() || this.host.handsRay();
+  }
+
+  /** Hands work by rays and taps (no trigger, no pinch to pull). */
+  private handRay(): boolean {
+    return !this.host.controllers() && this.host.handsRay();
+  }
+
+  /** A side's ray into `origin` and `dir`; false when it has none. */
+  private aimRay(side: Side, origin: Vector3, dir: Vector3): boolean {
+    if (this.host.controllers()) {
+      const ray = this.host.ray(side);
+      ray.getWorldPosition(origin);
+      // A ray space looks down its -Z.
+      ray.getWorldDirection(dir).negate();
+      return true;
+    }
+    return this.host.handAim(side, origin, dir);
+  }
+
+  /** The pin nearest the line of a ray, by its cone (other than `except`). */
+  private pinOnRay(origin: Vector3, dir: Vector3, except?: Pin): Pin | undefined {
     let best: Pin | undefined;
     let bestScore = 1;
     for (const p of this.pins) {
       if (p === except) continue;
-      p.mesh.getWorldPosition(this.k1).sub(this.o2);
-      const along = this.k1.dot(this.d2);
+      p.mesh.getWorldPosition(this.k1).sub(origin);
+      const along = this.k1.dot(dir);
       if (along <= 0) continue;
-      const score = this.k1.addScaledVector(this.d2, -along).length() / (RAY_PIN_M + RAY_PIN_SLOPE * along);
+      const score = this.k1.addScaledVector(dir, -along).length() / (RAY_PIN_M + RAY_PIN_SLOPE * along);
       if (score < bestScore) {
         best = p;
         bestScore = score;
@@ -759,6 +802,93 @@ export class MeasureDesk {
         sfx('grab');
       }
     }
+  }
+
+  /**
+   * A hand's tap that landed on no card, worked by what its ray points at: the bin
+   * beside the lit pin takes the pin away; a pin is chosen to start a thread
+   * from, or ends the thread from the chosen one; empty paper near a corner
+   * takes a pin, which ends the chosen pin's thread too.
+   */
+  private workTaps(): void {
+    for (const side of SIDES) {
+      const tap = this.tapAim[side];
+      if (!tap) continue;
+      this.tapAim[side] = undefined;
+      if (this.step !== 'measure' || this.unfolded > 0 || this.boardHeld) continue;
+      this.o2.copy(tap.origin);
+      this.d2.copy(tap.dir);
+      const lit = this.active;
+      if (lit && this.trash.visible && this.nearBin(this.o2, this.d2)) {
+        lit.mesh.getWorldPosition(this.t2);
+        this.active = undefined;
+        this.trash.visible = false;
+        this.removePin(lit);
+        sfx('pop', { at: this.t2 });
+        this.message = '';
+        this.showTask();
+        continue;
+      }
+      const pin = this.pinOnRay(this.o2, this.d2);
+      if (pin) {
+        this.choosePin(pin, side);
+        continue;
+      }
+      this.v.copy(this.o2);
+      if (!this.aim(this.v, this.d2)) continue;
+      if (this.pins.length >= this.maxPins()) {
+        if (this.pinnable(this.v)) this.tell(this.t.allPins(this.maxPins()));
+        continue;
+      }
+      if (!this.pinnable(this.v)) {
+        this.tell(this.t.farPin);
+        continue;
+      }
+      const made = this.addPin(this.v);
+      if (this.selected && made !== this.selected) this.join(this.selected, made);
+      if (this.selected) this.clearSelection();
+    }
+  }
+
+  /** A tap on a pin: it is chosen; tapped again it is let go; with another chosen, a thread joins them. */
+  private choosePin(pin: Pin, side: Side): void {
+    if (!this.selected) {
+      this.selected = pin;
+      this.selectedBy = side;
+      sfx('grab');
+      return;
+    }
+    if (this.selected !== pin) this.join(this.selected, pin);
+    this.clearSelection();
+  }
+
+  private clearSelection(): void {
+    this.selected = undefined;
+    if (!this.preview) return;
+    this.preview.mesh.removeFromParent();
+    dropLabel(this.preview.label);
+    this.preview = undefined;
+  }
+
+  /** The thread from the chosen pin follows the ray, with its length on it, as a pulled thread does. */
+  private showPreview(): void {
+    const from = this.selected;
+    if (!from) return;
+    if (!this.preview) {
+      const mesh = new Mesh(threadGeo, threadMat);
+      const label = new Label('', { height: 0.026 });
+      this.frame().add(mesh, label.mesh);
+      this.host.billboard(label.mesh);
+      onTop(label);
+      this.preview = { mesh, label };
+    }
+    const side = this.selectedBy;
+    const through = this.pinAtRay(side, from);
+    if (through) through.mesh.getWorldPosition(this.v);
+    else if (!this.tip(side, false, this.v)) return;
+    this.w.copy(this.v);
+    this.frame().worldToLocal(this.w);
+    this.lay(this.preview.mesh, this.preview.label, from.mesh.position, this.w);
   }
 
   /** The bin wakes over the pin a tip is near, stays while a tip is round it or on it, and goes a moment after. */
@@ -816,10 +946,8 @@ export class MeasureDesk {
   /** Whether a controller's ray is on the bin, or a hand's finger or pinch is at it. */
   private overBin(side: Side): boolean {
     if (!this.trash.visible) return false;
-    if (this.host.controllers()) {
-      const ray = this.host.ray(side);
-      ray.getWorldPosition(this.o2);
-      ray.getWorldDirection(this.d2).negate();
+    if (this.rayMode()) {
+      if (!this.aimRay(side, this.o2, this.d2)) return false;
       return this.nearBin(this.o2, this.d2);
     }
     const h = this.hands.get(side);
@@ -847,6 +975,7 @@ export class MeasureDesk {
 
   /** A press on the bin takes its pin away, and the threads of that pin with it. */
   private binPress(side: Side): boolean {
+    if (this.handRay()) return false;
     const pin = this.active;
     if (!pin || !this.trash.visible || this.pulls.has(side)) return false;
     if (!this.grabEdges(side).start || !this.overBin(side)) return false;
@@ -880,13 +1009,13 @@ export class MeasureDesk {
 
   /** The fingertip of a hand, or the tip of a controller's ray, and its speed. */
   private readTip(side: Side, delta: number): void {
-    if (this.host.controllers()) {
-      const ray = this.host.ray(side);
-      ray.getWorldPosition(this.v);
+    if (this.rayMode()) {
+      if (!this.aimRay(side, this.v, this.w)) {
+        this.aimed[side] = false;
+        return;
+      }
       if (delta > 0) this.rayVel[side].copy(this.v).sub(this.lastRay[side]).divideScalar(delta);
       this.lastRay[side].copy(this.v);
-      // A ray space looks down its -Z.
-      ray.getWorldDirection(this.w).negate();
       this.aimed[side] = this.aim(this.v, this.w);
     } else {
       const h = this.hands.get(side);
@@ -899,7 +1028,7 @@ export class MeasureDesk {
 
   /** Where a side touches: the hand's fingertip (or pinch), the controller's tip. World frame. */
   private tip(side: Side, pinch: boolean, out: Vector3): boolean {
-    if (this.host.controllers()) {
+    if (this.rayMode()) {
       out.copy(this.lastTip[side]);
       return this.aimed[side];
     }
@@ -1105,8 +1234,8 @@ export class MeasureDesk {
     const ghost = this.ghosts[side];
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
-    if (this.host.controllers()) {
-      const press = this.grabEdges(side).start;
+    if (this.rayMode()) {
+      const press = this.host.controllers() ? this.grabEdges(side).start : false;
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
       const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
@@ -1177,6 +1306,7 @@ export class MeasureDesk {
   }
 
   private removePin(pin: Pin): void {
+    if (this.selected === pin) this.clearSelection();
     for (const th of this.threads.filter((t) => t.a === pin || t.b === pin)) this.removeThread(th);
     pin.mesh.removeFromParent();
     this.pins = this.pins.filter((p) => p !== pin);
@@ -1190,6 +1320,8 @@ export class MeasureDesk {
 
   /** A pinch (or trigger) on a pin pulls a thread from it until let go. */
   private pullThread(side: Side): void {
+    // Hands join pins by tapping them (see worked taps), never by pulling.
+    if (this.handRay()) return;
     const edges = this.grabEdges(side);
     const pull = this.pulls.get(side);
     if (!pull) {
@@ -1265,6 +1397,7 @@ export class MeasureDesk {
   }
 
   private clearPins(): void {
+    this.clearSelection();
     for (const pull of this.pulls.values()) {
       pull.mesh.removeFromParent();
       dropLabel(pull.label);
@@ -1643,6 +1776,8 @@ export class MeasureDesk {
     this.dropPanel();
     setBoard(undefined);
     setBoardNear(false);
+    this.stopTaps?.();
+    this.clearSelection();
     this.boardOn = false;
     if (this.zoomCard?.active) this.host.remove(this.zoomCard);
     this.core?.dispose();

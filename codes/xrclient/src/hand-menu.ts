@@ -79,6 +79,11 @@ interface Aim {
   speed: number;
   /** Where the dot is. */
   point: Vector3;
+  /** The ray now (its origin and way), and as it was when the finger last stood steady before a tap. */
+  origin: Vector3;
+  aimDir: Vector3;
+  lockO: Vector3;
+  lockD: Vector3;
   /** The way the finger points now, a frame ago, and as it was when a tap began. */
   dir: Vector3;
   prev: Vector3;
@@ -120,9 +125,25 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, speed: 0, point: new Vector3(), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, speed: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
+  }
+
+  private sink?: (side: Side, origin: Vector3, dir: Vector3) => void;
+
+  /** Takes the taps that land on no card (with the ray they were aimed by); none to stop. */
+  setSink(sink: ((side: Side, origin: Vector3, dir: Vector3) => void) | undefined): void {
+    this.sink = sink;
+  }
+
+  /** A hand's ray this frame, if hands drive the menus and the ray is up. */
+  aimOf(side: Side, origin: Vector3, dir: Vector3): boolean {
+    const a = this.aim[side];
+    if (!this.on || !a.up) return false;
+    origin.copy(a.origin);
+    dir.copy(a.aimDir);
+    return true;
   }
 
   /** Whether hands drive the menus this frame. */
@@ -177,6 +198,8 @@ export class HandMenu {
       const point = a.point;
       const dir = a.rising ? a.frozen : a.dir;
       if (f) {
+        a.origin.copy(this.knuckle);
+        a.aimDir.copy(dir);
         this.raycaster.set(this.knuckle, dir);
         this.raycaster.far = REACH_M;
         const found = this.raycaster.intersectObjects(objects, true).find((x) => x.object.visible);
@@ -205,9 +228,13 @@ export class HandMenu {
       if (a.target) nowLit.add(a.target.object);
       // The card last aimed at before the fingers closed (they move the ray as they close).
       const closing = this.hands.get(side).tracked && this.hands.get(side).tip.distanceTo(this.hands.get(side).thumb) < CLOSING_M;
-      if (a.target && !closing) {
+      if (!closing) {
         a.lastTarget = a.target;
         a.lastAt = this.now;
+        if (a.up && !a.rising) {
+          a.lockO.copy(a.origin);
+          a.lockD.copy(a.aimDir);
+        }
       }
       if (!a.rising) a.steady = a.target;
       this.tap(side, a, delta);
@@ -262,6 +289,7 @@ export class HandMenu {
     let tapped = false;
     // The emulator's pinch closes the fingers and puts the ray down at once: the card it was on a moment ago.
     const lately = this.now - a.lastAt < 0.8 ? a.lastTarget : a.target;
+    const closed = this.now - a.lastAt < 0.8;
     if (this.host.pinchTaps() && h.pinchStart && lately) {
       a.steady = lately;
       tapped = true;
@@ -287,7 +315,9 @@ export class HandMenu {
     a.cooldown = TAP_COOLDOWN_S;
     const target = a.steady;
     console.info(`[hand-menu] ${side} tap on ${target ? (target.object.name || 'a card') : 'nothing'}`);
-    target?.press();
+    if (target) target.press();
+    // A tap on no card goes to whoever works with the hand's ray (Measure Hunt's paper), unless the other hand is on a card.
+    else if (!a.dim && (closed || a.up)) this.sink?.(side, a.lockO, a.lockD);
   }
 
   private draw(side: Side, a: Aim): void {
