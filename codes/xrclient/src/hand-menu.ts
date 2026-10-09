@@ -290,7 +290,7 @@ export class HandMenu {
     // The emulator's pinch closes the fingers and puts the ray down at once: the card it was on a moment ago.
     const lately = this.now - a.lastAt < 0.8 ? a.lastTarget : a.target;
     const closed = this.now - a.lastAt < 0.8;
-    if (this.host.pinchTaps() && h.pinchStart && lately) {
+    if (this.host.pinchTaps() && h.pinchStart) {
       a.steady = lately;
       tapped = true;
     } else if (a.up && a.cooldown <= 0) {
