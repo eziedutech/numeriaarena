@@ -2742,7 +2742,10 @@ export class GameSystem extends createSystem({
       const g = makeGate(i === 0 ? 0x3fb6a0 : 0xe8b64c);
       g.position.set((i === 0 ? -1 : 1) * GATE_X, 0, GATE_Z);
       this.addChoice(g, i, GATE_H / 2);
-      this.label(gate[getLang()], 0.016 * textScale(), g, GATE_H + 0.015, 0.008, false);
+      // The rule is drawn over the gate, never inside it: its slats would cut the letters and blink as the card grows.
+      const rule = this.label(gate[getLang()], 0.03 * textScale(), g, GATE_H + 0.03, 0.03, false);
+      (rule.mesh.material as MeshBasicMaterial).depthTest = false;
+      rule.mesh.renderOrder = 20;
     });
   }
 

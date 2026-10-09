@@ -56,6 +56,8 @@ const PINCH_M = 0.03;
 /** Thumb and index tip this close are closing on a pinch: the card aimed at is kept from here. */
 const CLOSING_M = 0.06;
 const REACH_M = 1.2;
+/** A card the dot has left stays lit this long (seconds). */
+const HOLD_S = 0.2;
 /** A card the dot is on grows by this much, as every lit thing in the game does. */
 const GROW = 0.12;
 const DOT_M = 0.5;
@@ -96,6 +98,9 @@ interface Aim {
   /** When the emulator's pinch began, and where. */
   pinchT: number;
   pinchP: Vector3;
+  /** The card the dot has just left, kept lit a moment so a card that grows under the dot does not blink. */
+  holdT?: MenuTarget;
+  holdUntil: number;
   /** The last card the dot was on, and when. */
   lastTarget?: MenuTarget;
   lastAt: number;
@@ -133,7 +138,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, pinchT: -1, pinchP: new Vector3(), speed: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, dim: false, alpha: 0, base: 0, rising: false, peak: 0, since: 0, cooldown: 0, lastAt: -1, holdUntil: 0, pinchT: -1, pinchP: new Vector3(), speed: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), dir: new Vector3(0, 0, -1), prev: new Vector3(0, 0, -1), frozen: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -224,6 +229,15 @@ export class HandMenu {
       }
       hits.push(target);
     }
+    // A card the dot has just left stays lit for a moment: one that grows under the dot would otherwise
+    // lose it at its edge, shrink, win it back, and blink.
+    ORDER.forEach((side, i) => {
+      const a = this.aim[side];
+      if (hits[i]) {
+        a.holdT = hits[i];
+        a.holdUntil = this.now + HOLD_S;
+      } else if (a.holdT && this.now < a.holdUntil && a.up && this.map.has(a.holdT.object)) hits[i] = a.holdT;
+    });
     // Two hands on two different cards: the right hand's.
     const [right, left] = hits;
     this.aim.right.dim = false;
