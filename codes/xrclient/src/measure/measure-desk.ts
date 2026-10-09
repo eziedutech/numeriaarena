@@ -624,10 +624,11 @@ export class MeasureDesk {
     this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
     // A paper solid turns by arrow cards (the corners behind it come to the front), and opens flat by NET.
     if (o.source === 'paper' && this.paper?.solid) {
-      this.card('me_tl', this.t.turnLeft, -0.41, -0.1, TEAL);
-      this.card('me_tr', this.t.turnRight, -0.31, -0.1, TEAL);
-      this.card('me_tu', this.t.turnUp, -0.41, -0.02, BLUE);
-      this.card('me_td', this.t.turnDown, -0.31, -0.02, BLUE);
+      // The turn cards stand as a cross: UP over the two turns, DOWN under them.
+      this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
+      this.card('me_tl', this.t.turnLeft, -0.415, -0.1, TEAL);
+      this.card('me_tr', this.t.turnRight, -0.305, -0.1, TEAL);
+      this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
       if (this.paper.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
     }
     sfx('unfold');
