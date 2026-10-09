@@ -189,8 +189,10 @@ interface Spin {
   auto: boolean;
   /** Where each hand last was across the ball (metres, sideways) while it held it. */
   held: Record<Side, number | undefined>;
-  /** The way the ball has begun to turn (+1 rightward, -1 leftward, 0 not yet): only that way counts, so a hand brought back for another stroke does not undo it. */
+  /** The way the ball turns (+1 rightward, -1 leftward, 0 not yet): that of the first sustained sweep; every sweep after, either way, carries it on that way, so the hand may go to and fro. */
   way: 0 | 1 | -1;
+  /** The sideways travel of the first sweep, before the way is known. */
+  first: number;
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
@@ -355,6 +357,8 @@ const TAU = Math.PI * 2;
 const HOLD_BAND = 0.8;
 /** A hand moves the ball only when it moves this far sideways in a frame: a hand's tremble does not. */
 const HOLD_STEP_M = 0.0015;
+/** The first sweep over the ball must go this far (metres) before the ball knows which way it turns. */
+const FIRST_SWEEP_M = 0.015;
 /** The line is round when the ball has turned to within this many radians of a full turn. */
 const ROUND_RAD = 0.15;
 /** A fingertip this near the ball (over its surface, metres) holds it. */
@@ -442,6 +446,9 @@ export class MeasureDesk {
   private spin?: Spin;
   private spinCard?: Entity;
   private swipeCool = 0;
+  /** Whether the last aim was drawn onto the centre, the ring, the rim or the foot, and each side's at its last tip. */
+  private snapNow = false;
+  private snapSide = { left: false, right: false };
   private preview?: { mesh: Mesh; label: Label };
   private stopTaps?: () => void;
   /** A hand's tap has brought the board close, and the next tap sends it back. */
@@ -1083,6 +1090,11 @@ export class MeasureDesk {
       }
       this.v.copy(this.o2);
       if (!this.aim(this.v, this.d2)) continue;
+      // A ball takes a pin only at its middle and on its ring, where the mark shows.
+      if (this.offer?.shape === 'sphere' && this.paper && !this.snapNow) {
+        this.tell(this.selected ? this.t.onRing : this.t.findMiddle);
+        continue;
+      }
       if (this.pins.length >= this.maxPins()) {
         if (this.pinnable(this.v)) this.tell(this.t.allPins(this.maxPins()));
         continue;
@@ -1367,6 +1379,7 @@ export class MeasureDesk {
       if (delta > 0) this.rayVel[side].copy(this.v).sub(this.lastRay[side]).divideScalar(delta);
       this.lastRay[side].copy(this.v);
       this.aimed[side] = this.aim(this.v, this.w);
+      this.snapSide[side] = this.snapNow;
     } else {
       const h = this.hands.get(side);
       if (!h.tracked) return;
@@ -1395,6 +1408,7 @@ export class MeasureDesk {
    * False when the ray is on a card: that is a press, not a pin.
    */
   private aim(origin: Vector3, dir: Vector3): boolean {
+    this.snapNow = false;
     // A ray at the bin presses the bin; it drops no pin.
     if (this.trash.visible && this.nearBin(origin, dir)) return false;
     this.caster.set(origin, dir);
@@ -1411,7 +1425,7 @@ export class MeasureDesk {
       if (hit.object.userData.card === true || hit.object.userData.trash === true) return false;
       origin.copy(hit.point);
       this.magnet(origin);
-      this.snapRound(origin);
+      if (this.snapRound(origin)) this.snapNow = true;
       return true;
     }
     // A real box: a ray near the vertical line over a pin of its base takes a point on that line (its top).
@@ -1430,7 +1444,7 @@ export class MeasureDesk {
     if (!this.caster.ray.intersectPlane(this.deskPlane, this.u)) return false;
     if (this.u.distanceTo(origin) > AIM_FAR_M) return false;
     origin.copy(this.u);
-    this.snapRound(origin);
+    if (this.snapRound(origin)) this.snapNow = true;
     return true;
   }
 
@@ -1734,7 +1748,9 @@ export class MeasureDesk {
     if (this.rayMode()) {
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
-      const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, this.pinGap());
+      // A ball takes a pin only at its middle and on its ring: the mark shows only there.
+      const strict = this.offer?.shape === 'sphere' && !!this.paper && !this.snapSide[side];
+      const free = !strict && !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, this.pinGap());
       // The mark shows the corner it will go onto.
       if (free && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
       // A small mark where the ray points, so the pin is seen before it drops.
@@ -2146,7 +2162,8 @@ export class MeasureDesk {
     this.flicking = false;
     this.spinVel = 0;
     this.turns.clear();
-    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, auto: false, held: { left: undefined, right: undefined }, way: 0 };
+    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, auto: false, held: { left: undefined, right: undefined }, way: 0, first: 0 };
+    console.info('[measure] the ball waits to be turned by the hand');
     // TURN takes the place NET would have: for a hand that cannot hold the ball.
     this.card('me_spin', this.t.turn, -0.36, 0.06, PURPLE);
     this.spinCard = this.cards[this.cards.length - 1];
@@ -2201,7 +2218,7 @@ export class MeasureDesk {
   /**
    * How far the hands that hold the ball have carried it round, this frame. The ball rolls
    * under the hand: the dot on it moving sideways turns it by that far over the ball's radius.
-   * It turns only the way it began, so the hand coming back for another stroke leaves it be.
+   * It turns the way the first sweep went, and every sweep after, to or fro, carries it on.
    */
   private heldTurn(s: Spin): number {
     const paper = this.paper;
@@ -2218,9 +2235,16 @@ export class MeasureDesk {
       if (across === undefined || last === undefined) continue;
       const step = across - last;
       if (Math.abs(step) < HOLD_STEP_M) continue;
-      const sign = step > 0 ? 1 : -1;
-      if (s.way === 0) s.way = sign;
-      if (sign === s.way) total += step / reach;
+      if (s.way === 0) {
+        // The first sweep must go a little way before it says which way the ball turns.
+        s.first += step;
+        if (Math.abs(s.first) < FIRST_SWEEP_M) continue;
+        s.way = s.first > 0 ? 1 : -1;
+        console.info(`[measure] the ball turns ${s.way > 0 ? 'rightward' : 'leftward'}`);
+        total += Math.abs(s.first) * s.way / reach;
+        continue;
+      }
+      total += (Math.abs(step) * s.way) / reach;
     }
     return total;
   }
