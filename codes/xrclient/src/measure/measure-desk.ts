@@ -128,6 +128,19 @@ type Step = 'grade' | 'group' | 'source' | 'object' | 'how' | 'loading' | 'measu
 
 interface Pin {
   mesh: Mesh;
+  /**
+   * A pin set on a box's opened net: where the corner it stands for is on the folded box
+   * (frame metres, what the core reads) and where it is on the net. Its mesh goes between
+   * the two as the box opens and folds.
+   */
+  cube?: Vector3;
+  net?: Vector3;
+}
+
+/** A corner of an opened net, and the corner of the folded box it is (frame metres). */
+interface NetSpot {
+  net: Vector3;
+  cube: Vector3;
 }
 
 /** A point the core reads: a pin, or one worked out from the threads (frame metres). */
@@ -195,6 +208,8 @@ const TIP_M = 0.05;
 const AIM_FAR_M = 2;
 /** A controller's pointed spot this near a paper corner goes onto it. */
 const MAGNET_M = 0.025;
+/** A pin on an opened net stands this far over the paper (metres). */
+const NET_LIFT = 0.003;
 /**
  * A controller picks a pin by the cone of its ray, not by where the ray ends:
  * a pin within RAY_PIN_M of the ray, and a little more for each metre along it,
@@ -337,6 +352,10 @@ export class MeasureDesk {
   private t1 = new Vector3();
   private k1 = new Vector3();
   private k2 = new Vector3();
+  /** The folded corner the last cornerNear found on an opened net (frame metres), if it found one there. */
+  private hitCube?: Vector3;
+  private netFor?: HuntOffer;
+  private netList: NetSpot[] = [];
   private t2 = new Vector3();
   private o2 = new Vector3();
   private d2 = new Vector3();
@@ -625,6 +644,9 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return;
     const lines: [string, number, string][] = [[o.prompt[getLang()], 0.022, HEAD], [this.hint, 0.016, INK]];
+    // How a pin and a thread are made, and what the cards at the side are for.
+    lines.push([this.host.controllers() ? this.t.tapTrigger : this.t.tapHand, 0.014, INK]);
+    if (o.source === 'paper' && this.paper?.solid) lines.push([this.t.toolsNote, 0.014, INK]);
     if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
@@ -808,7 +830,7 @@ export class MeasureDesk {
       return;
     }
     this.turnSolid(delta);
-    if (this.step !== 'measure' || this.unfolded > 0) {
+    if (this.step !== 'measure' || this.moving()) {
       this.trash.visible = false;
       this.active = undefined;
       for (const side of SIDES) this.ghosts[side].visible = false;
@@ -887,7 +909,7 @@ export class MeasureDesk {
     let best: Pin | undefined;
     let bestScore = 1;
     for (const p of this.pins) {
-      if (p === except) continue;
+      if (p === except || !p.mesh.visible) continue;
       p.mesh.getWorldPosition(this.k1).sub(origin);
       const along = this.k1.dot(dir);
       if (along <= 0) continue;
@@ -955,7 +977,7 @@ export class MeasureDesk {
       const tap = this.tapAim[side];
       if (!tap) continue;
       this.tapAim[side] = undefined;
-      if (this.step !== 'measure' || this.unfolded > 0 || this.boardHeld) continue;
+      if (this.step !== 'measure' || this.moving() || this.boardHeld) continue;
       this.o2.copy(tap.origin);
       this.d2.copy(tap.dir);
       const lit = this.active;
@@ -1021,7 +1043,85 @@ export class MeasureDesk {
   private roundPaper(world: Vector3): boolean {
     if (!this.paper) return true;
     this.paper.spin.getWorldPosition(this.u);
-    return world.distanceTo(this.u) < this.paper.radius * PAPER_SCALE + 0.1;
+    // An opened net reaches much further than the folded box.
+    const reach = this.netOpen() ? this.netReach() : this.paper.radius;
+    return world.distanceTo(this.u) < reach * PAPER_SCALE + 0.1;
+  }
+
+  /** The box is part-way between folded and open: nothing is placed while it moves. */
+  private moving(): boolean {
+    return this.unfolded > 0 && this.unfolded < 1;
+  }
+
+  /** The box lies open as its net. */
+  private netOpen(): boolean {
+    return this.unfolded === 1;
+  }
+
+  /** The corners of the opened net, each with the corner of the folded box it is (cached for the offer). */
+  private netSpots(): NetSpot[] {
+    const keys = this.offer?.keys;
+    if (this.netFor === this.offer) return this.netList;
+    this.netFor = this.offer;
+    this.netList = [];
+    if (!keys?.length) return this.netList;
+    const span = (i: number) => {
+      const v = keys.map((k) => k[i]);
+      return Math.max(...v) - Math.min(...v);
+    };
+    // The box as the paper makes it (see boxNet): the bottom on the desk, the sides folded out of it, the top past the back.
+    const hw = span(0) / 2;
+    const hd = span(2) / 2;
+    const h = span(1);
+    const add = (nx: number, nz: number, cx: number, cy: number, cz: number) =>
+      this.netList.push({ net: new Vector3(nx / 100, NET_LIFT, nz / 100), cube: new Vector3(cx / 100, cy / 100, cz / 100) });
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        add(sx * hw, sz * hd, sx * hw, 0, sz * hd);
+        add(sx * (hw + h), sz * hd, sx * hw, h, sz * hd);
+      }
+      add(sx * hw, hd + h, sx * hw, h, hd);
+      add(sx * hw, -hd - h, sx * hw, h, -hd);
+      add(sx * hw, -hd - h - 2 * hd, sx * hw, h, hd);
+    }
+    return this.netList;
+  }
+
+  /** How far the opened net reaches from the box's middle, in metres. */
+  private netReach(): number {
+    const keys = this.offer?.keys;
+    if (!keys?.length) return this.paper?.radius ?? 0;
+    const span = (i: number) => Math.max(...keys.map((k) => k[i])) - Math.min(...keys.map((k) => k[i]));
+    return (2.6 * Math.max(span(0), span(1), span(2))) / 100;
+  }
+
+  /** The corner of the opened net nearest a frame point, if one is within `reach`. */
+  private nearestNet(local: Vector3, reach: number): NetSpot | undefined {
+    let best: NetSpot | undefined;
+    let bestD = reach;
+    for (const s of this.netSpots()) {
+      const d = local.distanceTo(s.net);
+      if (d < bestD) {
+        best = s;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  /** Where the core reads a pin: its folded corner on an opened net, else where it stands. */
+  private at(p: Pin): Vector3 {
+    return p.cube ?? p.mesh.position;
+  }
+
+  /** The two pins stand at one corner of the box (a corner shows in more than one place on its net). */
+  private same(a: Pin, b: Pin): boolean {
+    return a === b || this.at(a).distanceTo(this.at(b)) < 1e-4;
+  }
+
+  /** A pin of the net shows between its folded and its opened place as the box opens. */
+  private seat(p: Pin): void {
+    if (p.cube && p.net) p.mesh.position.lerpVectors(p.cube, p.net, this.unfolded);
   }
 
   /** The thread from the chosen pin follows the ray, with its length on it, as a pulled thread does. */
@@ -1310,9 +1410,14 @@ export class MeasureDesk {
    */
   private magnet(world: Vector3): void {
     const keys = this.offer?.keys;
-    if (!this.paper || !keys || this.unfolded > 0) return;
+    if (!this.paper || !keys || this.moving()) return;
     this.n.copy(world);
     this.paper.frame.worldToLocal(this.n);
+    if (this.netOpen()) {
+      const spot = this.nearestNet(this.n, MAGNET_M);
+      if (spot) world.copy(this.paper.frame.localToWorld(this.n.copy(spot.net)));
+      return;
+    }
     let best = -1;
     let bestD = MAGNET_M;
     keys.forEach(([x, y, z], i) => {
@@ -1337,9 +1442,20 @@ export class MeasureDesk {
   /** The corner of a paper polygon nearest a world point, in `out` (world), if one is within reach. */
   private cornerNear(world: Vector3, out: Vector3): boolean {
     const keys = this.offer?.keys;
+    this.hitCube = undefined;
     if (!this.paper || !keys || !this.polygon()) return false;
     this.k1.copy(world);
     this.paper.frame.worldToLocal(this.k1);
+    // Opened flat, a box's corners are where its net has them, each one of the folded box's.
+    if (this.moving()) return false;
+    if (this.netOpen()) {
+      const spot = this.nearestNet(this.k1, CORNER_REACH_M);
+      if (!spot) return false;
+      this.hitCube = spot.cube;
+      out.copy(spot.net);
+      this.paper.frame.localToWorld(out);
+      return true;
+    }
     let best = -1;
     let bestD = CORNER_REACH_M;
     keys.forEach(([x, y, z], i) => {
@@ -1403,7 +1519,7 @@ export class MeasureDesk {
     let best: Pin | undefined;
     let bestD = within;
     for (const p of this.pins) {
-      if (p === except) continue;
+      if (p === except || !p.mesh.visible) continue;
       p.mesh.getWorldPosition(this.u);
       const d = this.u.distanceTo(world);
       if (d < bestD) {
@@ -1486,17 +1602,24 @@ export class MeasureDesk {
   private addPin(spot: Vector3): Pin {
     // A pin placed near a corner goes onto the corner, or is the pin already there.
     let world = spot;
+    let cube: Vector3 | undefined;
     if (this.cornerNear(spot, this.k2)) {
       const there = this.nearestPin(this.k2, 0.012);
       if (there) return there;
       world = this.k2.clone();
+      cube = this.hitCube?.clone();
     }
     const mesh = new Mesh(pinGeo, pinMat);
     mesh.name = 'measure-pin';
     mesh.position.copy(world);
     this.frame().worldToLocal(mesh.position);
     this.frame().add(mesh);
-    const pin = { mesh };
+    const pin: Pin = { mesh };
+    // A pin on the opened net knows the corner of the folded box it stands for.
+    if (cube) {
+      pin.cube = cube;
+      pin.net = mesh.position.clone();
+    }
     this.pins.push(pin);
     console.info(`[measure] pin ${this.pins.length} at ${[mesh.position.x, mesh.position.y, mesh.position.z].map((v) => (v * 100).toFixed(1)).join(', ')} cm`);
     sfx('place', { at: world });
@@ -1670,16 +1793,17 @@ export class MeasureDesk {
     if (!box && !flat) return undefined;
     const ths = this.threads;
     if (ths.length < (box ? 3 : 2)) return undefined;
-    const dir = (t: Thread) => t.b.mesh.position.clone().sub(t.a.mesh.position);
+    const dir = (t: Thread) => this.at(t.b).clone().sub(this.at(t.a));
     const square = (x: Thread, y: Thread) => {
       const u = dir(x);
       const v = dir(y);
       return u.length() > 1e-4 && v.length() > 1e-4 && Math.abs(u.normalize().dot(v.normalize())) < SQUARE_COS;
     };
-    const has = (t: Thread, p: Pin) => t.a === p || t.b === p;
-    const other = (t: Thread, p: Pin) => (t.a === p ? t.b : t.a);
+    // Two pins at one corner of the box are that corner (it shows in several places on an opened net).
+    const has = (t: Thread, p: Pin) => this.same(t.a, p) || this.same(t.b, p);
+    const other = (t: Thread, p: Pin) => (this.same(t.a, p) ? t.b : t.a);
     const share = (x: Thread, y: Thread) => [x.a, x.b].find((p) => has(y, p));
-    const spot = (p: Pin): Spot => ({ pin: p, at: p.mesh.position.clone() });
+    const spot = (p: Pin): Spot => ({ pin: p, at: this.at(p).clone() });
     if (flat) {
       for (let i = 0; i < ths.length; i += 1) {
         for (let j = i + 1; j < ths.length; j += 1) {
@@ -1689,7 +1813,7 @@ export class MeasureDesk {
           const c = other(ths[j], corner);
           if (!this.onKeys([a, corner, c])) return undefined;
           // The fourth corner completes the rectangle.
-          const d = a.mesh.position.clone().add(c.mesh.position).sub(corner.mesh.position);
+          const d = this.at(a).clone().add(this.at(c)).sub(this.at(corner));
           return [spot(a), spot(corner), spot(c), { at: d }];
         }
       }
@@ -1710,7 +1834,7 @@ export class MeasureDesk {
           }
           if (!corner) continue;
           if (!this.onKeys(t.flatMap((x) => [x.a, x.b]))) return undefined;
-          const at = corner.mesh.position;
+          const at = this.at(corner);
           const spots: Spot[] = [spot(corner)];
           for (const x of t) {
             if (has(x, corner)) {
@@ -1743,7 +1867,7 @@ export class MeasureDesk {
     const keys = this.offer?.keys;
     if (!keys?.length) return true;
     const snap = (this.offer?.snap_cm ?? 3) / 100;
-    if (pins.every((p) => this.nearKey(p.mesh.position) <= snap)) return true;
+    if (pins.every((p) => this.nearKey(this.at(p)) <= snap)) return true;
     this.tell(this.t.problem.off_corner);
     return false;
   }
@@ -1762,7 +1886,7 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o || !this.core || this.step !== 'measure') return;
     const ring = this.order();
-    const spots = ring ? ring.map((p): Spot => ({ pin: p, at: p.mesh.position.clone() })) : this.fromEdges();
+    const spots = ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
     if (!spots) {
       console.info(`[measure] waiting: ${this.pins.length} pins, ${this.threads.length} threads`);
       return;
@@ -1781,7 +1905,10 @@ export class MeasureDesk {
     r.pins.forEach((p, i) => {
       const pin = spots[i]?.pin;
       if (!pin) return;
-      pin.mesh.position.set(p[0] / 100, p[1] / 100, p[2] / 100);
+      if (pin.cube) {
+        pin.cube.set(p[0] / 100, p[1] / 100, p[2] / 100);
+        this.seat(pin);
+      } else pin.mesh.position.set(p[0] / 100, p[1] / 100, p[2] / 100);
     });
     for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
     sfx('sparkle');
@@ -1892,10 +2019,16 @@ export class MeasureDesk {
       const step = UNFOLD_SPEED * delta;
       this.unfolded = this.unfoldTo > this.unfolded ? Math.min(this.unfoldTo, this.unfolded + step) : Math.max(this.unfoldTo, this.unfolded - step);
       paper.unfold(this.unfolded);
-      // The pins mark the folded box: put away while it is open.
-      const shown = this.unfolded === 0;
-      for (const p of this.pins) p.mesh.visible = shown;
-      for (const th of this.threads) th.mesh.visible = th.label.mesh.visible = shown;
+      // The pins set on the folded box are put away while it is open; those set on its net go with it
+      // between the two, and so do their threads.
+      for (const p of this.pins) {
+        p.mesh.visible = this.unfolded === 0 || !!p.net;
+        this.seat(p);
+      }
+      for (const th of this.threads) {
+        th.mesh.visible = th.label.mesh.visible = th.a.mesh.visible && th.b.mesh.visible;
+        if (th.mesh.visible) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
+      }
     }
   }
 
