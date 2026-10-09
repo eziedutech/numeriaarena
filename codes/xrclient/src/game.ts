@@ -87,6 +87,7 @@ import { TOWN_TEXT } from './town/town-text.js';
 import { measureBanner } from './home/measure-banner.js';
 import { isMeasureChoice, MeasureDesk, type MeasureChoice, type MeasureHost } from './measure/measure-desk.js';
 import { MEASURE_TEXT } from './measure/measure-text.js';
+import { boardUp, setBoard } from './art/board.js';
 import { HandMenu, type MenuTarget } from './hand-menu.js';
 import type { HandAdapters } from './measure/hands.js';
 import { syncAnswers } from './answer-sync.js';
@@ -539,6 +540,9 @@ export class GameSystem extends createSystem({
   private wasControllers = false;
   /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
   private handMenu?: HandMenu;
+  /** What the board last said for the question, and whether the question has been answered rightly. */
+  private boardKey = '';
+  private promptSolved = false;
   /** A hand's tap is being taken: a card needs no arming. */
   private handTap = false;
   private kind: GameKind = 'balloon_burst';
@@ -686,9 +690,10 @@ export class GameSystem extends createSystem({
     steadyAim(this.player.raySpaces.right);
     this.handMenu = new HandMenu({
       adapters: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
+      ray: (side) => this.player.raySpaces[side],
       active: () => this.world.visibilityState.peek() !== VisibilityState.NonImmersive && !this.controllersOnly(),
       targets: () => this.handTargets(),
-      alwaysShow: () => this.phase !== 'playing',
+      alwaysShow: () => true,
       pinchTaps: emulatedHands,
       parent: this.world.scene,
     });
@@ -2606,6 +2611,7 @@ export class GameSystem extends createSystem({
         : { balloon_burst: T.popHint, balance_gate: T.balanceHint, factory_sort: T.sortHint }[offer.game as string];
     const desk = this.deskEntity()!.object3D!;
     this.prompt = new Label(card, { height: 0.036 * textScale(), ink: QUESTION_INK, question: true });
+    this.promptSolved = false;
     this.prompt.mesh.name = 'prompt-label';
     this.prompt.mesh.position.copy(PROMPT_POS);
     desk.add(this.prompt.mesh);
@@ -3139,6 +3145,7 @@ export class GameSystem extends createSystem({
     this.prompt.mesh.parent?.add(solved.mesh);
     this.clearPromptOnly();
     this.prompt = solved;
+    this.promptSolved = true;
     this.labels.add(solved.mesh);
   }
 
@@ -3270,10 +3277,44 @@ export class GameSystem extends createSystem({
         },
       });
     }
+    // Balloons, gates, weights and planks: chosen by a tap of the hand's ray, as the cards are.
+    for (const e of this.queries.balloons.entities) {
+      const obj = e.object3D;
+      if (!obj?.visible) continue;
+      out.push({
+        object: obj,
+        press: () => {
+          if (e.active && e.hasComponent(Balloon)) this.popBalloon(e, true);
+        },
+      });
+    }
     const seat = this.world.scene.getObjectByName('dev-seat-card');
     const touch = seat?.userData.onTouch as (() => void) | undefined;
     if (seat?.visible && touch) out.push({ object: seat, press: touch, selfGrow: true });
     return out;
+  }
+
+  /**
+   * Where a classroom board is up (the emulator's stand-in room), the question and its how-to are
+   * written on it in large chalk instead of on the cards over the desk, which are put away.
+   */
+  private syncBoard(): void {
+    if (this.phase === 'measure' || this.phase === 'town') return;
+    const active = boardUp() && (this.phase === 'playing' || this.phase === 'between') && !!this.prompt;
+    for (const l of [this.prompt, this.hint]) if (l) l.mesh.visible = !active;
+    if (!active || !this.prompt) {
+      if (this.boardKey !== '') {
+        this.boardKey = '';
+        setBoard(undefined);
+      }
+      return;
+    }
+    const lines = [{ text: this.prompt.value, size: 0.026, ink: this.promptSolved ? '#2f7d32' : '#3469c4' }];
+    if (this.hint) lines.push({ text: this.hint.value, size: 0.016, ink: '#3a3f4b' });
+    const key = JSON.stringify(lines);
+    if (key === this.boardKey) return;
+    this.boardKey = key;
+    setBoard(lines);
   }
 
   private hoverTargets(delta: number): void {
@@ -3301,6 +3342,9 @@ export class GameSystem extends createSystem({
           // pointer (and grows a little) for as long as it is pointed at, so the
           // cursor stays on it until the click.
           on = e.hasComponent(Hovered);
+        } else if (this.handMenu?.isActive()) {
+          // The hand's own dot, never IWSDK's: a tap chooses it.
+          on = obj.userData.handHover === true;
         } else if (this.handRayOn(e)) {
           on = true;
         } else {
@@ -3653,6 +3697,7 @@ export class GameSystem extends createSystem({
     this.runPops(delta);
     this.runDemo(delta);
     this.handMenu?.update(delta);
+    this.syncBoard();
     // IWSDK's own ray is drawn only where ours is not, so a hand never shows two. Put on each pointer
     // that has none yet: they may be made again when a session begins.
     for (const side of SIDES) {
@@ -3660,6 +3705,11 @@ export class GameSystem extends createSystem({
       if (pointer.menuHidesRay) continue;
       const own = pointer.shouldHideRay.bind(pointer);
       pointer.shouldHideRay = () => !!this.handMenu?.takesRay(side) || own();
+      const cursor = (pointer as unknown as { cursorVisual?: { setVisible(on: boolean): void } }).cursorVisual;
+      if (cursor) {
+        const show = cursor.setVisible.bind(cursor);
+        cursor.setVisible = (on) => show(on && !this.handMenu?.takesRay(side));
+      }
       pointer.menuHidesRay = true;
     }
     this.hoverTargets(delta);

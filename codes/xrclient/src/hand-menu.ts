@@ -4,8 +4,9 @@ import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 /**
  * How a tracked hand works every menu, without exception:
  *
- *  - each hand shows a ray and a dot, the ray from its index knuckle along the
- *    way the index finger points (held where it was while the finger dips to tap);
+ *  - each hand shows a ray and a dot, always while the hand is tracked, along IWSDK's own
+ *    pointer ray of the hand (the one balloons and crystals are pointed at by), held
+ *    where it was while the finger dips to tap;
  *  - a dot on a menu card only lights it (hover), it never opens it;
  *  - the click is a tap of the index finger (it dips at the knuckle and comes
  *    back), never a pinch;
@@ -27,6 +28,8 @@ export interface MenuTarget {
 
 export interface HandMenuHost {
   adapters(): HandAdapters | undefined;
+  /** A hand's ray space: IWSDK's own pose of its pointer, the one balloons and crystals are pointed at by. */
+  ray(side: Side): Object3D;
   /** Hands drive the menus now: in the headset, a hand tracked, not controllers alone. */
   active(): boolean;
   targets(): MenuTarget[];
@@ -115,6 +118,8 @@ export class HandMenu {
   private axis = new Vector3();
   private finger = new Vector3();
   private end = new Vector3();
+  private origin = new Vector3();
+  private rdir = new Vector3();
   private from = new Vector3();
   private map = new Map<Object3D, MenuTarget>();
 
@@ -199,18 +204,22 @@ export class HandMenu {
       a.up = f;
       let target: MenuTarget | undefined;
       const point = a.point;
+      const rs = this.host.ray(side);
+      rs.getWorldPosition(this.origin);
+      rs.getWorldDirection(this.rdir).negate();
+      a.dir.copy(this.rdir);
       const dir = a.rising ? a.frozen : a.dir;
       if (f) {
-        a.origin.copy(this.knuckle);
+        a.origin.copy(this.origin);
         a.aimDir.copy(dir);
-        this.raycaster.set(this.knuckle, dir);
+        this.raycaster.set(this.origin, dir);
         this.raycaster.far = REACH_M;
         const found = this.raycaster.intersectObjects(objects, true).find((x) => x.object.visible);
         if (found) {
           point.copy(found.point);
           for (let o: Object3D | null = found.object; o && !target; o = o.parent) target = this.map.get(o);
         } else {
-          point.copy(this.knuckle).addScaledVector(dir, DOT_M);
+          point.copy(this.origin).addScaledVector(dir, DOT_M);
         }
       }
       hits.push(target);
@@ -271,7 +280,6 @@ export class HandMenu {
     this.axis.copy(h.knuckle).sub(h.wrist).normalize();
     this.finger.copy(h.tip).sub(h.knuckle);
     const reach = this.finger.length();
-    if (reach > 1e-4) a.dir.copy(this.finger).divideScalar(reach);
     const alpha = reach > 1e-4 ? (Math.acos(Math.min(1, Math.max(-1, this.finger.normalize().dot(this.axis)))) * 180) / Math.PI : 0;
     const dt = Math.max(delta, 1e-3);
     const smooth = a.alpha + (alpha - a.alpha) * (1 - Math.exp(-dt / 0.03));
@@ -281,7 +289,10 @@ export class HandMenu {
     if (!a.rising && Math.abs(speed) < 40) a.base += (smooth - a.base) * (1 - Math.exp(-dt / 0.6));
     a.speed = speed;
     const pinch = h.tip.distanceTo(h.thumb) < PINCH_M;
-    return reach > FINGER_OUT_M && !pinch;
+    // The ray is up whenever the hand is tracked: it must not come and go as the fingers do.
+    void pinch;
+    void FINGER_OUT_M;
+    return true;
   }
 
   /** The tap: the finger dips by 22 to 65 degrees, quickly, and begins to come back. */
@@ -334,7 +345,8 @@ export class HandMenu {
     a.dot.visible = shown;
     if (!shown) return;
     // From the fingertip, along the ray, to the dot.
-    this.from.copy(h.tip);
+    void h;
+    this.from.copy(a.origin);
     this.end.copy(point).sub(this.from);
     const length = this.end.length();
     a.ray.position.copy(this.from);
