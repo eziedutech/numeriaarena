@@ -58,6 +58,8 @@ const NEAR_DIST = 0.85;
 const NEAR_RATE = 9;
 /** The board is held no lower than this far below level (sine of about 15 degrees). */
 const NEAR_LOWEST = 0.26;
+/** The held board's lower edge stays this far above the desk top. */
+const NEAR_CLEAR = 0.08;
 
 let lines: BoardLine[] | undefined;
 let version = 0;
@@ -102,7 +104,8 @@ export class BoardWriter {
   private eye = new Vector3();
   private fwd = new Vector3();
 
-  constructor() {
+  /** `deskTop`: the height of the desk top (metres), under which the board held close must not come. */
+  constructor(private deskTop = 0) {
     this.group.name = 'measure-board';
     this.board.position.copy(this.home);
     this.group.add(this.board);
@@ -144,6 +147,8 @@ export class BoardWriter {
       this.fwd.set((this.fwd.x / flat) * Math.sqrt(1 - down * down), -down, (this.fwd.z / flat) * Math.sqrt(1 - down * down));
     }
     this.target.copy(this.eye).addScaledVector(this.fwd, NEAR_DIST);
+    // Seated, with the desk top close under the eyes, the board's lower edge would sink behind the desk: it is raised clear of it.
+    this.target.y = Math.max(this.target.y, this.deskTop + (BACK_H * (NEAR_W / BACK_W)) / 2 + NEAR_CLEAR);
     this.group.updateWorldMatrix(true, false);
     this.local.copy(this.target).applyMatrix4(this.m.copy(this.group.matrixWorld).invert());
     // Facing the eyes: its +Z towards them, whichever way the room is turned.

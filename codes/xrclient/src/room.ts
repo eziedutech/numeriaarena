@@ -91,7 +91,7 @@ export class RoomSystem extends createSystem({
       group.traverse((o) => {
         if (o instanceof Mesh && o.name.endsWith('-paper')) o.material = this.tint!;
       });
-      this.writer = new BoardWriter();
+      this.writer = new BoardWriter(top);
       group.add(this.writer.group);
     } else {
       this.life = room === 'classroom' ? new ClassroomLife(group) : new BedroomLife(group);
