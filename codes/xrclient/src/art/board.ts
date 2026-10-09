@@ -40,8 +40,8 @@ const CHALK = 0xf4f1e6;
 const SIZE_TO_BOARD = 8;
 const HIGHEST = 0.2;
 /** The writing keeps to this width and height of the board. */
-const MAX_W = 3.0;
-const MAX_H = 0.95;
+const MAX_W = 3.1;
+const MAX_H = 1.02;
 const LINE_GAP = 1.12;
 /** Short words are made no larger than this many times their size. */
 const MOST = 1.8;
@@ -166,8 +166,8 @@ export class BoardWriter {
     const rows: { text: string; h: number; ink: number }[] = [];
     for (const line of lines ?? []) {
       const h = Math.min(HIGHEST, line.size * SIZE_TO_BOARD);
-      // A letter is about a third of its line's height wide: break the lines to fill the board's width.
-      const per = Math.max(12, Math.floor(MAX_W / (h * 0.34)));
+      // A letter is a little over a quarter of its line's height wide: break the lines to fill the board's width.
+      const per = Math.max(12, Math.floor(MAX_W / (h * 0.29)));
       for (const text of words(line.text, per)) rows.push({ text, h, ink: CHALKS[line.ink] ?? CHALK });
     }
     const total = rows.reduce((sum, r) => sum + r.h * LINE_GAP, 0);
