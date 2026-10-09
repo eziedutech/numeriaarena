@@ -187,6 +187,8 @@ interface Spin {
   pieces: { plus: Mesh[]; minus: Mesh[] };
   /** TURN was pressed: the ball turns itself. */
   auto: boolean;
+  /** Where the hands have carried the ball to; the ball eases after it. */
+  target: number;
   /** Where each hand last was across the ball (metres, sideways) while it held it. */
   held: Record<Side, number | undefined>;
   /** The way the ball turns (+1 rightward, -1 leftward, 0 not yet): that of the first sustained sweep; every sweep after, either way, carries it on that way, so the hand may go to and fro. */
@@ -357,6 +359,9 @@ const TAU = Math.PI * 2;
 const HOLD_BAND = 0.8;
 /** A hand moves the ball only when it moves this far sideways in a frame: a hand's tremble does not. */
 const HOLD_STEP_M = 0.0015;
+/** A sweep turns the ball this many times as far as rolling under the hand would, so one stroke across it is most of the way round; the ball eases after the hand at this rate. */
+const HOLD_GAIN = 2.2;
+const HOLD_EASE = 12;
 /** The first sweep over the ball must go this far (metres) before the ball knows which way it turns. */
 const FIRST_SWEEP_M = 0.015;
 /** The line is round when the ball has turned to within this many radians of a full turn. */
@@ -2162,7 +2167,7 @@ export class MeasureDesk {
     this.flicking = false;
     this.spinVel = 0;
     this.turns.clear();
-    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, auto: false, held: { left: undefined, right: undefined }, way: 0, first: 0 };
+    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, target: 0, auto: false, held: { left: undefined, right: undefined }, way: 0, first: 0 };
     console.info('[measure] the ball waits to be turned by the hand');
     // TURN takes the place NET would have: for a hand that cannot hold the ball.
     this.card('me_spin', this.t.turn, -0.36, 0.06, PURPLE);
@@ -2286,8 +2291,16 @@ export class MeasureDesk {
     const paper = this.paper;
     if (!s || s.stage !== 'turn' || !paper) return;
     const dir = s.angle < 0 ? -1 : 1;
-    const move = s.auto ? dir * (TAU / SPIN_S) * delta : this.heldTurn(s);
-    if (move !== 0) s.angle = Math.max(-TAU, Math.min(TAU, s.angle + move));
+    if (s.auto) {
+      s.angle = Math.max(-TAU, Math.min(TAU, s.angle + dir * (TAU / SPIN_S) * delta));
+      s.target = s.angle;
+    } else {
+      // The hand's sweep is carried a little further than it went, and the ball eases after it.
+      const move = this.heldTurn(s) * HOLD_GAIN;
+      if (move !== 0) s.target = Math.max(-TAU, Math.min(TAU, s.target + move));
+      s.angle += (s.target - s.angle) * (1 - Math.exp(-delta * HOLD_EASE));
+      if (Math.abs(s.target - s.angle) < 0.002) s.angle = s.target;
+    }
     const done = Math.abs(s.angle) >= TAU - ROUND_RAD;
     if (done) s.angle = (s.angle < 0 ? -1 : 1) * TAU;
     paper.spin.quaternion.setFromAxisAngle(Y, s.angle).multiply(s.q0);
