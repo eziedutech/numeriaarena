@@ -2311,14 +2311,15 @@ a.class-row,
     row-gap: 2px;
   }
 
+  /* A finger needs 44 pixels. */
   .paper-chip .seg {
-    min-height: 36px;
-    min-width: 40px;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .paper-foot a {
     display: inline-block;
-    padding: 8px 2px;
+    padding: 12px 4px;
   }
 
   label > input[type="checkbox"] {

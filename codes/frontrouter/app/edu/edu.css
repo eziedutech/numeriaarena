@@ -263,3 +263,61 @@ a.edu-topic:focus-visible {
     font-size: 17px;
   }
 }
+
+/* A phone held sideways: the sheet on the left as large as the height allows, its words and buttons beside it, so a lesson fits one screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .paper-page.edu:has(.edu-book) {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .edu-book:not(.full) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 290px);
+    grid-template-areas:
+      "fold head"
+      "fold say"
+      "fold controls";
+    grid-template-rows: auto 1fr auto;
+    align-items: start;
+    gap: 6px 14px;
+    padding: 10px;
+  }
+
+  .edu-book:not(.full) > .edu-head {
+    grid-area: head;
+  }
+
+  .edu-book:not(.full) > .edu-fold {
+    grid-area: fold;
+  }
+
+  .edu-book:not(.full) > .edu-say {
+    grid-area: say;
+    font-size: 15px;
+    min-height: 0;
+  }
+
+  .edu-book:not(.full) > .edu-controls {
+    grid-area: controls;
+    gap: 8px;
+  }
+
+  .edu-book:not(.full) > .err {
+    grid-column: 1 / -1;
+  }
+
+  .edu-book:not(.full) .edu-canvas {
+    width: min(100%, calc((100dvh - 120px) * 1.6));
+    margin-inline: 0;
+  }
+
+  .edu-book:not(.full) .edu-head h1 {
+    font-size: 17px;
+  }
+
+  .edu-book:not(.full) .edu-controls .btn {
+    min-width: 0;
+    padding-inline: 14px;
+  }
+}
