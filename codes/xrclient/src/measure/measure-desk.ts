@@ -722,8 +722,7 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return;
     const lines: [string, number, string][] = [[o.prompt[getLang()], 0.022, HEAD], [this.hint, 0.016, INK]];
-    // How a pin and a thread are made, and what the cards at the side are for.
-    lines.push([this.host.controllers() ? this.t.tapTrigger : this.t.tapHand, 0.014, INK]);
+    // How a pin is made is told before the play (CARA MENGUKUR): the board keeps to the question and one short line.
     // The turn and net cards are a box's; a ball or a cylinder says how it is swept instead.
     if (o.source === 'paper' && (o.shape === 'cube' || o.shape === 'cuboid')) lines.push([this.t.toolsNote, 0.014, INK]);
     if (o.source === 'paper' && o.shape === 'cylinder') lines.push([this.t.sweepNote, 0.014, INK]);
