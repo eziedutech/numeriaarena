@@ -19,7 +19,7 @@ function English() {
       <h2>1. Playing the games</h2>
       <ol>
         <li>
-          Put the headset on and sit at a table. The game finds the table; pinch, or wait a few seconds, and the pop-up
+          Put the headset on and sit at a table. The game finds the table; tap, or wait a few seconds, and the pop-up
           book opens on it.
         </li>
         <li>
@@ -27,8 +27,9 @@ function English() {
           waves).
         </li>
         <li>
-          A paper animal walks out of the book with a question. Answer with your hand: reach out and touch, or point the
-          controller and pull the trigger.
+          A paper animal walks out of the book with a question. Answer with your hand: a ray and a dot show where you
+          point, the dot only lights a card, and the tap of your index finger chooses it. With a controller, aim and
+          press the trigger. In some rooms the question is written on the classroom board.
         </li>
       </ol>
       <ul>
@@ -47,7 +48,30 @@ function English() {
         <li>
           <strong>Balance Gate</strong>: touch the weight that balances the scale.
         </li>
+        <li>
+          <strong>Cari &amp; Ukur (Measure Hunt)</strong>: measure a shape on the desk and pick its perimeter, area, edges,
+          volume or surface. It is played in the headset only.
+        </li>
       </ul>
+      <h2>Cari &amp; Ukur</h2>
+      <ol>
+        <li>Pick your grade (a guest), then FLAT SHAPES or SOLIDS, then PAPER OBJECT or SOMETHING NEAR YOU.</li>
+        <li>With something near you, pick the card of what you have (a book, a plate, a box) or PAPER to use a paper one.</li>
+        <li>
+          The problem is written on the board. Point at a corner: a circle shows. Tap, and a line starts there and
+          follows your hand.
+        </li>
+        <li>
+          Point at the next corner and tap: the line is fixed and the next one starts. A square or rectangle needs two
+          sides at a corner, a box needs three edges square to each other, and a triangle is closed by tapping its first
+          corner again.
+        </li>
+        <li>When the lines are enough, five answers appear. Pick one. The game also counts how truly you measured.</li>
+        <li>
+          Turn a paper solid with the arrow cards at the left, open it flat with NET, and read the board up close with
+          READ. Tap a pin and then the bin beside it to take it away; BACK leaves.
+        </li>
+      </ol>
       <p>
         A right answer sends the animal home happy and earns Folds. In a class, the teacher can open RACE MY CLASSMATES,
         and FIND A RIVAL pairs you with a student of your grade.
@@ -131,7 +155,7 @@ function Indonesian() {
       <h2>1. Bermain game</h2>
       <ol>
         <li>
-          Pakai headset dan duduk menghadap meja. Game mencari mejanya; cubit, atau tunggu beberapa detik, dan buku pop-up
+          Pakai headset dan duduk menghadap meja. Game mencari mejanya; tap, atau tunggu beberapa detik, dan buku pop-up
           terbuka di atasnya.
         </li>
         <li>
@@ -139,8 +163,9 @@ function Indonesian() {
           gelombang berwaktu).
         </li>
         <li>
-          Hewan kertas keluar dari buku membawa soal. Jawab dengan tanganmu: ulurkan dan sentuh, atau arahkan controller
-          lalu tarik trigger.
+          Hewan kertas keluar dari buku membawa soal. Jawab dengan tanganmu: sinar dan titik menunjukkan arah tunjukmu,
+          titik hanya menyalakan kartu, dan tap telunjukmu memilihnya. Dengan controller, arahkan lalu tekan trigger. Di
+          beberapa ruang soalnya ditulis di papan tulis kelas.
         </li>
       </ol>
       <ul>
@@ -159,7 +184,30 @@ function Indonesian() {
         <li>
           <strong>Balance Gate</strong>: sentuh beban yang membuat timbangan seimbang.
         </li>
+        <li>
+          <strong>Cari &amp; Ukur</strong>: ukur bangun di meja lalu pilih keliling, luas, rusuk, volume, atau luas
+          permukaannya. Hanya dimainkan di headset.
+        </li>
       </ul>
+      <h2>Cari &amp; Ukur</h2>
+      <ol>
+        <li>Pilih kelas (untuk tamu), lalu BANGUN DATAR atau BANGUN RUANG, lalu BENDA KERTAS atau BENDA DI SEKITARMU.</li>
+        <li>Untuk benda di sekitarmu, pilih kartu benda yang kamu punya (buku, piring, kardus) atau KERTAS untuk memakai benda kertas.</li>
+        <li>
+          Soal tertulis di papan tulis. Tunjuk sebuah sudut: bulatan muncul. Tap, dan garis mulai dari sana mengikuti
+          tanganmu.
+        </li>
+        <li>
+          Tunjuk sudut berikutnya lalu tap: garis dipatenkan dan garis berikutnya dimulai. Persegi dan persegi panjang
+          butuh dua sisi di satu sudut, balok butuh tiga rusuk yang saling tegak lurus, dan segitiga ditutup dengan tap
+          di sudut pertamanya lagi.
+        </li>
+        <li>Kalau garisnya cukup, lima jawaban muncul. Pilih satu. Game juga menghitung seberapa tepat kamu mengukur.</li>
+        <li>
+          Putar bangun kertas dengan kartu panah di kiri, buka datar dengan JARING, dan baca papan dari dekat dengan
+          BACA. Tap pin lalu tempat sampah di sampingnya untuk membuangnya; KEMBALI untuk keluar.
+        </li>
+      </ol>
       <p>
         Jawaban benar membuat hewan pulang dengan gembira dan memberi Folds. Di kelas, guru bisa membuka LOMBA DENGAN
         TEMAN, dan CARI LAWAN memasangkanmu dengan siswa satu tingkat.

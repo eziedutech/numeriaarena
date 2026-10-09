@@ -26,8 +26,12 @@ const FEATURES: { en: string; id: string; items: { en: [string, string]; id: [st
         id: ["BERLATIH SENDIRI", "latihan tanpa waktu, sesuai kecepatan siswa"],
       },
       {
-        en: ["Five desk games", "Balloon Burst, Orb Forge, Factory Sort, Bridge Builder and Balance Gate"],
-        id: ["Lima game meja", "Balloon Burst, Orb Forge, Factory Sort, Bridge Builder, dan Balance Gate"],
+        en: ["Six desk games", "Balloon Burst, Orb Forge, Factory Sort, Bridge Builder, Balance Gate and Cari & Ukur"],
+        id: ["Enam game meja", "Balloon Burst, Orb Forge, Factory Sort, Bridge Builder, Balance Gate, dan Cari & Ukur"],
+      },
+      {
+        en: ["Cari & Ukur (Measure Hunt)", "authentic assessment, only in the headset: a child solves a measuring problem on a paper shape or a real object, and is assessed on how truly it was measured as well as on the answer"],
+        id: ["Cari & Ukur (Measure Hunt)", "asesmen autentik, hanya di headset: siswa menyelesaikan masalah ukur pada bangun kertas atau benda nyata, dan dinilai dari ketepatan mengukur selain jawabannya"],
       },
       {
         en: ["A question bank of templates", "new numbers every time, with wrong answers drawn from common misconceptions"],

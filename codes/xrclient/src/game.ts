@@ -25,7 +25,7 @@ import {
 } from '@iwsdk/core';
 
 import { Label, type LabelOptions } from './art/label.js';
-import { softShadow, ToolButton, type ToolIcon, type ToolLook } from './art/tool-icon.js';
+import { softShadow, textPanel, ToolButton, type ToolIcon, type ToolLook } from './art/tool-icon.js';
 import {
   forgetMixers,
   makeBalloon,
@@ -1289,6 +1289,7 @@ export class GameSystem extends createSystem({
   /** Clears the desk menu: its buttons, envelopes and the writing on the book. */
   private clearMenu(): void {
     this.clear(this.queries.buttons);
+    this.hideInfo();
     this.measureBanner = undefined;
     for (const e of this.menuTrays) this.remove(e);
     this.menuTrays = [];
@@ -1437,12 +1438,19 @@ export class GameSystem extends createSystem({
       new PlaneGeometry(BANNER_W, BANNER_H),
       new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: DoubleSide }),
     );
+    // Off the headset it cannot be played: muted, and it only says why when pressed.
+    if (browser) {
+      const mat = plane.material as MeshBasicMaterial;
+      mat.color.setHex(0x9a9a9a);
+      mat.opacity = 0.55;
+    }
     plane.position.y = BANNER_H / 2;
     plane.renderOrder = 10;
     const banner = new Group();
     banner.name = 'menu-measure_hunt';
     banner.userData.tip = browser ? `${T.gameName.measure_hunt} · ${t.xrOnly}` : T.gameName.measure_hunt;
     banner.userData.tipH = BANNER_H;
+    banner.userData.muted = browser;
     banner.userData.choice = true;
     banner.userData.shownAt = performance.now();
     banner.userData.armed = false;
@@ -2250,9 +2258,49 @@ export class GameSystem extends createSystem({
    * MEASURE HUNT: on its own desk in the headset, the real room showing. On a
    * computer it cannot be played (it measures with the hands), and says so.
    */
+  /** The card that says Cari & Ukur needs the headset, over the muted banner, away by itself after a while. */
+  private infoCard?: Entity;
+  private infoTimer?: ReturnType<typeof setTimeout>;
+
+  private showMeasureInfo(): void {
+    const t = MEASURE_TEXT[getLang()];
+    this.hideInfo();
+    const { mesh } = textPanel(
+      [
+        { text: T.gameName.measure_hunt.toUpperCase(), size: 0.024, ink: '#3469c4' },
+        { text: t.needHeadset, size: 0.016, ink: '#3a3f4b' },
+        { text: t.infoHint, size: 0.016, ink: '#c94f49' },
+      ],
+      0.3,
+      0.24,
+      0.02,
+      0,
+      0.02,
+      'home',
+    );
+    mesh.name = 'measure-info';
+    this.labels.add(mesh);
+    const group = new Group();
+    group.add(mesh);
+    group.position.copy(BANNER_AT).add(new Vector3(0.1, 0.1, -0.04));
+    this.infoCard = this.add(group);
+    this.sound('tap', group);
+    this.infoTimer = setTimeout(() => this.hideInfo(), 5500);
+  }
+
+  private hideInfo(): void {
+    clearTimeout(this.infoTimer);
+    this.infoTimer = undefined;
+    const e = this.infoCard;
+    this.infoCard = undefined;
+    if (!e?.active) return;
+    e.object3D?.traverse((o) => this.labels.delete(o as Mesh));
+    this.remove(e);
+  }
+
   private openMeasure(): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
-      this.pop(MEASURE_TEXT[getLang()].needHeadset, QUESTION_INK, undefined, GAMES_AT.clone().add(new Vector3(0, 0.12, -0.04)), 0.018);
+      this.showMeasureInfo();
       return;
     }
     console.info('[measure] opening on the desk');
@@ -3724,7 +3772,7 @@ export class GameSystem extends createSystem({
     this.camera.getWorldPosition(this.head);
     for (const m of this.labels) if (m.parent) m.lookAt(this.head);
     // Measure Hunt's banner breathes on the menu, so the eye finds it.
-    if (this.measureBanner?.parent) {
+    if (this.measureBanner?.parent && !this.measureBanner.userData.muted) {
       const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PROMPT_PULSE_S) * Math.PI * 2);
       this.measureBanner.scale.setScalar((1 + 0.03 * k) * (1 + HOVER_GROW * ((this.measureBanner.userData.hover as number | undefined) ?? 0)));
     }

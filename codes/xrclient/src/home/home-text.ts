@@ -203,7 +203,7 @@ const EN = {
   },
   pages: {
     'How to play':
-      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. In MATH LESSONS, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
+      'Pick PRACTICE ON MY OWN or RACE THE ROBOTS. A paper animal walks out of the book with a question. Pop the balloon with the right answer, or join two crystals that make the number it asks for. Right answers send it home happy. Point with your hand and tap with the index finger, or aim a controller and press the trigger. CARI & UKUR, only in the headset, asks you to measure a shape on the desk with pins and a line and then pick the answer. In MATH LESSONS, paper lessons show each topic step by step. Every play earns Folds to build MY FOLD TOWN: practice and robot races give up to 100 Folds a day; class races, rooms and FIND A RIVAL have no limit. Each topic you master raises a landmark in your town.',
     'For parents':
       'Children play without an account. Progress stays on this device. When a teacher sets up a class, children sign in with a class code and a picture password, never with a name or an email. Teachers see only their own class.',
     Privacy:
@@ -213,7 +213,7 @@ const EN = {
     'Credits and licenses':
       'Built with the Immersive Web SDK (MIT) and three.js (MIT); the smartboard camera reads hands with MediaPipe (Apache 2.0). Paper animals, letters and pictures are made by the project owner. The background music was made by the project owner with an AI music tool. Every third-party part is listed with its license in the source repository.',
     About:
-      'Numeria Arena makes primary school maths effective, modern and fun. In the headset a pop-up book opens on your real desk and paper animals bring you questions; on a screen or a smartboard the same games play in the browser. It joins interactive lessons, fair races and a paper town you build with every answer.',
+      'Numeria Arena makes primary school maths effective, modern and fun. In the headset a pop-up book opens on your real desk and paper animals bring you questions; on a screen or a smartboard the same games play in the browser. It joins interactive lessons, fair races and a paper town you build with every answer. Its measuring game, Cari & Ukur, exists only in the headset: it assesses the way a child solves a problem on the real desk, not only the answer.',
   },
 };
 
@@ -410,7 +410,7 @@ const ID: typeof EN = {
   },
   pages: {
     'How to play':
-      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Di EDUKASI MATEMATIKA, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
+      'Pilih BERLATIH SENDIRI atau LOMBA LAWAN ROBOT. Hewan kertas keluar dari buku membawa soal. Pecahkan balon berisi jawaban yang benar, atau gabungkan dua kristal yang hasilnya sama dengan angka yang diminta. Jawaban benar membuatnya pulang dengan gembira. Tunjuk dengan tanganmu lalu tap dengan telunjuk, atau arahkan controller lalu tekan trigger. CARI & UKUR, hanya di headset, memintamu mengukur bangun di meja dengan pin dan garis lalu memilih jawabannya. Di EDUKASI MATEMATIKA, pelajaran kertas memperlihatkan tiap topik langkah demi langkah. Setiap permainan memberi Folds untuk membangun KOTA LIPATKU: latihan dan lomba robot memberi paling banyak 100 Folds sehari; lomba kelas, ruang, dan CARI LAWAN tanpa batas. Setiap topik yang kamu kuasai mendirikan satu landmark di kotamu.',
     'For parents':
       'Anak bermain tanpa akun. Progres tersimpan di perangkat ini. Bila guru membuat kelas, anak masuk dengan kode kelas dan sandi gambar, tidak pernah dengan nama atau email. Guru hanya melihat kelasnya sendiri.',
     Privacy:
