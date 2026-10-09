@@ -880,12 +880,19 @@ export class MeasureDesk {
       this.frame().add(mesh, label.mesh);
       this.host.billboard(label.mesh);
       onTop(label);
+      mesh.visible = false;
+      label.mesh.visible = false;
       this.preview = { mesh, label };
     }
     const side = this.selectedBy;
     const through = this.pinAtRay(side, from);
+    // Without an end to reach it is not shown: a thread not yet laid stands a metre tall at the middle.
+    let ended = true;
     if (through) through.mesh.getWorldPosition(this.v);
-    else if (!this.tip(side, false, this.v)) return;
+    else ended = this.tip(side, false, this.v);
+    this.preview.mesh.visible = ended;
+    this.preview.label.mesh.visible = ended;
+    if (!ended) return;
     this.w.copy(this.v);
     this.frame().worldToLocal(this.w);
     this.lay(this.preview.mesh, this.preview.label, from.mesh.position, this.w);
