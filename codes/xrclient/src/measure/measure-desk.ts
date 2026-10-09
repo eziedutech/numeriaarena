@@ -254,8 +254,10 @@ const pinMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6 });
 const greenMat = new MeshStandardMaterial({ color: 0x2fa84f, roughness: 0.6 });
 // The pin a ray points at, to start a thread from or to end one on.
 const hoverMat = new MeshStandardMaterial({ color: 0xffc940, roughness: 0.5, emissive: 0x7a5a00 });
-const threadGeo = new CylinderGeometry(0.0015, 0.0015, 1, 8).translate(0, 0.5, 0);
-const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8 });
+const threadGeo = new CylinderGeometry(0.0028, 0.0028, 1, 8).translate(0, 0.5, 0);
+// A thread lying on flat paper would sink into it: it is lifted, and wins the paper's depth.
+const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const THREAD_LIFT = 0.004;
 const ghostGeo = new SphereGeometry(0.012, 16, 12);
 const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
@@ -1396,6 +1398,7 @@ export class MeasureDesk {
     this.u.copy(b).sub(a);
     const len = this.u.length();
     mesh.position.copy(a);
+    mesh.position.y += THREAD_LIFT;
     mesh.scale.set(1, Math.max(len, 1e-4), 1);
     if (len > 1e-6) mesh.quaternion.setFromUnitVectors(UP, this.u.divideScalar(len));
     label.set(`${Math.round(len * 100)} cm`);
