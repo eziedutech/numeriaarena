@@ -103,6 +103,8 @@ export interface MeasureHost {
   select(side: Side): { start: boolean; end: boolean };
   /** A controller's A, B, X or Y pressed this frame. */
   turn(side: Side): boolean;
+  /** The way a controller's thumbstick was pushed over this frame, if it was. */
+  stick(side: Side): 'left' | 'right' | 'up' | 'down' | undefined;
   /** This frame's grip edges of a controller. */
   squeeze(side: Side): { start: boolean; end: boolean };
   grip(side: Side): Object3D;
@@ -344,6 +346,10 @@ const TRAIL_LIFT_M = 0.003;
 const CENTRE_REACH_M = 0.03;
 const SURFACE_REACH_M = 0.04;
 const FOOT_REACH_M = 0.04;
+/** A ball or cylinder is swept with a fingertip: within this of its surface, faster than this, mostly sideways or mostly up and down. */
+const SWIPE_NEAR_M = 0.05;
+const SWIPE_SPEED = 0.6;
+const SWIPE_COOL_S = 0.5;
 const ghostGeo = new SphereGeometry(0.009, 16, 12);
 const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
@@ -418,6 +424,7 @@ export class MeasureDesk {
   /** A ball's circumference being drawn, with the card that turns it. */
   private spin?: Spin;
   private spinCard?: Entity;
+  private swipeCool = 0;
   private preview?: { mesh: Mesh; label: Label };
   private stopTaps?: () => void;
   /** A hand's tap has brought the board close, and the next tap sends it back. */
@@ -687,6 +694,7 @@ export class MeasureDesk {
     // How a pin and a thread are made, and what the cards at the side are for.
     lines.push([this.host.controllers() ? this.t.tapTrigger : this.t.tapHand, 0.014, INK]);
     if (o.source === 'paper' && this.paper?.solid) lines.push([this.t.toolsNote, 0.014, INK]);
+    if (o.source === 'paper' && (o.shape === 'sphere' || o.shape === 'cylinder')) lines.push([this.t.sweepNote, 0.014, INK]);
     if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
@@ -875,6 +883,7 @@ export class MeasureDesk {
     if (this.spin?.stage === 'turning') this.runSpin(delta);
     else this.turnSolid(delta);
     this.blinkSpin();
+    this.swipes(delta);
     if (this.step !== 'measure' || this.moving()) {
       this.trash.visible = false;
       this.active = undefined;
@@ -2187,6 +2196,46 @@ export class MeasureDesk {
     if (!card) return;
     if (card.active) this.host.remove(card);
     this.cards = this.cards.filter((c) => c !== card);
+  }
+
+  /**
+   * A ball or a cylinder turns a quarter at each sweep of a fingertip over it, left or right,
+   * up or down, never slantwise; a controller's thumbstick does the same.
+   */
+  private swipes(delta: number): void {
+    const paper = this.paper;
+    const shape = this.offer?.shape;
+    if (!paper?.solid || (shape !== 'sphere' && shape !== 'cylinder')) return;
+    if (this.step !== 'measure' || this.spin?.stage === 'turning' || this.boardHeld) return;
+    this.swipeCool -= delta;
+    if (this.host.controllers()) {
+      for (const side of SIDES) {
+        const way = this.host.stick(side);
+        if (way === 'left' || way === 'right') this.turnBy(Y, way === 'right' ? 1 : -1);
+        else if (way === 'up' || way === 'down') this.turnBy(X, way === 'down' ? 1 : -1);
+      }
+      return;
+    }
+    if (this.swipeCool > 0) return;
+    for (const side of SIDES) {
+      const h = this.hands.get(side);
+      if (!h.tracked) continue;
+      this.n.copy(h.tip);
+      this.metric.worldToLocal(this.n);
+      paper.spin.getWorldPosition(this.u);
+      this.metric.worldToLocal(this.u);
+      if (this.n.distanceTo(this.u) > paper.radius * PAPER_SCALE + SWIPE_NEAR_M) continue;
+      // The finger's speed in the desk's frame: x across, y up.
+      this.w.copy(h.velocity).applyQuaternion(this.q.copy(this.metric.getWorldQuaternion(this.q)).invert());
+      const across = Math.abs(this.w.x);
+      const up = Math.abs(this.w.y);
+      if (Math.hypot(across, up) < SWIPE_SPEED) continue;
+      if (across > 1.6 * up) this.turnBy(Y, this.w.x > 0 ? 1 : -1);
+      else if (up > 1.6 * across) this.turnBy(X, this.w.y > 0 ? -1 : 1);
+      else continue;
+      this.swipeCool = SWIPE_COOL_S;
+      return;
+    }
   }
 
   /** TURN blinks while it waits to be pressed. */

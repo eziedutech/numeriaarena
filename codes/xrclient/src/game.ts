@@ -2376,6 +2376,17 @@ export class GameSystem extends createSystem({
       select: town.select,
       squeeze: town.squeeze,
       turn: town.turn,
+      // A thumbstick pushed over this frame: one quarter turn of a ball or a cylinder.
+      stick: (side) => {
+        const pad = this.controllersOnly() ? this.input.xr.gamepads[side] : undefined;
+        const id = 'xr-standard-thumbstick';
+        if (!pad) return undefined;
+        if (pad.getAxesEnteringLeft(id)) return 'left';
+        if (pad.getAxesEnteringRight(id)) return 'right';
+        if (pad.getAxesEnteringUp(id)) return 'up';
+        if (pad.getAxesEnteringDown(id)) return 'down';
+        return undefined;
+      },
       grip: town.grip,
       controllers: town.controllers,
       hands: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
