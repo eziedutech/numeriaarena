@@ -15,6 +15,7 @@ Status: playable today at **https://numeria.eziedutech.dev** in the Meta Quest b
 ## Table of Contents
 
 - [What it is](#what-it-is)
+  - [Authentic Assessment Based Problem Solving](#authentic-assessment-based-problem-solving-only-for-immersive-environment)
 - [Who it is for](#who-it-is-for)
 - [How to test](#how-to-test)
 - [Architecture](#architecture)
@@ -33,7 +34,7 @@ Numeria Arena is an **immersive mathematics game** for primary school, grades 4 
 
 ### Math Edu Game
 
-The maths is the action, not a quiz with 3D decoration around it. 28 skills common to most curricula (place value, multiplication and division, fractions, decimals and measurement) come from 206 validated question templates. Every answer is computed by one exact fraction engine, so `0.1 + 0.2` is `0.3`, and no answer is ever typed in by a person or written by an AI model. Everything is in English and Indonesian.
+The maths is the action, not a quiz with 3D decoration around it. 29 skills common to most curricula (place value, multiplication and division, fractions, decimals and measurement) come from 222 validated question templates. Every answer is computed by one exact fraction engine, so `0.1 + 0.2` is `0.3`, and no answer is ever typed in by a person or written by an AI model. Everything is in English and Indonesian.
 
 ### Learn
 
@@ -48,8 +49,21 @@ Origami creatures walk out of the book on the desk, each carrying a problem, and
 - **Factory Sort:** carry each creature from the conveyor to the right gate.
 - **Bridge Builder:** lay fraction and decimal planks until the gap is exactly spanned.
 - **Balance Gate:** place number weights until the scale balances.
+- **Cari & Ukur (Measure Hunt):** measure a shape on the desk, a paper one the game lays down or a real object within reach, and find its perimeter, area, edges, volume or surface. See [Authentic Assessment Based Problem Solving](#authentic-assessment-based-problem-solving-only-for-immersive-environment).
 
 Children can practise alone, race two clearly labelled robot rivals through three timed waves and a final, race their classmates (up to six desks per match, with robots filling empty seats), find a rival of the same grade, or race side by side at one smartboard. Hands work from start to finish, and controllers work too. Play is seated with no artificial movement, so it stays comfortable.
+
+### Authentic Assessment Based Problem Solving, Only for Immersive Environment
+
+Cari & Ukur is the one game that cannot exist outside mixed reality. The child is not shown a question and then a menu of answers. The child is given a problem to solve in the room: how long are all the edges of this box, how much paper covers this top. It is solved with what a person has at a desk, the hands, the eyes and some judgement, on a shape the game lays down or on a real object within reach.
+
+What is assessed is the way the problem is solved, not only its answer:
+
+- **The measuring itself.** The exact fraction engine knows the true size of every paper shape, so it can tell how truly each point was placed on a corner, whether the sides the child chose make the shape the problem needs, and whether the right quantity was found. Real objects are judged by the geometry the points make.
+- **Then the answer,** chosen among five, each wrong one tied to a recorded misconception such as perimeter taken for area.
+- **The working and the answer agree.** The choices are computed from the lengths the child measured and wrote on the threads, so a teacher's report can show both, and an answer cannot be guessed away from the work.
+
+It needs a real desk, hands in space and objects that can be reached, so on a flat screen it would shrink to a drawing quiz. It is therefore offered in the headset only, and its answers join the same reports, skill stars and Folds as the other games.
 
 ### Create
 
@@ -99,7 +113,7 @@ Children never enter a name or an email. Real names stay in the teacher's browse
 | | |
 |---|---|
 | Players | Grades 4 to 6, ages 10 to 12 |
-| Topics | Place value, multiply and divide, fractions, decimals, measurement: 28 skills common to most curricula |
+| Topics | Place value, multiply and divide, fractions, decimals, measurement: 29 skills common to most curricula |
 | Languages | English, Bahasa Indonesia. Decimal point in both, no thousands separator |
 | Accounts | None for students: a class seat with a pseudonym and a picture password. Real names stay in the teacher's browser. Teachers sign in with Google, Facebook or email |
 
@@ -139,7 +153,7 @@ codes/
     server/        axum game server: rooms and WebSocket, classes, reports, town sync,
                    leaderboards, AI gateway, PostgreSQL migrations
     content-cli/   validate, instantiate, simulate
-  content/         skills, misconceptions, JSON schemas, 206 item templates
+  content/         skills, misconceptions, JSON schemas, 222 item templates
   brand/           logo and icons
 assets/            diagrams
 ```
@@ -220,12 +234,12 @@ Measured, not claimed. Everything below is reproducible with the commands above.
 |---|---|
 | Rust core: unit tests and the class match, examples, fairness simulation, race and session suites | 101 passed, 1 ignored (a report printer run on demand) |
 | Rust game server | 75 passed |
-| Template validator | 206 of 206 templates pass |
+| Template validator | 222 of 222 templates pass |
 | Game client type check | no errors |
 
 ### Template validator
 
-206 templates across the 28 skills (place value, multiplication and division, fractions,
+222 templates across the 29 skills (place value, multiplication and division, fractions,
 decimals, measurement) all pass `content-cli validate`. All of them are drafts written with
 an AI model and still await review by a teacher; the game uses them for now so every skill
 can be played. An AI model only wrote the templates: every answer is computed by the core.
@@ -294,6 +308,7 @@ with a mouse: clicking an envelope, a balloon, or two crystals in turn.
 - Hand tracking and table detection have only been exercised in the emulator, which does not reproduce real tracking noise or real rooms.
 - The simulations use synthetic students and template difficulties that are not yet calibrated on real answers. Real students will differ.
 - No classroom trial has been run yet, so no learning gain and no integrity effect are claimed; action-based assessment is the design, not a measured result.
+- Cari & Ukur has not been tried on a headset. Real objects are judged by the geometry of the points the child places, not by their true size, and the emulator has no real object to measure.
 - It is not a curriculum and does not grade students. Skill stars and reports are a guide for teachers.
 
 ## Roadmap
@@ -311,7 +326,7 @@ After the competition:
 - **Book Keeper:** students without a headset answer on a tablet or the class screen to send help to headset players.
 - **Daily Portal:** the same daily waves for everyone, with the numbers still fitted to each child.
 - **Pip, the paper owl coach:** a short recap after each match, made from structured data only.
-- **Measure Hunt** out of beta: estimate the length of the real desk, then measure it with a virtual tape.
+- **Cari & Ukur** tuned on a headset: real objects found by surface hit-testing, small objects, and shapes beyond the sixteen it starts with.
 - A shared class town on the class screen, a classroom local network mode for schools with weak internet, and a guardian role for parents.
 
 ## Credits and licenses
