@@ -119,6 +119,22 @@ const CSS = `
 #town .sheet p.ask { font-size: 22px; font-weight: 700; }
 #town .shelf p.sample { margin: 0; padding: 8px 12px; font-size: 17px; max-width: 760px; }
 #town ul { margin: 0; padding-left: 22px; font-size: 17px; display: flex; flex-direction: column; gap: 6px; }
+/* A phone held sideways: one slim bar on top, the land filling the rest, and the shop's shelf as a column on the right. */
+html.phone #town { display: grid; grid-template-columns: minmax(0, 1fr) 252px; grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar bar" "stage shelf"; }
+html.phone #town .bar { grid-area: bar; padding: 4px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
+html.phone #town .bar > canvas { display: none; }
+html.phone #town .bar .folds { padding: 8px 10px; font-size: 16px; white-space: nowrap; }
+html.phone #town .bar .tab { padding: 6px 10px; font-size: 14px; white-space: nowrap; flex: none; }
+html.phone #town .stage { grid-area: stage; }
+html.phone #town .shelf { grid-area: shelf; min-height: 0; box-shadow: -3px 0 8px rgba(70, 50, 25, 0.2); }
+html.phone #town .shelves { overflow-x: auto; padding: 6px 8px 0; flex: none; }
+html.phone #town .items { flex: 1; min-height: 0; flex-wrap: wrap; align-content: flex-start; overflow-x: hidden; overflow-y: auto; padding: 6px 8px; }
+html.phone #town .item { width: 108px; }
+html.phone #town .item img { width: 72px; height: 72px; }
+html.phone #town .keys { display: none; }
+html.phone #town .card { max-height: calc(100% - 28px); overflow-y: auto; width: min(280px, 60%); }
+html.phone #town .sheet { max-height: 94vh; padding: 14px 18px; }
 `;
 
 let open: TownPage | null = null;
@@ -313,7 +329,9 @@ class TownPage {
     this.look.x = Math.min(r.cols, Math.max(0, this.look.x));
     this.look.z = Math.min(r.rows, Math.max(0, this.look.z));
     // At 1, far enough back that the whole page shows on a narrow screen too.
-    const reach = Math.max(r.rows * 1.15, (r.cols * 1.1) / Math.max(0.5, this.camera.aspect)) / this.zoom;
+    // A phone's land is seen with more room round it: the perspective runs wide at the front.
+    const room = document.documentElement.classList.contains('phone') ? 1.2 : 1;
+    const reach = (Math.max(r.rows * 1.15, (r.cols * 1.1) / Math.max(0.5, this.camera.aspect)) * room) / this.zoom;
     this.camera.position.set(this.look.x, reach * 1.05, this.look.z + reach * 0.95);
     this.camera.lookAt(this.look);
     this.camera.updateMatrixWorld();
