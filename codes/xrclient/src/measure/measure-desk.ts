@@ -248,17 +248,17 @@ const INK = '#3a3f4b';
 const HEAD = '#3469c4';
 const ACCENT = '#c94f49';
 
-const pinGeo = new SphereGeometry(0.008, 16, 12);
+const pinGeo = new SphereGeometry(0.0055, 16, 12);
 // A pin with no thread is red, one with a thread green; the point a controller is about to drop is blue.
 const pinMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6 });
 const greenMat = new MeshStandardMaterial({ color: 0x2fa84f, roughness: 0.6 });
 // The pin a ray points at, to start a thread from or to end one on.
 const hoverMat = new MeshStandardMaterial({ color: 0xffc940, roughness: 0.5, emissive: 0x7a5a00 });
-const threadGeo = new CylinderGeometry(0.0028, 0.0028, 1, 8).translate(0, 0.5, 0);
+const threadGeo = new CylinderGeometry(0.0017, 0.0017, 1, 8).translate(0, 0.5, 0);
 // A thread lying on flat paper would sink into it: it is lifted, and wins the paper's depth.
 const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const THREAD_LIFT = 0.004;
-const ghostGeo = new SphereGeometry(0.012, 16, 12);
+const ghostGeo = new SphereGeometry(0.009, 16, 12);
 const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
 const Y = new Vector3(0, 1, 0);
