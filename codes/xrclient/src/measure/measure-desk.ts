@@ -187,8 +187,10 @@ interface Spin {
   pieces: { plus: Mesh[]; minus: Mesh[] };
   /** TURN was pressed: the ball turns itself. */
   auto: boolean;
-  /** Where each hand last was round the ball (radians) while it held it. */
+  /** Where each hand last was across the ball (metres, sideways) while it held it. */
   held: Record<Side, number | undefined>;
+  /** The way the ball has begun to turn (+1 rightward, -1 leftward, 0 not yet): only that way counts, so a hand brought back for another stroke does not undo it. */
+  way: 0 | 1 | -1;
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
@@ -351,6 +353,10 @@ const TRAIL_LIFT_M = 0.003;
 const TAU = Math.PI * 2;
 /** A hand's ray on the ball above or below this (of the ball's radius from its middle) is too near a pole to turn it. */
 const HOLD_BAND = 0.8;
+/** A hand moves the ball only when it moves this far sideways in a frame: a hand's tremble does not. */
+const HOLD_STEP_M = 0.0015;
+/** The line is round when the ball has turned to within this many radians of a full turn. */
+const ROUND_RAD = 0.15;
 /** A fingertip this near the ball (over its surface, metres) holds it. */
 const HOLD_NEAR_M = 0.03;
 /** On a round paper object a ray this near the centre is drawn onto it; this near the rim, the surface or the foot of the height, onto that. */
@@ -682,10 +688,12 @@ export class MeasureDesk {
 
   /** The cards that turn a paper solid, standing as a cross: UP over the two turns, DOWN under them, NET below. */
   private addTurnCards(): void {
-    this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
-    this.card('me_tl', this.t.turnLeft, -0.415, -0.1, TEAL);
+    // A ball turns only sideways: the line round its middle is written that way.
+    const ball = this.offer?.shape === 'sphere';
+    if (!ball) this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
+    this.card('me_tl', this.t.turnLeft, ball ? -0.415 : -0.415, -0.1, TEAL);
     this.card('me_tr', this.t.turnRight, -0.305, -0.1, TEAL);
-    this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
+    if (!ball) this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
     if (this.paper?.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
   }
 
@@ -705,7 +713,8 @@ export class MeasureDesk {
     // How a pin and a thread are made, and what the cards at the side are for.
     lines.push([this.host.controllers() ? this.t.tapTrigger : this.t.tapHand, 0.014, INK]);
     if (o.source === 'paper' && this.paper?.solid) lines.push([this.t.toolsNote, 0.014, INK]);
-    if (o.source === 'paper' && (o.shape === 'sphere' || o.shape === 'cylinder')) lines.push([this.t.sweepNote, 0.014, INK]);
+    if (o.source === 'paper' && o.shape === 'cylinder') lines.push([this.t.sweepNote, 0.014, INK]);
+    if (o.source === 'paper' && o.shape === 'sphere' && this.spin?.stage !== 'turn') lines.push([this.t.sweepBall, 0.014, INK]);
     if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
@@ -2137,7 +2146,7 @@ export class MeasureDesk {
     this.flicking = false;
     this.spinVel = 0;
     this.turns.clear();
-    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, auto: false, held: { left: undefined, right: undefined } };
+    this.spin = { stage: 'turn', reading: r, outer, angle: 0, q0, pen, trail, pieces: { plus: [], minus: [] }, auto: false, held: { left: undefined, right: undefined }, way: 0 };
     // TURN takes the place NET would have: for a hand that cannot hold the ball.
     this.card('me_spin', this.t.turn, -0.36, 0.06, PURPLE);
     this.spinCard = this.cards[this.cards.length - 1];
@@ -2189,7 +2198,11 @@ export class MeasureDesk {
     return list;
   }
 
-  /** How far the hands that hold the ball have carried it round, this frame. */
+  /**
+   * How far the hands that hold the ball have carried it round, this frame. The ball rolls
+   * under the hand: the dot on it moving sideways turns it by that far over the ball's radius.
+   * It turns only the way it began, so the hand coming back for another stroke leaves it be.
+   */
   private heldTurn(s: Spin): number {
     const paper = this.paper;
     if (!paper) return 0;
@@ -2199,19 +2212,24 @@ export class MeasureDesk {
     const reach = paper.radius * paper.root.scale.x;
     let total = 0;
     for (const side of SIDES) {
-      const az = this.holdAzimuth(side, middle, reach);
+      const across = this.holdAcross(side, middle, reach);
       const last = s.held[side];
-      s.held[side] = az;
-      if (az !== undefined && last !== undefined) total += wrap(az - last);
+      s.held[side] = across;
+      if (across === undefined || last === undefined) continue;
+      const step = across - last;
+      if (Math.abs(step) < HOLD_STEP_M) continue;
+      const sign = step > 0 ? 1 : -1;
+      if (s.way === 0) s.way = sign;
+      if (sign === s.way) total += step / reach;
     }
     return total;
   }
 
   /**
-   * Where round the ball a hand holds it, as an angle about the desk's up: the ray's dot on the
-   * ball sticks to it, or a fingertip at its surface. Undefined when the hand is not on it.
+   * How far across the ball (sideways, from its middle) a hand holds it: the ray's dot on the
+   * ball, or a fingertip at its surface. Undefined when the hand is not on it.
    */
-  private holdAzimuth(side: Side, middle: Vector3, reach: number): number | undefined {
+  private holdAcross(side: Side, middle: Vector3, reach: number): number | undefined {
     if (this.rayMode() && this.aimRay(side, this.o2, this.d2)) {
       // The ray in the desk's frame, against the ball.
       this.rd.copy(this.o2);
@@ -2225,7 +2243,7 @@ export class MeasureDesk {
         const miss = this.k1.addScaledVector(this.rp, -along).length();
         if (miss < reach) {
           this.k1.copy(this.rd).addScaledVector(this.rp, along - Math.sqrt(reach * reach - miss * miss));
-          if (Math.abs(this.k1.y - middle.y) <= HOLD_BAND * reach) return Math.atan2(this.k1.x - middle.x, this.k1.z - middle.z);
+          if (Math.abs(this.k1.y - middle.y) <= HOLD_BAND * reach) return this.k1.x - middle.x;
         }
       }
     }
@@ -2235,7 +2253,7 @@ export class MeasureDesk {
     this.metric.worldToLocal(this.k1);
     const d = this.k1.distanceTo(middle);
     if (d > reach + HOLD_NEAR_M || d < reach * 0.5 || Math.abs(this.k1.y - middle.y) > HOLD_BAND * reach) return undefined;
-    return Math.atan2(this.k1.x - middle.x, this.k1.z - middle.z);
+    return this.k1.x - middle.x;
   }
 
   /** One frame of the turn: the hands (or TURN) carry the ball round, and the line is written as far as it has gone. */
@@ -2246,7 +2264,7 @@ export class MeasureDesk {
     const dir = s.angle < 0 ? -1 : 1;
     const move = s.auto ? dir * (TAU / SPIN_S) * delta : this.heldTurn(s);
     if (move !== 0) s.angle = Math.max(-TAU, Math.min(TAU, s.angle + move));
-    const done = Math.abs(s.angle) >= TAU - 0.04;
+    const done = Math.abs(s.angle) >= TAU - ROUND_RAD;
     if (done) s.angle = (s.angle < 0 ? -1 : 1) * TAU;
     paper.spin.quaternion.setFromAxisAngle(Y, s.angle).multiply(s.q0);
     for (const sign of [1, -1] as const) {
@@ -2309,7 +2327,7 @@ export class MeasureDesk {
       for (const side of SIDES) {
         const way = this.host.stick(side);
         if (way === 'left' || way === 'right') this.turnBy(Y, way === 'right' ? 1 : -1);
-        else if (way === 'up' || way === 'down') this.turnBy(X, way === 'down' ? 1 : -1);
+        else if ((way === 'up' || way === 'down') && shape !== 'sphere') this.turnBy(X, way === 'down' ? 1 : -1);
       }
       return;
     }
@@ -2328,7 +2346,7 @@ export class MeasureDesk {
       const up = Math.abs(this.w.y);
       if (Math.hypot(across, up) < SWIPE_SPEED) continue;
       if (across > 1.6 * up) this.turnBy(Y, this.w.x > 0 ? 1 : -1);
-      else if (up > 1.6 * across) this.turnBy(X, this.w.y > 0 ? -1 : 1);
+      else if (up > 1.6 * across && shape !== 'sphere') this.turnBy(X, this.w.y > 0 ? -1 : 1);
       else continue;
       this.swipeCool = SWIPE_COOL_S;
       return;
@@ -2341,6 +2359,7 @@ export class MeasureDesk {
   private turnBy(axis: Vector3, sign: number): void {
     const spin = this.paper?.spin;
     if (!spin || !this.paper?.solid || this.unfoldTo > 0 || this.step !== 'measure' || this.spin?.stage === 'turn') return;
+    if (this.offer?.shape === 'sphere' && axis !== Y) return;
     const from = this.turnGoal ?? nearestSquare(spin.quaternion);
     this.turnGoal = new Quaternion().setFromAxisAngle(axis, (sign * Math.PI) / 2).multiply(from);
     sfx('fold');
@@ -2415,6 +2434,8 @@ export class MeasureDesk {
       // A controller's buttons turn it a quarter: A or B round the desk's up, X or Y over towards the player.
       for (const side of SIDES) {
         if (this.unfoldTo > 0 || !this.host.turn(side)) continue;
+        // A ball turns only sideways: the controller's left hand has no turn for it.
+        if (this.offer?.shape === 'sphere' && side === 'left') continue;
         const from = this.turnGoal ?? nearestSquare(spin.quaternion);
         this.turnGoal = this.q.setFromAxisAngle(side === 'right' ? Y : X, Math.PI / 2).clone().multiply(from);
         sfx('fold');
