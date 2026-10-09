@@ -309,11 +309,10 @@ const BEST_KEY = 'numeria.best';
 /**
  * The QUIT card during a game in the headset: a chip leaning on the desk at its
  * right, within a hand's or a controller's reach and away from the balloons and
- * crystals, as Measure Hunt's. The first press (tap, trigger or click) asks, a
- * second within QUIT_ASK_MS leaves to the desk menu.
+ * crystals, and the same card as Measure Hunt's BACK: a coral chip with the back
+ * arrow and the word BACK, one press (tap, trigger or click) leaving to the desk menu.
  */
 const QUIT_AT = new Vector3(0.34, 0, 0.15);
-const QUIT_ASK_MS = 4000;
 /** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
 const RAY_VISIBLE = 1;
 const RAY_ON_TARGET = 2;
@@ -537,10 +536,11 @@ export class GameSystem extends createSystem({
   private store?: LocalStore;
   private unsaved: { events: unknown[]; mode: string; seat?: string }[] = [];
   private phase: Phase = 'loading';
-  private quitAskedAt = 0;
   private wasControllers = false;
   /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
   private handMenu?: HandMenu;
+  /** A hand's tap is being taken: a card needs no arming. */
+  private handTap = false;
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
   private shownAt = 0;
@@ -1747,7 +1747,7 @@ export class GameSystem extends createSystem({
     if (!obj?.userData.choice) return true;
     const immersive = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
     if (performance.now() - (obj.userData.shownAt as number) < CHOICE_GRACE_MS) return false;
-    return !immersive || obj.userData.armed === true;
+    return !immersive || obj.userData.armed === true || this.handTap;
   }
 
   private start(choice: MenuChoice, resume?: RaceCheckpoint, link?: ClassRace): void {
@@ -2390,14 +2390,7 @@ export class GameSystem extends createSystem({
   private addQuitCard(): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     this.removeQuitCard();
-    const e = this.measureCard('quit', 'exit', T.quit, QUIT_AT.x, QUIT_AT.z, 'accent', '#ffffff');
-    const button = e.object3D;
-    if (!button) return;
-    // Approached from outside and up a while before it takes a press, like the results choices.
-    button.userData.choice = true;
-    button.userData.shownAt = performance.now();
-    button.userData.armed = false;
-    this.quitAskedAt = 0;
+    this.measureCard('quit', 'back', T.back, QUIT_AT.x, QUIT_AT.z, 'accent', '#ffffff');
   }
 
   /** The QUIT card is a convenience: if it cannot be made, the game goes on without it. */
@@ -2414,29 +2407,11 @@ export class GameSystem extends createSystem({
     for (const e of [...this.queries.buttons.entities]) if (e.getValue(MenuButton, 'game') === 'quit') this.remove(e);
   }
 
-  /** First press asks (SURE?), a second within QUIT_ASK_MS leaves the game for the desk menu. */
+  /** One press of the BACK card leaves the game for the desk menu, as in Measure Hunt. */
   private pressQuit(e: Entity): void {
     const playing = this.phase === 'playing' || this.phase === 'between' || (this.phase === 'loading' && this.race);
-    if (!playing || !this.choiceReady(e)) return;
-    const obj = e.object3D;
-    if (!obj) return;
-    const now = performance.now();
-    if (now - this.quitAskedAt > QUIT_ASK_MS) {
-      this.quitAskedAt = now;
-      // The same finger has to come in again for the second press.
-      obj.userData.armed = false;
-      const chip = obj.userData.toolButton as ToolButton | undefined;
-      chip?.set(undefined, 'accent', T.quitSure);
-      obj.getWorldPosition(this.a);
-      this.pop(T.quitAgain, QUESTION_INK, undefined, this.a.clone().add(new Vector3(0, 0.07, 0)), 0.02);
-      const asked = this.quitAskedAt;
-      setTimeout(() => {
-        if (this.quitAskedAt === asked) chip?.set(undefined, 'accent', T.quit);
-      }, QUIT_ASK_MS);
-      return;
-    }
+    if (!playing || !e.object3D) return;
     console.info(`[game] quit from the desk while ${this.phase}`);
-    this.quitAskedAt = 0;
     this.removeQuitCard();
     if (this.race) {
       this.endRace();
@@ -3278,7 +3253,14 @@ export class GameSystem extends createSystem({
       out.push({
         object: obj,
         press: () => {
-          if (e.active) this.pressButton(e, true);
+          if (!e.active) return;
+          // A tap is aimed with a ray from afar: the choices' rule that a finger must first come in from outside is for brushes.
+          this.handTap = true;
+          try {
+            this.pressButton(e, true);
+          } finally {
+            this.handTap = false;
+          }
         },
       });
     }

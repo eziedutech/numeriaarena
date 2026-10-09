@@ -498,7 +498,7 @@ export class MeasureDesk {
     this.clearCards();
     this.card('me_clear', this.t.clear, TOOLS_X, -0.06, YELLOW);
     this.card('me_skip', this.t.skip, TOOLS_X, 0.025, BLUE);
-    this.card('me_back', this.t.quit, TOOLS_X, CARD_Z, CORAL);
+    this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
     sfx('unfold');
   }
 
@@ -524,7 +524,7 @@ export class MeasureDesk {
     this.clearCards();
     const unit = this.t.unit[this.offer?.unit ?? 'cm'] ?? '';
     r.choices.forEach((c, i) => this.card(`me_a${i}` as MeasureChoice, `${c} ${unit}`, (i - 2) * CHOICE_STEP, CARD_Z, BLUE));
-    this.card('me_back', this.t.quit, TOOLS_X, -0.06, CORAL);
+    this.card('me_back', this.t.back, TOOLS_X, -0.06, CORAL);
   }
 
   private choose(index: number): void {
@@ -1572,11 +1572,9 @@ export class MeasureDesk {
     const answer = /^me_a\d$/.test(choice);
     const icon: ToolIcon | undefined = answer
       ? undefined
-      : choice === 'me_back' && word === this.t.quit
-        ? 'exit'
-        : choice.startsWith('me_grade')
-          ? 'school'
-          : CARD_ICON[choice];
+      : choice.startsWith('me_grade')
+        ? 'school'
+        : CARD_ICON[choice];
     const look: ToolLook = choice === 'me_back' || choice === 'me_done' ? 'accent' : choice === 'me_start' || choice === 'me_again' ? 'on' : 'plain';
     this.cards.push(this.host.button(choice, icon, word, x, z, look, `#${color.toString(16).padStart(6, '0')}`));
   }
