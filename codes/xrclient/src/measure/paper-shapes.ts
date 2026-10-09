@@ -45,6 +45,8 @@ const INK = 0x3a3f4b;
 const LIFT = 0.0015;
 
 const paperMat = new MeshStandardMaterial({ color: PAPER, roughness: 1, side: DoubleSide });
+// A ball is seen through, so its middle can be looked for.
+const glassMat = new MeshStandardMaterial({ color: 0xcfe3ff, roughness: 0.6, transparent: true, opacity: 0.32, depthWrite: false, side: DoubleSide });
 const lineMat = new LineBasicMaterial({ color: INK });
 const dotMat = new MeshStandardMaterial({ color: INK, roughness: 1 });
 
@@ -114,9 +116,9 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
       break;
     }
     case 'sphere': {
-      const d = g('d');
+      const d = 2 * g('r');
       height = d;
-      add(frame, new SphereGeometry(d / 2, 40, 24).translate(0, d / 2, 0), paperMat, false);
+      add(frame, new SphereGeometry(d / 2, 40, 24).translate(0, d / 2, 0), glassMat, false);
       // One line round its middle, so the ball is seen turning.
       const ring = new LineSegments(new EdgesGeometry(new CircleGeometry(d / 2 + 0.0005, 64), 1), lineMat);
       ring.rotation.x = -Math.PI / 2;

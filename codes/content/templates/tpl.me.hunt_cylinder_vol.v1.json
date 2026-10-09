@@ -1,7 +1,7 @@
 {
-  "id": "tpl.me.hunt_cylinder_top.v1",
+  "id": "tpl.me.hunt_cylinder_vol.v1",
   "version": 1,
-  "skill": "ME.AREA",
+  "skill": "ME.VOL",
   "grades": [
     6
   ],
@@ -20,41 +20,41 @@
     }
   },
   "answer": {
-    "expr": "314 / 100 * r * r",
+    "expr": "314 * r * r * t / 100",
     "format": "decimal",
     "decimal_places": 2
   },
   "difficulty": {
-    "base": 0.8
+    "base": 0.85
   },
   "distractors": [
     {
-      "expr": "2 * 314 / 100 * r",
-      "misconception": "gave_perimeter"
+      "expr": "314 * r * r / 100",
+      "misconception": "forgot_height"
     },
     {
-      "expr": "314 / 100 * 2 * r * 2 * r",
+      "expr": "314 * 2 * r * 2 * r * t / 100",
       "misconception": "used_diameter"
     },
     {
-      "expr": "314 / 100 * r",
+      "expr": "314 * r * t / 100",
       "misconception": "forgot_to_square"
     },
     {
-      "expr": "314 / 100 * r * r * t",
-      "misconception": "gave_volume"
+      "expr": "2 * 314 * r * (r + t) / 100",
+      "misconception": "gave_surface"
     }
   ],
   "prompt": {
-    "en": "Mark the top's middle and edge. Area of the top?",
-    "id": "Tandai pusat dan tepi tutup tabung. Luas tutupnya?"
+    "en": "Mark the top's middle and edge, then its height. Volume?",
+    "id": "Tandai pusat dan tepi tutup, lalu tingginya. Volumenya?"
   },
   "visual_model": "ruler",
   "game_adapters": {
     "measure_hunt": {
       "shape": "cylinder",
-      "task": "area",
-      "unit": "cm2"
+      "task": "volume",
+      "unit": "cm3"
     }
   },
   "tags": [

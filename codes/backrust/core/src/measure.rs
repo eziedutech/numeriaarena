@@ -361,6 +361,10 @@ impl Hunt {
                 }
             }
             keys = key_points(k.shape, &size);
+            // A cylinder's height is read down to the middle of its base.
+            if k.shape == Shape::Cylinder && k.task == Task::Volume {
+                keys.push([0.0, 0.0, 0.0]);
+            }
         }
         let id = self.next_id;
         self.next_id += 1;
@@ -695,7 +699,8 @@ pub fn key_points(shape: Shape, size: &BTreeMap<String, f64>) -> Vec<P> {
         }
         Shape::Circle => vec![[0.0, 0.0, 0.0], [g("r"), 0.0, 0.0]],
         Shape::Cylinder => vec![[0.0, g("t"), 0.0], [g("r"), g("t"), 0.0]],
-        Shape::Sphere => vec![[-g("d") / 2.0, g("d") / 2.0, 0.0], [g("d") / 2.0, g("d") / 2.0, 0.0]],
+        // The ball's centre, floating at its radius over the desk, and a point of its surface.
+        Shape::Sphere => vec![[0.0, g("r"), 0.0], [g("r"), g("r"), 0.0]],
         Shape::Cube | Shape::Cuboid => {
             let (w, d, h) = if shape == Shape::Cube {
                 (g("s"), g("s"), g("s"))
@@ -817,6 +822,7 @@ fn paper(shape: Shape, task: Task, size: &BTreeMap<String, f64>, points: &[P]) -
             }
             Ok(triangle_perimeter(pins, q))
         }
+        Shape::Cylinder if task == Task::Volume => cylinder_volume(&keys, size, points),
         Shape::Circle | Shape::Cylinder => {
             need(points, 2)?;
             let centre = keys[0];
@@ -842,29 +848,33 @@ fn paper(shape: Shape, task: Task, size: &BTreeMap<String, f64>, points: &[P]) -
             Ok(round_one(vec![c, rim], "r", q))
         }
         Shape::Sphere => {
+            // The child finds the ball's centre, then marks its surface: the radius.
             need(points, 2)?;
-            let d = size.get("d").copied().unwrap_or(0.0);
-            let centre = [0.0, d / 2.0, 0.0];
-            let off: Vec<f64> = points.iter().map(|p| (dist(*p, centre) - d / 2.0).abs()).collect();
-            let across = dist(points[0], points[1]);
-            if off.iter().any(|o| *o > REACH_CM) || (across - d).abs() > REACH_CM {
-                return Err(("not_across", points.to_vec()));
+            let r = size.get("r").copied().unwrap_or(0.0);
+            let centre = keys[0];
+            let dc = dist(points[0], centre);
+            if dc > REACH_CM {
+                return Err(("off_centre", points.to_vec()));
             }
-            let pins = if (across - d).abs() <= SNAP_CM && off.iter().all(|o| *o <= SNAP_CM) {
-                // The two ends of the diameter through the first pin.
-                let dir = sub(points[0], centre);
-                let l = len(dir).max(1e-9);
-                let u = [dir[0] / l, dir[1] / l, dir[2] / l];
-                let h = d / 2.0;
-                vec![
-                    [centre[0] + u[0] * h, centre[1] + u[1] * h, centre[2] + u[2] * h],
-                    [centre[0] - u[0] * h, centre[1] - u[1] * h, centre[2] - u[2] * h],
+            let c = if dc <= SNAP_CM { centre } else { points[0] };
+            let out = sub(points[1], centre);
+            let reach = len(out);
+            let surface_off = (reach - r).abs();
+            if surface_off > REACH_CM || reach == 0.0 {
+                return Err(("off_rim", vec![c, points[1]]));
+            }
+            // On the surface, along the way the thread was pulled.
+            let on = if surface_off <= SNAP_CM {
+                [
+                    centre[0] + out[0] / reach * r,
+                    centre[1] + out[1] / reach * r,
+                    centre[2] + out[2] / reach * r,
                 ]
             } else {
-                points.to_vec()
+                points[1]
             };
-            let q = (accuracy(off[0]) + accuracy(off[1]) + accuracy((across - d).abs())) / 3.0;
-            Ok(round_one(pins, "d", q))
+            let q = (accuracy(dc) + accuracy(surface_off)) / 2.0;
+            Ok(round_one(vec![c, on], "r", q))
         }
         Shape::Cube | Shape::Cuboid => {
             need(points, 4)?;
@@ -877,6 +887,57 @@ fn paper(shape: Shape, task: Task, size: &BTreeMap<String, f64>, points: &[P]) -
             box_edges(shape, pins, q)
         }
     }
+}
+
+/// A cylinder's volume: the middle of its top, a point of its rim, and the
+/// foot of the height, straight under the middle or under the rim point.
+fn cylinder_volume(keys: &[P], size: &BTreeMap<String, f64>, points: &[P]) -> Looked {
+    need(points, 3)?;
+    let centre = keys[0];
+    let r = size.get("r").copied().unwrap_or(0.0);
+    let dc = dist(points[0], centre);
+    if dc > REACH_CM {
+        return Err(("off_centre", points.to_vec()));
+    }
+    let c = if dc <= SNAP_CM { centre } else { points[0] };
+    let out = sub(points[1], c);
+    let flat = [out[0], 0.0, out[2]];
+    let reach = len(flat);
+    let rim_off = (reach - r).abs() + out[1].abs();
+    if rim_off > REACH_CM || reach == 0.0 {
+        return Err(("off_rim", vec![c, points[1]]));
+    }
+    let rim = if rim_off <= SNAP_CM {
+        [c[0] + flat[0] / reach * r, c[1], c[2] + flat[2] / reach * r]
+    } else {
+        points[1]
+    };
+    // The foot: on the desk under the middle, or under the rim point.
+    let under = |top: P| [top[0], 0.0, top[2]];
+    let (top, true_foot) = {
+        let a = under(c);
+        let b = under(rim);
+        if dist(points[2], a) <= dist(points[2], b) {
+            (c, a)
+        } else {
+            (rim, b)
+        }
+    };
+    let foot_off = dist(points[2], true_foot);
+    if foot_off > REACH_CM {
+        return Err(("height_not_upright", vec![c, rim, points[2]]));
+    }
+    let foot = if foot_off <= SNAP_CM { true_foot } else { points[2] };
+    let q = (accuracy(dc) + accuracy(rim_off) + accuracy(foot_off)) / 3.0;
+    Ok(Shown {
+        lengths: vec![0, whole(dist(c, rim)), whole(dist(top, foot))],
+        params: vec![
+            ("r".to_string(), whole(dist(c, rim))),
+            ("t".to_string(), whole(dist(top, foot))),
+        ],
+        pins: vec![c, rim, foot],
+        quality: q,
+    })
 }
 
 /// Corners 0 to 3 are the bottom face going round, 4 to 7 the top.
@@ -1102,6 +1163,31 @@ fn real(shape: Shape, task: Task, points: &[P]) -> Looked {
             }
             Ok(triangle_perimeter(points.to_vec(), 1.0))
         }
+        Shape::Cylinder if task == Task::Volume => {
+            // The middle of the top, a point of its rim, and the foot under one of them.
+            need(points, 3)?;
+            if dist(points[0], points[1]) < SHORTEST_CM - 1.0 {
+                return Err(("too_small", points.to_vec()));
+            }
+            let (top, off) = [points[0], points[1]]
+                .iter()
+                .map(|t| (*t, ((t[0] - points[2][0]).powi(2) + (t[2] - points[2][2]).powi(2)).sqrt()))
+                .fold((points[0], f64::INFINITY), |a, b| if b.1 < a.1 { b } else { a });
+            let height = (top[1] - points[2][1]).abs();
+            if off > SNAP_CM {
+                return Err(("height_not_upright", points.to_vec()));
+            }
+            if height < SHORTEST_CM {
+                return Err(("too_small", points.to_vec()));
+            }
+            let r = whole(dist(points[0], points[1]));
+            Ok(Shown {
+                pins: points.to_vec(),
+                lengths: vec![0, r, whole(height)],
+                params: vec![("r".to_string(), r), ("t".to_string(), whole(height))],
+                quality: 1.0,
+            })
+        }
         Shape::Circle | Shape::Cylinder => {
             need(points, 2)?;
             if dist(points[0], points[1]) < SHORTEST_CM - 1.0 {
@@ -1110,11 +1196,18 @@ fn real(shape: Shape, task: Task, points: &[P]) -> Looked {
             Ok(round_one(points.to_vec(), "r", 1.0))
         }
         Shape::Sphere => {
+            // A real ball has no centre to pin: its width, across.
             need(points, 2)?;
             if dist(points[0], points[1]) < 2.0 * SHORTEST_CM {
                 return Err(("too_small", points.to_vec()));
             }
-            Ok(round_one(points.to_vec(), "d", 1.0))
+            let width = dist(points[0], points[1]);
+            Ok(Shown {
+                pins: points.to_vec(),
+                lengths: vec![0, whole(width)],
+                params: vec![("r".to_string(), whole(width / 2.0))],
+                quality: 1.0,
+            })
         }
         Shape::Cube | Shape::Cuboid => {
             need(points, 4)?;
@@ -1327,6 +1420,61 @@ mod tests {
         )
         .expect("text");
         assert!(r.choices.contains(&area), "{area} {:?}", r.choices);
+    }
+
+
+    #[test]
+    fn a_paper_ball_is_measured_from_its_centre_to_its_surface() {
+        let mut h = hunt(Some(6));
+        let id = task_id(&h, Shape::Sphere, Task::Perimeter);
+        let offer = h.next(&id, true, Source::Paper, 0.0).expect("offer");
+        let r0 = offer.size["r"];
+        // The centre a centimetre off, the surface point a centimetre outside.
+        let centre = offer.keys[0];
+        let r = h
+            .measure(
+                offer.offer_id,
+                &Pins { points: vec![[centre[0] + 1.0, centre[1], centre[2]], [0.0, centre[1] + r0 + 1.0, 0.0]] },
+            )
+            .expect("reading");
+        assert!(r.ok, "{:?}", r.problem);
+        assert_eq!(r.lengths[1], r0 as u32);
+        let circumference = format_number(
+            &Rational::from_f64(2.0 * 3.14 * r0).expect("c"),
+            NumberFormat::Decimal { places: 2 },
+        )
+        .expect("text");
+        assert!(r.choices.contains(&circumference), "{circumference} {:?}", r.choices);
+        // A pin that is not in the middle of the ball is refused.
+        let offer = h.next(&id, true, Source::Paper, 0.0).expect("offer");
+        let r = h
+            .measure(offer.offer_id, &Pins { points: vec![[0.0, 0.0, 0.0], [offer.size["r"], offer.size["r"], 0.0]] })
+            .expect("reading");
+        assert_eq!(r.problem, Some("off_centre"));
+    }
+
+    #[test]
+    fn a_cylinder_volume_needs_the_height_down_to_the_base() {
+        let mut h = hunt(Some(6));
+        let id = task_id(&h, Shape::Cylinder, Task::Volume);
+        let offer = h.next(&id, true, Source::Paper, 0.0).expect("offer");
+        let (r0, t0) = (offer.size["r"], offer.size["t"]);
+        let k = &offer.keys;
+        assert_eq!(k.len(), 3);
+        // A foot that is not under the middle or the rim is refused.
+        let r = h
+            .measure(offer.offer_id, &Pins { points: vec![k[0], k[1], [r0 / 2.0, 0.0, r0 / 2.0 + 8.0]] })
+            .expect("reading");
+        assert_eq!(r.problem, Some("height_not_upright"));
+        let r = h
+            .measure(offer.offer_id, &Pins { points: vec![k[0], k[1], [0.0, 0.3, 0.5]] })
+            .expect("reading");
+        assert!(r.ok, "{:?}", r.problem);
+        assert_eq!(r.lengths[1], r0 as u32);
+        assert_eq!(r.lengths[2], t0 as u32);
+        let hundredths = (314.0 * r0 * r0 * t0) as u64;
+        let volume = format!("{}.{:02}", hundredths / 100, hundredths % 100);
+        assert!(r.choices.contains(&volume), "{volume} {:?}", r.choices);
     }
 
     #[test]

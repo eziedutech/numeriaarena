@@ -34,7 +34,7 @@ Numeria Arena is an **immersive mathematics game** for primary school, grades 4 
 
 ### Math Edu Game
 
-The maths is the action, not a quiz with 3D decoration around it. 29 skills common to most curricula (place value, multiplication and division, fractions, decimals and measurement) come from 222 validated question templates. Every answer is computed by one exact fraction engine, so `0.1 + 0.2` is `0.3`, and no answer is ever typed in by a person or written by an AI model. Everything is in English and Indonesian.
+The maths is the action, not a quiz with 3D decoration around it. 29 skills common to most curricula (place value, multiplication and division, fractions, decimals and measurement) come from 224 validated question templates. Every answer is computed by one exact fraction engine, so `0.1 + 0.2` is `0.3`, and no answer is ever typed in by a person or written by an AI model. Everything is in English and Indonesian.
 
 ### Learn
 
@@ -153,7 +153,7 @@ codes/
     server/        axum game server: rooms and WebSocket, classes, reports, town sync,
                    leaderboards, AI gateway, PostgreSQL migrations
     content-cli/   validate, instantiate, simulate
-  content/         skills, misconceptions, JSON schemas, 222 item templates
+  content/         skills, misconceptions, JSON schemas, 224 item templates
   brand/           logo and icons
 assets/            diagrams
 ```
@@ -234,12 +234,12 @@ Measured, not claimed. Everything below is reproducible with the commands above.
 |---|---|
 | Rust core: unit tests and the class match, examples, fairness simulation, race and session suites | 101 passed, 1 ignored (a report printer run on demand) |
 | Rust game server | 75 passed |
-| Template validator | 222 of 222 templates pass |
+| Template validator | 224 of 224 templates pass |
 | Game client type check | no errors |
 
 ### Template validator
 
-222 templates across the 29 skills (place value, multiplication and division, fractions,
+224 templates across the 29 skills (place value, multiplication and division, fractions,
 decimals, measurement) all pass `content-cli validate`. All of them are drafts written with
 an AI model and still await review by a teacher; the game uses them for now so every skill
 can be played. An AI model only wrote the templates: every answer is computed by the core.

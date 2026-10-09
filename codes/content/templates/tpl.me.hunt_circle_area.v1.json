@@ -41,8 +41,8 @@
     }
   ],
   "prompt": {
-    "en": "Measure the circle with the compass. Its area?",
-    "id": "Ukur lingkaran ini dengan jangka. Luasnya?"
+    "en": "Mark the circle's middle and edge. Its area?",
+    "id": "Tandai pusat dan tepi lingkaran. Luasnya?"
   },
   "visual_model": "ruler",
   "game_adapters": {

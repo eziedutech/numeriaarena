@@ -8,14 +8,14 @@
   "status": "draft",
   "answer_kind": "value",
   "params": {
-    "d": {
+    "r": {
       "type": "int",
-      "min": 12,
-      "max": 24
+      "min": 4,
+      "max": 12
     }
   },
   "answer": {
-    "expr": "314 / 100 * d",
+    "expr": "2 * 314 / 100 * r",
     "format": "decimal",
     "decimal_places": 2
   },
@@ -24,25 +24,25 @@
   },
   "distractors": [
     {
-      "expr": "314 / 100 * d / 2",
+      "expr": "314 / 100 * r",
       "misconception": "used_radius"
     },
     {
-      "expr": "2 * 314 / 100 * d",
+      "expr": "2 * 314 / 100 * 2 * r",
       "misconception": "used_diameter"
     },
     {
-      "expr": "3 * d",
+      "expr": "6 * r",
       "misconception": "pi_as_three"
     },
     {
-      "expr": "d",
+      "expr": "2 * r",
       "misconception": "gave_diameter"
     }
   ],
   "prompt": {
-    "en": "Pin across the ball. Circumference of its middle?",
-    "id": "Tandai lebar bola. Keliling lingkaran tengahnya?"
+    "en": "Mark the ball's middle and surface. Biggest circumference?",
+    "id": "Tandai pusat dan permukaan bola. Keliling terbesarnya?"
   },
   "visual_model": "ruler",
   "game_adapters": {

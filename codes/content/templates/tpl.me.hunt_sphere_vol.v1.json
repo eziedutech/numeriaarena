@@ -1,7 +1,7 @@
 {
-  "id": "tpl.me.hunt_circle_perim.v1",
+  "id": "tpl.me.hunt_sphere_vol.v1",
   "version": 1,
-  "skill": "ME.PERIM",
+  "skill": "ME.VOL",
   "grades": [
     6
   ],
@@ -10,46 +10,47 @@
   "params": {
     "r": {
       "type": "int",
-      "min": 6,
-      "max": 15
+      "min": 3,
+      "max": 12,
+      "step": 3
     }
   },
   "answer": {
-    "expr": "2 * 314 / 100 * r",
+    "expr": "4 * 314 * r * r * r / 300",
     "format": "decimal",
     "decimal_places": 2
   },
   "difficulty": {
-    "base": 0.6
+    "base": 0.85
   },
   "distractors": [
     {
-      "expr": "314 / 100 * r",
-      "misconception": "used_radius"
+      "expr": "4 * 314 * r * r / 100",
+      "misconception": "gave_surface"
     },
     {
-      "expr": "314 / 100 * r * r",
+      "expr": "314 * r * r / 100",
       "misconception": "gave_area"
     },
     {
-      "expr": "2 * r",
-      "misconception": "gave_diameter"
+      "expr": "4 * 3 * r * r * r / 3",
+      "misconception": "pi_as_three"
     },
     {
-      "expr": "6 * r",
-      "misconception": "pi_as_three"
+      "expr": "4 * 314 * 2 * r * 2 * r * 2 * r / 300",
+      "misconception": "used_diameter"
     }
   ],
   "prompt": {
-    "en": "Mark the circle's middle and edge. Circumference?",
-    "id": "Tandai pusat dan tepi lingkaran. Kelilingnya?"
+    "en": "Mark the ball's middle and surface. Its volume?",
+    "id": "Tandai pusat dan permukaan bola. Volumenya?"
   },
   "visual_model": "ruler",
   "game_adapters": {
     "measure_hunt": {
-      "shape": "circle",
-      "task": "perimeter",
-      "unit": "cm"
+      "shape": "sphere",
+      "task": "volume",
+      "unit": "cm3"
     }
   },
   "tags": [

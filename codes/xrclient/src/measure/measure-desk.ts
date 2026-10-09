@@ -69,6 +69,7 @@ export type MeasureChoice =
   | 'me_tu'
   | 'me_td'
   | 'me_net'
+  | 'me_spin'
   | 'me_sh_square'
   | 'me_sh_rectangle'
   | 'me_sh_triangle'
@@ -166,6 +167,22 @@ interface Pull {
 interface Turn {
   side: Side;
   last: number;
+}
+
+/** A ball's circumference being drawn: the turn waits to be pressed, runs, and waits for its start to be tapped. */
+interface Spin {
+  stage: 'press' | 'turning' | 'close';
+  reading: Reading;
+  /** The pin the line began at. */
+  outer: Pin;
+  angle: number;
+  /** The ball's turn as it was, the pen's place and the axis the ball turns about (the root's frame). */
+  q0: Quaternion;
+  rel0: Vector3;
+  pen: Vector3;
+  axis: Vector3;
+  trail: Group;
+  last: Vector3;
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
@@ -281,6 +298,7 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_tu: 'arrowUp',
   me_td: 'arrowDown',
   me_net: 'box',
+  me_spin: 'turnRight',
   me_sh_square: 'square',
   me_sh_rectangle: 'rectangle',
   me_sh_triangle: 'triangle',
@@ -315,6 +333,17 @@ const threadGeo = new CylinderGeometry(0.0017, 0.0017, 1, 8).translate(0, 0.5, 0
 // A thread lying on flat paper would sink into it: it is lifted, and wins the paper's depth.
 const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const THREAD_LIFT = 0.004;
+// The line a turning ball writes on itself.
+const trailMat = new MeshStandardMaterial({ color: 0xf28c28, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+/** The ball makes one turn in this many seconds. */
+const SPIN_S = 3.5;
+/** The line is drawn in pieces this long (frame metres), a hair over the ball. */
+const TRAIL_STEP_M = 0.006;
+const TRAIL_LIFT_M = 0.003;
+/** On a round paper object a ray this near the centre is drawn onto it; this near the rim, the surface or the foot of the height, onto that. */
+const CENTRE_REACH_M = 0.03;
+const SURFACE_REACH_M = 0.04;
+const FOOT_REACH_M = 0.04;
 const ghostGeo = new SphereGeometry(0.009, 16, 12);
 const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
@@ -352,6 +381,9 @@ export class MeasureDesk {
   private t1 = new Vector3();
   private k1 = new Vector3();
   private k2 = new Vector3();
+  private rc = new Vector3();
+  private rd = new Vector3();
+  private rp = new Vector3();
   /** The folded corner the last cornerNear found on an opened net (frame metres), if it found one there. */
   private hitCube?: Vector3;
   private netFor?: HuntOffer;
@@ -383,6 +415,9 @@ export class MeasureDesk {
   private tapAim: Record<Side, { origin: Vector3; dir: Vector3 } | undefined> = { left: undefined, right: undefined };
   private selected?: Pin;
   private selectedBy: Side = 'right';
+  /** A ball's circumference being drawn, with the card that turns it. */
+  private spin?: Spin;
+  private spinCard?: Entity;
   private preview?: { mesh: Mesh; label: Label };
   private stopTaps?: () => void;
   /** A hand's tap has brought the board close, and the next tap sends it back. */
@@ -623,21 +658,25 @@ export class MeasureDesk {
     this.card('me_skip', this.t.skip, TOOLS_X, 0.025, BLUE);
     this.card('me_back', this.t.back, TOOLS_X, CARD_Z, CORAL);
     // A paper solid turns by arrow cards (the corners behind it come to the front), and opens flat by NET.
-    if (o.source === 'paper' && this.paper?.solid) {
-      // The turn cards stand as a cross: UP over the two turns, DOWN under them.
-      this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
-      this.card('me_tl', this.t.turnLeft, -0.415, -0.1, TEAL);
-      this.card('me_tr', this.t.turnRight, -0.305, -0.1, TEAL);
-      this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
-      if (this.paper.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
-    }
+    if (o.source === 'paper' && this.paper?.solid) this.addTurnCards();
     sfx('unfold');
+  }
+
+  /** The cards that turn a paper solid, standing as a cross: UP over the two turns, DOWN under them, NET below. */
+  private addTurnCards(): void {
+    this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
+    this.card('me_tl', this.t.turnLeft, -0.415, -0.1, TEAL);
+    this.card('me_tr', this.t.turnRight, -0.305, -0.1, TEAL);
+    this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
+    if (this.paper?.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
   }
 
   private steps(o: HuntOffer): string {
     const s = this.t.steps;
     if (o.shape === 'cube' || o.shape === 'cuboid') return s.box;
     if (o.shape === 'triangle' && o.task === 'area') return s.triangleArea;
+    if (o.shape === 'cylinder' && o.task === 'volume') return s.cylinderVolume;
+    if (o.shape === 'sphere' && o.task !== 'perimeter') return s.sphereVolume;
     return s[o.shape];
   }
 
@@ -778,6 +817,9 @@ export class MeasureDesk {
           sfx(this.unfoldTo > 0 ? 'unfold' : 'fold');
         }
         return;
+      case 'me_spin':
+        this.startSpin();
+        return;
       case 'me_zoom':
         // A controller holds the card down (see magnify); a hand taps it on and taps it off.
         if (!this.host.controllers()) {
@@ -830,7 +872,9 @@ export class MeasureDesk {
       for (const side of SIDES) this.ghosts[side].visible = false;
       return;
     }
-    this.turnSolid(delta);
+    if (this.spin?.stage === 'turning') this.runSpin(delta);
+    else this.turnSolid(delta);
+    this.blinkSpin();
     if (this.step !== 'measure' || this.moving()) {
       this.trash.visible = false;
       this.active = undefined;
@@ -845,6 +889,10 @@ export class MeasureDesk {
       for (const side of SIDES) {
         if (this.grabEdges(side).start && this.aimRay(side, this.o2, this.d2)) this.tapAim[side] = { origin: this.o2.clone(), dir: this.d2.clone() };
       }
+    }
+    if (this.spin) {
+      for (const side of SIDES) this.ghosts[side].visible = false;
+      return;
     }
     for (const side of SIDES) {
       if (this.boardHeld === side || this.binPress(side)) continue;
@@ -863,10 +911,11 @@ export class MeasureDesk {
     }
     for (const p of this.pins) {
       const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
-      const hover = pointed.has(p) || p === this.selected;
+      const calling = this.spin?.stage === 'close' && this.spin.outer === p;
+      const hover = pointed.has(p) || p === this.selected || calling;
       const m = hover ? hoverMat : used ? greenMat : pinMat;
       if (p.mesh.material !== m) p.mesh.material = m;
-      const k = hover ? 1.5 : 1;
+      const k = calling ? 1.8 + 0.5 * (0.5 - 0.5 * Math.cos((performance.now() / 1000 / 0.7) * Math.PI * 2)) : hover ? 1.5 : 1;
       if (p.mesh.scale.x !== k) p.mesh.scale.setScalar(k);
     }
   }
@@ -981,6 +1030,11 @@ export class MeasureDesk {
       if (this.step !== 'measure' || this.moving() || this.boardHeld) continue;
       this.o2.copy(tap.origin);
       this.d2.copy(tap.dir);
+      // While the ball's line is drawn, the only tap is on the pin it began at, when the line is back.
+      if (this.spin) {
+        if (this.spin.stage === 'close' && this.pinOnRay(this.o2, this.d2) === this.spin.outer) this.finishSpin();
+        continue;
+      }
       const lit = this.active;
       if (lit && this.trash.visible && this.nearBin(this.o2, this.d2)) {
         lit.mesh.getWorldPosition(this.t2);
@@ -1327,6 +1381,7 @@ export class MeasureDesk {
       if (hit.object.userData.card === true || hit.object.userData.trash === true) return false;
       origin.copy(hit.point);
       this.magnet(origin);
+      this.snapRound(origin);
       return true;
     }
     // A real box: a ray near the vertical line over a pin of its base takes a point on that line (its top).
@@ -1345,6 +1400,88 @@ export class MeasureDesk {
     if (!this.caster.ray.intersectPlane(this.deskPlane, this.u)) return false;
     if (this.u.distanceTo(origin) > AIM_FAR_M) return false;
     origin.copy(this.u);
+    this.snapRound(origin);
+    return true;
+  }
+
+  /**
+   * On a paper circle, cylinder or ball the point aimed at is drawn onto what the
+   * next pin is for: the centre first (a ball's is seen through its glass: the
+   * ray only has to pass near it), then the rim, or the ball's surface, along the
+   * way the line is pulled; a cylinder's height ends on the desk under the rim pin.
+   * Real objects have no known centre, so nothing is drawn onto them.
+   */
+  private snapRound(point: Vector3): boolean {
+    const o = this.offer;
+    const paper = this.paper;
+    const keys = o?.keys;
+    const radius = o?.size?.r;
+    if (!o || !paper || !keys || keys.length < 2 || !radius || this.spin || this.moving()) return false;
+    if (o.shape !== 'circle' && o.shape !== 'cylinder' && o.shape !== 'sphere') return false;
+    const R = radius / 100;
+    const frame = paper.frame;
+    frame.updateWorldMatrix(true, false);
+    const c = this.rc.set(keys[0][0] / 100, keys[0][1] / 100, keys[0][2] / 100);
+    const start = this.selected;
+    if (o.shape === 'sphere') {
+      // The ray in the ball's frame: its origin in rd, its way in rp.
+      const ray = this.caster.ray;
+      this.rd.copy(ray.origin);
+      frame.worldToLocal(this.rd);
+      this.rp.copy(ray.origin).add(ray.direction);
+      frame.worldToLocal(this.rp);
+      this.rp.sub(this.rd).normalize();
+      this.k1.copy(c).sub(this.rd);
+      const along = this.k1.dot(this.rp);
+      if (along <= 0) return false;
+      this.k1.addScaledVector(this.rp, -along);
+      const miss = this.k1.length();
+      if (!start) {
+        if (miss > CENTRE_REACH_M) return false;
+        point.copy(c);
+        frame.localToWorld(point);
+        return true;
+      }
+      if (miss > R + SURFACE_REACH_M) return false;
+      if (miss <= R) {
+        // Through the glass: where the ray first meets the ball.
+        point.copy(this.rd).addScaledVector(this.rp, along - Math.sqrt(R * R - miss * miss));
+      } else {
+        // Just past its edge: the nearest point of the surface.
+        point.copy(this.rd).addScaledVector(this.rp, along).sub(c).setLength(R).add(c);
+      }
+      frame.localToWorld(point);
+      return true;
+    }
+    const lift = o.shape === 'circle' ? 0.0015 : 0;
+    this.k1.copy(point);
+    frame.worldToLocal(this.k1);
+    if (!start) {
+      // The cylinder's middle is on its lid: a ray on its side or the desk is not at it.
+      if (o.shape === 'cylinder' && this.k1.y < c.y * 0.5) return false;
+      if (Math.hypot(this.k1.x - c.x, this.k1.z - c.z) > CENTRE_REACH_M) return false;
+      point.set(c.x, c.y + lift, c.z);
+      frame.localToWorld(point);
+      return true;
+    }
+    const at = start.mesh.position;
+    // A cylinder's height: from the rim pin straight down to the desk.
+    if (o.shape === 'cylinder' && o.task === 'volume' && this.pins.length >= 2) {
+      this.rp.set(at.x, 0, at.z);
+      if (this.k1.distanceTo(this.rp) > FOOT_REACH_M) return false;
+      point.copy(this.rp);
+      frame.localToWorld(point);
+      return true;
+    }
+    // The rim, along the way the line is pulled from the middle.
+    this.rp.copy(at);
+    if (Math.hypot(at.x - c.x, at.z - c.z) < 0.04) this.rp.set(c.x, at.y, c.z);
+    const dx = this.k1.x - this.rp.x;
+    const dz = this.k1.z - this.rp.z;
+    const reach = Math.hypot(dx, dz);
+    if (reach < 1e-3 || Math.abs(reach - R) > SURFACE_REACH_M) return false;
+    point.set(this.rp.x + (dx / reach) * R, this.rp.y, this.rp.z + (dz / reach) * R);
+    frame.localToWorld(point);
     return true;
   }
 
@@ -1544,6 +1681,9 @@ export class MeasureDesk {
         return 8;
       case 'triangle':
         return o.task === 'area' ? 4 : 3;
+      case 'cylinder':
+        // The middle of the top, a point of its rim, and the foot of the height.
+        return o.task === 'volume' ? 3 : 2;
       default:
         return 2;
     }
@@ -1721,6 +1861,7 @@ export class MeasureDesk {
   }
 
   private clearPins(): void {
+    this.dropSpin();
     this.clearSelection();
     for (const pull of this.pulls.values()) {
       pull.mesh.removeFromParent();
@@ -1771,6 +1912,17 @@ export class MeasureDesk {
       case 'cuboid':
         // Read from its edges (see fromEdges).
         return undefined;
+      case 'cylinder': {
+        if (o.task !== 'volume') return this.threads.length === 1 ? [this.threads[0].a, this.threads[0].b] : undefined;
+        if (this.threads.length !== 2) return undefined;
+        // The foot is the pin on the desk, the middle the one of the top nearer the axis.
+        const foot = this.pins.reduce((a, b) => (b.mesh.position.y < a.mesh.position.y ? b : a));
+        const top = this.pins.filter((p) => p !== foot);
+        if (top.length !== 2 || foot.mesh.position.y > (o.size?.t ?? 0) / 200) return undefined;
+        const off = (p: Pin) => Math.hypot(p.mesh.position.x, p.mesh.position.z);
+        const [centre, rim] = off(top[0]) <= off(top[1]) ? top : [top[1], top[0]];
+        return [centre, rim, foot];
+      }
       default: {
         // The thread's first end is where it was pulled from: the centre, for a circle.
         const th = this.threads[0];
@@ -1885,7 +2037,7 @@ export class MeasureDesk {
   /** The pins or threads changed: once they make the shape, the core reads them. */
   private changed(): void {
     const o = this.offer;
-    if (!o || !this.core || this.step !== 'measure') return;
+    if (!o || !this.core || this.step !== 'measure' || this.spin) return;
     const ring = this.order();
     const spots = ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
     if (!spots) {
@@ -1916,6 +2068,12 @@ export class MeasureDesk {
     this.message = this.t.measured(r.process_points);
     this.messageInk = '#2f7d32';
     this.showTask();
+    // A ball's circumference is seen being drawn before the answers come.
+    const outer = spots[1]?.pin;
+    if (o.source === 'paper' && o.shape === 'sphere' && o.task === 'perimeter' && outer && r.choices.length > 0) {
+      this.holdSpin(r, outer);
+      return;
+    }
     if (r.choices.length === 0) {
       this.core.close(o.offer_id);
       this.nextTask();
@@ -1925,12 +2083,128 @@ export class MeasureDesk {
     this.showChoices(r);
   }
 
+  // ------------------------------------------------------------ a ball's circumference
+
+  /** The ball is measured from its middle to its surface: TURN blinks, and the answers wait for the line to come round. */
+  private holdSpin(r: Reading, outer: Pin): void {
+    this.clearSelection();
+    const trail = new Group();
+    trail.name = 'measure-trail';
+    this.paper?.frame.add(trail);
+    this.spin = { stage: 'press', reading: r, outer, angle: 0, q0: new Quaternion(), rel0: new Vector3(), pen: new Vector3(), axis: new Vector3(), trail, last: new Vector3() };
+    // CLEAR, SKIP and the cards that turn the ball stay; TURN takes the place NET would have.
+    this.card('me_spin', this.t.turn, -0.36, 0.06, PURPLE);
+    this.spinCard = this.cards[this.cards.length - 1];
+    this.message = `${this.t.measured(r.process_points)} ${this.t.spinPress}`;
+    this.messageInk = '#2f7d32';
+    this.showTask();
+  }
+
+  /** TURN is pressed: the ball turns once about an axis square to its radius, a pen at the pin's place writing a great circle on it. */
+  private startSpin(): void {
+    const s = this.spin;
+    const paper = this.paper;
+    const radius = this.offer?.size?.r;
+    if (!s || s.stage !== 'press' || !paper || !radius) return;
+    s.stage = 'turning';
+    s.angle = 0;
+    this.turnGoal = undefined;
+    this.flicking = false;
+    this.spinVel = 0;
+    this.turns.clear();
+    s.q0.copy(paper.spin.quaternion);
+    // The pin's place in the ball's own frame about its middle, and where that is in the root's: the pen stays there.
+    s.rel0.copy(s.outer.mesh.position);
+    s.rel0.y -= radius / 100;
+    s.pen.copy(s.rel0).applyQuaternion(s.q0);
+    s.axis.copy(s.pen).cross(Y);
+    if (s.axis.length() < 0.3 * s.pen.length()) s.axis.copy(s.pen).cross(X);
+    s.axis.normalize();
+    s.last.copy(s.outer.mesh.position);
+    this.removeCard(this.spinCard);
+    this.spinCard = undefined;
+    this.message = '';
+    this.showTask();
+    sfx('unfold');
+  }
+
+  /** One frame of the turn: the ball moves, and the pen writes a piece of line where it touches. */
+  private runSpin(delta: number): void {
+    const s = this.spin;
+    const paper = this.paper;
+    const radius = (this.offer?.size?.r ?? 0) / 100;
+    if (!s || s.stage !== 'turning' || !paper || radius <= 0) return;
+    const full = Math.PI * 2;
+    s.angle = Math.min(full, s.angle + (full / SPIN_S) * delta);
+    paper.spin.quaternion.setFromAxisAngle(s.axis, s.angle).multiply(s.q0);
+    // The pen's touch in the ball's frame: the pen's place turned back, out of the ball's turn.
+    this.n.copy(s.pen).applyAxisAngle(s.axis, -s.angle).applyQuaternion(this.q.copy(s.q0).invert());
+    this.n.multiplyScalar(1 + TRAIL_LIFT_M / radius);
+    this.n.y += radius;
+    const done = s.angle >= full;
+    if (done) this.n.copy(s.outer.mesh.position);
+    this.u.copy(this.n).sub(s.last);
+    const len = this.u.length();
+    if (len >= TRAIL_STEP_M || (done && len > 1e-4)) {
+      const piece = new Mesh(threadGeo, trailMat);
+      piece.position.copy(s.last);
+      piece.scale.set(1, len, 1);
+      piece.quaternion.setFromUnitVectors(UP, this.u.divideScalar(len));
+      s.trail.add(piece);
+      s.last.copy(this.n);
+    }
+    if (!done) return;
+    paper.spin.quaternion.copy(s.q0);
+    s.stage = 'close';
+    sfx('sparkle');
+    this.message = this.t.spinClose;
+    this.messageInk = '#2f7d32';
+    this.showTask();
+  }
+
+  /** The line is back at its start and that pin is tapped: the answers come. */
+  private finishSpin(): void {
+    const s = this.spin;
+    if (!s) return;
+    this.dropSpin();
+    sfx('right');
+    this.showChoices(s.reading);
+  }
+
+  /** Puts away the ball's turn: its card, its line, and the ball back as it stood. */
+  private dropSpin(): void {
+    const s = this.spin;
+    if (!s) return;
+    this.spin = undefined;
+    if (s.stage === 'turning' && this.paper) this.paper.spin.quaternion.copy(s.q0);
+    for (const piece of [...s.trail.children]) piece.removeFromParent();
+    s.trail.removeFromParent();
+    this.removeCard(this.spinCard);
+    this.spinCard = undefined;
+  }
+
+  private removeCard(card?: Entity): void {
+    if (!card) return;
+    if (card.active) this.host.remove(card);
+    this.cards = this.cards.filter((c) => c !== card);
+  }
+
+  /** TURN blinks while it waits to be pressed. */
+  private blinkSpin(): void {
+    const card = this.spinCard;
+    if (!card?.active || this.spin?.stage !== 'press') return;
+    const face = (card.object3D?.userData.toolButton as { mesh?: Object3D } | undefined)?.mesh;
+    if (!face) return;
+    const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / 0.6) * Math.PI * 2);
+    face.scale.setScalar(1 + 0.16 * k);
+  }
+
   // ------------------------------------------------------------ turning a paper solid
 
   /** A quarter turn of the paper solid about the desk's up (Y) or sideways (X), as the controller's buttons make. */
   private turnBy(axis: Vector3, sign: number): void {
     const spin = this.paper?.spin;
-    if (!spin || !this.paper?.solid || this.unfoldTo > 0 || this.step !== 'measure') return;
+    if (!spin || !this.paper?.solid || this.unfoldTo > 0 || this.step !== 'measure' || this.spin?.stage === 'turning') return;
     const from = this.turnGoal ?? nearestSquare(spin.quaternion);
     this.turnGoal = new Quaternion().setFromAxisAngle(axis, (sign * Math.PI) / 2).multiply(from);
     sfx('fold');
