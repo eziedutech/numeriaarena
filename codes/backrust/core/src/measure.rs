@@ -33,6 +33,8 @@ pub const SNAP_CM: f64 = 3.0;
 pub const REACH_CM: f64 = 5.0;
 /// Placing the pins and threads well.
 pub const PROCESS_MAX: u32 = 60;
+/// A real object's size is not known, so only its shape is judged: the process counts for less.
+pub const REAL_PROCESS_MAX: u32 = 40;
 /// The right choice.
 pub const ANSWER_POINTS: u32 = 100;
 pub const CHOICES: usize = 5;
@@ -431,7 +433,11 @@ impl Hunt {
             1 => 10.0,
             _ => 0.0,
         };
-        let process = (structure + 40.0 * shown.quality).round().min(PROCESS_MAX as f64) as u32;
+        let cap = match open.offer.source {
+            Source::Paper => PROCESS_MAX,
+            Source::Real => REAL_PROCESS_MAX,
+        };
+        let process = (structure + 40.0 * shown.quality).round().min(cap as f64) as u32;
         let mut env = Env::new();
         for (name, v) in &shown.params {
             env.insert(name.clone(), Value::Num(Rational::int(i128::from(*v))));
@@ -1250,6 +1256,8 @@ mod tests {
         assert!(r.ok, "{:?}", r.problem);
         assert_eq!(r.lengths, vec![120, 60, 120, 60]);
         assert!(r.choices.contains(&"7200".to_string()), "{:?}", r.choices);
+        // Only the shape is judged, so the process counts for at most 40 points.
+        assert_eq!(r.process_points, REAL_PROCESS_MAX);
     }
 
     #[test]

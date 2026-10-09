@@ -1,6 +1,7 @@
 import {
   CylinderGeometry,
   Group,
+  DoubleSide,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -19,7 +20,7 @@ import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } f
 import { sfx } from '../audio.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
-import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading } from './measure-core.js';
+import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading, type Shape } from './measure-core.js';
 import { MEASURE_TEXT } from './measure-text.js';
 import { paperObject, type PaperObject } from './paper-shapes.js';
 
@@ -67,7 +68,14 @@ export type MeasureChoice =
   | 'me_tr'
   | 'me_tu'
   | 'me_td'
-  | 'me_net';
+  | 'me_net'
+  | 'me_sh_square'
+  | 'me_sh_rectangle'
+  | 'me_sh_triangle'
+  | 'me_sh_circle'
+  | 'me_sh_cube'
+  | 'me_sh_cuboid'
+  | 'me_sh_paper';
 
 export function isMeasureChoice(choice: string): choice is MeasureChoice {
   return choice.startsWith('me_');
@@ -116,7 +124,7 @@ export interface MeasureHost {
   closed(note?: string): void;
 }
 
-type Step = 'grade' | 'group' | 'source' | 'how' | 'loading' | 'measure' | 'choose' | 'verdict' | 'recap';
+type Step = 'grade' | 'group' | 'source' | 'object' | 'how' | 'loading' | 'measure' | 'choose' | 'verdict' | 'recap';
 
 interface Pin {
   mesh: Mesh;
@@ -157,6 +165,23 @@ const DWELL_S = 0.5;
 const REARM_M = 0.03;
 /** No pin this near another, nor this near a card. */
 const PIN_GAP_M = 0.04;
+/** On a real object, which can be small, pins may stand this near each other. */
+const REAL_PIN_GAP_M = 0.02;
+/** A ray this near the vertical line over a base pin takes a point on it (the top of a real box). */
+const VERT_REACH_M = 0.035;
+
+/** What stands for a real object in the emulator, which has none: a model of the true size, in cm. */
+const MOCK: Record<string, { size: Record<string, number>; keys?: P3[] }> = {
+  rectangle: { size: { p: 24, l: 17 } },
+  square: { size: { s: 16 } },
+  circle: { size: { r: 9 } },
+  triangle: { size: { a: 15, b: 20 }, keys: [[-10, 0, 7.5], [10, 0, 7.5], [-10, 0, -7.5]] },
+  cube: { size: { s: 10 } },
+  cuboid: { size: { p: 20, l: 12, t: 8 } },
+};
+const VS_O = new Vector3();
+const VS_D = new Vector3();
+const VS_Q = new Quaternion();
 const CARD_GAP_M = 0.07;
 /** A pinch or trigger this near a pin takes its thread. */
 const GRAB_M = 0.035;
@@ -241,6 +266,13 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_tu: 'arrowUp',
   me_td: 'arrowDown',
   me_net: 'box',
+  me_sh_square: 'square',
+  me_sh_rectangle: 'rectangle',
+  me_sh_triangle: 'triangle',
+  me_sh_circle: 'circle',
+  me_sh_cube: 'box',
+  me_sh_cuboid: 'cuboid',
+  me_sh_paper: 'paper',
   me_clear: 'trash',
   me_skip: 'skip',
   me_again: 'replay',
@@ -314,6 +346,11 @@ export class MeasureDesk {
   private step: Step = 'grade';
   private grade?: number;
   private solid = false;
+  /** What a child has of the real kind (a rectangle, a box), and the shapes offered for it. */
+  private shape?: Shape;
+  private shapesHere: Shape[] = [];
+  /** The emulator's stand-in for a real object. */
+  private mock?: { object: PaperObject; tint: MeshStandardMaterial };
   private source: 'paper' | 'real' = 'paper';
   private core?: HuntCore;
   private tasks: HuntTask[] = [];
@@ -456,6 +493,38 @@ export class MeasureDesk {
     this.card('me_back', this.t.back, 0.08 + CHOICE_STEP, CARD_Z, CORAL);
   }
 
+  /** What shapes the child may have of the real kind in this grade, then the cards to choose among them. */
+  private async loadObjects(): Promise<void> {
+    this.step = 'loading';
+    this.clearCards();
+    let shapes: Shape[] = [];
+    try {
+      const core = await HuntCore.start(1, this.grade, this.host.player());
+      const have = new Set(core.tasks(this.solid).map((t) => t.shape));
+      core.dispose();
+      // Boxes only for solids: a cup or a ball needs a depth the web does not give.
+      const order: Shape[] = this.solid ? ['cuboid', 'cube'] : ['rectangle', 'square', 'circle', 'triangle'];
+      shapes = order.filter((s) => have.has(s));
+    } catch (error) {
+      console.warn(`[measure] could not list the shapes: ${String(error)}`);
+    }
+    if (this.gone) return;
+    this.shapesHere = shapes;
+    this.showObjects();
+  }
+
+  private showObjects(): void {
+    this.step = 'object';
+    this.say([[this.t.title, 0.03, HEAD], [this.t.pickObject, 0.022, INK], [this.t.objectNote, 0.016, INK]]);
+    this.clearCards();
+    const n = this.shapesHere.length + 1;
+    const at = (i: number) => (i - (n - 1) / 2) * 0.105;
+    const colours = [TEAL, BLUE, PURPLE, YELLOW];
+    this.shapesHere.forEach((s, i) => this.card(`me_sh_${s}` as MeasureChoice, this.t.shapes[s] ?? s, at(i), CARD_Z, colours[i % colours.length]));
+    this.card('me_sh_paper', this.t.paper, at(n - 1), CARD_Z, YELLOW);
+    this.card('me_back', this.t.back, Math.min(0.38, at(n - 1) + 0.13), CARD_Z, CORAL);
+  }
+
   private showHow(): void {
     this.step = 'how';
     const lines: [string, number, string][] = [[this.t.howTitle, 0.026, HEAD]];
@@ -483,6 +552,11 @@ export class MeasureDesk {
     }
     if (this.gone) return;
     this.tasks = this.core.tasks(this.solid);
+    // Of a real object, only the problems of the shape the child has.
+    if (this.source === 'real' && this.shape) {
+      const mine = this.tasks.filter((t) => t.shape === this.shape);
+      if (mine.length > 0) this.tasks = mine;
+    }
     if (this.tasks.length === 0) {
       console.warn(`[measure] no tasks for grade ${this.grade}, ${this.solid ? 'solids' : 'flat shapes'}`);
       this.host.closed(this.t.failed);
@@ -512,6 +586,7 @@ export class MeasureDesk {
       return;
     }
     const o = this.offer;
+    if (o.source === 'real') this.showMock(o.shape);
     console.info(`[measure] task ${o.offer_id}: ${o.template_id} ${o.shape} ${o.task} (${o.source})`, o.size ?? {});
     if (o.source === 'paper') {
       this.paper = paperObject(o.shape, o.size ?? {}, o.keys ?? []);
@@ -550,7 +625,7 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return;
     const lines: [string, number, string][] = [[o.prompt[getLang()], 0.022, HEAD], [this.hint, 0.016, INK]];
-    if (o.source === 'real') lines.push([this.t.realNote, 0.015, INK]);
+    if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
     this.say(lines);
@@ -626,6 +701,22 @@ export class MeasureDesk {
       case 'me_real':
         if (this.step !== 'source') return;
         this.source = choice === 'me_paper' ? 'paper' : 'real';
+        this.shape = undefined;
+        if (this.source === 'real') void this.loadObjects();
+        else this.showHow();
+        return;
+      case 'me_sh_square':
+      case 'me_sh_rectangle':
+      case 'me_sh_triangle':
+      case 'me_sh_circle':
+      case 'me_sh_cube':
+      case 'me_sh_cuboid':
+      case 'me_sh_paper':
+        if (this.step !== 'object') return;
+        if (choice === 'me_sh_paper') {
+          this.source = 'paper';
+          this.shape = undefined;
+        } else this.shape = choice.slice('me_sh_'.length) as Shape;
         this.showHow();
         return;
       case 'me_start':
@@ -677,7 +768,11 @@ export class MeasureDesk {
           if (this.host.grade() === undefined) this.showGrades();
           else this.host.closed();
         } else if (this.step === 'source') this.showGroups();
-        else if (this.step === 'how') this.showSources();
+        else if (this.step === 'object') this.showSources();
+        else if (this.step === 'how') {
+          if (this.source === 'real') this.showObjects();
+          else this.showSources();
+        }
         else if (this.step === 'measure' || this.step === 'choose' || this.step === 'verdict') this.finish();
         return;
       default: {
@@ -763,6 +858,11 @@ export class MeasureDesk {
   /** Whether a ray aims this frame: a controller's, or a tracked hand's under the hand menu. */
   private rayMode(): boolean {
     return this.host.controllers() || this.host.handsRay();
+  }
+
+  /** How near pins may stand: nearer on a real object, which may be small. */
+  private pinGap(): number {
+    return this.source === 'real' ? REAL_PIN_GAP_M : PIN_GAP_M;
   }
 
   /** Hands work by rays and taps (no trigger, no pinch to pull). */
@@ -1128,11 +1228,16 @@ export class MeasureDesk {
       this.magnet(origin);
       return true;
     }
+    // A real box: a ray near the vertical line over a pin of its base takes a point on that line (its top).
     if (this.source === 'real') {
-      origin.addScaledVector(dir, TIP_M);
-      return true;
+      const up = this.verticalSnap(origin, dir);
+      if (up) {
+        origin.copy(up);
+        return true;
+      }
     }
-    // The desk's top, under the paper object.
+    // The desk's top, under the paper object or the real one.
+
     this.metric.getWorldPosition(this.u);
     this.metric.getWorldQuaternion(this.q);
     this.deskPlane.setFromNormalAndCoplanarPoint(this.n.copy(UP).applyQuaternion(this.q), this.u);
@@ -1140,6 +1245,39 @@ export class MeasureDesk {
     if (this.u.distanceTo(origin) > AIM_FAR_M) return false;
     origin.copy(this.u);
     return true;
+  }
+
+  /** The point on the vertical line over a base pin that a ray passes nearest, if it passes near enough. */
+  private verticalSnap(origin: Vector3, dir: Vector3): Vector3 | undefined {
+    if (!this.solid || this.pins.length === 0) return undefined;
+    this.metric.getWorldQuaternion(VS_Q).invert();
+    VS_D.copy(dir).applyQuaternion(VS_Q);
+    VS_O.copy(origin);
+    this.metric.worldToLocal(VS_O);
+    let best: { x: number; y: number; z: number } | undefined;
+    let bestD = VERT_REACH_M;
+    for (const p of this.pins) {
+      const bx = p.mesh.position.x;
+      const bz = p.mesh.position.z;
+      // Base pins only: the ones that stand on the desk.
+      if (p.mesh.position.y > 0.02) continue;
+      const wx = VS_O.x - bx;
+      const wz = VS_O.z - bz;
+      const b = VS_D.y;
+      const d0 = VS_D.x * wx + VS_D.y * VS_O.y + VS_D.z * wz;
+      const denom = 1 - b * b;
+      if (denom < 1e-3) continue;
+      const t = (b * VS_O.y - d0) / denom;
+      const s = (VS_O.y - b * d0) / denom;
+      if (t <= 0 || s < 0.03 || s > 0.6) continue;
+      const dist = Math.hypot(VS_O.x + VS_D.x * t - bx, VS_O.y + VS_D.y * t - s, VS_O.z + VS_D.z * t - bz);
+      if (dist < bestD) {
+        bestD = dist;
+        best = { x: bx, y: s, z: bz };
+      }
+    }
+    if (!best) return undefined;
+    return this.metric.localToWorld(new Vector3(best.x, best.y, best.z));
   }
 
   private grabEdges(side: Side): { start: boolean; end: boolean } {
@@ -1302,7 +1440,7 @@ export class MeasureDesk {
     if (this.rayMode()) {
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
-      const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, PIN_GAP_M);
+      const free = !onPin && this.pins.length < this.maxPins() && this.pinnable(this.v) && !this.nearestPin(this.v, this.pinGap());
       // The mark shows the corner it will go onto.
       if (free && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
       // A small mark where the ray points, so the pin is seen before it drops.
@@ -1321,10 +1459,10 @@ export class MeasureDesk {
       if (tip.distanceTo(this.lastPin[side]) > REARM_M) this.armed[side] = true;
       else return;
     }
-    if (this.pins.length >= this.maxPins() && h.pointing() && h.still() && this.pinnable(tip) && !this.nearestPin(tip, PIN_GAP_M)) {
+    if (this.pins.length >= this.maxPins() && h.pointing() && h.still() && this.pinnable(tip) && !this.nearestPin(tip, this.pinGap())) {
       this.tell(this.t.allPins(this.maxPins()));
     }
-    const can = h.pointing() && h.still() && this.pins.length < this.maxPins() && this.pinnable(tip) && !this.nearestPin(tip, PIN_GAP_M);
+    const can = h.pointing() && h.still() && this.pins.length < this.maxPins() && this.pinnable(tip) && !this.nearestPin(tip, this.pinGap());
     if (!can) {
       this.dwell[side] = 0;
       return;
@@ -1425,7 +1563,7 @@ export class MeasureDesk {
     if (this.u.distanceTo(this.v) < CANCEL_M) return;
     let to = this.nearestPin(this.v, GRAB_M, pull.from);
     if (!to) {
-      if (this.pins.length >= this.maxPins() || !this.pinnable(this.v) || this.nearestPin(this.v, PIN_GAP_M)) return;
+      if (this.pins.length >= this.maxPins() || !this.pinnable(this.v) || this.nearestPin(this.v, this.pinGap())) return;
       to = this.addPin(this.v);
     }
     this.join(pull.from, to);
@@ -1838,6 +1976,26 @@ export class MeasureDesk {
     this.unfolded = 0;
     this.paper?.dispose();
     this.paper = undefined;
+    if (this.mock) {
+      this.mock.object.dispose();
+      this.mock.tint.dispose();
+      this.mock = undefined;
+    }
+  }
+
+  /** In the emulator, which has no real object, a model of one of the true size stands at the middle of the desk. */
+  private showMock(shape: Shape): void {
+    if (!import.meta.env.DEV || !(window as unknown as { IWER_DEVICE?: unknown }).IWER_DEVICE) return;
+    const spec = MOCK[shape];
+    if (!spec) return;
+    const object = paperObject(shape, spec.size, spec.keys ?? []);
+    object.root.position.copy(OBJECT_AT);
+    const tint = new MeshStandardMaterial({ color: 0xcfe3ff, roughness: 1, side: DoubleSide });
+    object.root.traverse((o) => {
+      if (o instanceof Mesh && o.userData.paper === true) o.material = tint;
+    });
+    this.metric.add(object.root);
+    this.mock = { object, tint };
   }
 
   dispose(): void {

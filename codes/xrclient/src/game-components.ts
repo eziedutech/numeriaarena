@@ -116,6 +116,13 @@ const Games = {
   MeTurnUp: 'me_tu',
   MeTurnDown: 'me_td',
   MeNet: 'me_net',
+  MeShSquare: 'me_sh_square',
+  MeShRectangle: 'me_sh_rectangle',
+  MeShTriangle: 'me_sh_triangle',
+  MeShCircle: 'me_sh_circle',
+  MeShCube: 'me_sh_cube',
+  MeShCuboid: 'me_sh_cuboid',
+  MeShPaper: 'me_sh_paper',
   /** BUILD, on any results: MY FOLD TOWN on the desk. */
   Build: 'build',
   /** PRACTICE AGAIN, on a practice's results. */
