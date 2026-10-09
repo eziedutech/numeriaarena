@@ -21,6 +21,8 @@ import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 export interface MenuTarget {
   object: Object3D;
   press: () => void;
+  /** The card is not one the game eases itself: it grows here while the dot is on it. */
+  selfGrow?: boolean;
 }
 
 export interface HandMenuHost {
@@ -48,7 +50,11 @@ const TAP_COOLDOWN_S = 0.3;
 const FINGER_OUT_M = 0.045;
 /** The thumb and index tip this close is a pinch: no ray. */
 const PINCH_M = 0.03;
+/** Thumb and index tip this close are closing on a pinch: the card aimed at is kept from here. */
+const CLOSING_M = 0.06;
 const REACH_M = 1.2;
+/** A card the dot is on grows by this much, as every lit thing in the game does. */
+const GROW = 0.12;
 const DOT_M = 0.5;
 const RAY_COLOR = 0x9fc4ff;
 const HOVER_COLOR = 0xffc940;
@@ -194,9 +200,12 @@ export class HandMenu {
     const nowLit = new Set<Object3D>();
     ORDER.forEach((side, i) => {
       const a = this.aim[side];
+      if (hits[i] !== a.target) console.info(`[hand-menu] ${side} dot ${hits[i] ? `on ${hits[i]?.object.name || 'a card'}` : 'off the cards'}`);
       a.target = hits[i];
-      if (a.target) {
-        nowLit.add(a.target.object);
+      if (a.target) nowLit.add(a.target.object);
+      // The card last aimed at before the fingers closed (they move the ray as they close).
+      const closing = this.hands.get(side).tracked && this.hands.get(side).tip.distanceTo(this.hands.get(side).thumb) < CLOSING_M;
+      if (a.target && !closing) {
         a.lastTarget = a.target;
         a.lastAt = this.now;
       }
@@ -208,6 +217,15 @@ export class HandMenu {
     for (const o of this.lit) if (!nowLit.has(o)) o.userData.handHover = false;
     for (const o of nowLit) o.userData.handHover = true;
     this.lit = nowLit;
+    for (const t of targets) {
+      if (!t.selfGrow) continue;
+      const o = t.object;
+      const h = (o.userData.hover as number | undefined) ?? 0;
+      const next = h + ((nowLit.has(o) ? 1 : 0) - h) * Math.min(1, delta * 10);
+      o.userData.hover = next;
+      o.userData.hoverBase ??= o.scale.x;
+      o.scale.setScalar((o.userData.hoverBase as number) * (1 + GROW * next));
+    }
   }
 
   /**
@@ -243,7 +261,7 @@ export class HandMenu {
     if (a.cooldown > 0) a.cooldown -= delta;
     let tapped = false;
     // The emulator's pinch closes the fingers and puts the ray down at once: the card it was on a moment ago.
-    const lately = a.target ?? (this.now - a.lastAt < 0.25 ? a.lastTarget : undefined);
+    const lately = this.now - a.lastAt < 0.8 ? a.lastTarget : a.target;
     if (this.host.pinchTaps() && h.pinchStart && lately) {
       a.steady = lately;
       tapped = true;

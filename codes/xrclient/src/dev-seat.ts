@@ -47,7 +47,7 @@ const HANDS_APART_M = 0.25;
  * SETTINGS_AT), floating over the desk at the strip's depth and leaning back
  * a little towards the eyes, so nothing on the desk stands in a ray's way.
  */
-const CARD_AT = new Vector3(0.52, 0.1, 0.15);
+const CARD_AT = new Vector3(0.4, 0.1, 0.03);
 const CARD_LEAN = -0.35;
 /** A flat tile like the town's toolbar buttons: a chair to sit, a standing person to stand. */
 const CARD_W = 0.08;

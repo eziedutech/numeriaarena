@@ -312,7 +312,7 @@ const BEST_KEY = 'numeria.best';
  * crystals, as Measure Hunt's. The first press (tap, trigger or click) asks, a
  * second within QUIT_ASK_MS leaves to the desk menu.
  */
-const QUIT_AT = new Vector3(0.42, 0, 0.14);
+const QUIT_AT = new Vector3(0.34, 0, 0.15);
 const QUIT_ASK_MS = 4000;
 /** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
 const RAY_VISIBLE = 1;
@@ -3284,7 +3284,7 @@ export class GameSystem extends createSystem({
     }
     const seat = this.world.scene.getObjectByName('dev-seat-card');
     const touch = seat?.userData.onTouch as (() => void) | undefined;
-    if (seat?.visible && touch) out.push({ object: seat, press: touch });
+    if (seat?.visible && touch) out.push({ object: seat, press: touch, selfGrow: true });
     return out;
   }
 
@@ -3336,7 +3336,8 @@ export class GameSystem extends createSystem({
         // No growing towards the finger: that is what pressed it by itself.
         obj.getWorldPosition(this.a);
         if (this.tipPos.every((t) => t.distanceTo(this.a) > CHOICE_ARM_M)) obj.userData.armed = true;
-        return;
+        // But a card a hand's dot is on grows: the dot never presses it.
+        if (!(e.hasComponent(MenuButton) && this.handMenu?.isActive())) return;
       }
       const h = (obj.userData.hover as number | undefined) ?? 0;
       const next = h + ((on ? 1 : 0) - h) * step;
@@ -3684,7 +3685,7 @@ export class GameSystem extends createSystem({
     // Measure Hunt's banner breathes on the menu, so the eye finds it.
     if (this.measureBanner?.parent) {
       const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PROMPT_PULSE_S) * Math.PI * 2);
-      this.measureBanner.scale.setScalar(1 + 0.03 * k);
+      this.measureBanner.scale.setScalar((1 + 0.03 * k) * (1 + HOVER_GROW * ((this.measureBanner.userData.hover as number | undefined) ?? 0)));
     }
     // The question breathes while it waits, so the eye finds it.
     if (this.prompt && this.phase === 'playing') {
