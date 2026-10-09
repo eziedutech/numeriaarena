@@ -48,6 +48,8 @@ const paperMat = new MeshStandardMaterial({ color: PAPER, roughness: 1, side: Do
 // A ball is seen through, so its middle can be looked for.
 const glassMat = new MeshStandardMaterial({ color: 0xcfe3ff, roughness: 0.6, transparent: true, opacity: 0.32, depthWrite: false, side: DoubleSide });
 const lineMat = new LineBasicMaterial({ color: INK });
+// The ring round a ball's middle, where the line is pinned and the ball's circumference is written: light, not black.
+const ringMat = new LineBasicMaterial({ color: 0x6f9ee0, transparent: true, opacity: 0.85 });
 const dotMat = new MeshStandardMaterial({ color: INK, roughness: 1 });
 
 const m = (cm: number) => cm / 100;
@@ -120,7 +122,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
       height = d;
       add(frame, new SphereGeometry(d / 2, 40, 24).translate(0, d / 2, 0), glassMat, false);
       // One line round its middle, so the ball is seen turning.
-      const ring = new LineSegments(new EdgesGeometry(new CircleGeometry(d / 2 + 0.0005, 64), 1), lineMat);
+      const ring = new LineSegments(new EdgesGeometry(new CircleGeometry(d / 2 + 0.0005, 64), 1), ringMat);
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = d / 2;
       frame.add(ring);

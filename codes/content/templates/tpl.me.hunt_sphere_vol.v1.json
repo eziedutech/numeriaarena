@@ -10,7 +10,7 @@
   "params": {
     "r": {
       "type": "int",
-      "min": 3,
+      "min": 6,
       "max": 12,
       "step": 3
     }
