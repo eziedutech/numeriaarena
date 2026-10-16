@@ -1,11 +1,12 @@
 import { MathUtils, Vector3, type PerspectiveCamera } from '@iwsdk/core';
 
 /**
- * Where a phone held sideways puts its camera. The desk is framed for a wide
- * computer window, with room round it; a phone's screen is small, so the
- * camera comes in until the part of the desk in use fills it, and goes out
- * again where more is in use. Only on a phone, outside the headset: nothing
- * of this touches a computer or XR.
+ * Where the browser camera goes outside the headset. The desk menu is framed
+ * with room round it; in a game the camera comes in until the part of the
+ * desk in use fills the screen, and goes out again where more is in use. A
+ * phone held sideways (PHONE_VIEW) also comes in for the menu, under a
+ * question brought down; a computer (SCREEN_VIEW) keeps its menu and its
+ * question where they were. Nothing of this touches XR.
  */
 
 /** What is kept in view: half the width and half the height of the desk part in use, in metres, and the height looked at. */
@@ -32,6 +33,18 @@ export const PHONE_VIEW = {
   planks: { halfW: 0.36, halfH: 0.29, lookY: 0.88 },
   race: { halfW: 0.63, halfH: 0.3, lookY: 0.98 },
 } satisfies Record<string, View>;
+
+/** A computer or a tablet: the score at the top and the front of the book at the bottom, just inside the screen. */
+export const SCREEN_VIEW = {
+  // Wider than the desk: the camera stays where DeskSystem.placeForBrowser puts it.
+  menu: { halfW: 9, halfH: 9, lookY: 0.98 },
+  balloons: { halfW: 0.36, halfH: 0.29, lookY: 1.02 },
+  // The crystals, gates, planks and weights stand at the front of the book, down to its edge.
+  play: { halfW: 0.36, halfH: 0.325, lookY: 1.0 },
+  planks: { halfW: 0.36, halfH: 0.335, lookY: 0.99 },
+  // The robots' windows on the left and the race card on the right.
+  race: { halfW: 0.7, halfH: 0.3, lookY: 1.0 },
+} satisfies Record<keyof typeof PHONE_VIEW, View>;
 
 export class PhoneView {
   private dist = FAR;

@@ -96,7 +96,7 @@ import { LobbyBook, type LobbyFacts } from './lobby-book.js';
 import { PageTurn, PAGE_TURN_S } from './page-turn.js';
 import { openBoard } from './board/board.js';
 import { onPhone } from './phone-mode.js';
-import { PhoneView, PHONE_VIEW } from './phone-view.js';
+import { PhoneView, PHONE_VIEW, SCREEN_VIEW } from './phone-view.js';
 
 const WAVE = 6;
 /** Presses this soon after balloons appear are ignored (ms). */
@@ -3757,9 +3757,12 @@ export class GameSystem extends createSystem({
     const placed = !!desk?.getValue(DeskRoot, 'placed');
     this.runHome();
     const onHome = this.home.visible;
-    // A phone held sideways: the camera comes in until the part of the desk in use fills the screen.
-    if (!onHome && onPhone() && this.phase !== 'town' && this.phase !== 'measure' && this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
-      this.phoneView.update(this.camera, delta, this.phase === 'menu' ? PHONE_VIEW.menu : this.race ? PHONE_VIEW.race : this.kind === 'balloon_burst' ? PHONE_VIEW.balloons : this.kind === 'bridge_builder' ? PHONE_VIEW.planks : PHONE_VIEW.play);
+    // In the browser the camera comes in until the part of the desk in use fills the screen.
+    if (!onHome && this.phase !== 'town' && this.phase !== 'measure' && this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      const phone = onPhone();
+      const views = phone ? PHONE_VIEW : SCREEN_VIEW;
+      const atMenu = this.phase === 'menu' || (!phone && this.phase === 'loading');
+      this.phoneView.update(this.camera, delta, atMenu ? views.menu : this.race ? views.race : this.kind === 'balloon_burst' ? views.balloons : this.kind === 'bridge_builder' ? views.planks : views.play);
     }
     if (this.phase === 'menu' && placed && this.pendingXr && this.world.visibilityState.peek() !== VisibilityState.NonImmersive) {
       const mode = this.pendingXr;
