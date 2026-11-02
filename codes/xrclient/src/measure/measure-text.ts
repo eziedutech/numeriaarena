@@ -41,8 +41,8 @@ const EN = {
     'Throw a pin off the desk, or point at it and press the bin that appears, to take it away.',
   ],
   howHand: [
-    'Point at a corner: a circle shows. Pinch, and a line starts there and follows your hand.',
-    'Point at the next corner and pinch: the line is fixed, and the next one starts.',
+    'Touch a corner with your fingertip and hold it there a moment, or point at it from afar and pinch: a line starts there and follows your hand.',
+    'Touch the next corner (or point and pinch): the line is fixed, and the next one starts.',
     'When the lines are enough, the answers come. Pinch on a pin and then on the bin beside it to take it away.',
   ],
   howTrigger: [
@@ -52,7 +52,7 @@ const EN = {
   ],
   howSolidHand: 'Turn the solid with the arrow cards at the left, to reach every corner; NET opens it flat.',
   howSolid: 'Grab the paper solid to turn it, flick it to spin. Pull it apart with both hands to unfold its net.',
-  tapHand: 'Aim at a spot and pinch: a pin drops. Aim at the next spot and pinch: a thread joins them and shows its length.',
+  tapHand: 'Touch a spot with your fingertip, or aim and pinch: a pin drops. Touch the next spot: a thread joins them and shows its length.',
   tapTrigger: 'Aim at a spot and press the index-finger button: a pin drops. Aim at the next spot and press: a thread joins them and shows its length.',
   toolsNote: 'Arrows turn it. NET opens it. READ brings the board close.',
   sweepNote: 'Sweep a finger over it to turn it.',
@@ -158,8 +158,8 @@ const ID: MeasureText = {
     'Lempar pin keluar meja, atau arahkan ke pin lalu tekan tempat sampah yang muncul, untuk membuangnya.',
   ],
   howHand: [
-    'Tunjuk sebuah sudut: bulatan muncul. Cubit, dan garis mulai dari sana mengikuti tanganmu.',
-    'Tunjuk sudut berikutnya lalu cubit: garis dipatenkan, dan garis berikutnya dimulai.',
+    'Sentuh sebuah sudut dengan ujung jari dan tahan sebentar, atau tunjuk dari jauh lalu cubit: garis mulai dari sana mengikuti tanganmu.',
+    'Sentuh sudut berikutnya (atau tunjuk lalu cubit): garis dipatenkan, dan garis berikutnya dimulai.',
     'Kalau garisnya cukup, pilihan jawaban muncul. Cubit pada pin lalu pada tempat sampah di sampingnya untuk membuangnya.',
   ],
   howTrigger: [
@@ -169,7 +169,7 @@ const ID: MeasureText = {
   ],
   howSolidHand: 'Putar bangun dengan kartu panah di kiri untuk menjangkau semua sudut; JARING membukanya datar.',
   howSolid: 'Pegang bangun kertas untuk memutarnya, jentik untuk memutar cepat. Tarik dengan dua tangan untuk membuka jaring-jaringnya.',
-  tapHand: 'Bidik satu titik lalu cubit: pin jatuh. Bidik titik berikutnya lalu cubit: benang menyambung keduanya dan menunjukkan panjangnya.',
+  tapHand: 'Sentuh satu titik dengan ujung jari, atau bidik lalu cubit: pin jatuh. Sentuh titik berikutnya: benang menyambung keduanya dan menunjukkan panjangnya.',
   tapTrigger: 'Bidik satu titik lalu tekan tombol telunjuk: pin jatuh. Bidik titik berikutnya lalu tekan: benang menyambung keduanya dan menunjukkan panjangnya.',
   toolsNote: 'Panah memutar. JARING membuka. BACA mendekatkan papan.',
   sweepNote: 'Usap dengan jari untuk memutarnya.',

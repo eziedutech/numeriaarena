@@ -18,7 +18,7 @@ import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
-import { setDeskRaise } from '../desk.js';
+import { fingertipOnCard } from '../hand-menu.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
 import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading, type Shape } from './measure-core.js';
@@ -228,6 +228,17 @@ const VS_Q = new Quaternion();
 const CARD_GAP_M = 0.07;
 /** A pinch or trigger this near a pin takes its thread. */
 const GRAB_M = 0.035;
+/**
+ * A fingertip touching the paper object (or a pin) drops a pin there, as a pinch from afar does: its tip
+ * at most TOUCH_AT_M off the surface along the finger, or TOUCH_PIN_M from a pin, held TOUCH_HOLD_S
+ * without sliding TOUCH_SLIDE_M (so a sweep over a ball turns it and drops nothing); again only after
+ * it has come TOUCH_REARM_M off. On a real Quest a fingertip on the paper did nothing at all.
+ */
+const TOUCH_AT_M = 0.012;
+const TOUCH_PIN_M = 0.02;
+const TOUCH_HOLD_S = 0.12;
+const TOUCH_SLIDE_M = 0.015;
+const TOUCH_REARM_M = 0.03;
 /** A thread let go this near its own pin is no thread. */
 const CANCEL_M = 0.02;
 /** A thread let go faster than this is thrown, and its pin goes. */
@@ -266,7 +277,7 @@ const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
-const OBJECT_AT = new Vector3(0, 0, -0.1);
+const OBJECT_AT = new Vector3(0, 0, -0.05);
 /** A paper object is drawn this much larger than its centimetres say, to be seen and reached; its threads still read the centimetres of the question. A real thing is never scaled. */
 const PAPER_SCALE = 1.5;
 /** A ball is drawn larger still: its middle is to be found inside it. */
@@ -424,6 +435,14 @@ export class MeasureDesk {
   private t2 = new Vector3();
   private o2 = new Vector3();
   private d2 = new Vector3();
+  private o3 = new Vector3();
+  private d3 = new Vector3();
+  private p3 = new Vector3();
+  /** Each hand's fingertip on the paper: since when (-1 off it), where, and whether it may drop a pin. */
+  private touching: Record<Side, { since: number; at: Vector3; armed: boolean }> = {
+    left: { since: -1, at: new Vector3(), armed: true },
+    right: { since: -1, at: new Vector3(), armed: true },
+  };
   private restoreDesk: () => void;
   private room: Room;
   private hands: Hands;
@@ -597,7 +616,6 @@ export class MeasureDesk {
   private showSources(): void {
     this.step = 'source';
     setRoom(this.room);
-    setDeskRaise(true);
     this.say([[this.t.title, 0.03, HEAD], [this.t.pickSource, 0.022, INK], [this.t.realNote, 0.016, INK]]);
     this.clearCards();
     this.card('me_paper', this.t.paper, -0.08, CARD_Z, YELLOW);
@@ -829,7 +847,6 @@ export class MeasureDesk {
         this.shape = undefined;
         // Something real is measured where it is: the real room shows for it.
         setRoom(this.source === 'real' ? 'here' : this.room);
-        setDeskRaise(this.source !== 'real');
         if (this.source === 'real') void this.loadObjects();
         else this.showHow();
         return;
@@ -845,7 +862,6 @@ export class MeasureDesk {
           this.source = 'paper';
           this.shape = undefined;
           setRoom(this.room);
-          setDeskRaise(true);
         } else this.shape = choice.slice('me_sh_'.length) as Shape;
         this.showHow();
         return;
@@ -953,6 +969,7 @@ export class MeasureDesk {
     this.paintPins();
     this.showPreview();
     this.updateBin(delta);
+    this.touchPins();
     // A controller's trigger works as a hand's tap does: the same running line, pin by pin.
     if (this.host.controllers() && !this.boardHeld) {
       for (const side of SIDES) {
@@ -999,6 +1016,52 @@ export class MeasureDesk {
   /** Whether a ray aims this frame: a controller's, or a tracked hand's under the hand menu. */
   private rayMode(): boolean {
     return this.host.controllers() || this.host.handsRay();
+  }
+
+  /** A fingertip held on the paper object or a pin taps there (see TOUCH_AT_M): the ray along the finger, knuckle to tip. */
+  private touchPins(): void {
+    if (!this.handRay() || this.boardHeld) return;
+    const now = performance.now() / 1000;
+    for (const side of SIDES) {
+      const h = this.hands.get(side);
+      const t = this.touching[side];
+      if (!h.tracked || h.pinching || fingertipOnCard(side)) {
+        t.since = -1;
+        continue;
+      }
+      this.o3.copy(h.knuckle);
+      this.d3.copy(h.tip).sub(h.knuckle);
+      const length = this.d3.length();
+      if (length < 1e-3) continue;
+      this.d3.divideScalar(length);
+      let gap = this.nearestPin(h.tip, TOUCH_PIN_M) ? 0 : Infinity;
+      if (gap > 0) {
+        this.p3.copy(this.o3);
+        if (this.aim(this.p3, this.d3)) gap = this.p3.distanceTo(this.o3) - length;
+      }
+      // A finger lying along the paper's face meets it nowhere ahead: straight down onto it from over the tip.
+      if (gap > TOUCH_REARM_M) {
+        this.o3.copy(h.tip).y += TOUCH_REARM_M;
+        this.d3.set(0, -1, 0);
+        this.p3.copy(this.o3);
+        if (this.aim(this.p3, this.d3)) gap = Math.min(gap, this.p3.distanceTo(this.o3) - TOUCH_REARM_M);
+      }
+      if (gap > TOUCH_REARM_M) t.armed = true;
+      if (!t.armed || gap > TOUCH_AT_M || gap < -TOUCH_REARM_M) {
+        t.since = -1;
+        continue;
+      }
+      if (t.since < 0 || h.tip.distanceTo(t.at) > TOUCH_SLIDE_M) {
+        t.since = now;
+        t.at.copy(h.tip);
+        continue;
+      }
+      if (now - t.since < TOUCH_HOLD_S) continue;
+      t.since = -1;
+      t.armed = false;
+      console.info(`[measure] ${side} fingertip taps the paper`);
+      this.tapAim[side] = { origin: this.o3.clone(), dir: this.d3.clone() };
+    }
   }
 
   /** How near pins may stand: nearer on a real object, which may be small. */
@@ -1123,7 +1186,10 @@ export class MeasureDesk {
         continue;
       }
       this.v.copy(this.o2);
-      if (!this.aim(this.v, this.d2)) continue;
+      if (!this.aim(this.v, this.d2)) {
+        console.info(`[measure] ${side} tap meets neither the paper nor the desk`);
+        continue;
+      }
       // A ball takes a pin only at its middle and on its ring, where the mark shows.
       if (this.offer?.shape === 'sphere' && this.paper && !this.snapNow) {
         this.tell(this.selected ? this.t.onRing : this.t.findMiddle);
@@ -2115,6 +2181,7 @@ export class MeasureDesk {
   /** A word under the task about what to do now, said once until it changes. */
   private tell(text: string): void {
     if (this.message === text) return;
+    console.info(`[measure] told: ${text}`);
     this.message = text;
     this.messageInk = ACCENT;
     this.showTask();
@@ -2647,7 +2714,6 @@ export class MeasureDesk {
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();
     setRoom(this.room);
-    setDeskRaise(true);
   }
 }
 

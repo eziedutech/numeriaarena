@@ -19,14 +19,13 @@ import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
-import { fingertipOnCard } from './hand-menu.js';
 import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 import { T } from './text.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
 const TABLE_WAIT_S = 3;
 /** How far the book sits inside the table edge nearest the player. */
-const EDGE_INSET_M = 0.22;
+const EDGE_INSET_M = 0.16;
 /**
  * The book sits at the back of the play area; creatures walk off it onto
  * the free table in front, where the answers are. Offset along -Z (away
@@ -57,34 +56,17 @@ const TOUCH_REACH_M = 0.85;
 const TOUCH_FALL_S = 3;
 /** A table touched this near under the eyes still counts (a high table, a low chair). */
 const TOUCH_DROP_MIN_M = 0.12;
-/**
- * Once the book is down: a fingertip held still this long (within RAISE_STILL_M), resting on
- * something RAISE_MIN_M to RAISE_MAX_M above the desk and on none of its cards, is on the real
- * table, which then lies higher than the desk was put; the desk goes up to it. On a real Quest the
- * hand struck the table before it reached the buttons. Only ever up: a desk above the real one
- * still has its buttons in reach.
+/*
+ * A desk that rose by itself to a fingertip resting still over it (v0.4.2) was taken out in
+ * v0.4.3: a hand held still in the air after a press looks the same, and raised it too high.
  */
-const RAISE_HOLD_S = 1.5;
-const RAISE_STILL_M = 0.01;
-const RAISE_MIN_M = 0.015;
-const RAISE_MAX_M = 0.15;
-/** "Desk moved" shows this long over the book after the desk goes up. */
-const RAISED_S = 1.5;
-
-/** Measure Hunt's real objects lie on the table: a fingertip on one is not the table top. */
-let raiseOn = true;
-
-/** Lets a fingertip resting on the real table raise the desk (on), or not while real objects are measured (off). */
-export function setDeskRaise(on: boolean): void {
-  raiseOn = on;
-}
 /**
  * Seated desk: this far below the eyes and this far in front. Near enough
  * that a seated child's fingertip reaches the cards without leaning in (on
  * a real Quest the old 0.8 m sent players forward or to the controllers).
  */
 export const SEATED_DROP_M = 0.5;
-const SEATED_REACH_M = 0.58;
+const SEATED_REACH_M = 0.5;
 /**
  * Everything on the desk in the headset, this much larger than the browser view. Less than it was
  * (1.32) now the desk is nearer: the score and the robots' windows stay in view and the cards in reach.
@@ -221,7 +203,6 @@ export class DeskSystem extends createSystem({
   private forward = new Vector3();
   private hands!: Hands;
   private clock = 0;
-  private raisedLeft = 0;
   /** Each hand's fingertip: where it holds still and since when, and the highest it was lately. */
   private touch: Record<Side, { at: Vector3; since: number; hiY: number; hiT: number }> = {
     left: { at: new Vector3(), since: -1, hiY: -Infinity, hiT: 0 },
@@ -444,10 +425,9 @@ export class DeskSystem extends createSystem({
 
   /**
    * The real table's top, once a fingertip has come down onto it and held still
-   * there (between heights `lo` and `hi`, within seated reach, and, with
-   * `offCards`, on none of the desk's cards); undefined until then.
+   * there (between heights `lo` and `hi`, within seated reach); undefined until then.
    */
-  private touchedTop(delta: number, lo: number, hi: number, hold: number, still: number, offCards: boolean): number | undefined {
+  private touchedTop(delta: number, lo: number, hi: number): number | undefined {
     this.clock += delta;
     this.hands.update(delta);
     this.player.head.getWorldPosition(this.head);
@@ -466,13 +446,13 @@ export class DeskSystem extends createSystem({
       }
       const across = Math.hypot(tip.x - this.head.x, tip.z - this.head.z);
       // A pinching hand holds something (a crystal): its fingertip is not resting on the table.
-      const fits = tip.y >= lo && tip.y <= hi && across <= TOUCH_REACH_M && !h.pinching && !(offCards && fingertipOnCard(side));
-      if (!fits || t.since < 0 || tip.distanceTo(t.at) > still) {
+      const fits = tip.y >= lo && tip.y <= hi && across <= TOUCH_REACH_M && !h.pinching;
+      if (!fits || t.since < 0 || tip.distanceTo(t.at) > TOUCH_STILL_M) {
         t.at.copy(tip);
         t.since = fits ? this.clock : -1;
         continue;
       }
-      if (this.clock - t.since >= hold && t.hiY - t.at.y >= TOUCH_DROP_M) {
+      if (this.clock - t.since >= TOUCH_HOLD_S && t.hiY - t.at.y >= TOUCH_DROP_M) {
         t.since = -1;
         return t.at.y - TOUCH_PAD_M;
       }
@@ -489,24 +469,6 @@ export class DeskSystem extends createSystem({
       return;
     }
     if (e.getValue(DeskRoot, 'placed')) {
-      if (raiseOn && e.getValue(DeskRoot, 'method') !== 3) {
-        this.player.head.getWorldPosition(this.head);
-        const lo = this.root.position.y + RAISE_MIN_M;
-        const hi = Math.min(this.root.position.y + RAISE_MAX_M, this.head.y - TOUCH_DROP_MIN_M);
-        const top = hi > lo ? this.touchedTop(delta, lo, hi, RAISE_HOLD_S, RAISE_STILL_M, true) : undefined;
-        if (top !== undefined && top > this.root.position.y) {
-          console.info(`[desk] a fingertip rests on the real table ${(top - this.root.position.y).toFixed(3)} m over the desk: the desk goes up to it`);
-          this.root.position.y = top;
-          this.raisedLeft = RAISED_S;
-        }
-      }
-      if (this.raisedLeft > 0) {
-        this.raisedLeft -= delta;
-        this.root.localToWorld(this.readyAt.copy(READY_ON_BOOK));
-        this.showStatus(T.deskRaised, delta, false, 0, this.readyAt, undefined, 0);
-        if (this.raisedLeft <= 0) this.status.visible = false;
-        return;
-      }
       if (this.readyLeft > 0) {
         this.readyLeft -= delta;
         // On the book itself, over the front of the pages and under the
@@ -543,7 +505,7 @@ export class DeskSystem extends createSystem({
     this.statusSmall.set(T.touchHold(left));
     this.statusSmall.mesh.visible = true;
     this.player.head.getWorldPosition(this.head);
-    const top = this.touchedTop(delta, this.head.y - TABLE_DROP_MAX_M, this.head.y - TOUCH_DROP_MIN_M, TOUCH_HOLD_S, TOUCH_STILL_M, false);
+    const top = this.touchedTop(delta, this.head.y - TABLE_DROP_MAX_M, this.head.y - TOUCH_DROP_MIN_M);
     if (top !== undefined) {
       this.frontOf(this.root);
       this.root.position.y = top;

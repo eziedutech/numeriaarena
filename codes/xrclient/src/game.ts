@@ -322,10 +322,11 @@ const BEST_KEY = 'numeria.best';
 const QUIT_AT = new Vector3(0.34, 0, 0.15);
 /**
  * In the headset the desk's buttons (the menu's chips, Measure Hunt's cards and answers, QUIT, the
- * banner and the town sticker) stand this much higher over the desk (desk units, about 6 cm), so a
+ * banner and the town sticker) stand this much higher over the desk (desk units, about 3.5 cm), so a
  * fingertip meets them before it meets the real table top under them. The browser keeps them on it.
+ * 6 cm was found too high on a real Quest once the desk took its height from the real table.
  */
-const BUTTON_LIFT_XR = 0.05;
+const BUTTON_LIFT_XR = 0.03;
 /** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
 const RAY_VISIBLE = 1;
 const RAY_ON_TARGET = 2;
