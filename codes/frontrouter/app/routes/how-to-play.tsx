@@ -27,8 +27,8 @@ function English() {
           waves).
         </li>
         <li>
-          A paper animal walks out of the book with a question. Answer with your hand: a ray and a dot show where you
-          point, the dot only lights a card, and the tap of your index finger chooses it. With a controller, aim and
+          A paper animal walks out of the book with a question. Answer with your hand: touch a card or a balloon with your
+          fingertip, or point at it from afar (a ray and a dot show where) and pinch your thumb and index finger. With a controller, aim and
           press the index-finger button. In some rooms the question is written on the classroom board.
         </li>
       </ol>
@@ -163,8 +163,8 @@ function Indonesian() {
           gelombang berwaktu).
         </li>
         <li>
-          Hewan kertas keluar dari buku membawa soal. Jawab dengan tanganmu: sinar dan titik menunjukkan arah tunjukmu,
-          titik hanya menyalakan kartu, dan tap telunjukmu memilihnya. Dengan controller, arahkan lalu tekan tombol telunjuk. Di
+          Hewan kertas keluar dari buku membawa soal. Jawab dengan tanganmu: sentuh kartu atau balon dengan ujung jarimu,
+          atau tunjuk dari jauh (sinar dan titik menunjukkan arahnya) lalu cubit ibu jari dan telunjuk. Dengan controller, arahkan lalu tekan tombol telunjuk. Di
           beberapa ruang soalnya ditulis di papan tulis kelas.
         </li>
       </ol>

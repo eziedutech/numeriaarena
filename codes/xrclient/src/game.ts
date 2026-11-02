@@ -144,6 +144,8 @@ const HOVER_REACH = 0.07;
  */
 const BALLOON_REACH = 0.06;
 const BALLOON_MIDDLE = 0.07;
+/** A fingertip this near the middle of a balloon (or a weight, gate or plank) is at its paper. */
+const BALLOON_TOUCH_R = 0.04;
 const BALLOON_HOLD_S = 2.5;
 /** How quickly the hover grows in and out (per second). */
 const HOVER_RATE = 10;
@@ -548,13 +550,14 @@ export class GameSystem extends createSystem({
     return onPhone() && this.world.visibilityState.peek() === VisibilityState.NonImmersive;
   }
   private wasControllers = false;
-  /** How tracked hands work every menu: a ray and a dot, hover, and a tap of the index finger. */
+  /** How tracked hands work every menu: a fingertip touch near, a ray and a pinch from afar. */
   private handMenu?: HandMenu;
   /** What the board last said for the question, and whether the question has been answered rightly. */
   private boardKey = '';
   private promptSolved = false;
   /** A hand's tap is being taken: a card needs no arming. */
   private handTap = false;
+  private touchAt = new Vector3();
   private kind: GameKind = 'balloon_burst';
   private offer?: Offer;
   private shownAt = 0;
@@ -704,7 +707,8 @@ export class GameSystem extends createSystem({
       active: () => this.world.visibilityState.peek() !== VisibilityState.NonImmersive && !this.controllersOnly(),
       targets: () => this.handTargets(),
       alwaysShow: () => true,
-      pinchTaps: emulatedHands,
+      select: (side) => this.handPinchStart(side),
+      holding: (side) => this.crystalAtHand(side),
       parent: this.world.scene,
     });
     this.cleanupFuncs.push(() => this.handMenu?.dispose());
@@ -3342,7 +3346,7 @@ export class GameSystem extends createSystem({
         object: obj,
         press: () => {
           if (!e.active) return;
-          // A tap is aimed with a ray from afar: the choices' rule that a finger must first come in from outside is for brushes.
+          // The hand menu has its own rule (a fingertip comes back out before it presses again, or a pinch from afar).
           this.handTap = true;
           try {
             this.pressButton(e, true);
@@ -3360,6 +3364,13 @@ export class GameSystem extends createSystem({
         object: obj,
         press: () => {
           if (e.active && e.hasComponent(Balloon)) this.popBalloon(e, true);
+        },
+        // The fingertip at its envelope (or the middle of a weight, gate or plank), not at its string.
+        distance: (tip) => {
+          if (!obj.visible) return Infinity;
+          this.touchAt.set(0, (obj.userData.middle as number | undefined) ?? BALLOON_MIDDLE, 0);
+          obj.localToWorld(this.touchAt);
+          return Math.max(0, tip.distanceTo(this.touchAt) - BALLOON_TOUCH_R);
         },
       });
     }
@@ -3483,6 +3494,18 @@ export class GameSystem extends createSystem({
       if (found) return found;
     }
     return undefined;
+  }
+
+  /** A hand's pinch here is for a crystal: its ray is on one, or its fingertip is at one, or it holds one. */
+  private crystalAtHand(side: (typeof SIDES)[number]): boolean {
+    if (this.aimedCrystal(side)) return true;
+    const tip = this.tipPos[side === 'right' ? 0 : 1];
+    for (const e of this.queries.crystals.entities) {
+      if (!e.object3D) continue;
+      if (e.hasComponent(Grabbed) || e === this.pulled?.e) return true;
+      if (e.object3D.getWorldPosition(this.a).distanceTo(tip) < HOVER_REACH) return true;
+    }
+    return false;
   }
 
   /** A hand's pinch began this frame (IWSDK keeps it per hand, one edge a frame; not public). */
