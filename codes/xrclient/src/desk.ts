@@ -24,7 +24,7 @@ import { T } from './text.js';
 /** Seconds to wait for a detected table before offering pinch placement. */
 const TABLE_WAIT_S = 3;
 /** How far the book sits inside the table edge nearest the player. */
-const EDGE_INSET_M = 0.3;
+const EDGE_INSET_M = 0.22;
 /**
  * The book sits at the back of the play area; creatures walk off it onto
  * the free table in front, where the answers are. Offset along -Z (away
@@ -41,20 +41,23 @@ const TABLE_DROP_MAX_M = 0.75;
 /** After this long with the pinch ghost, the book is put in front of the player. */
 const PINCH_WAIT_S = 6;
 /**
- * Seated desk: this far below the eyes and this far in front. Far enough that
- * the hands start behind and above what they act on (controllers rest about
- * 0.4 m ahead and 0.1 m below the eyes), so a pointer comes down onto it.
+ * Seated desk: this far below the eyes and this far in front. Near enough
+ * that a seated child's fingertip reaches the cards without leaning in (on
+ * a real Quest the old 0.8 m sent players forward or to the controllers).
  */
-export const SEATED_DROP_M = 0.55;
-const SEATED_REACH_M = 0.7;
-/** Everything on the desk in the headset, this much larger than the browser view, to read from further away. */
-const HEADSET_SCALE = 1.32;
+export const SEATED_DROP_M = 0.5;
+const SEATED_REACH_M = 0.58;
+/**
+ * Everything on the desk in the headset, this much larger than the browser view. Less than it was
+ * (1.32) now the desk is nearer: the score and the robots' windows stay in view and the cards in reach.
+ */
+const HEADSET_SCALE = 1.15;
 /**
  * In the headset everything on the desk sits this much further from the
- * player than where it was placed (the larger scale above keeps it the same
- * size to the eye), so the hands and the cards are not crowded at the chest.
+ * player than where it was placed. None now: the cards are touched with the
+ * fingertip, so they stay within the reach of a seated arm.
  */
-const HEADSET_PUSH_M = 0.1;
+const HEADSET_PUSH_M = 0;
 /** Pushed back on a detected table, the book stays at least this far inside its far edge. */
 const FAR_EDGE_INSET_M = 0.2;
 /**
