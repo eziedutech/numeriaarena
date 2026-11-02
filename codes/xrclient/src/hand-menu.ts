@@ -58,6 +58,13 @@ const PRESS_M = 0.012;
 const REARM_M = 0.035;
 /** Thumb and index tip this close are closing on a pinch: the card aimed at is kept from here. */
 const CLOSING_M = 0.06;
+/**
+ * The pinch read from the joints: tips this close close it, this far open it again. Wider than
+ * the measuring hands' own (1.5 cm), as the joints sit inside a real finger: touching pads leave
+ * their centres nearly 2 cm apart. The headset's own pinch (select) is read as well.
+ */
+const PINCH_SHUT_M = 0.022;
+const PINCH_OPEN_M = 0.035;
 const PRESS_COOLDOWN_S = 0.3;
 const REACH_M = 1.2;
 /** A card the dot has left stays lit this long (seconds). */
@@ -91,6 +98,8 @@ interface Aim {
   lockD: Vector3;
   /** Whether IWSDK's own ray was last told to hide. */
   taking?: boolean;
+  /** Thumb and index are shut in a pinch (see PINCH_SHUT_M). */
+  shut: boolean;
   /** The card the dot has just left, kept lit a moment so a card that grows under the dot does not blink. */
   holdT?: MenuTarget;
   holdUntil: number;
@@ -139,7 +148,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, nearD: Infinity, armed: true, dim: false, cooldown: 0, holdUntil: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, shut: false, nearD: Infinity, armed: true, dim: false, cooldown: 0, holdUntil: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -335,7 +344,11 @@ export class HandMenu {
   /** A pinch from afar presses the card the dot was on before the fingers closed. */
   private pinch(side: Side, a: Aim): void {
     const h = this.hands.get(side);
-    const pinched = h.pinchStart || this.host.select(side);
+    const gap = h.tracked ? h.tip.distanceTo(h.thumb) : Infinity;
+    const was = a.shut;
+    // An untracked hand counts as shut, so one that is found already pinching presses nothing.
+    a.shut = !h.tracked || (was ? gap < PINCH_OPEN_M : gap < PINCH_SHUT_M);
+    const pinched = (a.shut && !was) || this.host.select(side);
     if (!pinched || a.near || !h.tracked || a.cooldown > 0 || this.host.holding(side)) return;
     a.cooldown = PRESS_COOLDOWN_S;
     const target = a.dim ? undefined : a.lastTarget;
