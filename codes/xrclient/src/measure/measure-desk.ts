@@ -18,6 +18,7 @@ import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
+import { setDeskRaise } from '../desk.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
 import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading, type Shape } from './measure-core.js';
@@ -573,9 +574,30 @@ export class MeasureDesk {
     this.card('me_back', this.t.back, 0.08 + CHOICE_STEP, CARD_Z, CORAL);
   }
 
+  /**
+   * In a virtual room (the classroom or the bedroom) only the paper objects are measured, straight
+   * after flat or solid: something real cannot be seen there, and switching the room under the
+   * player in the middle of the game was found confusing on a real Quest.
+   */
+  private afterGroup(): void {
+    if (!this.virtualRoom()) {
+      this.showSources();
+      return;
+    }
+    this.source = 'paper';
+    this.shape = undefined;
+    this.showHow();
+  }
+
+  /** The player chose a virtual room round the desk, not their own. */
+  private virtualRoom(): boolean {
+    return this.room !== 'here';
+  }
+
   private showSources(): void {
     this.step = 'source';
     setRoom(this.room);
+    setDeskRaise(true);
     this.say([[this.t.title, 0.03, HEAD], [this.t.pickSource, 0.022, INK], [this.t.realNote, 0.016, INK]]);
     this.clearCards();
     this.card('me_paper', this.t.paper, -0.08, CARD_Z, YELLOW);
@@ -621,6 +643,7 @@ export class MeasureDesk {
     const hands = !this.host.controllers() && this.host.handsRay();
     for (const l of this.host.controllers() ? this.t.howTrigger : hands ? this.t.howHand : this.t.how) lines.push([l, 0.017, INK]);
     if (this.solid && this.source === 'paper') lines.push([hands ? this.t.howSolidHand : this.t.howSolid, 0.017, INK]);
+    if (this.virtualRoom()) lines.push([this.t.realInRoom, 0.015, INK]);
     this.say(lines);
     this.clearCards();
     this.card('me_start', this.t.start, 0, CARD_Z, TEAL);
@@ -797,7 +820,7 @@ export class MeasureDesk {
       case 'me_solid':
         if (this.step !== 'group') return;
         this.solid = choice === 'me_solid';
-        this.showSources();
+        this.afterGroup();
         return;
       case 'me_paper':
       case 'me_real':
@@ -806,6 +829,7 @@ export class MeasureDesk {
         this.shape = undefined;
         // Something real is measured where it is: the real room shows for it.
         setRoom(this.source === 'real' ? 'here' : this.room);
+        setDeskRaise(this.source !== 'real');
         if (this.source === 'real') void this.loadObjects();
         else this.showHow();
         return;
@@ -821,6 +845,7 @@ export class MeasureDesk {
           this.source = 'paper';
           this.shape = undefined;
           setRoom(this.room);
+          setDeskRaise(true);
         } else this.shape = choice.slice('me_sh_'.length) as Shape;
         this.showHow();
         return;
@@ -876,6 +901,7 @@ export class MeasureDesk {
           if (this.host.grade() === undefined) this.showGrades();
           else this.host.closed();
         } else if (this.step === 'source') this.showGroups();
+        else if (this.step === 'how' && this.virtualRoom()) this.showGroups();
         else if (this.step === 'object') this.showSources();
         else if (this.step === 'how') {
           if (this.source === 'real') this.showObjects();
@@ -2621,6 +2647,7 @@ export class MeasureDesk {
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();
     setRoom(this.room);
+    setDeskRaise(true);
   }
 }
 
