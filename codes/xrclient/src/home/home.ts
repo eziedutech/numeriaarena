@@ -46,8 +46,8 @@ const INK = '#3a3f4b';
 const PAPER = '#fff8ec';
 const COLORS = { teal: '#3fb6a0', cobalt: '#3469c4', coral: '#f2716b', violet: '#b198ea', sun: '#e8b64c' };
 /** The page is laid out on this stage and scaled to fit the window. */
-/** Shown in the footer. */
-const VERSION = 'v0.4';
+/** Shown in the footer: package.json's version, raised with every change pushed, so a reload shows whether it is the new one. */
+const VERSION = `v${__APP_VERSION__}`;
 const STAGE_W = 1600;
 const STAGE_H = 900;
 /** On a phone held sideways the page is a narrower stage, scrolled up and down, so its cards and words stay readable. */

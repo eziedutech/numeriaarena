@@ -136,7 +136,11 @@ function onlyUsedIcons(): Plugin {
   };
 }
 
+/** The game's version, from package.json: raised by one at its last number with every change pushed, shown in the home page's footer. */
+const APP_VERSION = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   plugins: [iwsdkDev(), onlyUsedIcons(), cameraFiles(), bootProgress(), offlineWorker()],
   server: {
     host: '0.0.0.0',
