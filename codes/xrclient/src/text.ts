@@ -115,6 +115,7 @@ export const EN = {
   findingTable: 'Finding your table',
   pinchToPlace: (s: number) => `Pinch to place the book, or wait ${s} s`,
   touchTable: 'Touch your table',
+  deskRaised: 'Desk moved to your table',
   touchHold: (s: number) => `hold a fingertip on it, or wait ${s} s`,
   orWait: (s: number) => `or wait ${s} s`,
   animal: {
@@ -220,6 +221,7 @@ export const ID: Text = {
   findingTable: 'Mencari mejamu',
   pinchToPlace: (s: number) => `Cubit untuk menaruh buku, atau tunggu ${s} detik`,
   touchTable: 'Sentuh mejamu',
+  deskRaised: 'Meja pindah ke mejamu',
   touchHold: (s: number) => `tahan ujung jari di atasnya, atau tunggu ${s} detik`,
   orWait: (s: number) => `atau tunggu ${s} detik`,
   animal: {

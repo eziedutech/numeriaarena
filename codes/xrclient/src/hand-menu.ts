@@ -100,6 +100,14 @@ interface Aim {
   dot: Mesh;
 }
 
+/** Each hand's fingertip is on a card this frame (at or in it): read by the desk, which must not take a card for the table. */
+const onCard: Record<Side, boolean> = { left: false, right: false };
+
+/** Whether this hand's fingertip is on one of the desk's cards (or balloons) now. */
+export function fingertipOnCard(side: Side): boolean {
+  return onCard[side];
+}
+
 const rayGeo = new CylinderGeometry(0.0015, 0.0015, 1, 6).translate(0, 0.5, 0);
 const dotGeo = new SphereGeometry(0.006, 12, 8);
 const UP = new Vector3(0, 1, 0);
@@ -271,6 +279,7 @@ export class HandMenu {
   private touch(side: Side, a: Aim, tip: Vector3 | undefined, targets: MenuTarget[]): void {
     a.near = undefined;
     a.nearD = Infinity;
+    onCard[side] = false;
     if (!tip) {
       a.armed = true;
       return;
@@ -282,6 +291,7 @@ export class HandMenu {
         a.near = t;
       }
     }
+    onCard[side] = a.nearD <= PRESS_M + 0.005;
     if (a.nearD > NEAR_M) a.near = undefined;
     if (a.nearD > REARM_M) a.armed = true;
     if (!a.near || !a.armed || a.cooldown > 0 || a.nearD > PRESS_M) return;
@@ -356,6 +366,7 @@ export class HandMenu {
   private hide(): void {
     for (const side of ORDER) {
       const a = this.aim[side];
+      onCard[side] = false;
       a.up = false;
       a.near = undefined;
       a.target = undefined;
