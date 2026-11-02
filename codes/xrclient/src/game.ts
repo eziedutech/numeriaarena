@@ -320,6 +320,12 @@ const BEST_KEY = 'numeria.best';
  * arrow and the word BACK, one press (tap, trigger or click) leaving to the desk menu.
  */
 const QUIT_AT = new Vector3(0.34, 0, 0.15);
+/**
+ * In the headset the desk's buttons (the menu's chips, Measure Hunt's cards and answers, QUIT, the
+ * banner and the town sticker) stand this much higher over the desk (desk units, about 6 cm), so a
+ * fingertip meets them before it meets the real table top under them. The browser keeps them on it.
+ */
+const BUTTON_LIFT_XR = 0.05;
 /** IWSDK's RayDisplayMode values: always, or only while hitting a target (its default). */
 const RAY_VISIBLE = 1;
 const RAY_ON_TARGET = 2;
@@ -1297,6 +1303,11 @@ export class GameSystem extends createSystem({
     this.showBest();
   }
 
+  /** How much higher the desk's buttons stand in the headset (see BUTTON_LIFT_XR); none in the browser. */
+  private buttonLift(): number {
+    return this.world.visibilityState.peek() === VisibilityState.NonImmersive ? 0 : BUTTON_LIFT_XR;
+  }
+
   /** The desk menu shows the accessibility line in place of the settings. */
   private accessOpen = false;
 
@@ -1470,6 +1481,7 @@ export class GameSystem extends createSystem({
     banner.userData.armed = false;
     banner.add(plane);
     banner.position.copy(BANNER_AT);
+    banner.position.y += this.buttonLift();
     banner.rotation.x = MENU_LEAN;
     const e = this.add(banner);
     e.addComponent(MenuButton, { game: 'measure_hunt' });
@@ -1533,6 +1545,7 @@ export class GameSystem extends createSystem({
     sticker.name = 'menu-town';
     sticker.add(shadow, plane);
     sticker.position.copy(TOWN_AT);
+    sticker.position.y += this.buttonLift();
     sticker.rotation.x = MENU_LEAN;
     const e = this.add(sticker);
     e.addComponent(MenuButton, { game: 'town' });
@@ -1645,7 +1658,7 @@ export class GameSystem extends createSystem({
       let x = -total / 2;
       row.forEach((c, k) => {
         const w = width(c);
-        const place = new Vector3(at.x + x + w / 2, at.y, at.z).addScaledVector(MENU_UP, up);
+        const place = new Vector3(at.x + x + w / 2, at.y + this.buttonLift(), at.z).addScaledVector(MENU_UP, up);
         x += w + CHIP_GAP;
         if (!c) {
           if (!heading) return;
@@ -2367,8 +2380,8 @@ export class GameSystem extends createSystem({
     cell.name = `menu-${choice}`;
     cell.userData.toolButton = b;
     cell.add(shadow, b.mesh);
-    // Leaning back on the desk as the menu's chips, its lower edge on the top.
-    cell.position.set(x, (h / 2) * Math.sin(-MENU_LEAN) + 0.002, z);
+    // Leaning back as the menu's chips, its lower edge on the desk top (over it in the headset).
+    cell.position.set(x, (h / 2) * Math.sin(-MENU_LEAN) + 0.002 + this.buttonLift(), z);
     cell.rotation.x = MENU_LEAN;
     const e = this.add(cell);
     e.addComponent(MenuButton, { game: choice });
