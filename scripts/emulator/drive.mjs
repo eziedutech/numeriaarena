@@ -37,7 +37,7 @@ const METHOD = {
  * While the page reloads the bridge is briefly away, so a failed send is
  * retried for up to 15 s.
  */
-async function cli(group, action, params = {}) {
+export async function cli(group, action, params = {}) {
   const method = METHOD[`${group} ${action}`];
   if (!method) throw new Error(`no runtime method for ${group} ${action}`);
   for (let attempt = 0; ; attempt++) {
@@ -117,8 +117,8 @@ export async function allowPokes() {
 export async function seat() {
   await cli('xr', 'enter'); await sleep(5);
   await cli('xr', 'set-input-mode', { mode: 'hand' });
-  // The book may take up to about 9 s to land (table search, then pinch wait).
-  for (let i = 0; i < 30; i++) {
+  // The book may take up to about 15 s to land (table search, then the touch or pinch wait).
+  for (let i = 0; i < 40; i++) {
     const p = await posOf('^desk-root$');
     if (p?.comps.find((c) => c.componentId === 'DeskRoot')?.values.placed) break;
     await sleep(0.5);

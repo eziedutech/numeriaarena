@@ -19,6 +19,7 @@ import { Label } from './art/label.js';
 import { makeBook, makeStar } from './art/models.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
+import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 import { T } from './text.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
@@ -38,8 +39,21 @@ const TABLE_FACING_COS = 0.5;
 /** Comfortable table top: this far below the eyes (seated at a desk or on a sofa). */
 const TABLE_DROP_MIN_M = 0.2;
 const TABLE_DROP_MAX_M = 0.75;
-/** After this long with the pinch ghost, the book is put in front of the player. */
-const PINCH_WAIT_S = 6;
+/** After this long with the ghost book (touch or pinch), the book is put in front of the player. */
+const PINCH_WAIT_S = 12;
+/**
+ * The real table's height from a fingertip: one that comes down at least TOUCH_DROP_M
+ * and then holds within TOUCH_STILL_M for TOUCH_HOLD_S rests on the table, and the desk
+ * top goes there, TOUCH_PAD_M under the tip joint (the finger's pad is below it).
+ */
+const TOUCH_HOLD_S = 0.8;
+const TOUCH_STILL_M = 0.015;
+const TOUCH_DROP_M = 0.03;
+const TOUCH_PAD_M = 0.008;
+/** The fingertip that sets the height is at most this far from the eyes, across. */
+const TOUCH_REACH_M = 0.85;
+/** How long a higher fingertip is remembered: it must have come down within this. */
+const TOUCH_FALL_S = 3;
 /**
  * Seated desk: this far below the eyes and this far in front. Near enough
  * that a seated child's fingertip reaches the cards without leaning in (on
@@ -181,8 +195,16 @@ export class DeskSystem extends createSystem({
   private corner = new Vector3();
   private head = new Vector3();
   private forward = new Vector3();
+  private hands!: Hands;
+  private clock = 0;
+  /** Each hand's fingertip: where it holds still and since when, and the highest it was lately. */
+  private touch: Record<Side, { at: Vector3; since: number; hiY: number; hiT: number }> = {
+    left: { at: new Vector3(), since: -1, hiY: -Infinity, hiT: 0 },
+    right: { at: new Vector3(), since: -1, hiY: -Infinity, hiT: 0 },
+  };
 
   init(): void {
+    this.hands = new Hands(() => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand);
     this.root = new Group();
     this.root.name = 'desk-root';
     const book = makeBook();
@@ -395,6 +417,43 @@ export class DeskSystem extends createSystem({
     return false;
   }
 
+  /**
+   * The real table's top, once a fingertip has come down onto it and held still
+   * there, within seated reach in front of the player; undefined until then.
+   */
+  private touchedTop(delta: number): number | undefined {
+    this.clock += delta;
+    this.hands.update(delta);
+    this.player.head.getWorldPosition(this.head);
+    for (const side of ['right', 'left'] as const) {
+      const h = this.hands.get(side);
+      const t = this.touch[side];
+      if (!h.tracked) {
+        t.since = -1;
+        t.hiY = -Infinity;
+        continue;
+      }
+      const tip = h.tip;
+      if (tip.y > t.hiY || this.clock - t.hiT > TOUCH_FALL_S) {
+        t.hiY = tip.y;
+        t.hiT = this.clock;
+      }
+      const drop = this.head.y - tip.y;
+      const across = Math.hypot(tip.x - this.head.x, tip.z - this.head.z);
+      const fits = drop >= TABLE_DROP_MIN_M && drop <= TABLE_DROP_MAX_M && across <= TOUCH_REACH_M;
+      if (!fits || t.since < 0 || tip.distanceTo(t.at) > TOUCH_STILL_M) {
+        t.at.copy(tip);
+        t.since = fits ? this.clock : -1;
+        continue;
+      }
+      if (this.clock - t.since >= TOUCH_HOLD_S && t.hiY - t.at.y >= TOUCH_DROP_M) {
+        t.since = -1;
+        return t.at.y - TOUCH_PAD_M;
+      }
+    }
+    return undefined;
+  }
+
   update(delta: number): void {
     const e = this.desk();
     if (!e) return;
@@ -428,18 +487,25 @@ export class DeskSystem extends createSystem({
       return;
     }
     // No table: a ghost book waits in the middle, in front of the player at
-    // seated desk height, turning with the head; a pinch with either hand
-    // puts it down there. It is where the book lands anyway when the wait
-    // runs out, so the book never jumps from the side to the middle.
+    // seated desk height, turning with the head. A fingertip held on the real
+    // table puts it down there at that height; a pinch with either hand puts it
+    // down at the guessed height. It is where the book lands anyway when the
+    // wait runs out, so the book never jumps from the side to the middle.
     this.ghost.visible = true;
     this.ghost.scale.setScalar(HEADSET_SCALE);
     this.frontOf(this.ghost);
     const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(T.pinchToPlace(left), delta, true, CURTAIN_ACT, this.ghost.position, {
-      name: 'status_pinch_to_place',
-      scale: 1.2,
-      small: T.orWait(left),
-    });
+    this.showStatus(T.touchTable, delta, true, CURTAIN_ACT, this.ghost.position);
+    this.statusSmall.set(T.touchHold(left));
+    this.statusSmall.mesh.visible = true;
+    const top = this.touchedTop(delta);
+    if (top !== undefined) {
+      this.frontOf(this.root);
+      this.root.position.y = top;
+      this.setPlaced(true, 5);
+      console.info(`[desk] placed by a fingertip on the table at y=${top.toFixed(3)} (${(this.head.y - top).toFixed(2)} m under the eyes)`);
+      return;
+    }
     const pads = this.input.xr.gamepads;
     if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
       this.root.position.copy(this.ghost.position);
