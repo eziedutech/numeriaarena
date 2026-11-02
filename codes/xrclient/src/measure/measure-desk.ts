@@ -25,8 +25,8 @@ import { MEASURE_TEXT } from './measure-text.js';
 import { paperObject, type PaperObject } from './paper-shapes.js';
 
 /**
- * MEASURE HUNT, game 6, in the headset only: the real room shows (the
- * virtual rooms are put away while it is open) and a child measures a
+ * MEASURE HUNT, game 6, in the headset only: the chosen room stays round
+ * the desk (the real one shows only to measure something real) and a child measures a
  * paper shape the game lays on the desk, or something real near them, with
  * their hands. Pointing the index finger at a corner and holding it still
  * drops a pin; pinching a pin pulls a thread from it, let go on another pin
@@ -514,9 +514,8 @@ export class MeasureDesk {
 
   constructor(private host: MeasureHost) {
     this.restoreDesk = host.clearDesk();
-    // The real room only: Measure Hunt is played on the real desk.
+    // The chosen room stays, as in every other game; only measuring something real shows the real room.
     this.room = getRoom();
-    setRoom('here');
     this.hands = new Hands(() => host.hands());
     this.group = new Group();
     this.group.name = 'measure-desk';
@@ -576,6 +575,7 @@ export class MeasureDesk {
 
   private showSources(): void {
     this.step = 'source';
+    setRoom(this.room);
     this.say([[this.t.title, 0.03, HEAD], [this.t.pickSource, 0.022, INK], [this.t.realNote, 0.016, INK]]);
     this.clearCards();
     this.card('me_paper', this.t.paper, -0.08, CARD_Z, YELLOW);
@@ -804,6 +804,8 @@ export class MeasureDesk {
         if (this.step !== 'source') return;
         this.source = choice === 'me_paper' ? 'paper' : 'real';
         this.shape = undefined;
+        // Something real is measured where it is: the real room shows for it.
+        setRoom(this.source === 'real' ? 'here' : this.room);
         if (this.source === 'real') void this.loadObjects();
         else this.showHow();
         return;
@@ -818,6 +820,7 @@ export class MeasureDesk {
         if (choice === 'me_sh_paper') {
           this.source = 'paper';
           this.shape = undefined;
+          setRoom(this.room);
         } else this.shape = choice.slice('me_sh_'.length) as Shape;
         this.showHow();
         return;
