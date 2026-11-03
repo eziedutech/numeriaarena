@@ -18,7 +18,7 @@ import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
-import { fingertipOnCard } from '../hand-menu.js';
+import { fingertipOnCard, setRayRest } from '../hand-menu.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
 import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading, type Shape } from './measure-core.js';
@@ -226,7 +226,8 @@ const MOCK: Record<string, { size: Record<string, number>; keys?: P3[] }> = {
 const VS_O = new Vector3();
 const VS_D = new Vector3();
 const VS_Q = new Quaternion();
-const CARD_GAP_M = 0.07;
+/** No pin this near a card's middle (5 cm since a touch, not a hover, drops a pin; 7 cm kept a net's front corners from the turning cards). */
+const CARD_GAP_M = 0.05;
 /** A pinch or trigger this near a pin takes its thread. */
 const GRAB_M = 0.035;
 /**
@@ -241,7 +242,17 @@ const TOUCH_HOLD_S = 0.12;
 const TOUCH_SLIDE_M = 0.015;
 const TOUCH_REARM_M = 0.03;
 /** A fingertip this near a corner (world metres) touches that corner, even just off the shape's faces. */
-const TOUCH_CORNER_M = 0.025;
+const TOUCH_CORNER_M = 0.018;
+/** A pin or corner this near a fingertip lights (yellow) and the hand's ray is put away: near lights, a touch chooses. */
+const TOUCH_LIGHT_M = 0.05;
+/**
+ * Opened, a box's net is laid at most this deep and this wide (world metres), turned to run across the
+ * desk when that lets it be larger, its front this far before the desk's middle, clear of the turning
+ * cards: folded out at the box's size its top lay a metre from the eyes.
+ */
+const NET_DEEP_M = 0.28;
+const NET_WIDE_M = 0.6;
+const NET_FRONT_M = 0.16;
 /** A thread let go this near its own pin is no thread. */
 const CANCEL_M = 0.02;
 /** A thread let go faster than this is thrown, and its pin goes. */
@@ -415,6 +426,8 @@ const SWIPE_SPEED = 0.6;
 const SWIPE_COOL_S = 0.5;
 const ghostGeo = new SphereGeometry(0.009, 16, 12);
 const ghostMat = new MeshBasicMaterial({ color: 0x2f6fe0, transparent: true, opacity: 0.65, depthWrite: false });
+/** The corner a fingertip is at: lit yellow as the pins are. */
+const ghostLitMat = new MeshBasicMaterial({ color: 0xffc940, transparent: true, opacity: 0.9, depthWrite: false });
 const UP = new Vector3(0, 1, 0);
 const Y = new Vector3(0, 1, 0);
 const Z = new Vector3(0, 0, 1);
@@ -464,6 +477,10 @@ export class MeasureDesk {
   private d3 = new Vector3();
   private p3 = new Vector3();
   /** Each hand's fingertip on the paper: since when (-1 off it), where, and whether it may drop a pin. */
+  /** The pin or corner each fingertip lights this frame, and the pin if it is one. */
+  private touchLit: Record<Side, Vector3 | undefined> = { left: undefined, right: undefined };
+  private touchPin: Record<Side, Pin | undefined> = { left: undefined, right: undefined };
+  private netAt = new Vector3();
   private touching: Record<Side, { since: number; at: Vector3; armed: boolean }> = {
     left: { since: -1, at: new Vector3(), armed: true },
     right: { since: -1, at: new Vector3(), armed: true },
@@ -990,6 +1007,7 @@ export class MeasureDesk {
     if (boardUp() !== this.onBoard && this.lines.length > 0) this.show();
     for (const side of SIDES) this.readTip(side, delta);
     this.magnify();
+    this.touchPins();
     this.workTaps();
     this.paintGuide(delta);
     if (this.step === 'verdict') {
@@ -1015,7 +1033,6 @@ export class MeasureDesk {
     this.syncRemoveCard();
     this.showPreview();
     this.updateBin(delta);
-    this.touchPins();
     // A controller's trigger works as a hand's tap does: the same running line, pin by pin.
     if (this.host.controllers() && !this.boardHeld) {
       for (const side of SIDES) {
@@ -1040,7 +1057,11 @@ export class MeasureDesk {
       const pull = this.pulls.get(side);
       const pin = this.pinAtRay(side, pull?.from);
       if (pin) pointed.add(pin);
+      const touched = this.touchPin[side];
+      if (touched) pointed.add(touched);
     }
+    // Pins keep their size on a net laid smaller than the box.
+    const zoom = this.paperZoom();
     for (const p of this.pins) {
       const used = this.threads.some((t) => t.a === p || t.b === p) || [...this.pulls.values()].some((pl) => pl.from === p);
       const calling = this.spin?.stage === 'close' && this.spin.outer === p;
@@ -1048,7 +1069,7 @@ export class MeasureDesk {
       const m = hover ? hoverMat : used ? greenMat : pinMat;
       if (p.mesh.material !== m) p.mesh.material = m;
       const k = calling ? 1.8 + 0.5 * (0.5 - 0.5 * Math.cos((performance.now() / 1000 / 0.7) * Math.PI * 2)) : hover ? 1.5 : 1;
-      if (p.mesh.scale.x !== k) p.mesh.scale.setScalar(k);
+      if (p.mesh.scale.x !== k * zoom) p.mesh.scale.setScalar(k * zoom);
     }
   }
 
@@ -1064,41 +1085,67 @@ export class MeasureDesk {
     return this.host.controllers() || this.host.handsRay();
   }
 
-  /** A fingertip held on the paper object or a pin taps there (see TOUCH_AT_M): the ray along the finger, knuckle to tip. */
+  /**
+   * A fingertip on the paper, by one rule for every target in the game: near lights, a touch chooses.
+   * A pin or a corner within TOUCH_LIGHT_M of the fingertip lights (yellow), with the hand's ray put
+   * away; touching it (within TOUCH_PIN_M of a pin, TOUCH_CORNER_M of a corner, or on the paper's face
+   * by it) and holding a moment taps there, as a pinch from afar does. Again only once the finger has
+   * come off. A circle or ball (and a triangle's side, for its height) takes a touch of its face anywhere;
+   * a polygon's face away from its corners takes none, so a hand searching for a corner breaks nothing.
+   */
   private touchPins(): void {
-    if (!this.handRay() || this.boardHeld) return;
+    for (const side of SIDES) {
+      this.touchLit[side] = undefined;
+      this.touchPin[side] = undefined;
+    }
+    if (!this.handRay() || this.boardHeld || this.step !== 'measure') {
+      for (const side of SIDES) setRayRest(side, false);
+      return;
+    }
     const now = performance.now() / 1000;
     for (const side of SIDES) {
       const h = this.hands.get(side);
       const t = this.touching[side];
       if (!h.tracked || h.pinching || fingertipOnCard(side)) {
         t.since = -1;
+        setRayRest(side, false);
         continue;
       }
+      // The pin, else the corner, nearest the fingertip.
+      let spot: Vector3 | undefined;
+      let reach = 0;
+      const pin = this.nearestPin(h.tip, TOUCH_LIGHT_M);
+      if (pin) {
+        spot = pin.mesh.getWorldPosition(this.p3).clone();
+        reach = TOUCH_PIN_M;
+        this.touchPin[side] = pin;
+      } else if (this.polygon() && this.cornerNear(h.tip, this.k2) && this.k2.distanceTo(h.tip) < TOUCH_LIGHT_M) {
+        spot = this.k2.clone();
+        reach = TOUCH_CORNER_M;
+      }
+      // How far off the paper's face the fingertip is: along the finger, else straight down onto it.
       this.o3.copy(h.knuckle);
       this.d3.copy(h.tip).sub(h.knuckle);
       const length = this.d3.length();
-      if (length < 1e-3) continue;
-      this.d3.divideScalar(length);
-      // A pin, then a corner, right at the fingertip is the one touched: a finger on a corner is often just off its faces.
-      let target: Vector3 | undefined;
-      const pin = this.nearestPin(h.tip, TOUCH_PIN_M);
-      if (pin) target = pin.mesh.getWorldPosition(this.p3).clone();
-      else if (this.polygon() && this.cornerNear(h.tip, this.k2) && this.k2.distanceTo(h.tip) < TOUCH_CORNER_M) target = this.k2.clone();
-      let gap = target ? 0 : Infinity;
-      if (gap > 0) {
+      let gap = Infinity;
+      if (length > 1e-3) {
+        this.d3.divideScalar(length);
         this.p3.copy(this.o3);
         if (this.aim(this.p3, this.d3)) gap = this.p3.distanceTo(this.o3) - length;
       }
-      // A finger lying along the paper's face meets it nowhere ahead: straight down onto it from over the tip.
-      if (gap > TOUCH_REARM_M) {
+      if (gap > TOUCH_AT_M) {
         this.o3.copy(h.tip).y += TOUCH_REARM_M;
         this.d3.set(0, -1, 0);
         this.p3.copy(this.o3);
         if (this.aim(this.p3, this.d3)) gap = Math.min(gap, this.p3.distanceTo(this.o3) - TOUCH_REARM_M);
       }
-      if (gap > TOUCH_REARM_M) t.armed = true;
-      if (!t.armed || gap > TOUCH_AT_M || gap < -TOUCH_REARM_M) {
+      const off = spot ? h.tip.distanceTo(spot) : Infinity;
+      this.touchLit[side] = spot;
+      // Near the paper the finger touches: the ray from the hand would only be in the way.
+      setRayRest(side, !!spot || gap < TOUCH_LIGHT_M);
+      const pressing = spot ? off <= reach || (gap <= TOUCH_AT_M && off <= reach + TOUCH_AT_M) : (!this.polygon() || this.nearSide(this.p3)) && gap <= TOUCH_AT_M && gap > -TOUCH_REARM_M;
+      if (!pressing && off > reach + TOUCH_REARM_M - TOUCH_AT_M && gap > TOUCH_REARM_M - TOUCH_AT_M) t.armed = true;
+      if (!t.armed || !pressing) {
         t.since = -1;
         continue;
       }
@@ -1110,8 +1157,8 @@ export class MeasureDesk {
       if (now - t.since < TOUCH_HOLD_S) continue;
       t.since = -1;
       t.armed = false;
-      console.info(`[measure] ${side} fingertip taps the paper`);
-      this.tapAim[side] = { origin: this.o3.clone(), dir: this.d3.clone(), at: target };
+      console.info(`[measure] ${side} fingertip taps the paper${spot ? (pin ? ' on a pin' : ' on a corner') : ''}`);
+      this.tapAim[side] = { origin: this.o3.clone(), dir: this.d3.clone(), at: spot };
     }
   }
 
@@ -1366,6 +1413,58 @@ export class MeasureDesk {
     return p.cube ?? p.mesh.position;
   }
 
+  /** How much larger pins and lengths are drawn than the paper is now: 1, more on a net laid smaller. */
+  private paperZoom(): number {
+    const paper = this.paper;
+    if (!paper || paper.root.scale.x <= 0) return 1;
+    return (this.offer?.shape === 'sphere' ? BALL_SCALE : PAPER_SCALE) / paper.root.scale.x;
+  }
+
+  /** Whether a hand's ray is put away because its fingertip is at the paper. */
+  private rayResting(side: Side): boolean {
+    const h = this.hands.get(side);
+    return !!this.touchLit[side] || (h.tracked && this.roundPaper(h.tip) && h.tip.distanceTo(this.paperMiddle()) < this.paperReach());
+  }
+
+  private paperMiddle(): Vector3 {
+    return this.paper ? this.paper.spin.getWorldPosition(this.netAt) : this.netAt.set(0, 0, 0);
+  }
+
+  private paperReach(): number {
+    return this.paper ? this.paper.radius * this.paper.root.scale.x : 0;
+  }
+
+  /**
+   * As a box opens (u from 0 to 1) its net is laid within a seated child's reach (see NET_DEEP_M):
+   * smaller, turned to run across the desk if that is larger, its front by the turning cards. The net
+   * lies round the bottom, from d/2 + h in front of the middle to 1.5 d + h behind it, w/2 + h each side.
+   */
+  private placeNet(u: number): void {
+    const paper = this.paper;
+    const keys = this.offer?.keys;
+    if (!paper || !keys?.length) return;
+    const span = (i: number) => (Math.max(...keys.map((k) => k[i])) - Math.min(...keys.map((k) => k[i]))) / 100;
+    const w = span(0);
+    const h = span(1);
+    const d = span(2);
+    const along = 2 * d + 2 * h;
+    const across = w + 2 * h;
+    const fit = (deep: number, wide: number) => Math.min(PAPER_SCALE, NET_DEEP_M / deep, NET_WIDE_M / wide);
+    const turn = fit(across, along) > fit(along, across);
+    const s = turn ? fit(across, along) : fit(along, across);
+    const deep = (turn ? across : along) * s;
+    // The net's middle, from the box's: d/2 behind it; turned a quarter, that way runs across.
+    const midX = turn ? -(d / 2) * s : 0;
+    const midZ = turn ? 0 : -(d / 2) * s;
+    this.netAt.set(-midX, OBJECT_AT.y, NET_FRONT_M - deep / 2 - midZ);
+    paper.root.position.lerpVectors(OBJECT_AT, this.netAt, u);
+    paper.root.rotation.y = (turn ? Math.PI / 2 : 0) * u;
+    paper.root.scale.setScalar(PAPER_SCALE + (s - PAPER_SCALE) * u);
+    if (u === 1) {
+      console.info(`[measure] net laid ${turn ? 'across' : 'along'} the desk at ${s.toFixed(2)} times, front ${NET_FRONT_M} m`);
+    }
+  }
+
   /** The two pins stand at one corner of the box (a corner shows in more than one place on its net). */
   private same(a: Pin, b: Pin): boolean {
     return a === b || this.at(a).distanceTo(this.at(b)) < 1e-4;
@@ -1395,7 +1494,9 @@ export class MeasureDesk {
     // Without an end to reach it is not shown: a thread not yet laid stands a metre tall at the middle.
     // The line follows the hand while it points in or near the paper; its end rests on a corner it comes near.
     let ended = true;
-    if (through) through.mesh.getWorldPosition(this.v);
+    const lit = this.handRay() ? (this.touchLit[side] ?? this.touchLit[side === 'right' ? 'left' : 'right']) : undefined;
+    if (lit) this.v.copy(lit);
+    else if (through) through.mesh.getWorldPosition(this.v);
     else {
       ended = this.tip(side, false, this.v) && this.roundPaper(this.v);
       if (ended && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
@@ -2024,6 +2125,19 @@ export class MeasureDesk {
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
     if (this.rayMode()) {
+      // A fingertip near the paper: the corner it is at lights, where the ray points does not matter.
+      const lit = this.handRay() ? this.touchLit[side] : undefined;
+      if (lit) {
+        if (this.touchPin[side]) return;
+        ghost.visible = true;
+        ghost.material = ghostLitMat;
+        ghost.position.copy(lit);
+        this.metric.worldToLocal(ghost.position);
+        ghost.scale.setScalar(0.9);
+        return;
+      }
+      if (this.handRay() && this.rayResting(side)) return;
+      ghost.material = ghostMat;
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
       // A ball takes a pin only at its middle and on its ring: the mark shows only there.
@@ -2189,6 +2303,7 @@ export class MeasureDesk {
     label.set(`${Math.round(len * 100)} cm`);
     label.mesh.position.copy(a).add(b).multiplyScalar(0.5);
     label.mesh.position.y += 0.022;
+    label.mesh.scale.setScalar(this.paperZoom());
   }
 
   private clearPins(): void {
@@ -2762,6 +2877,7 @@ export class MeasureDesk {
       const step = UNFOLD_SPEED * delta;
       this.unfolded = this.unfoldTo > this.unfolded ? Math.min(this.unfoldTo, this.unfolded + step) : Math.max(this.unfoldTo, this.unfolded - step);
       paper.unfold(this.unfolded);
+      this.placeNet(this.unfolded);
       // The pins set on the folded box are put away while it is open; those set on its net go with it
       // between the two, and so do their threads.
       for (const p of this.pins) {
@@ -2894,6 +3010,7 @@ export class MeasureDesk {
     if (this.root.active) this.host.remove(this.root);
     this.restoreDesk();
     setRoom(this.room);
+    for (const side of SIDES) setRayRest(side, false);
   }
 }
 
