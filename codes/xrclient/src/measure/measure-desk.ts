@@ -245,6 +245,8 @@ const TOUCH_REARM_M = 0.03;
 const TOUCH_CORNER_M = 0.018;
 /** A pin or corner this near a fingertip lights (yellow) and the hand's ray is put away: near lights, a touch chooses. */
 const TOUCH_LIGHT_M = 0.05;
+/** The running line's end goes onto a corner or pin this near it (world metres); elsewhere it is where the hand is. */
+const PREVIEW_SNAP_M = 0.025;
 /**
  * Opened, a box's net is laid at most this deep and this wide (world metres), turned to run across the
  * desk when that lets it be larger, its front this far before the desk's middle, clear of the turning
@@ -291,7 +293,7 @@ const TRASH_GRACE_S = 0.8;
 /** A box's three threads from a corner go ways this near square to each other (cos of about 70 degrees). */
 const SQUARE_COS = 0.35;
 /** Where the paper object stands, and how far round it a finger may pin. */
-const OBJECT_AT = new Vector3(0, 0, -0.05);
+const OBJECT_AT = new Vector3(0, 0, -0.1);
 /** A paper object is drawn this much larger than its centimetres say, to be seen and reached; its threads still read the centimetres of the question. A real thing is never scaled. */
 const PAPER_SCALE = 1.5;
 /** A ball is drawn larger still: its middle is to be found inside it. */
@@ -314,14 +316,14 @@ const GUIDE_SPEED = 0.05;
  * The turning cards stand in one row along the front of the desk, nearest the child and clear of
  * the opened net's front flap; REMOVE PIN at the right end of that row.
  */
-const TURN_Z = 0.19;
+const TURN_Z = 0.22;
 const TURN_STEP = 0.1;
 const REMOVE_X = 0.29;
 /** The real thing may be anywhere this near the desk's middle. */
 const REAL_REACH = 1.0;
 /** The words over the desk, and the time and points under them. */
-const HEADER = new Vector3(0, 0.17, -0.45);
-const STATUS = new Vector3(0, 0.135, -0.45);
+const HEADER = new Vector3(0, 0.3, -0.32);
+const STATUS = new Vector3(0, 0.265, -0.32);
 /** The words breathe this much, once in this many seconds. */
 const PANEL_PULSE = 0.05;
 const PANEL_PULSE_S = 1.1;
@@ -480,6 +482,8 @@ export class MeasureDesk {
   /** The pin or corner each fingertip lights this frame, and the pin if it is one. */
   private touchLit: Record<Side, Vector3 | undefined> = { left: undefined, right: undefined };
   private touchPin: Record<Side, Pin | undefined> = { left: undefined, right: undefined };
+  /** Each hand's fingertip is at the paper this frame, its ray put away (see touchPins). */
+  private resting: Record<Side, boolean> = { left: false, right: false };
   private netAt = new Vector3();
   private touching: Record<Side, { since: number; at: Vector3; armed: boolean }> = {
     left: { since: -1, at: new Vector3(), armed: true },
@@ -1097,6 +1101,7 @@ export class MeasureDesk {
     for (const side of SIDES) {
       this.touchLit[side] = undefined;
       this.touchPin[side] = undefined;
+      this.resting[side] = false;
     }
     if (!this.handRay() || this.boardHeld || this.step !== 'measure') {
       for (const side of SIDES) setRayRest(side, false);
@@ -1142,7 +1147,8 @@ export class MeasureDesk {
       const off = spot ? h.tip.distanceTo(spot) : Infinity;
       this.touchLit[side] = spot;
       // Near the paper the finger touches: the ray from the hand would only be in the way.
-      setRayRest(side, !!spot || gap < TOUCH_LIGHT_M);
+      this.resting[side] = !!spot || gap < TOUCH_LIGHT_M;
+      setRayRest(side, this.resting[side]);
       const pressing = spot ? off <= reach || (gap <= TOUCH_AT_M && off <= reach + TOUCH_AT_M) : (!this.polygon() || this.nearSide(this.p3)) && gap <= TOUCH_AT_M && gap > -TOUCH_REARM_M;
       if (!pressing && off > reach + TOUCH_REARM_M - TOUCH_AT_M && gap > TOUCH_REARM_M - TOUCH_AT_M) t.armed = true;
       if (!t.armed || !pressing) {
@@ -1422,16 +1428,7 @@ export class MeasureDesk {
 
   /** Whether a hand's ray is put away because its fingertip is at the paper. */
   private rayResting(side: Side): boolean {
-    const h = this.hands.get(side);
-    return !!this.touchLit[side] || (h.tracked && this.roundPaper(h.tip) && h.tip.distanceTo(this.paperMiddle()) < this.paperReach());
-  }
-
-  private paperMiddle(): Vector3 {
-    return this.paper ? this.paper.spin.getWorldPosition(this.netAt) : this.netAt.set(0, 0, 0);
-  }
-
-  private paperReach(): number {
-    return this.paper ? this.paper.radius * this.paper.root.scale.x : 0;
+    return this.resting[side];
   }
 
   /**
@@ -1489,17 +1486,24 @@ export class MeasureDesk {
       label.mesh.visible = false;
       this.preview = { mesh, label };
     }
-    const side = this.selectedBy;
-    const through = this.pinAtRay(side, from);
     // Without an end to reach it is not shown: a thread not yet laid stands a metre tall at the middle.
-    // The line follows the hand while it points in or near the paper; its end rests on a corner it comes near.
+    // The line follows the hand: a fingertip near the paper (the hand that drew it, else the other), else
+    // the hand's or the controller's ray. It goes onto a corner or pin only right at one (PREVIEW_SNAP_M):
+    // on a real Quest a line that jumped to corners 9 cm off did not seem to follow the hand.
     let ended = true;
-    const lit = this.handRay() ? (this.touchLit[side] ?? this.touchLit[side === 'right' ? 'left' : 'right']) : undefined;
-    if (lit) this.v.copy(lit);
-    else if (through) through.mesh.getWorldPosition(this.v);
+    const other: Side = this.selectedBy === 'right' ? 'left' : 'right';
+    const near = (k: Side) => this.handRay() && this.rayResting(k) && this.hands.get(k).tracked;
+    const finger = near(this.selectedBy) ? this.selectedBy : near(other) ? other : undefined;
+    const side = finger ?? this.selectedBy;
+    const through = finger ? undefined : this.pinAtRay(side, from);
+    if (finger) {
+      this.v.copy(this.hands.get(finger).tip);
+      const lit = this.touchLit[finger];
+      if (lit && lit.distanceTo(this.v) < PREVIEW_SNAP_M) this.v.copy(lit);
+    } else if (through) through.mesh.getWorldPosition(this.v);
     else {
       ended = this.tip(side, false, this.v) && this.roundPaper(this.v);
-      if (ended && this.cornerNear(this.v, this.k2)) this.v.copy(this.k2);
+      if (ended && this.cornerNear(this.v, this.k2) && this.k2.distanceTo(this.v) < PREVIEW_SNAP_M) this.v.copy(this.k2);
     }
     this.preview.mesh.visible = ended;
     this.preview.label.mesh.visible = ended;
