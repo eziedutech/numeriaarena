@@ -71,6 +71,7 @@ export type MeasureChoice =
   | 'me_td'
   | 'me_net'
   | 'me_spin'
+  | 'me_remove'
   | 'me_sh_square'
   | 'me_sh_rectangle'
   | 'me_sh_triangle'
@@ -239,6 +240,8 @@ const TOUCH_PIN_M = 0.02;
 const TOUCH_HOLD_S = 0.12;
 const TOUCH_SLIDE_M = 0.015;
 const TOUCH_REARM_M = 0.03;
+/** A fingertip this near a corner (world metres) touches that corner, even just off the shape's faces. */
+const TOUCH_CORNER_M = 0.025;
 /** A thread let go this near its own pin is no thread. */
 const CANCEL_M = 0.02;
 /** A thread let go faster than this is thrown, and its pin goes. */
@@ -286,6 +289,23 @@ const OBJECT_MARGIN = 0.02;
 /** On a paper polygon a pin goes only this near a corner, and onto it; the foot of a triangle's height this near a side. */
 const CORNER_REACH_M = 0.06;
 const SIDE_REACH_M = 0.025;
+/**
+ * Hands are helped more than controllers (a real Quest showed a hand cannot hold a ray as still):
+ * a corner this near (paper frame) is the one meant, and a pointed spot this near one goes onto it.
+ */
+const CORNER_REACH_HAND_M = 0.09;
+const MAGNET_HAND_M = 0.045;
+/** The moving dashes from the chosen pin to the corners next to it: dash and gap (paper frame metres), speed (m/s). */
+const GUIDE_DASH = 0.012;
+const GUIDE_GAP = 0.012;
+const GUIDE_SPEED = 0.05;
+/**
+ * The turning cards stand in one row along the front of the desk, nearest the child and clear of
+ * the opened net's front flap; REMOVE PIN at the right end of that row.
+ */
+const TURN_Z = 0.19;
+const TURN_STEP = 0.1;
+const REMOVE_X = 0.29;
 /** The real thing may be anywhere this near the desk's middle. */
 const REAL_REACH = 1.0;
 /** The words over the desk, and the time and points under them. */
@@ -325,6 +345,7 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_td: 'arrowDown',
   me_net: 'box',
   me_spin: 'turnRight',
+  me_remove: 'trash',
   me_sh_square: 'square',
   me_sh_rectangle: 'rectangle',
   me_sh_triangle: 'triangle',
@@ -359,6 +380,10 @@ const threadGeo = new CylinderGeometry(0.0017, 0.0017, 1, 8).translate(0, 0.5, 0
 // A thread lying on flat paper would sink into it: it is lifted, and wins the paper's depth.
 const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const THREAD_LIFT = 0.004;
+/** A pin and its threads while REMOVE PIN is lit: what it takes away. */
+const removeMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6, emissive: 0x5a0000 });
+const guideGeo = new CylinderGeometry(0.0022, 0.0022, 1, 6).translate(0, 0.5, 0);
+const guideMat = new MeshBasicMaterial({ color: 0xffc940, transparent: true, opacity: 0.95, depthWrite: false });
 // The line a turning ball writes on itself.
 const trailMat = new MeshStandardMaterial({ color: 0xf28c28, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 /** TURN makes the ball turn once in this many seconds. */
@@ -464,8 +489,16 @@ export class MeasureDesk {
   /** The controller holding the board's magnifier down: the board is close while it does. */
   private boardHeld?: Side;
   /** A hand's tap waiting to be worked (its ray), and the pin chosen to start a thread from. */
-  private tapAim: Record<Side, { origin: Vector3; dir: Vector3 } | undefined> = { left: undefined, right: undefined };
+  /** A tap waiting to be worked: the ray it was aimed along, or (a fingertip on a pin or corner) the very spot. */
+  private tapAim: Record<Side, { origin: Vector3; dir: Vector3; at?: Vector3 } | undefined> = { left: undefined, right: undefined };
   private selected?: Pin;
+  /** The dashes that run along the edges from the chosen pin, made as needed and kept. */
+  private guide: Mesh[] = [];
+  private guideT = 0;
+  private g1 = new Vector3();
+  private g2 = new Vector3();
+  /** REMOVE PIN, while a pin is chosen. */
+  private removePinCard?: Entity;
   private selectedBy: Side = 'right';
   /** A ball's circumference being drawn, with the card that turns it. */
   private spin?: Spin;
@@ -718,7 +751,7 @@ export class MeasureDesk {
     }
     const o = this.offer;
     if (o.source === 'real') this.showMock(o.shape);
-    console.info(`[measure] task ${o.offer_id}: ${o.template_id} ${o.shape} ${o.task} (${o.source})`, o.size ?? {});
+    console.info(`[measure] task ${o.offer_id}: ${o.template_id} ${o.shape} ${o.task} (${o.source}) keys ${JSON.stringify(o.keys ?? [])}`, o.size ?? {});
     if (o.source === 'paper') {
       this.paper = paperObject(o.shape, o.size ?? {}, o.keys ?? []);
       this.paper.root.position.copy(OBJECT_AT);
@@ -739,15 +772,16 @@ export class MeasureDesk {
     sfx('unfold');
   }
 
-  /** The cards that turn a paper solid, standing as a cross: UP over the two turns, DOWN under them, NET below. */
+  /** The cards that turn a paper solid, in a row along the front of the desk: UP, LEFT, RIGHT, DOWN, NET. */
   private addTurnCards(): void {
     // A ball turns only sideways: the line round its middle is written that way.
     const ball = this.offer?.shape === 'sphere';
-    if (!ball) this.card('me_tu', this.t.turnUp, -0.36, -0.18, BLUE);
-    this.card('me_tl', this.t.turnLeft, ball ? -0.415 : -0.415, -0.1, TEAL);
-    this.card('me_tr', this.t.turnRight, -0.305, -0.1, TEAL);
-    if (!ball) this.card('me_td', this.t.turnDown, -0.36, -0.02, BLUE);
-    if (this.paper?.unfold) this.card('me_net', this.t.net, -0.36, 0.06, PURPLE);
+    const row: [MeasureChoice, string, number][] = [];
+    if (!ball) row.push(['me_tu', this.t.turnUp, BLUE]);
+    row.push(['me_tl', this.t.turnLeft, TEAL], ['me_tr', this.t.turnRight, TEAL]);
+    if (!ball) row.push(['me_td', this.t.turnDown, BLUE]);
+    if (this.paper?.unfold) row.push(['me_net', this.t.net, PURPLE]);
+    row.forEach(([choice, word, color], i) => this.card(choice, word, (i - (row.length - 1) / 2) * TURN_STEP, TURN_Z, color));
   }
 
   private steps(o: HuntOffer): string {
@@ -868,6 +902,16 @@ export class MeasureDesk {
       case 'me_start':
         if (this.step === 'how') void this.begin();
         return;
+      case 'me_remove':
+        if (this.step === 'measure' && this.selected) {
+          const pin = this.selected;
+          pin.mesh.getWorldPosition(this.t2);
+          this.removePin(pin);
+          sfx('pop', { at: this.t2 });
+          this.message = '';
+          this.showTask();
+        }
+        return;
       case 'me_clear':
         if (this.step !== 'measure') return;
         this.clearPins();
@@ -947,6 +991,7 @@ export class MeasureDesk {
     for (const side of SIDES) this.readTip(side, delta);
     this.magnify();
     this.workTaps();
+    this.paintGuide(delta);
     if (this.step === 'verdict') {
       this.verdictLeft -= delta;
       if (this.verdictLeft <= 0) this.nextTask();
@@ -967,6 +1012,7 @@ export class MeasureDesk {
       return;
     }
     this.paintPins();
+    this.syncRemoveCard();
     this.showPreview();
     this.updateBin(delta);
     this.touchPins();
@@ -1034,7 +1080,12 @@ export class MeasureDesk {
       const length = this.d3.length();
       if (length < 1e-3) continue;
       this.d3.divideScalar(length);
-      let gap = this.nearestPin(h.tip, TOUCH_PIN_M) ? 0 : Infinity;
+      // A pin, then a corner, right at the fingertip is the one touched: a finger on a corner is often just off its faces.
+      let target: Vector3 | undefined;
+      const pin = this.nearestPin(h.tip, TOUCH_PIN_M);
+      if (pin) target = pin.mesh.getWorldPosition(this.p3).clone();
+      else if (this.polygon() && this.cornerNear(h.tip, this.k2) && this.k2.distanceTo(h.tip) < TOUCH_CORNER_M) target = this.k2.clone();
+      let gap = target ? 0 : Infinity;
       if (gap > 0) {
         this.p3.copy(this.o3);
         if (this.aim(this.p3, this.d3)) gap = this.p3.distanceTo(this.o3) - length;
@@ -1060,7 +1111,7 @@ export class MeasureDesk {
       t.since = -1;
       t.armed = false;
       console.info(`[measure] ${side} fingertip taps the paper`);
-      this.tapAim[side] = { origin: this.o3.clone(), dir: this.d3.clone() };
+      this.tapAim[side] = { origin: this.o3.clone(), dir: this.d3.clone(), at: target };
     }
   }
 
@@ -1163,8 +1214,9 @@ export class MeasureDesk {
       this.o2.copy(tap.origin);
       this.d2.copy(tap.dir);
       // While the ball's line is drawn, the only tap is on the pin it began at, when the line is back.
+      const at = tap.at;
       if (this.spin) {
-        if (this.spin.stage === 'close' && this.pinOnRay(this.o2, this.d2) === this.spin.outer) this.finishSpin();
+        if (this.spin.stage === 'close' && (at ? this.nearestPin(at, TOUCH_PIN_M) : this.pinOnRay(this.o2, this.d2)) === this.spin.outer) this.finishSpin();
         continue;
       }
       const lit = this.active;
@@ -1180,13 +1232,16 @@ export class MeasureDesk {
       }
       // A ball's first pin sits in its middle, behind the spot the ray points at: it is not the one tapped.
       const inside = this.offer?.shape === 'sphere' && this.pins.length === 1 ? this.selected : undefined;
-      const pin = this.pinOnRay(this.o2, this.d2, inside);
+      let pin = at ? this.nearestPin(at, TOUCH_PIN_M, inside) : this.pinOnRay(this.o2, this.d2, inside);
+      // While a line runs, a pin on a corner not next to its start is not taken: the tap goes on to the corner meant.
+      if (pin && pin !== this.selected && !this.pinAllowed(pin)) pin = undefined;
       if (pin) {
         this.choosePin(pin, side);
         continue;
       }
       this.v.copy(this.o2);
-      if (!this.aim(this.v, this.d2)) {
+      if (at) this.v.copy(at);
+      else if (!this.aim(this.v, this.d2)) {
         console.info(`[measure] ${side} tap meets neither the paper nor the desk`);
         continue;
       }
@@ -1200,7 +1255,7 @@ export class MeasureDesk {
         continue;
       }
       if (!this.pinnable(this.v)) {
-        this.tell(this.t.farPin);
+        this.tell(this.lineCorner() >= 0 ? this.t.followEdge : this.t.farPin);
         continue;
       }
       const made = this.addPin(this.v);
@@ -1355,6 +1410,15 @@ export class MeasureDesk {
 
   /** The bin wakes over the pin a tip is near, stays while a tip is round it or on it, and goes a moment after. */
   private updateBin(delta: number): void {
+    // Replaced by the REMOVE PIN card (v0.4.4): on a real Quest the bin by each pin was hard to reach,
+    // and it did not show that a pin's threads go with it.
+    this.trash.visible = false;
+    this.active = undefined;
+    if (this.trash.visible) this.binNear(delta);
+  }
+
+  /** The old bin: wakes over the pin a tip is near (kept for a return of the bin, unused). */
+  private binNear(delta: number): void {
     let near: Pin | undefined;
     let keep = false;
     for (const side of SIDES) {
@@ -1695,21 +1759,23 @@ export class MeasureDesk {
   /**
    * A controller's pointed spot this near a corner of the paper object (or
    * its centre) is drawn onto it: a ray from the seat cannot be held as
-   * still as a fingertip. Hands are never helped, so their placing is theirs.
+   * still as a fingertip. A hand's ray is drawn from further (MAGNET_HAND_M).
    */
   private magnet(world: Vector3): void {
     const keys = this.offer?.keys;
     if (!this.paper || !keys || this.moving()) return;
     this.n.copy(world);
     this.paper.frame.worldToLocal(this.n);
+    const pull = this.handRay() ? MAGNET_HAND_M : MAGNET_M;
     if (this.netOpen()) {
-      const spot = this.nearestNet(this.n, MAGNET_M);
+      const spot = this.nearestNet(this.n, pull);
       if (spot) world.copy(this.paper.frame.localToWorld(this.n.copy(spot.net)));
       return;
     }
     let best = -1;
-    let bestD = MAGNET_M;
+    let bestD = pull;
     keys.forEach(([x, y, z], i) => {
+      if (!this.allowedCorner(i)) return;
       const d = Math.hypot(this.n.x - x / 100, this.n.y - y / 100, this.n.z - z / 100);
       if (d < bestD) {
         best = i;
@@ -1737,8 +1803,9 @@ export class MeasureDesk {
     this.paper.frame.worldToLocal(this.k1);
     // Opened flat, a box's corners are where its net has them, each one of the folded box's.
     if (this.moving()) return false;
+    const reach = this.handRay() ? CORNER_REACH_HAND_M : CORNER_REACH_M;
     if (this.netOpen()) {
-      const spot = this.nearestNet(this.k1, CORNER_REACH_M);
+      const spot = this.nearestNet(this.k1, reach);
       if (!spot) return false;
       this.hitCube = spot.cube;
       out.copy(spot.net);
@@ -1746,8 +1813,9 @@ export class MeasureDesk {
       return true;
     }
     let best = -1;
-    let bestD = CORNER_REACH_M;
+    let bestD = reach;
     keys.forEach(([x, y, z], i) => {
+      if (!this.allowedCorner(i)) return;
       const d = Math.hypot(this.k1.x - x / 100, this.k1.y - y / 100, this.k1.z - z / 100);
       if (d < bestD) {
         best = i;
@@ -1759,6 +1827,116 @@ export class MeasureDesk {
     out.set(x / 100, y / 100, z / 100);
     this.paper.frame.localToWorld(out);
     return true;
+  }
+
+  /** The corner of the paper object at a frame point (within half a centimetre), or -1. */
+  private cornerOf(local: Vector3): number {
+    const keys = this.offer?.keys ?? [];
+    return keys.findIndex(([x, y, z]) => Math.hypot(local.x - x / 100, local.y - y / 100, local.z - z / 100) < 0.005);
+  }
+
+  /** Two corners joined by a side of the shape (an edge of the box): all of a triangle's, those differing on one axis otherwise. */
+  private adjacent(i: number, j: number): boolean {
+    const keys = this.offer?.keys;
+    if (!keys || i === j || !keys[i] || !keys[j]) return false;
+    if (this.offer?.shape === 'triangle') return true;
+    let differ = 0;
+    for (let k = 0; k < 3; k += 1) if (Math.abs(keys[i][k] - keys[j][k]) > 0.05) differ += 1;
+    return differ === 1;
+  }
+
+  /** The corner the running line starts at, or -1: no line, its pin not on a corner, no polygon, or the net open. */
+  private lineCorner(): number {
+    if (!this.selected || !this.paper || !this.polygon() || this.netOpen() || this.moving()) return -1;
+    return this.cornerOf(this.selected.mesh.position);
+  }
+
+  /**
+   * While a line runs from a corner, only the corners next to it along a side take the next pin, so no
+   * thread cuts across the shape (on a real Quest a hand's line went to a diagonal corner unwanted).
+   */
+  private allowedCorner(i: number): boolean {
+    const from = this.lineCorner();
+    if (from < 0 || i === from) return true;
+    const keys = this.offer?.keys ?? [];
+    // A shape lying askew has no corners on one axis: then none is held back.
+    if (!keys.some((_, j) => this.adjacent(from, j))) return true;
+    return this.adjacent(from, i);
+  }
+
+  /** A pin may end the running line: it is on no corner (a triangle's height foot), or on one next to the line's start. */
+  private pinAllowed(pin: Pin): boolean {
+    const i = this.cornerOf(pin.mesh.position);
+    return i < 0 || this.allowedCorner(i);
+  }
+
+  /** Whether the chosen pin is already joined by a thread to the pin standing on corner `j`. */
+  private joinedTo(j: number): boolean {
+    const from = this.selected;
+    return this.threads.some((t) => (t.a === from && this.cornerOf(t.b.mesh.position) === j) || (t.b === from && this.cornerOf(t.a.mesh.position) === j));
+  }
+
+  /** Moving dashes run from the chosen pin along the sides to the corners next to it not yet joined to it: where the line can go. */
+  private paintGuide(delta: number): void {
+    this.guideT += delta;
+    let used = 0;
+    const from = this.step === 'measure' && !this.spin ? this.lineCorner() : -1;
+    const keys = this.offer?.keys;
+    const frame = this.paper?.frame;
+    if (from >= 0 && keys && frame && this.selected) {
+      const a = this.selected.mesh.position;
+      const period = GUIDE_DASH + GUIDE_GAP;
+      const phase = (this.guideT * GUIDE_SPEED) % period;
+      keys.forEach(([x, y, z], j) => {
+        if (!this.adjacent(from, j) || this.joinedTo(j)) return;
+        this.g1.set(x / 100, y / 100, z / 100).sub(a);
+        const length = this.g1.length();
+        if (length < 1e-4) return;
+        this.g1.divideScalar(length);
+        for (let s = phase - period; s < length; s += period) {
+          const lo = Math.max(0, s);
+          const hi = Math.min(length, s + GUIDE_DASH);
+          if (hi - lo < 1e-4) continue;
+          let dash = this.guide[used];
+          if (!dash) {
+            dash = new Mesh(guideGeo, guideMat);
+            dash.name = 'measure-guide';
+            dash.renderOrder = 5;
+            this.guide.push(dash);
+          }
+          if (dash.parent !== frame) frame.add(dash);
+          dash.visible = true;
+          dash.position.copy(a).addScaledVector(this.g1, lo);
+          dash.position.y += THREAD_LIFT;
+          dash.scale.set(1, hi - lo, 1);
+          dash.quaternion.setFromUnitVectors(UP, this.g2.copy(this.g1));
+          used += 1;
+        }
+      });
+    }
+    for (let i = used; i < this.guide.length; i += 1) this.guide[i].visible = false;
+  }
+
+  /** REMOVE PIN stands at the front while a pin is chosen; lit, the pin and its threads turn red: what it takes away. */
+  private syncRemoveCard(): void {
+    if (this.removePinCard && !this.removePinCard.active) this.removePinCard = undefined;
+    const want = this.step === 'measure' && !!this.selected && !this.spin;
+    if (want && !this.removePinCard) {
+      this.card('me_remove', this.t.removePin, REMOVE_X, TURN_Z, CORAL);
+      this.removePinCard = this.cards[this.cards.length - 1];
+    } else if (!want && this.removePinCard) {
+      const card = this.removePinCard;
+      this.removePinCard = undefined;
+      this.cards = this.cards.filter((c) => c !== card);
+      if (card.active) this.host.remove(card);
+    }
+    const lit = !!this.removePinCard?.object3D?.userData.hovered;
+    for (const th of this.threads) {
+      const doomed = lit && (th.a === this.selected || th.b === this.selected);
+      const m = doomed ? removeMat : threadMat;
+      if (th.mesh.material !== m) th.mesh.material = m;
+    }
+    if (lit && this.selected) this.selected.mesh.material = removeMat;
   }
 
   /** Whether a world point is close to a side of the paper triangle: where the foot of its height may go. */
@@ -2665,6 +2843,8 @@ export class MeasureDesk {
   }
 
   private clearShape(): void {
+    // The dashes stand in the paper's frame, which goes with it: they are kept for the next.
+    for (const m of this.guide) m.removeFromParent();
     this.clearPins();
     this.turns.clear();
     this.wheel = undefined;

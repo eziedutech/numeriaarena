@@ -117,6 +117,7 @@ const Games = {
   MeTurnDown: 'me_td',
   MeNet: 'me_net',
   MeSpin: 'me_spin',
+  MeRemove: 'me_remove',
   MeShSquare: 'me_sh_square',
   MeShRectangle: 'me_sh_rectangle',
   MeShTriangle: 'me_sh_triangle',
