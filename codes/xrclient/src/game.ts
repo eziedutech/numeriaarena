@@ -2279,6 +2279,7 @@ export class GameSystem extends createSystem({
       },
       emulated: emulatedHands,
       closed: (note) => this.closeTown(note),
+      onCard: (side) => this.handMenu?.onCard(side) ?? false,
     };
   }
 
@@ -3388,6 +3389,8 @@ export class GameSystem extends createSystem({
         },
       });
     }
+    // Fold Town's own buttons (its shelf's tabs, its toolbar, its cards) take the same fingertip.
+    if (this.phase === 'town') for (const t of this.town?.touchTargets() ?? []) out.push(t);
     const seat = this.world.scene.getObjectByName('dev-seat-card');
     const touch = seat?.userData.onTouch as (() => void) | undefined;
     if (seat?.visible && touch) out.push({ object: seat, press: touch, selfGrow: true });

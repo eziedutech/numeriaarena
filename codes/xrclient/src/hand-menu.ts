@@ -180,6 +180,11 @@ export class HandMenu {
     return true;
   }
 
+  /** Whether this hand's fingertip or dot is on a card now. */
+  onCard(side: Side): boolean {
+    return this.on && !!this.aim[side].target;
+  }
+
   /** Whether hands drive the menus this frame. */
   isActive(): boolean {
     return this.on;

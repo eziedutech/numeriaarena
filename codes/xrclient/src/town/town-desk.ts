@@ -111,6 +111,15 @@ export interface TownHost {
   emulated(): boolean;
   /** The town is done with; `note` is said on the menu. */
   closed(note?: string): void;
+  /** A hand's fingertip or ray is on one of the desk's cards (the town's buttons among them) now. */
+  onCard(side: Side): boolean;
+}
+
+/** One of the town's buttons, for the hands: touched with a fingertip, or pointed at and pinched from afar. */
+export interface TownTouch {
+  object: Object3D;
+  press: () => void;
+  selfGrow?: boolean;
 }
 
 const SIDES: readonly Side[] = ['right', 'left'];
@@ -342,6 +351,8 @@ export class TownDesk {
   private folding: { obj: Object3D; t: number; s: number }[] = [];
   private unlisten: () => void;
   private gone = false;
+  /** The shelf's tabs and page arrows, the toolbar and the cards' buttons: pressed by a fingertip as the menu's cards are. */
+  private touchable = new Set<Object3D>();
 
   private o = new Vector3();
   private d = new Vector3();
@@ -496,6 +507,7 @@ export class TownDesk {
       const tab = new Group();
       tab.name = `town-tab-${shelf}`;
       tab.userData.townTab = shelf;
+      this.touchable.add(tab);
       tab.position.set(col(i % SHELF_COLS), TAB_Y[Math.floor(i / SHELF_COLS)], -0.028);
       tab.add(new Mesh(tabGeo, slotMat));
       if (on) {
@@ -546,6 +558,7 @@ export class TownDesk {
         const b = new Group();
         b.name = `town-step-${step}`;
         b.userData.townStep = step;
+        this.touchable.add(b);
         b.position.set(step * 0.12, PAGER_Y, -0.02);
         b.add(new Mesh(stepGeo, slotMat));
         const l = new Label(step < 0 ? '<' : '>', { height: 0.032 });
@@ -865,6 +878,7 @@ export class TownDesk {
       const b = new ToolButton(icon, word, TOOL_W, TOOL_H, look, { alone: true, bare: true, theme: 'home', stroke: TOOL_STROKE });
       b.mesh.name = `${prefix}-${choice}`;
       b.mesh.userData.townOpt = choice;
+      this.touchable.add(b.mesh);
       b.mesh.position.set(-w / 2 + TOOL_W / 2 + i * (TOOL_W + TOOL_GAP), 0, 0.0015);
       // The shadow rides on its chip, so it dips with it and a ray on it still finds the chip.
       const shade = softShadow(TOOL_W, TOOL_H, TOOL_BLUR);
@@ -879,10 +893,11 @@ export class TownDesk {
   private dip(o: Object3D): void {
     if (o.userData.dipping) return;
     o.userData.dipping = true;
-    const was = o.scale.x;
-    o.scale.setScalar(was * 0.88);
+    // A card's cell is scaled to its width: each axis dips by itself.
+    const was = o.scale.clone();
+    o.scale.multiplyScalar(0.88);
     setTimeout(() => {
-      o.scale.setScalar(was);
+      o.scale.copy(was);
       o.userData.dipping = false;
     }, 120);
   }
@@ -1136,8 +1151,56 @@ export class TownDesk {
   }
 
   private onButton(side: Side): boolean {
+    if (this.host.onCard(side)) return true;
     for (let o = this.host.aimed(side); o; o = o.parent ?? undefined) if (o.name.startsWith('menu-')) return true;
     return false;
+  }
+
+  /**
+   * The town's own buttons, for the hands, by the game's one rule: near lights, a touch chooses (from
+   * afar a ray lights and a pinch chooses). Only those standing in the scene and shown. While the hands
+   * work them, IWSDK's ray leaves them alone, so a pinch never presses one twice.
+   */
+  touchTargets(): TownTouch[] {
+    const out: TownTouch[] = [];
+    for (const o of this.touchable) {
+      let shown = true;
+      let top: Object3D = o;
+      for (let p: Object3D | null = o; p; p = p.parent) {
+        if (!p.visible) shown = false;
+        top = p;
+      }
+      // Taken out of the town: forgotten.
+      if (top.type !== 'Scene') {
+        if (!o.parent) this.touchable.delete(o);
+        continue;
+      }
+      if (!shown) continue;
+      // Lit, it grows as the menu's cards do; a card's cell, drawn to its width by its scale, stays as it is.
+      const even = o.scale.x === o.scale.y && o.scale.y === o.scale.z;
+      out.push({ object: o, press: () => this.pressTouched(o), selfGrow: even });
+    }
+    return out;
+  }
+
+  /** A town button touched or pinched: as a ray and a pinch on it do (see pick). */
+  private pressTouched(o: Object3D): void {
+    if (this.gone) return;
+    const tab = o.userData.townTab as string | undefined;
+    if (tab) {
+      this.turnShelf(tab, 0);
+      return;
+    }
+    const step = o.userData.townStep as number | undefined;
+    if (step) {
+      this.turnShelf(this.shelfOn, this.shelfPage + step);
+      return;
+    }
+    const opt = o.userData.townOpt as TownChoice | undefined;
+    if (opt) {
+      this.dip(o);
+      this.press(opt);
+    }
   }
 
   /** Takes up what `side`'s ray is on: a shelf piece or a placed item; `grip` when the controller's grip took it. */
@@ -1498,6 +1561,7 @@ export class TownDesk {
       const cell = new Mesh(cellGeo, CELL_MATS[look]);
       cell.name = `town-card-${choice}`;
       cell.userData.townOpt = choice;
+      this.touchable.add(cell);
       cell.scale.set(cellW[i], CELL_H, 1);
       cell.position.set(x + cellW[i] / 2, CARD_PAD + CELL_H / 2, 0.0015);
       cell.renderOrder = 5;
