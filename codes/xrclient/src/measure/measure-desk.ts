@@ -2303,7 +2303,8 @@ export class MeasureDesk {
     label.set(`${Math.round(len * 100)} cm`);
     label.mesh.position.copy(a).add(b).multiplyScalar(0.5);
     label.mesh.position.y += 0.022;
-    label.mesh.scale.setScalar(this.paperZoom());
+    // A label's card is a plane drawn to its text's size by its scale: grown with pulse, never set outright.
+    label.pulse(this.paperZoom());
   }
 
   private clearPins(): void {
