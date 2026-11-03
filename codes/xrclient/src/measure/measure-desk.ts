@@ -18,7 +18,7 @@ import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
-import { fingertipOnCard, setRayRest } from '../hand-menu.js';
+import { fingertipOnCard, setRayReach, setRayRest } from '../hand-menu.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
 import { HuntCore, type HuntOffer, type HuntTask, type P3, type Reading, type Shape } from './measure-core.js';
@@ -247,6 +247,8 @@ const TOUCH_CORNER_M = 0.018;
 const TOUCH_LIGHT_M = 0.05;
 /** The running line's end goes onto a corner or pin this near it (world metres); elsewhere it is where the hand is. */
 const PREVIEW_SNAP_M = 0.025;
+/** While measuring, a hand's ray reaches this far (metres): far enough for the cards, too short to shoot across the desk. */
+const MEASURE_RAY_M = 0.4;
 /**
  * Opened, a box's net is laid at most this deep and this wide (world metres), turned to run across the
  * desk when that lets it be larger, its front this far before the desk's middle, clear of the turning
@@ -620,6 +622,8 @@ export class MeasureDesk {
     this.ghosts = { left: ghost(), right: ghost() };
     this.grade = host.grade();
     this.stopTaps = host.handTaps((side, origin, dir) => {
+      // While measuring, a hand works only near itself: a pinch shot from afar drops no pin (see touchPins).
+      if (this.step === 'measure') return;
       this.tapAim[side] = { origin: origin.clone(), dir: dir.clone() };
     });
     if (this.grade === undefined) this.showGrades();
@@ -1059,7 +1063,8 @@ export class MeasureDesk {
     const pointed = new Set<Pin>();
     for (const side of SIDES) {
       const pull = this.pulls.get(side);
-      const pin = this.pinAtRay(side, pull?.from);
+      // A hand lights only the pin at its fingertip (touchPin), never one along its ray.
+      const pin = this.handRay() ? undefined : this.pinAtRay(side, pull?.from);
       if (pin) pointed.add(pin);
       const touched = this.touchPin[side];
       if (touched) pointed.add(touched);
@@ -1103,6 +1108,8 @@ export class MeasureDesk {
       this.touchPin[side] = undefined;
       this.resting[side] = false;
     }
+    // While measuring, a hand's ray reaches only the cards round the desk, not across the room.
+    setRayReach(this.handRay() && this.step === 'measure' ? MEASURE_RAY_M : undefined);
     if (!this.handRay() || this.boardHeld || this.step !== 'measure') {
       for (const side of SIDES) setRayRest(side, false);
       return;
@@ -1426,7 +1433,7 @@ export class MeasureDesk {
     return (this.offer?.shape === 'sphere' ? BALL_SCALE : PAPER_SCALE) / paper.root.scale.x;
   }
 
-  /** Whether a hand's ray is put away because its fingertip is at the paper. */
+  /** Whether a hand's ray is put away because its fingertip is at the paper (kept for the ray's own rest). */
   private rayResting(side: Side): boolean {
     return this.resting[side];
   }
@@ -1492,11 +1499,15 @@ export class MeasureDesk {
     // on a real Quest a line that jumped to corners 9 cm off did not seem to follow the hand.
     let ended = true;
     const other: Side = this.selectedBy === 'right' ? 'left' : 'right';
-    const near = (k: Side) => this.handRay() && this.rayResting(k) && this.hands.get(k).tracked;
+    // A hand's line always ends at its fingertip, wherever the hand is (the drawing hand's, else the other's).
+    const near = (k: Side) => this.handRay() && this.hands.get(k).tracked;
     const finger = near(this.selectedBy) ? this.selectedBy : near(other) ? other : undefined;
     const side = finger ?? this.selectedBy;
-    const through = finger ? undefined : this.pinAtRay(side, from);
-    if (finger) {
+    if (this.handRay() && !finger) ended = false;
+    const through = finger || !ended ? undefined : this.pinAtRay(side, from);
+    if (!ended) {
+      // No tracked hand: no end to draw to.
+    } else if (finger) {
       this.v.copy(this.hands.get(finger).tip);
       const lit = this.touchLit[finger];
       if (lit && lit.distanceTo(this.v) < PREVIEW_SNAP_M) this.v.copy(lit);
@@ -2140,7 +2151,8 @@ export class MeasureDesk {
         ghost.scale.setScalar(0.9);
         return;
       }
-      if (this.handRay() && this.rayResting(side)) return;
+      // A hand shows a mark only at the corner or pin by its fingertip: where its ray points takes no pin.
+      if (this.handRay()) return;
       ghost.material = ghostMat;
       if (!this.tip(side, false, this.v)) return;
       const onPin = this.pinAtRay(side) !== undefined || this.nearestPin(this.v, GRAB_M) !== undefined;
@@ -3016,6 +3028,7 @@ export class MeasureDesk {
     this.restoreDesk();
     setRoom(this.room);
     for (const side of SIDES) setRayRest(side, false);
+    setRayReach(undefined);
   }
 }
 

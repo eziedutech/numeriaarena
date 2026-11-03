@@ -118,6 +118,14 @@ const onCard: Record<Side, boolean> = { left: false, right: false };
 /** Each hand's fingertip is at something it touches (Measure Hunt's paper): its ray is put away. */
 const resting: Record<Side, boolean> = { left: false, right: false };
 
+/** How far the hands' rays reach now (metres), when something limits them (Measure Hunt while measuring). */
+let reachNow: number | undefined;
+
+/** Limits how far the hands' rays reach and are drawn, or (undefined) lets them reach as far as ever. */
+export function setRayReach(m: number | undefined): void {
+  reachNow = m;
+}
+
 /** Puts a hand's ray away while its fingertip works near something it touches, or brings it back. */
 export function setRayRest(side: Side, on: boolean): void {
   resting[side] = on;
@@ -241,13 +249,13 @@ export class HandMenu {
         a.origin.copy(this.origin);
         a.aimDir.copy(this.rdir);
         this.raycaster.set(this.origin, this.rdir);
-        this.raycaster.far = REACH_M;
+        this.raycaster.far = reachNow ?? REACH_M;
         const found = this.raycaster.intersectObjects(objects, true).find((x) => x.object.visible);
         if (found) {
           a.point.copy(found.point);
           for (let o: Object3D | null = found.object; o && !target; o = o.parent) target = this.map.get(o);
         } else {
-          a.point.copy(this.origin).addScaledVector(this.rdir, DOT_M);
+          a.point.copy(this.origin).addScaledVector(this.rdir, Math.min(DOT_M, reachNow ?? DOT_M));
         }
       }
       hits.push(target);
