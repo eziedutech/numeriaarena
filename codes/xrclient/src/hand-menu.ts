@@ -52,8 +52,11 @@ const ORDER: readonly Side[] = ['right', 'left'];
 
 /** The fingertip this near a card (metres, from its surface) lights it and puts the ray away. */
 const NEAR_M = 0.07;
-/** The fingertip this near, or inside, presses it. */
-const PRESS_M = 0.012;
+/**
+ * The fingertip this near, or inside, presses it: a touch, not a hover. (1.2 cm pressed cards a
+ * finger was only coming near on a real Quest; near lights, a touch chooses, everywhere in the game.)
+ */
+const PRESS_M = 0.006;
 /** After a press the fingertip must come this far back out before it presses again. */
 const REARM_M = 0.035;
 /** Thumb and index tip this close are closing on a pinch: the card aimed at is kept from here. */
@@ -111,6 +114,14 @@ interface Aim {
 
 /** Each hand's fingertip is on a card this frame (at or in it): read by the desk, which must not take a card for the table. */
 const onCard: Record<Side, boolean> = { left: false, right: false };
+
+/** Each hand's fingertip is at something it touches (Measure Hunt's paper): its ray is put away. */
+const resting: Record<Side, boolean> = { left: false, right: false };
+
+/** Puts a hand's ray away while its fingertip works near something it touches, or brings it back. */
+export function setRayRest(side: Side, on: boolean): void {
+  resting[side] = on;
+}
 
 /** Whether this hand's fingertip is on one of the desk's cards (or balloons) now. */
 export function fingertipOnCard(side: Side): boolean {
@@ -214,7 +225,7 @@ export class HandMenu {
       const h = this.hands.get(side);
       if (a.cooldown > 0) a.cooldown -= delta;
       this.touch(side, a, h.tracked ? h.tip : undefined, targets);
-      const up = h.tracked && !a.near;
+      const up = h.tracked && !a.near && !resting[side];
       if (up !== a.up) console.info(`[hand-menu] ${side} ray ${up ? 'up' : 'down'}${a.near ? ' (fingertip at a card)' : ''}`);
       a.up = up;
       let target: MenuTarget | undefined = a.near;
@@ -349,7 +360,7 @@ export class HandMenu {
     // An untracked hand counts as shut, so one that is found already pinching presses nothing.
     a.shut = !h.tracked || (was ? gap < PINCH_OPEN_M : gap < PINCH_SHUT_M);
     const pinched = (a.shut && !was) || this.host.select(side);
-    if (!pinched || a.near || !h.tracked || a.cooldown > 0 || this.host.holding(side)) return;
+    if (!pinched || a.near || resting[side] || !h.tracked || a.cooldown > 0 || this.host.holding(side)) return;
     a.cooldown = PRESS_COOLDOWN_S;
     const target = a.dim ? undefined : a.lastTarget;
     console.info(`[hand-menu] ${side} pinch on ${target ? (target.object.name || 'a card') : 'nothing'}`);
