@@ -5,6 +5,7 @@ export default [
   index("routes/home.tsx"),
   route("about", "routes/about.tsx"),
   route("how-to-play", "routes/how-to-play.tsx"),
+  route("in-schools", "routes/in-schools.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("data-deletion", "routes/data-deletion.tsx"),
   route("credits", "routes/credits.tsx"),

@@ -55,11 +55,14 @@ export function PaperPage({
   setLang,
   title,
   children,
+  updated = UPDATED,
 }: {
   lang: Lang;
   setLang: (l: Lang) => void;
   title: string;
   children: ReactNode;
+  /** A page kept apart from the legal ones has its own date. */
+  updated?: { en: string; id: string };
 }) {
   return (
     <main className="paper-page">
@@ -83,12 +86,13 @@ export function PaperPage({
       </nav>
       <article className="paper-sheet">
         <h1>{title}</h1>
-        <p className="updated">{UPDATED[lang]}</p>
+        <p className="updated">{updated[lang]}</p>
         {children}
       </article>
       <footer className="paper-foot">
         <a href="/about">{lang === "id" ? "Tentang" : "About"}</a>
         <a href="/how-to-play">{lang === "id" ? "Cara bermain" : "How to play"}</a>
+        <a href="/in-schools">{lang === "id" ? "Di sekolah" : "In schools"}</a>
         <a href="/privacy">{lang === "id" ? "Privasi" : "Privacy"}</a>
         <a href="/terms">{lang === "id" ? "Syarat penggunaan" : "Terms of use"}</a>
         <a href="/data-deletion">{lang === "id" ? "Penghapusan data" : "Data deletion"}</a>
