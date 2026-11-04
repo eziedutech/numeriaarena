@@ -1,4 +1,4 @@
-import { Box3, CylinderGeometry, Matrix4, Mesh, MeshBasicMaterial, Raycaster, SphereGeometry, Vector3, type Object3D } from '@iwsdk/core';
+import { Box3, CylinderGeometry, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Raycaster, SphereGeometry, Vector3, type Object3D } from '@iwsdk/core';
 import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 
 /**
@@ -74,6 +74,20 @@ const REARM_M = 0.035;
 const PINCH_SHUT_M = 0.022;
 const PINCH_OPEN_M = 0.035;
 const PRESS_COOLDOWN_S = 0.3;
+/**
+ * A card that has just come up takes no fingertip for this long (seconds): the answers that come up
+ * when the last pin of Measure Hunt is joined are where the hand passes on its way back.
+ */
+const NEW_WAIT_S = 0.6;
+/**
+ * A fingertip presses a card only moving into it through its face: over the last PUSH_S its way
+ * runs into the face at least PUSH_SHARE of how far it went, and at least PUSH_MIN_M. A hand drawn
+ * back across a card lying nearly flat (going along its face) presses nothing.
+ */
+const PUSH_S = 0.2;
+const PUSH_SHARE = 0.5;
+const PUSH_MIN_M = 0.003;
+const TIP_N = 32;
 const REACH_M = 1.2;
 /** A card the dot has left stays lit this long (seconds). */
 const HOLD_S = 0.2;
@@ -117,6 +131,9 @@ interface Aim {
   nearD: number;
   /** The fingertip has come out since its last press. */
   armed: boolean;
+  /** The fingertip's last moments, newest at `tipHead`. */
+  tips: { t: number; at: Vector3 }[];
+  tipHead: number;
   /** The card the dot is on after the right hand took precedence. */
   target?: MenuTarget;
   dim: boolean;
@@ -189,6 +206,12 @@ export class HandMenu {
   private rel = new Matrix4();
   private part = new Box3();
   private map = new Map<Object3D, MenuTarget>();
+  /** When each card now up came up (seconds), and the cards up last frame. */
+  private upSince = new Map<Object3D, number>();
+  private wasUp = new Set<Object3D>();
+  private move = new Vector3();
+  private axis = new Vector3();
+  private quat = new Quaternion();
 
   constructor(private host: HandMenuHost) {
     this.hands = new Hands(() => host.adapters());
@@ -200,7 +223,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, shut: false, nearD: Infinity, armed: true, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, shut: false, nearD: Infinity, armed: true, tips: Array.from({ length: TIP_N }, () => ({ t: -Infinity, at: new Vector3() })), tipHead: 0, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -260,6 +283,12 @@ export class HandMenu {
     }
     this.hands.update(delta);
     this.map.clear();
+    this.wasUp.clear();
+    for (const t of targets) {
+      if (!this.upSince.has(t.object)) this.upSince.set(t.object, this.now);
+      this.wasUp.add(t.object);
+    }
+    for (const o of this.upSince.keys()) if (!this.wasUp.has(o)) this.upSince.delete(o);
     const objects: Object3D[] = [];
     for (const t of targets) {
       this.map.set(t.object, t);
@@ -345,6 +374,9 @@ export class HandMenu {
       a.armed = true;
       return;
     }
+    a.tipHead = (a.tipHead + 1) % TIP_N;
+    a.tips[a.tipHead].t = this.now;
+    a.tips[a.tipHead].at.copy(tip);
     for (const t of targets) {
       const d = t.distance ? t.distance(tip) : this.distance(t.object, tip);
       if (d < a.nearD) {
@@ -356,6 +388,13 @@ export class HandMenu {
     if (a.nearD > NEAR_M) a.near = undefined;
     if (a.nearD > REARM_M) a.armed = true;
     if (!a.near || !a.armed || a.cooldown > 0 || a.nearD > PRESS_M) return;
+    if (this.now - (this.upSince.get(a.near.object) ?? -Infinity) < NEW_WAIT_S) return;
+    if (!a.near.distance && !this.pushedInto(a, a.near.object, tip)) {
+      // Slid onto it: it waits for the fingertip to come out and in again.
+      a.armed = false;
+      console.info(`[hand-menu] ${side} fingertip slid onto ${a.near.object.name || 'a card'}: not pressed`);
+      return;
+    }
     a.armed = false;
     a.cooldown = PRESS_COOLDOWN_S;
     console.info(`[hand-menu] ${side} fingertip presses ${a.near.object.name || 'a card'}`);
@@ -409,6 +448,31 @@ export class HandMenu {
     a.lastTarget = take.target ? this.map.get(take.target.object) : undefined;
     a.lockO.copy(take.origin);
     a.lockD.copy(take.dir);
+  }
+
+  /** Whether the fingertip came into the card through its face (along its thin side), not across it. */
+  private pushedInto(a: Aim, obj: Object3D, tip: Vector3): boolean {
+    const box = this.boxOf(obj);
+    if (!box) return true;
+    let old: Vector3 | undefined;
+    for (let i = 1; i < TIP_N; i += 1) {
+      const q = a.tips[(a.tipHead - i + TIP_N) % TIP_N];
+      if (q.t === -Infinity) break;
+      old = q.at;
+      if (this.now - q.t >= PUSH_S) break;
+    }
+    if (!old) return true;
+    this.move.copy(tip).sub(old);
+    const went = this.move.length();
+    if (went < PUSH_MIN_M) return false;
+    box.getSize(this.part.min);
+    const z = this.part.min;
+    const thin = z.x <= z.y && z.x <= z.z ? 0 : z.y <= z.z ? 1 : 2;
+    this.axis.set(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0).applyQuaternion(obj.getWorldQuaternion(this.quat));
+    // A card's face looks along its +Z (a plane's front): it is pushed from there, into it. A hand
+    // drawn back toward the player through a card that leans back goes through it from behind.
+    const into = thin === 2 ? -this.move.dot(this.axis) : Math.abs(this.move.dot(this.axis));
+    return into >= PUSH_SHARE * went;
   }
 
   /** How far a point is from a card's paper (metres), zero inside it. */
