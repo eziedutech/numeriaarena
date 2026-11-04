@@ -247,6 +247,8 @@ const TOUCH_CORNER_M = 0.018;
 const TOUCH_LIGHT_M = 0.05;
 /** The running line's end goes onto a corner or pin this near it (world metres); elsewhere it is where the hand is. */
 const PREVIEW_SNAP_M = 0.025;
+/** Two sides this near square (cos of about 87 degrees) meet at a right triangle's square corner. */
+const RIGHT_COS = 0.05;
 /** While measuring, a hand's ray reaches this far (metres): far enough for the cards, too short to shoot across the desk. */
 const MEASURE_RAY_M = 0.4;
 /**
@@ -2378,8 +2380,23 @@ export class MeasureDesk {
     const o = this.offer;
     if (!o) return undefined;
     const n = this.maxPins();
-    if (this.pins.length !== n) return undefined;
     const near = (p: Pin) => this.threads.filter((t) => t.a === p || t.b === p).map((t) => (t.a === p ? t.b : t.a));
+    // A right triangle's area: its two sides at the square corner are its base and height, so the three
+    // sides are enough; the height's foot is that corner itself (decided with Zia, 4 Nov 2026).
+    if (o.shape === 'triangle' && o.task === 'area' && this.pins.length === 3 && this.threads.length === 3) {
+      if (this.pins.some((p) => near(p).length !== 2)) return undefined;
+      const square = this.pins.find((p) => {
+        const [a, b] = near(p);
+        this.u.copy(this.at(a)).sub(this.at(p));
+        this.w.copy(this.at(b)).sub(this.at(p));
+        const l = this.u.length() * this.w.length();
+        return l > 0 && Math.abs(this.u.dot(this.w)) / l < RIGHT_COS;
+      });
+      if (!square) return undefined;
+      const [a, b] = near(square);
+      return [square, a, b, square];
+    }
+    if (this.pins.length !== n) return undefined;
     const loop = (ring: Pin[]): Pin[] | undefined => {
       const out = [ring[0]];
       let prev: Pin | undefined;
@@ -2546,6 +2563,7 @@ export class MeasureDesk {
       console.info(`[measure] waiting: ${this.pins.length} pins, ${this.threads.length} threads`);
       // A triangle's three sides are joined for its area: what is still wanted is said, not left to guess.
       if (o.shape === 'triangle' && o.task === 'area' && this.pins.length === 3 && this.threads.length === 3) {
+        // (A right triangle never waits here: its legs are base and height, see order.)
         this.message = this.t.heightNext;
         this.messageInk = '#3469c4';
         this.showTask();

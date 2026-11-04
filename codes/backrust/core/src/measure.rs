@@ -1382,6 +1382,30 @@ mod tests {
     }
 
     #[test]
+    fn a_right_triangle_takes_a_leg_as_its_height() {
+        let mut h = hunt(Some(5));
+        let id = task_id(&h, Shape::Triangle, Task::Area);
+        let offer = h.next(&id, false, Source::Paper, 0.0).expect("offer");
+        let k = offer.keys.clone();
+        assert!(k.len() >= 3);
+        // The corner whose two sides meet square.
+        let square = (0..3)
+            .find(|&i| {
+                let (p, q, r) = (k[i], k[(i + 1) % 3], k[(i + 2) % 3]);
+                dot(sub(q, p), sub(r, p)).abs() < 1e-6
+            })
+            .expect("a right triangle");
+        let legs: Vec<f64> = (1..3).map(|j| dist(k[square], k[(square + j) % 3])).collect();
+        // The height's foot on the square corner itself: the other leg is the height.
+        let mut points = k[..3].to_vec();
+        points.push(k[square]);
+        let r = h.measure(offer.offer_id, &Pins { points }).expect("reading");
+        assert!(r.ok, "{:?}", r.problem);
+        let area = format!("{}", (legs[0] * legs[1] / 2.0).round() as u64);
+        assert!(r.choices.contains(&area), "{area} {:?}", r.choices);
+    }
+
+    #[test]
     fn a_paper_box_is_measured_from_one_corner() {
         let mut h = hunt(Some(5));
         let id = task_id(&h, Shape::Cuboid, Task::Volume);
