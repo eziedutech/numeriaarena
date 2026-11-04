@@ -162,7 +162,8 @@ function English() {
       <p className="lead">
         Numeria Arena is a maths game for primary school, grade 4 to 6. In a Meta Quest headset, a pop-up book opens on
         the student's real desk and paper animals walk out of it carrying questions. On a laptop, a tablet or a classroom
-        smartboard, the same games play in the browser.
+        smartboard, the same games play in the browser. It is made for those grades, and older students can use it too,
+        to practise and review the basics.
       </p>
       <Shot
         src="about-desk.webp"
@@ -254,7 +255,8 @@ function Indonesian() {
       <p className="lead">
         Numeria Arena adalah game matematika untuk sekolah dasar, kelas 4 sampai 6. Di headset Meta Quest, sebuah buku
         pop-up terbuka di meja nyata siswa dan hewan-hewan kertas keluar darinya membawa soal. Di laptop, tablet, atau
-        smartboard kelas, game yang sama berjalan di browser.
+        smartboard kelas, game yang sama berjalan di browser. Game ini dibuat untuk kelas-kelas itu, dan siswa yang lebih
+        besar juga dapat memakainya untuk berlatih dan mengulang dasar.
       </p>
       <Shot
         src="about-desk.webp"

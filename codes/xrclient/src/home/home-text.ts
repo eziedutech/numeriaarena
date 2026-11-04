@@ -57,13 +57,14 @@ const EN = {
   town: ['MY FOLD TOWN', 'Build your town with the Folds you earn'],
   board: ['LEADERBOARD', 'My class and the world'],
   soon: 'SOON',
-  footer: ['How to play', 'For parents', 'Privacy', 'Terms of use', 'Credits and licenses', 'About'],
+  footer: ['How to play', 'For parents', 'Privacy', 'Terms of use', 'Credits and licenses', 'In schools', 'About'],
   fullPolicy: 'Read the full privacy policy and how to delete data',
   /** Where each footer page goes on for longer, on the site. */
   more: {
     'How to play': 'Read the full guide',
     'Terms of use': 'Read the full terms of use',
     'Credits and licenses': 'See every credit and license',
+    'In schools': 'See the sessions in schools',
     About: 'Read more about Numeria Arena',
   } as Record<string, string>,
   close: 'CLOSE',
@@ -212,8 +213,10 @@ const EN = {
       "Numeria Arena is free to play, with or without an account. Play fairly, with your own class card only. Teachers and organisers agree to the terms to make classes and look after their students' cards and names. It may not be used officially on behalf of a school or other institution without the developer's written permission.",
     'Credits and licenses':
       'Built with the Immersive Web SDK (MIT) and three.js (MIT); the smartboard camera reads hands with MediaPipe (Apache 2.0). Paper animals, letters and pictures are made by the project owner. The background music was made by the project owner with an AI music tool. Every third-party part is listed with its license in the source repository.',
+    'In schools':
+      'Numeria Arena is being tried in schools on Meta Quest headsets. No child account is made or used: the headsets are signed in to the developer\'s own adult account, and every student plays seated with the developer and a teacher beside them. The site lists each session.',
     About:
-      'Numeria Arena makes primary school maths effective, modern and fun. In the headset a pop-up book opens on your real desk and paper animals bring you questions; on a screen or a smartboard the same games play in the browser. It joins interactive lessons, fair races and a paper town you build with every answer. Its measuring game, Cari & Ukur, exists only in the headset: it assesses the way a child solves a problem on the real desk, not only the answer.',
+      'Numeria Arena makes primary school maths effective, modern and fun. In the headset a pop-up book opens on your real desk and paper animals bring you questions; on a screen or a smartboard the same games play in the browser. It joins interactive lessons, fair races and a paper town you build with every answer. Its measuring game, Cari & Ukur, exists only in the headset: it assesses the way a child solves a problem on the real desk, not only the answer. It is made for grades 4 to 6, and older students can use it too, to practise and review the basics.',
   },
 };
 
@@ -266,12 +269,13 @@ const ID: typeof EN = {
   town: ['KOTA LIPATKU', 'Bangun kotamu dengan Folds yang kamu dapat'],
   board: ['PAPAN PERINGKAT', 'Kelasku dan seluruh dunia'],
   soon: 'SEGERA',
-  footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Syarat penggunaan', 'Kredit dan lisensi', 'Tentang'],
+  footer: ['Cara bermain', 'Untuk orang tua', 'Privasi', 'Syarat penggunaan', 'Kredit dan lisensi', 'Di sekolah', 'Tentang'],
   fullPolicy: 'Baca kebijakan privasi lengkap dan cara menghapus data',
   more: {
     'How to play': 'Baca panduan lengkap',
     'Terms of use': 'Baca syarat penggunaan lengkap',
     'Credits and licenses': 'Lihat semua kredit dan lisensi',
+    'In schools': 'Lihat sesi di sekolah',
     About: 'Baca selengkapnya tentang Numeria Arena',
   } as Record<string, string>,
   close: 'TUTUP',
@@ -419,8 +423,10 @@ const ID: typeof EN = {
       'Numeria Arena gratis dimainkan, dengan atau tanpa akun. Bermainlah dengan jujur, hanya dengan kartu kelasmu sendiri. Guru dan penyelenggara menyetujui syarat ini untuk membuat kelas dan menjaga kartu serta nama siswanya. Game ini tidak boleh dipakai secara resmi atas nama sekolah atau lembaga lain tanpa izin tertulis dari pengembang.',
     'Credits and licenses':
       'Dibangun dengan Immersive Web SDK (MIT) dan three.js (MIT); kamera smartboard membaca tangan dengan MediaPipe (Apache 2.0). Hewan kertas, huruf, dan gambar dibuat oleh pemilik proyek. Musik latarnya dibuat oleh pemilik proyek dengan alat musik AI. Setiap bagian pihak ketiga tercatat bersama lisensinya di repositori sumber.',
+    'In schools':
+      'Numeria Arena sedang dicoba di sekolah dengan headset Meta Quest. Tidak ada akun anak yang dibuat atau dipakai: headset masuk dengan akun dewasa milik pengembang, dan setiap siswa bermain sambil duduk didampingi pengembang dan guru. Situs mencatat setiap sesinya.',
     About:
-      'Numeria Arena membuat matematika sekolah dasar efektif, modern, dan menyenangkan. Di headset, buku pop-up terbuka di meja nyatamu dan hewan kertas membawakan soal; di layar atau smartboard, game yang sama berjalan di browser. Numeria Arena memadukan pelajaran interaktif, lomba yang jujur, dan kota kertas yang kamu bangun dari setiap jawaban.',
+      'Numeria Arena membuat matematika sekolah dasar efektif, modern, dan menyenangkan. Di headset, buku pop-up terbuka di meja nyatamu dan hewan kertas membawakan soal; di layar atau smartboard, game yang sama berjalan di browser. Numeria Arena memadukan pelajaran interaktif, lomba yang jujur, dan kota kertas yang kamu bangun dari setiap jawaban. Game ini dibuat untuk kelas 4 sampai 6, dan siswa yang lebih besar juga dapat memakainya untuk berlatih dan mengulang dasar.',
   },
 };
 

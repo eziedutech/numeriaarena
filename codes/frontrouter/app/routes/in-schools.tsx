@@ -65,8 +65,12 @@ function English() {
   return (
     <>
       <p>
-        Numeria Arena is being tried in schools, with students playing on Meta Quest headsets while the developer and
-        their teacher watch. This page lists those sessions and how each one is run.
+        Numeria Arena is a maths game for primary school, grades 4 to 6. It is made for those grades, and older students
+        can use it too, to practise and review the basics.
+      </p>
+      <p>
+        It is being tried in schools, with students playing on Meta Quest headsets while the developer and their teacher
+        watch. This page lists those sessions and how each one is run.
       </p>
 
       <h2>How a session is run</h2>
@@ -107,6 +111,10 @@ function Indonesian() {
   const mail = <a href={`mailto:${CONTACT}`}>{CONTACT}</a>;
   return (
     <>
+      <p>
+        Numeria Arena adalah game matematika untuk sekolah dasar, kelas 4 sampai 6. Game ini dibuat untuk kelas-kelas
+        itu, dan siswa yang lebih besar juga dapat memakainya untuk berlatih dan mengulang dasar.
+      </p>
       <p>
         Numeria Arena sedang dicoba di sekolah: siswa bermain dengan headset Meta Quest sambil didampingi pengembang dan
         gurunya. Halaman ini mencatat sesi-sesi itu dan cara setiap sesi dijalankan.

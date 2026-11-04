@@ -275,7 +275,7 @@ body.home-open button[class*="xr" i], body.home-open #VRButton, body.home-open #
 #home.phone .townlabel { left: 20px; top: 134px; }
 #home.phone .town.board { left: 390px; right: auto; top: 340px; }
 #home.phone .town.board .townlabel { left: 20px; right: auto; }
-#home.phone .footer { bottom: 14px; }
+#home.phone .footer { bottom: 14px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 32px); }
 #home.phone > .veil { position: fixed; inset: 0; padding: 8px; box-sizing: border-box; overflow-y: auto; display: flex; z-index: 6; }
 #home.phone > .veil > .pop { margin: auto; }
 #home-games { position: fixed; top: 16px; z-index: 5; padding: 10px 16px; border: 0; cursor: pointer;
@@ -754,6 +754,7 @@ export class Home {
         Privacy: '/privacy',
         'Terms of use': '/terms',
         'Credits and licenses': '/credits',
+        'In schools': '/in-schools',
         About: '/about',
       };
       const more = { href: pages[keys[i]], label: t.more[keys[i]] ?? t.fullPolicy };
