@@ -478,8 +478,12 @@ export class HandMenu {
     // In it: a poke, if it came from in front of it just now, moving itself, over the card.
     const ready = a.poke;
     a.poke = undefined;
-    if (!ready || !f.over || this.now - ready.at > READY_S || a.cooldown > 0) return;
-    if (tip.distanceTo(ready.tip) < READY_M + POKE_M - 0.002) return;
+    if (!ready || !f.over || a.cooldown > 0) return;
+    // A balloon, weight, gate or plank moves: one drifting onto a still finger is no poke, so the finger
+    // must have come in itself, just now. A card stands still, and a finger resting at its face before
+    // pushing in, as one does with nothing to feel there, was over READY_S and never went green (Zia,
+    // 4 Nov 2026): a card takes it however slowly it comes.
+    if (t.distance && (this.now - ready.at > READY_S || tip.distanceTo(ready.tip) < READY_M + POKE_M - 0.002)) return;
     if (this.now - (this.upSince.get(t.object) ?? -Infinity) < NEW_WAIT_S) return;
     a.poke = ready;
     ready.down = true;
