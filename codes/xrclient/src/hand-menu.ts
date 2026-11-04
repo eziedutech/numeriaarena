@@ -73,7 +73,11 @@ const NEAR_M = 0.07;
  * from behind or across it, it presses nothing. The tip must have moved itself, so a balloon that
  * drifts onto a still finger is not poked. Only the index fingertip counts, of either hand.
  */
-const READY_M = 0.012;
+/**
+ * 4 mm, not 12 (v0.4.19): a finger coming at a card from the side, as at HOME and QUIT at the far
+ * right, was in front of its face only just before going in, and was never ready (Zia, 4 Nov 2026).
+ */
+const READY_M = 0.004;
 const POKE_M = 0.005;
 /**
  * All these are measured from the finger's skin, not from its tip joint: the headset puts the
@@ -444,7 +448,7 @@ export class HandMenu {
       return;
     }
     const t = a.near;
-    const f = this.faceOf(t, tip, a.poke?.down ? a.poke.way : undefined);
+    const f = this.faceOf(t, tip, a.poke?.way);
     f.depth -= FINGER_R;
     onCard[side] = f.over && f.depth <= ON_CARD_M;
     if (a.poke && a.poke.obj !== t.object) this.endPoke(side, a, 'the fingertip went to another');
@@ -475,7 +479,7 @@ export class HandMenu {
     const ready = a.poke;
     a.poke = undefined;
     if (!ready || !f.over || this.now - ready.at > READY_S || a.cooldown > 0) return;
-    if (tip.distanceTo(ready.tip) < READY_M + POKE_M - 0.004) return;
+    if (tip.distanceTo(ready.tip) < READY_M + POKE_M - 0.002) return;
     if (this.now - (this.upSince.get(t.object) ?? -Infinity) < NEW_WAIT_S) return;
     a.poke = ready;
     ready.down = true;

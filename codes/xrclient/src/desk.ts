@@ -4,6 +4,7 @@ import {
   CanvasTexture,
   createSystem,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -20,6 +21,7 @@ import { makeBook, makeStar } from './art/models.js';
 import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
 import { Hands, type HandAdapters, type Side } from './measure/hands.js';
+import { FLAT_JOINTS, notFlat, type P3 } from './flat-hand.js';
 import { T } from './text.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
@@ -64,6 +66,23 @@ const TOUCH_DROP_MIN_M = 0.12;
 const TOUCH_AHEAD_M = 0.3;
 /** One press of HIGHER or LOWER on the desk menu moves the book this much (metres). */
 export const DESK_STEP_M = 0.01;
+
+/**
+ * The book goes where a hand is laid flat, all four fingers straight ahead, and held still (Zia,
+ * 4 Nov 2026: "the hand decides"). Space Setup's table, a fingertip resting and a pinch all put it
+ * at heights the player could not see coming, under or over the real table. With both hands flat,
+ * it goes between them.
+ */
+const FLAT_HOLD_S = 1;
+/** Still: the hands' middle moves less than this (metres) while held. */
+const FLAT_STILL_M = 0.02;
+/** The flat hand must be at least this far in front of the eyes (metres): held out, not in the lap. */
+const FLAT_AHEAD_M = 0.2;
+/** The desk top goes this far under the lowest fingertip joint (metres): the finger's pad is below it. */
+const FLAT_PAD_M = 0.007;
+/** With no flat hand this long (seconds), the book is put in front of the player at a guessed height. */
+const FLAT_WAIT_S = 25;
+const JOINT_M = new Matrix4();
 
 /** After PLACE AGAIN, no fingertip is read this long (seconds): the pressing finger is still there. */
 const AGAIN_WAIT_S = 1;
@@ -224,8 +243,15 @@ export class DeskSystem extends createSystem({
   private skipTable = false;
   /** How the book was last put down (DeskRoot's method), told under Ready!. */
   private method = 0;
-  /** No fingertip is read before this (clock seconds): the finger that pressed PLACE AGAIN must come down anew. */
+  /** No hand is read before this (clock seconds): the finger that pressed PLACE AGAIN is still out. */
   private touchFrom = 0;
+  /** The flat hands' middle while held, and since when (clock seconds; -1 when none). */
+  private flatAt = new Vector3();
+  private flatSince = -1;
+  private flatLow = 0;
+  private flatNow = new Vector3();
+  private joints = new Map<string, [number, number, number]>();
+  private jointV = new Vector3();
   /** The table's height a fingertip is holding still on now, before it is taken; NaN when none. */
   private touching = NaN;
   /** Each hand's fingertip: where it holds still and since when, and the highest it was lately. */
@@ -450,56 +476,71 @@ export class DeskSystem extends createSystem({
     return false;
   }
 
+  /** A hand's joints this frame, by name, in the world; false when it is not tracked. */
+  private readJoints(side: Side): boolean {
+    this.joints.clear();
+    const a = (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand?.[side];
+    const m = a?.jointTransforms;
+    const grip = a?.gripSpace;
+    if (!a || !m || !grip || a.jointSpaces.length === 0) return false;
+    grip.updateWorldMatrix(true, false);
+    for (const name of FLAT_JOINTS) {
+      const k = a.jointSpaces.findIndex((js) => js.jointName === name);
+      if (k < 0 || m.length < (k + 1) * 16) return false;
+      JOINT_M.fromArray(m, k * 16).premultiply(grip.matrixWorld);
+      this.jointV.setFromMatrixPosition(JOINT_M);
+      this.joints.set(name, [this.jointV.x, this.jointV.y, this.jointV.z]);
+    }
+    return true;
+  }
+
   /**
-   * The real table's top, once a fingertip has come down onto it and held still
-   * there (between heights `lo` and `hi`, within seated reach); undefined until then.
+   * Where the flat hands are (their knuckles' middle into `flatNow`, the lowest fingertip's height
+   * under it into `flatLow`); false when no hand is flat, held out in front, at a table's height.
    */
-  private touchedTop(delta: number, lo: number, hi: number): number | undefined {
-    this.clock += delta;
-    this.hands.update(delta);
-    this.touching = NaN;
+  private flatHands(lo: number, hi: number): boolean {
     this.player.head.getWorldPosition(this.head);
     this.player.head.getWorldDirection(this.forward).negate();
     this.forward.y = 0;
     if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
     this.forward.normalize();
+    const fwd: P3 = [this.forward.x, 0, this.forward.z];
+    let n = 0;
+    let low = Infinity;
+    this.flatNow.set(0, 0, 0);
     for (const side of ['right', 'left'] as const) {
-      const h = this.hands.get(side);
-      const t = this.touch[side];
-      if (!h.tracked) {
-        t.since = -1;
-        t.hiY = -Infinity;
-        continue;
+      if (!this.readJoints(side)) continue;
+      const why = notFlat((name) => this.joints.get(name), fwd);
+      if (why) continue;
+      let x = 0;
+      let z = 0;
+      let tip = Infinity;
+      for (const f of ['index', 'middle', 'ring', 'pinky']) {
+        const k = this.joints.get(`${f}-finger-phalanx-proximal`)!;
+        x += k[0] / 4;
+        z += k[2] / 4;
+        tip = Math.min(tip, this.joints.get(`${f}-finger-tip`)![1]);
       }
-      const tip = h.tip;
-      if (this.clock < this.touchFrom) {
-        t.since = -1;
-        t.hiY = tip.y;
-        t.hiT = this.clock;
-        continue;
-      }
-      if (tip.y > t.hiY || this.clock - t.hiT > TOUCH_FALL_S) {
-        t.hiY = tip.y;
-        t.hiT = this.clock;
-      }
-      const across = Math.hypot(tip.x - this.head.x, tip.z - this.head.z);
-      const ahead = (tip.x - this.head.x) * this.forward.x + (tip.z - this.head.z) * this.forward.z;
-      // A pinching hand holds something (a crystal): its fingertip is not resting on the table.
-      const fits = tip.y >= lo && tip.y <= hi && across <= TOUCH_REACH_M && ahead >= TOUCH_AHEAD_M && !h.pinching;
-      if (!fits || t.since < 0 || tip.distanceTo(t.at) > TOUCH_STILL_M) {
-        t.at.copy(tip);
-        t.since = fits ? this.clock : -1;
-        continue;
-      }
-      if (t.hiY - t.at.y < TOUCH_DROP_M) continue;
-      // Held still on the table: the ghost book goes down to it, so the child sees where it will land.
-      if (Number.isNaN(this.touching) || side === 'right') this.touching = t.at.y - TOUCH_PAD_M;
-      if (this.clock - t.since >= TOUCH_HOLD_S) {
-        t.since = -1;
-        return t.at.y - TOUCH_PAD_M;
-      }
+      const across = Math.hypot(x - this.head.x, z - this.head.z);
+      const ahead = (x - this.head.x) * this.forward.x + (z - this.head.z) * this.forward.z;
+      if (tip < lo || tip > hi || across > TOUCH_REACH_M || ahead < FLAT_AHEAD_M) continue;
+      this.flatNow.x += x;
+      this.flatNow.z += z;
+      n += 1;
+      low = Math.min(low, tip);
     }
-    return undefined;
+    if (n === 0) return false;
+    this.flatNow.x /= n;
+    this.flatNow.z /= n;
+    this.flatNow.y = low - FLAT_PAD_M;
+    this.flatLow = this.flatNow.y;
+    return true;
+  }
+
+  /** The book facing the player, its middle at `at`. */
+  private faceAt(target: Object3D, at: Vector3): void {
+    target.position.copy(at);
+    target.rotation.set(0, Math.atan2(this.head.x - at.x, this.head.z - at.z), 0);
   }
 
   update(delta: number): void {
@@ -513,9 +554,9 @@ export class DeskSystem extends createSystem({
     if (againAsked) {
       againAsked = false;
       if (e.getValue(DeskRoot, 'placed')) {
-        console.info('[desk] placed again from the menu: waiting for a fingertip on the table');
-        this.skipTable = true;
-        this.waited = TABLE_WAIT_S;
+        console.info('[desk] placed again from the menu: waiting for a flat hand');
+        this.waited = 0;
+        this.flatSince = -1;
         this.touchFrom = this.clock + AGAIN_WAIT_S;
         this.setPlaced(false, 0);
         return;
@@ -535,48 +576,43 @@ export class DeskSystem extends createSystem({
       }
       return;
     }
-    if (!this.skipTable && this.placeOnTable()) return;
     this.waited += delta;
-    if (this.waited < TABLE_WAIT_S) {
-      const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
-      this.showStatus(`${T.findingTable}${dots}`, delta, true, CURTAIN_WAIT, undefined, {
-        name: 'status_finding_table',
-        scale: 1.2,
-      });
-      return;
-    }
-    // No table: a ghost book waits in the middle, in front of the player at
-    // seated desk height, turning with the head. A fingertip held on the real
-    // table puts it down there at that height; a pinch with either hand puts it
-    // down at the guessed height. It is where the book lands anyway when the
-    // wait runs out, so the book never jumps from the side to the middle.
+    this.clock += delta;
+    // A ghost book waits in front of the player at a guessed height, turning with the head. A hand laid
+    // flat (on the table, fingers straight ahead) and held still brings it there and puts it down.
     this.ghost.visible = true;
     this.ghost.scale.setScalar(HEADSET_SCALE);
     this.frontOf(this.ghost);
-    const left = Math.max(1, Math.ceil(TABLE_WAIT_S + PINCH_WAIT_S - this.waited));
-    this.showStatus(T.touchTable, delta, true, CURTAIN_ACT, this.ghost.position);
-    this.statusSmall.set(T.touchHold(left));
-    this.statusSmall.mesh.visible = true;
+    const left = Math.max(1, Math.ceil(FLAT_WAIT_S - this.waited));
     this.player.head.getWorldPosition(this.head);
-    const top = this.touchedTop(delta, this.head.y - TABLE_DROP_MAX_M, this.head.y - TOUCH_DROP_MIN_M);
-    if (!Number.isNaN(this.touching)) this.ghost.position.y = this.touching;
-    if (top !== undefined) {
-      this.skipTable = false;
-      this.frontOf(this.root);
-      this.root.position.y = top;
-      this.setPlaced(true, 5);
-      console.info(`[desk] placed by a fingertip on the table at y=${top.toFixed(3)} (${(this.head.y - top).toFixed(2)} m under the eyes)`);
+    const flat = this.clock >= this.touchFrom && this.flatHands(this.head.y - TABLE_DROP_MAX_M, this.head.y - TOUCH_DROP_MIN_M);
+    if (!flat || this.flatSince < 0 || this.flatNow.distanceTo(this.flatAt) > FLAT_STILL_M) {
+      this.flatAt.copy(this.flatNow);
+      this.flatSince = flat ? this.clock : -1;
+    }
+    if (flat) this.faceAt(this.ghost, this.flatNow);
+    const held = flat ? Math.min(FLAT_HOLD_S, this.clock - this.flatSince) : 0;
+    this.showStatus(T.touchTable, delta, true, CURTAIN_ACT, this.ghost.position);
+    this.statusSmall.set(flat ? T.flatHolding : T.touchHold(left));
+    this.statusSmall.mesh.visible = true;
+    if (flat && held >= FLAT_HOLD_S) {
+      this.faceAt(this.root, this.flatNow);
+      this.flatSince = -1;
+      this.setPlaced(true, 6);
+      console.info(`[desk] placed by a flat hand at y=${this.flatLow.toFixed(3)} (${(this.head.y - this.flatLow).toFixed(2)} m under the eyes)`);
       return;
     }
+    // Controllers only (no hand tracked): the trigger puts it down where the ghost is.
     const pads = this.input.xr.gamepads;
-    if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
+    this.hands.update(delta);
+    const hands = this.hands.get('right').tracked || this.hands.get('left').tracked;
+    if (!hands && (pads.right?.getSelectStart() || pads.left?.getSelectStart())) {
       this.root.position.copy(this.ghost.position);
       this.root.rotation.copy(this.ghost.rotation);
-      this.skipTable = false;
       this.setPlaced(true, 2);
-      console.info('[desk] placed by pinch');
+      console.info('[desk] placed by a trigger');
       return;
     }
-    if (this.waited >= TABLE_WAIT_S + PINCH_WAIT_S) this.placeInFront();
+    if (this.waited >= FLAT_WAIT_S) this.placeInFront();
   }
 }
