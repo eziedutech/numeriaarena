@@ -334,6 +334,18 @@ const TURN_STEP = 0.1;
 const REMOVE_X = 0.29;
 /** The real thing may be anywhere this near the desk's middle. */
 const REAL_REACH = 1.0;
+/**
+ * Something real is pinned by a pointing fingertip held still REAL_DWELL_S, where the fingertip is (the
+ * game knows no faces of it): a resting or holding hand, or a finger dragged over the table, pins nothing.
+ * A tip this low over the desk pins on the desk (a box's base); one this near the vertical line over a
+ * base pin pins on that line (the box's height). A pointing hand this low over the desk has its ray put away.
+ */
+const REAL_DWELL_S = 0.5;
+const REAL_FLOOR_M = 0.02;
+const REAL_UP_M = 0.03;
+const REAL_REST_HIGH_M = 0.4;
+/** A flat real thing's fourth pin goes onto the plane of its first three if it is this near it (metres). */
+const REAL_PLANE_M = 0.04;
 /** The words over the desk, and the time and points under them. */
 const HEADER = new Vector3(0, 0.3, -0.32);
 const STATUS = new Vector3(0, 0.265, -0.32);
@@ -478,6 +490,7 @@ export class MeasureDesk {
   private t1 = new Vector3();
   private k1 = new Vector3();
   private k2 = new Vector3();
+  private k3 = new Vector3();
   private rc = new Vector3();
   private rd = new Vector3();
   private rp = new Vector3();
@@ -1125,6 +1138,24 @@ export class MeasureDesk {
     setRayReach(this.handRay() && this.step === 'measure' ? MEASURE_RAY_M : undefined);
     if (!this.handRay() || this.boardHeld || this.step !== 'measure') {
       for (const side of SIDES) setRayRest(side, false);
+      return;
+    }
+    // Something real has no faces the game knows: a pointing fingertip held still pins it (dropPinReal).
+    if (this.source === 'real') {
+      for (const side of SIDES) {
+        const h = this.hands.get(side);
+        this.touching[side].since = -1;
+        if (!h.tracked || h.pinching || fingertipOnCard(side)) {
+          setRayRest(side, false);
+          continue;
+        }
+        this.touchPin[side] = this.nearestPin(h.tip, TOUCH_PIN_M);
+        this.u.copy(h.tip);
+        this.metric.worldToLocal(this.u);
+        // A pointing hand over the desk pins: its ray would only be in the way.
+        this.resting[side] = h.pointing() && this.u.length() < REAL_REACH && this.u.y < REAL_REST_HIGH_M;
+        setRayRest(side, this.resting[side]);
+      }
       return;
     }
     const now = performance.now() / 1000;
@@ -2189,6 +2220,10 @@ export class MeasureDesk {
     const ghost = this.ghosts[side];
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
+    if (this.source === 'real' && this.handRay()) {
+      this.dropPinReal(side, delta);
+      return;
+    }
     if (this.rayMode()) {
       // A fingertip near the paper: the corner it is at lights, where the ray points does not matter.
       const lit = this.handRay() ? this.touchLit[side] : undefined;
@@ -2249,6 +2284,98 @@ export class MeasureDesk {
     this.armed[side] = false;
     this.lastPin[side].copy(this.dwellAt[side]);
     this.addPin(this.dwellAt[side]);
+  }
+
+  /**
+   * A hand on something real: the index finger pointing (the others curled) and held still pins where its
+   * tip is, a ring growing there while it is held; drawn back before the ring is full, nothing is pinned.
+   * On a pin it chooses that pin. The tap goes through workTaps, which joins the running line as ever.
+   * Then the finger must move REARM_M before it pins again.
+   */
+  private dropPinReal(side: Side, delta: number): void {
+    const ghost = this.ghosts[side];
+    const h = this.hands.get(side);
+    if (!h.tracked || h.pinching || fingertipOnCard(side)) {
+      this.dwell[side] = 0;
+      return;
+    }
+    const tip = h.tip;
+    if (!this.armed[side]) {
+      if (tip.distanceTo(this.lastPin[side]) > REARM_M) this.armed[side] = true;
+      else return;
+    }
+    if (!h.pointing() || !h.still()) {
+      this.dwell[side] = 0;
+      return;
+    }
+    // The pin falls where the finger rested, not where it twitched last.
+    const k = this.dwell[side] === 0 ? 1 : Math.min(1, delta / Math.max(this.dwell[side], delta));
+    if (this.dwell[side] === 0) this.dwellAt[side].copy(tip);
+    else this.dwellAt[side].lerp(tip, k);
+    const onPin = this.nearestPin(this.dwellAt[side], TOUCH_PIN_M);
+    const spot = this.v;
+    if (onPin) onPin.mesh.getWorldPosition(spot);
+    else this.realSpot(spot.copy(this.dwellAt[side]));
+    if (!onPin) {
+      if (!this.pinnable(spot) || this.nearestPin(spot, this.pinGap())) {
+        this.dwell[side] = 0;
+        return;
+      }
+      if (this.pins.length >= this.maxPins()) {
+        this.tell(this.t.allPins(this.maxPins()));
+        this.dwell[side] = 0;
+        return;
+      }
+    }
+    this.dwell[side] += delta;
+    ghost.visible = true;
+    ghost.material = onPin ? ghostLitMat : ghostMat;
+    ghost.position.copy(spot);
+    this.metric.worldToLocal(ghost.position);
+    ghost.scale.setScalar(0.4 + 0.8 * Math.min(1, this.dwell[side] / REAL_DWELL_S));
+    if (this.dwell[side] < REAL_DWELL_S) return;
+    this.dwell[side] = 0;
+    this.armed[side] = false;
+    this.lastPin[side].copy(tip);
+    console.info(`[measure] ${side} fingertip pins the real thing${onPin ? ' on a pin' : ''}`);
+    this.tapAim[side] = { origin: tip.clone(), dir: new Vector3(0, -1, 0), at: spot.clone() };
+  }
+
+  /**
+   * Where a fingertip's pin goes on something real (world, in place): on the desk if the tip is just
+   * over it, on the vertical line over a box's base pin if near one, and onto the plane of a flat
+   * thing's first three pins if near it, so a trembling hand does not make it uneven.
+   */
+  private realSpot(world: Vector3): void {
+    this.u.copy(world);
+    this.metric.worldToLocal(this.u);
+    if (this.u.y < REAL_FLOOR_M) this.u.y = 0;
+    if (this.solid && this.u.y > REAL_UP_M) {
+      let best: Pin | undefined;
+      let bestD = VERT_REACH_M;
+      for (const p of this.pins) {
+        if (p.mesh.position.y > REAL_FLOOR_M) continue;
+        const d = Math.hypot(this.u.x - p.mesh.position.x, this.u.z - p.mesh.position.z);
+        if (d < bestD) {
+          best = p;
+          bestD = d;
+        }
+      }
+      if (best) {
+        this.u.x = best.mesh.position.x;
+        this.u.z = best.mesh.position.z;
+      }
+    }
+    if (!this.solid && this.pins.length >= 3) {
+      const a = this.pins[0].mesh.position;
+      this.n.copy(this.pins[1].mesh.position).sub(a).cross(this.k3.copy(this.pins[2].mesh.position).sub(a));
+      if (this.n.length() > 1e-4) {
+        this.n.normalize();
+        const off = this.k3.copy(this.u).sub(a).dot(this.n);
+        if (Math.abs(off) < REAL_PLANE_M) this.u.addScaledVector(this.n, -off);
+      }
+    }
+    this.metric.localToWorld(world.copy(this.u));
   }
 
   private addPin(spot: Vector3): Pin {
