@@ -3388,6 +3388,9 @@ export class GameSystem extends createSystem({
           obj.localToWorld(this.touchAt);
           return Math.max(0, tip.distanceTo(this.touchAt) - BALLOON_TOUCH_R);
         },
+        // Pointed at from afar: a ray passing near its middle takes it (a rising balloon is small and moving).
+        aimAt: (out) => obj.localToWorld(out.set(0, (obj.userData.middle as number | undefined) ?? BALLOON_MIDDLE, 0)),
+        aimR: BALLOON_TOUCH_R,
       });
     }
     // Fold Town's own buttons (its shelf's tabs, its toolbar, its cards) take the same fingertip.

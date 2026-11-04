@@ -10,7 +10,8 @@ import { Hands, type HandAdapters, type Side } from './measure/hands.js';
  *    out, so a hand resting on the desk never presses by itself;
  *  - far: each hand shows a ray and a dot along IWSDK's own pointer ray of
  *    the hand. The dot lights a card, a pinch of thumb and index presses it
- *    (the card the dot was on before the fingers began to close);
+ *    (the card the dot was on a moment before the pinch, PINCH_LOOKBACK_S);
+ *    a balloon, weight, gate or plank is taken by a ray passing near it;
  *  - when the two hands' dots are on two different cards, the right hand's
  *    is the one: the left hand's ray lies dim and does nothing.
  *
@@ -29,6 +30,12 @@ export interface MenuTarget {
   selfGrow?: boolean;
   /** How far a fingertip is from it (metres), where its bounds would mislead (a balloon on its string). */
   distance?: (world: Vector3) => number;
+  /**
+   * A small thing that moves or stands apart (a balloon, a weight, a gate, a plank): where its middle
+   * is (world) and how big round it (metres). A ray passing this near it takes it even off its paper.
+   */
+  aimAt?: (out: Vector3) => Vector3;
+  aimR?: number;
 }
 
 export interface HandMenuHost {
@@ -59,8 +66,6 @@ const NEAR_M = 0.07;
 const PRESS_M = 0.006;
 /** After a press the fingertip must come this far back out before it presses again. */
 const REARM_M = 0.035;
-/** Thumb and index tip this close are closing on a pinch: the card aimed at is kept from here. */
-const CLOSING_M = 0.06;
 /**
  * The pinch read from the joints: tips this close close it, this far open it again. Wider than
  * the measuring hands' own (1.5 cm), as the joints sit inside a real finger: touching pads leave
@@ -79,6 +84,30 @@ const RAY_COLOR = 0x9fc4ff;
 const HOVER_COLOR = 0xffc940;
 const DIM_COLOR = 0x8c8c8c;
 const DENY = { deny: ['ray', 'touch'] };
+/**
+ * A ray that hits no card takes the small thing (aimAt) whose middle it passes nearest, this much
+ * outside its size at most (metres): a balloon of 6 cm drifting up is hard to keep exactly under a dot.
+ */
+const ASSIST_M = 0.035;
+/** The small thing the dot is on keeps it while the ray stays this near it (metres): it never flickers off. */
+const STICK_M = 0.06;
+/**
+ * A pinch presses what the dot was on this long before it (seconds), as closing fingers move the
+ * ray. Found from the time, not from how open the hand is: a relaxed hand on a real Quest points
+ * with thumb and index nearer than 6 cm, and the old rule then kept the card of long before.
+ */
+const PINCH_LOOKBACK_S = 0.15;
+/** How long back the dot's way is remembered (seconds), and in how many frames at most: a dot that
+ * slipped off a moving balloon just before the pinch still takes it. */
+const HISTORY_S = 0.4;
+const HISTORY_N = 64;
+
+interface Past {
+  t: number;
+  target?: MenuTarget;
+  origin: Vector3;
+  dir: Vector3;
+}
 
 interface Aim {
   /** A tracked hand: its ray is up unless the fingertip is at a card. */
@@ -110,6 +139,9 @@ interface Aim {
   lastTarget?: MenuTarget;
   ray: Mesh;
   dot: Mesh;
+  /** The dot's last moments, newest at `head`. */
+  past: Past[];
+  head: number;
 }
 
 /** Each hand's fingertip is on a card this frame (at or in it): read by the desk, which must not take a card for the table. */
@@ -151,6 +183,7 @@ export class HandMenu {
   private origin = new Vector3();
   private rdir = new Vector3();
   private local = new Vector3();
+  private best = new Vector3();
   private scale = new Vector3();
   private inverse = new Matrix4();
   private rel = new Matrix4();
@@ -167,7 +200,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot);
-      return { up: false, shut: false, nearD: Infinity, armed: true, dim: false, cooldown: 0, holdUntil: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, shut: false, nearD: Infinity, armed: true, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -257,6 +290,7 @@ export class HandMenu {
         } else {
           a.point.copy(this.origin).addScaledVector(this.rdir, Math.min(DOT_M, reachNow ?? DOT_M));
         }
+        if (!target) target = this.assist(targets, a.point, a.target);
       }
       hits.push(target);
     }
@@ -284,13 +318,7 @@ export class HandMenu {
       a.target = hits[i];
       if (a.target) nowLit.add(a.target.object);
       // The card and the ray as they were before the fingers closed (they move the ray as they close).
-      const h = this.hands.get(side);
-      const closing = h.tracked && h.tip.distanceTo(h.thumb) < CLOSING_M;
-      if (!closing && a.up) {
-        a.lastTarget = a.target;
-        a.lockO.copy(a.origin);
-        a.lockD.copy(a.aimDir);
-      }
+      this.remember(a);
       this.pinch(side, a);
       this.draw(a);
     });
@@ -332,6 +360,55 @@ export class HandMenu {
     a.cooldown = PRESS_COOLDOWN_S;
     console.info(`[hand-menu] ${side} fingertip presses ${a.near.object.name || 'a card'}`);
     a.near.press();
+  }
+
+  /** The small thing a ray passes nearest, if near enough (see ASSIST_M); `point` goes onto it. */
+  private assist(targets: MenuTarget[], point: Vector3, was: MenuTarget | undefined): MenuTarget | undefined {
+    let best: MenuTarget | undefined;
+    let bestD = ASSIST_M;
+    const far = reachNow ?? REACH_M;
+    for (const t of targets) {
+      if (!t.aimAt || !t.object.visible) continue;
+      // The one the dot is on already is held to a wider reach.
+      const reach = was && was.object === t.object ? STICK_M : ASSIST_M;
+      t.aimAt(this.local);
+      this.end.copy(this.local).sub(this.origin);
+      const along = this.end.dot(this.rdir);
+      if (along <= 0 || along > far) continue;
+      const off = this.end.addScaledVector(this.rdir, -along).length() - (t.aimR ?? 0) - (reach - ASSIST_M);
+      if (off < bestD) {
+        bestD = off;
+        best = t;
+        this.best.copy(this.local);
+      }
+    }
+    if (best) point.copy(this.best);
+    return best;
+  }
+
+  /** Keeps where the dot is now (its card and ray), and sets what a pinch now would take. */
+  private remember(a: Aim): void {
+    a.head = (a.head + 1) % HISTORY_N;
+    const p = a.past[a.head];
+    p.t = this.now;
+    p.target = a.up && !a.dim ? a.target : undefined;
+    p.origin.copy(a.origin);
+    p.dir.copy(a.aimDir);
+    // What the dot was on PINCH_LOOKBACK_S ago (before the fingers moved it), or if it was on
+    // nothing then, the last card it was on since HISTORY_S ago.
+    let back: Past | undefined;
+    let any: Past | undefined;
+    for (let i = 0; i < HISTORY_N; i += 1) {
+      const q = a.past[(a.head - i + HISTORY_N) % HISTORY_N];
+      if (this.now - q.t > HISTORY_S) break;
+      if (!any && q.target) any = q;
+      if (!back && this.now - q.t >= PINCH_LOOKBACK_S) back = q;
+      if (back && any) break;
+    }
+    const take = back?.target ? back : any ?? back ?? p;
+    a.lastTarget = take.target ? this.map.get(take.target.object) : undefined;
+    a.lockO.copy(take.origin);
+    a.lockD.copy(take.dir);
   }
 
   /** How far a point is from a card's paper (metres), zero inside it. */
