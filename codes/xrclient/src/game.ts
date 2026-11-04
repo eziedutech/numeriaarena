@@ -286,8 +286,12 @@ const TOWN_SLANT = -0.55;
 const BANNER_W = TOWN_W;
 const BANNER_H = TOWN_H;
 const BANNER_AT = new Vector3(-0.33, 0.014, 0.19);
-/** The Fold Town sticker, lower right: in front of the settings, towards the player. */
-const TOWN_AT = new Vector3(0.37, 0.014, 0.16);
+/**
+ * The Fold Town sticker, lower right: in front of the settings, towards the player. Clear of HOME by
+ * 3 cm (0.41, not 0.37): once DESK made the settings line longer, HOME's edge went under the sticker,
+ * and a finger poking HOME opened Fold Town (Zia, 4 Nov 2026).
+ */
+const TOWN_AT = new Vector3(0.41, 0.014, 0.16);
 /** Its shadow on the desk, a soft oval a little down and behind it like the chips' shadows. */
 const TOWN_SHADOW = new Vector3(0.002, -0.006, -0.012);
 /**

@@ -83,6 +83,13 @@ const FLAT_PAD_M = 0.007;
 /** With no flat hand this long (seconds), the book is put in front of the player at a guessed height. */
 const FLAT_WAIT_S = 25;
 const JOINT_M = new Matrix4();
+/** A flat hand lost a moment (covered, turned) keeps the ghost book where it was this long (seconds). */
+const FLAT_KEEP_S = 2;
+/** The waiting book is seen through this much, so it hides no hand. */
+const GHOST_OPACITY = 0.3;
+/** The placing card stands this far ahead of the eyes and this far over them, out of the way of the hands. */
+const PLACING_CARD_AHEAD_M = 0.5;
+const PLACING_CARD_UP_M = 0.06;
 
 /** After PLACE AGAIN, no fingertip is read this long (seconds): the pressing finger is still there. */
 const AGAIN_WAIT_S = 1;
@@ -250,6 +257,10 @@ export class DeskSystem extends createSystem({
   private flatSince = -1;
   private flatLow = 0;
   private flatNow = new Vector3();
+  /** Where a flat hand was last seen in this placing, and when (clock seconds; -Infinity when never). */
+  private lastFlat = new Vector3();
+  private lastFlatT = -Infinity;
+  private cardAt = new Vector3();
   private joints = new Map<string, [number, number, number]>();
   private jointV = new Vector3();
   /** The table's height a fingertip is holding still on now, before it is taken; NaN when none. */
@@ -274,6 +285,19 @@ export class DeskSystem extends createSystem({
     this.ghost = new Group();
     const ghostBook = makeBook();
     ghostBook.position.z = BOOK_Z;
+    // See-through, so the hand laid flat where it goes stays in sight under it.
+    ghostBook.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      const mats = (Array.isArray(m.material) ? m.material : [m.material]).map((mat) => {
+        const c = mat.clone();
+        c.transparent = true;
+        c.opacity = GHOST_OPACITY;
+        c.depthWrite = false;
+        return c;
+      });
+      m.material = Array.isArray(m.material) ? mats : mats[0];
+    });
     this.ghost.add(ghostBook);
     this.ghost.name = 'desk-ghost';
     this.ghost.visible = false;
@@ -309,6 +333,8 @@ export class DeskSystem extends createSystem({
         if (now === immersive) return;
         immersive = now;
         this.waited = 0;
+        this.flatSince = -1;
+        this.lastFlatT = -Infinity;
         this.setPlaced(false, 0);
         this.scene.background = now ? null : makePreviewBackdrop();
         if (!now) this.placeForBrowser();
@@ -557,6 +583,7 @@ export class DeskSystem extends createSystem({
         console.info('[desk] placed again from the menu: waiting for a flat hand');
         this.waited = 0;
         this.flatSince = -1;
+        this.lastFlatT = -Infinity;
         this.touchFrom = this.clock + AGAIN_WAIT_S;
         this.setPlaced(false, 0);
         return;
@@ -590,9 +617,21 @@ export class DeskSystem extends createSystem({
       this.flatAt.copy(this.flatNow);
       this.flatSince = flat ? this.clock : -1;
     }
-    if (flat) this.faceAt(this.ghost, this.flatNow);
+    if (flat) {
+      this.lastFlat.copy(this.flatNow);
+      this.lastFlatT = this.clock;
+    }
+    // Lost a moment (the hand turned, or out of the cameras' sight): the ghost stays where the hand was.
+    if (flat || this.clock - this.lastFlatT < FLAT_KEEP_S) this.faceAt(this.ghost, this.lastFlat);
     const held = flat ? Math.min(FLAT_HOLD_S, this.clock - this.flatSince) : 0;
-    this.showStatus(T.touchTable, delta, true, CURTAIN_ACT, this.ghost.position);
+    // The card over the eyes, not over the ghost book: there it stood between the eyes and the hand.
+    this.player.head.getWorldDirection(this.forward).negate();
+    this.forward.y = 0;
+    if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
+    this.forward.normalize();
+    this.cardAt.copy(this.head).addScaledVector(this.forward, PLACING_CARD_AHEAD_M);
+    this.cardAt.y += PLACING_CARD_UP_M;
+    this.showStatus(T.touchTable, delta, true, CURTAIN_ACT, this.cardAt, undefined, 0);
     this.statusSmall.set(flat ? T.flatHolding : T.touchHold(left));
     this.statusSmall.mesh.visible = true;
     if (flat && held >= FLAT_HOLD_S) {
@@ -613,6 +652,15 @@ export class DeskSystem extends createSystem({
       console.info('[desk] placed by a trigger');
       return;
     }
-    if (this.waited >= FLAT_WAIT_S) this.placeInFront();
+    if (this.waited >= FLAT_WAIT_S) {
+      // A flat hand was seen: the book goes where it last was, not to a guessed height.
+      if (this.lastFlatT > -Infinity) {
+        this.faceAt(this.root, this.lastFlat);
+        this.setPlaced(true, 6);
+        console.info(`[desk] time up: placed where a flat hand last was, y=${this.lastFlat.y.toFixed(3)}`);
+        return;
+      }
+      this.placeInFront();
+    }
   }
 }
