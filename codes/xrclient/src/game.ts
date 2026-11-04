@@ -715,6 +715,7 @@ export class GameSystem extends createSystem({
       targets: () => this.handTargets(),
       alwaysShow: () => true,
       select: (side) => this.handPinchStart(side),
+      release: (side) => this.handPinchEnd(side),
       holding: (side) => this.crystalAtHand(side),
       parent: this.world.scene,
     });
@@ -3528,6 +3529,12 @@ export class GameSystem extends createSystem({
       if (e.object3D.getWorldPosition(this.a).distanceTo(tip) < HOVER_REACH) return true;
     }
     return false;
+  }
+
+  /** A hand's pinch ended this frame (see handPinchStart). */
+  private handPinchEnd(side: (typeof SIDES)[number]): boolean {
+    const state = (this.input.xr as unknown as { handSelectFrameState?: Record<string, { end: boolean }> }).handSelectFrameState;
+    return !!state?.[side]?.end;
   }
 
   /** A hand's pinch began this frame (IWSDK keeps it per hand, one edge a frame; not public). */

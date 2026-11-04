@@ -9,9 +9,12 @@ import { Hands, type HandAdapters, type Side } from './measure/hands.js';
  *    is close; it presses once, and again only after the finger has come back
  *    out, so a hand resting on the desk never presses by itself;
  *  - far: each hand shows a ray and a dot along IWSDK's own pointer ray of
- *    the hand. The dot lights a card, a pinch of thumb and index presses it
- *    (the card the dot was on a moment before the pinch, PINCH_LOOKBACK_S);
- *    a balloon, weight, gate or plank is taken by a ray passing near it;
+ *    the hand. The dot held still on a card for SETTLE_S makes it ready
+ *    (yellow); the headset's pinch then takes it (green) and opening the
+ *    fingers again presses it, the dot still on it or just off it (LEAVE_S),
+ *    as the headset's browser clicks on the release. A card the ray only
+ *    swept past is never pressed. A balloon, weight, gate or plank is taken
+ *    by a ray passing near it;
  *  - when the two hands' dots are on two different cards, the right hand's
  *    is the one: the left hand's ray lies dim and does nothing.
  *
@@ -44,6 +47,8 @@ export interface HandMenuHost {
   ray(side: Side): Object3D;
   /** The headset's own pinch of that hand (its select) began this frame. */
   select(side: Side): boolean;
+  /** That pinch ended this frame (the fingers opened). */
+  release(side: Side): boolean;
   /** That hand's pinch is for something it picks up (a crystal), not for a card. */
   holding(side: Side): boolean;
   /** Hands drive the menus now: in the headset, a hand tracked, not controllers alone. */
@@ -74,6 +79,11 @@ const READY_S = 0.8;
 const CANCEL_M = 0.04;
 /** Back out this far in front of the face: the press. */
 const RELEASE_M = 0.002;
+/**
+ * Or drawn back this far from the deepest it went (metres): the press comes as the finger starts to
+ * lift, not only once it is out (Zia, 4 Nov 2026: faster). Above the hand's tracking shake.
+ */
+const RETREAT_M = 0.004;
 /**
  * The fingertip may be this far past the card's edges (metres) and still be over it; down in it,
  * DOWN_EDGE_M (a finger poking straight on at a card that lies back slides along it as it goes in).
@@ -117,6 +127,14 @@ const STICK_M = 0.06;
  * with thumb and index nearer than 6 cm, and the old rule then kept the card of long before.
  */
 const PINCH_LOOKBACK_S = 0.15;
+/**
+ * The dot must stay on a card this long (seconds) before a pinch can take it, so a ray swept across
+ * the cards on its way to another presses none of them (Zia, 4 Nov 2026: half a second).
+ */
+const SETTLE_S = 0.5;
+/** The dot may have slipped off the card this long (seconds) at the pinch or at its release: closing and opening fingers move the ray. */
+const LEAVE_S = 0.25;
+const PINCHED_COLOR = 0x2f9d4a;
 /** How long back the dot's way is remembered (seconds), and in how many frames at most: a dot that
  * slipped off a moving balloon just before the pinch still takes it. */
 const HISTORY_S = 0.4;
@@ -136,7 +154,7 @@ interface Aim {
   near?: MenuTarget;
   nearD: number;
   /** The fingertip's poke of a card: in front of it (ready), or in it (down). */
-  poke?: { obj: Object3D; down: boolean; at: number; tip: Vector3; way: Vector3 };
+  poke?: { obj: Object3D; down: boolean; at: number; tip: Vector3; way: Vector3; deep: number };
   /** A ring on the card under the fingertip, smaller the nearer it is, as the headset's browser shows. */
   ring: Mesh;
   /** The card the dot is on after the right hand took precedence. */
@@ -155,8 +173,15 @@ interface Aim {
   /** The card the dot has just left, kept lit a moment so a card that grows under the dot does not blink. */
   holdT?: MenuTarget;
   holdUntil: number;
-  /** The last card the dot was on before the fingers began to close. */
-  lastTarget?: MenuTarget;
+  /** The card the dot is on now, and since when (seconds). Cards by their object: targets are made anew each frame. */
+  onT?: Object3D;
+  onSince: number;
+  /** The last card the dot was held still on for SETTLE_S, and when the dot was last on it. */
+  settled?: Object3D;
+  settledSeen: number;
+  /** The card a pinch took, pressed when the fingers open, and when the dot was last on it. */
+  pinchOn?: Object3D;
+  pinchSeen: number;
   ray: Mesh;
   dot: Mesh;
   /** The dot's last moments, newest at `head`. */
@@ -230,7 +255,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot, ring);
-      return { up: false, ring, nearD: Infinity, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, ring, nearD: Infinity, dim: false, cooldown: 0, holdUntil: 0, onSince: 0, settledSeen: -Infinity, pinchSeen: -Infinity, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -353,6 +378,17 @@ export class HandMenu {
       if (hits[i] !== a.target) console.info(`[hand-menu] ${side} ${a.near ? 'fingertip' : 'dot'} ${hits[i] ? `on ${hits[i]?.object.name || 'a card'}` : 'off the cards'}`);
       a.target = hits[i];
       if (a.target) nowLit.add(a.target.object);
+      const on = a.target?.object;
+      if (on !== a.onT) {
+        a.onT = on;
+        a.onSince = this.now;
+      }
+      if (on && !a.near && !a.dim && this.now - a.onSince >= SETTLE_S) {
+        if (a.settled !== on) console.info(`[hand-menu] ${side} dot held on ${on.name || 'a card'}: ready for a pinch`);
+        a.settled = on;
+        a.settledSeen = this.now;
+      }
+      if (a.settled && !this.map.has(a.settled)) a.settled = undefined;
       // The card and the ray as they were before the fingers closed (they move the ray as they close).
       this.remember(a);
       this.pinch(side, a);
@@ -405,7 +441,8 @@ export class HandMenu {
     if (a.poke?.down) {
       if (!f.over) return this.endPoke(side, a, 'slid off its edge');
       if (!t.distance && f.depth < -CANCEL_M) return this.endPoke(side, a, 'pushed on through it');
-      if (f.depth < RELEASE_M) return;
+      a.poke.deep = Math.min(a.poke.deep, f.depth);
+      if (f.depth < RELEASE_M && f.depth - a.poke.deep < RETREAT_M) return;
       a.poke = undefined;
       a.cooldown = PRESS_COOLDOWN_S;
       console.info(`[hand-menu] ${side} fingertip presses ${t.object.name || 'a card'}`);
@@ -414,7 +451,7 @@ export class HandMenu {
     }
     if (f.near && f.depth >= READY_M) {
       // In front of it: ready, from here.
-      if (!a.poke) a.poke = { obj: t.object, down: false, at: this.now, tip: new Vector3(), way: new Vector3() };
+      if (!a.poke) a.poke = { obj: t.object, down: false, at: this.now, tip: new Vector3(), way: new Vector3(), deep: 0 };
       a.poke.at = this.now;
       a.poke.tip.copy(tip);
       a.poke.way.copy(f.normal);
@@ -429,6 +466,7 @@ export class HandMenu {
     if (this.now - (this.upSince.get(t.object) ?? -Infinity) < NEW_WAIT_S) return;
     a.poke = ready;
     ready.down = true;
+    ready.deep = f.depth;
     console.info(`[hand-menu] ${side} fingertip pokes into ${t.object.name || 'a card'} (pressed on the way out)`);
   }
 
@@ -504,18 +542,17 @@ export class HandMenu {
     return f;
   }
 
-  /** The ring under the fingertip: white near, yellow ready, green while down in the card. */
+  /** The ring under the fingertip: white near, green while down in the card (no yellow: Zia, 4 Nov 2026). */
   private showRing(a: Aim, f: { depth: number; over: boolean; near: boolean; at: Vector3; normal: Vector3 }): void {
     if (!f.near || f.depth > NEAR_M) return;
     const down = !!a.poke?.down;
-    const ready = !!a.poke && !down;
     a.ring.visible = true;
     a.ring.position.copy(f.at).addScaledVector(f.normal, 0.001);
     this.axis.copy(a.ring.position).add(f.normal);
     a.ring.lookAt(this.axis);
     const k = Math.min(1, Math.max(0, f.depth / NEAR_M));
     a.ring.scale.setScalar(down ? 0.8 : 1 + 1.6 * k);
-    (a.ring.material as MeshBasicMaterial).color.setHex(down ? 0x2f9d4a : ready ? HOVER_COLOR : 0xffffff);
+    (a.ring.material as MeshBasicMaterial).color.setHex(down ? 0x2f9d4a : 0xffffff);
   }
 
   /** The small thing a ray passes nearest, if near enough (see ASSIST_M); `point` goes onto it. */
@@ -562,7 +599,6 @@ export class HandMenu {
       if (back && any) break;
     }
     const take = back?.target ? back : any ?? back ?? p;
-    a.lastTarget = take.target ? this.map.get(take.target.object) : undefined;
     a.lockO.copy(take.origin);
     a.lockD.copy(take.dir);
   }
@@ -598,19 +634,52 @@ export class HandMenu {
     return box;
   }
 
-  /** A pinch from afar presses the card the dot was on before the fingers closed. */
+  /**
+   * A pinch from afar takes the card the dot was held still on (SETTLE_S), and opening the fingers
+   * presses it, the dot still on it or just off it (LEAVE_S); moved away by then, it is cancelled.
+   */
   private pinch(side: Side, a: Aim): void {
     const h = this.hands.get(side);
     // The headset's own pinch only, as its browser reads it: thumb and index read from the joints
     // closed by themselves on a relaxed or curling hand on a real Quest, and pressed what the ray was on.
     const pinched = this.host.select(side);
+    if (a.pinchOn) {
+      const o = a.pinchOn;
+      if (a.target?.object === o) a.pinchSeen = this.now;
+      const t = this.map.get(o);
+      const lost = !h.tracked || !!a.near || !t;
+      if (!lost && !this.host.release(side)) return;
+      a.pinchOn = undefined;
+      const name = o.name || 'a card';
+      if (lost) {
+        console.info(`[hand-menu] ${side} pinch on ${name} cancelled: the hand or the card went`);
+        return;
+      }
+      if (this.now - a.pinchSeen > LEAVE_S) {
+        console.info(`[hand-menu] ${side} pinch on ${name} cancelled: let go with the dot moved off it`);
+        return;
+      }
+      a.cooldown = PRESS_COOLDOWN_S;
+      console.info(`[hand-menu] ${side} pinch on ${name} let go: pressed`);
+      t?.press();
+      return;
+    }
     if (!pinched || a.near || resting[side] || !h.tracked || a.cooldown > 0 || this.host.holding(side)) return;
+    const ready = !a.dim && a.settled && this.now - a.settledSeen <= LEAVE_S ? a.settled : undefined;
+    if (ready) {
+      a.pinchOn = ready;
+      a.pinchSeen = this.now;
+      console.info(`[hand-menu] ${side} pinch on ${ready.name || 'a card'} (pressed when the fingers open)`);
+      return;
+    }
     a.cooldown = PRESS_COOLDOWN_S;
-    const target = a.dim ? undefined : a.lastTarget;
-    console.info(`[hand-menu] ${side} pinch on ${target ? (target.object.name || 'a card') : 'nothing'}`);
-    if (target) target.press();
+    if (a.target) {
+      console.info(`[hand-menu] ${side} pinch on nothing: the dot was not held on ${a.target.object.name || 'a card'} for ${SETTLE_S} s`);
+      return;
+    }
+    console.info(`[hand-menu] ${side} pinch on nothing`);
     // A pinch on no card goes to whoever works with the hand's ray (Measure Hunt's paper), unless the other hand is on a card.
-    else if (!a.dim) this.sink?.(side, a.lockO, a.lockD);
+    if (!a.dim) this.sink?.(side, a.lockO, a.lockD);
   }
 
   private draw(a: Aim): void {
@@ -625,9 +694,12 @@ export class HandMenu {
     a.ray.scale.set(1, Math.max(length, 1e-3), 1);
     if (length > 1e-4) a.ray.quaternion.setFromUnitVectors(UP, this.end.divideScalar(length));
     a.dot.position.copy(a.point);
-    const lit = !!a.target;
-    a.dot.scale.setScalar(lit ? 1.7 : 1);
-    (a.dot.material as MeshBasicMaterial).color.setHex(a.dim ? DIM_COLOR : lit ? HOVER_COLOR : 0xffffff);
+    // On a card the dot grows as it is held there, yellow once a pinch can take it, green while pinched.
+    const held = a.target && !a.dim ? Math.min(1, (this.now - a.onSince) / SETTLE_S) : 0;
+    const pinched = !!a.pinchOn;
+    const ready = !!a.target && a.settled === a.target.object && held >= 1;
+    a.dot.scale.setScalar(pinched ? 1.4 : 1 + 0.7 * held);
+    (a.dot.material as MeshBasicMaterial).color.setHex(a.dim ? DIM_COLOR : pinched ? PINCHED_COLOR : ready ? HOVER_COLOR : 0xffffff);
     (a.ray.material as MeshBasicMaterial).color.setHex(a.dim ? DIM_COLOR : RAY_COLOR);
   }
 
@@ -642,6 +714,9 @@ export class HandMenu {
       a.dot.visible = false;
       a.ring.visible = false;
       a.poke = undefined;
+      a.pinchOn = undefined;
+      a.settled = undefined;
+      a.onT = undefined;
     }
     for (const o of this.lit) o.userData.handHover = false;
     this.lit.clear();
