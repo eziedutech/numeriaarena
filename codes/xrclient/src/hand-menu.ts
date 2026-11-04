@@ -78,7 +78,12 @@ const NEAR_M = 0.07;
  * right, was in front of its face only just before going in, and was never ready (Zia, 4 Nov 2026).
  */
 const READY_M = 0.004;
-const POKE_M = 0.005;
+/**
+ * 2 mm, not 5 (v0.4.23): the eye takes the card as pressed when the finger's skin meets its face,
+ * and the 5 mm more it had to go in before turning green felt late (Zia, 5 Nov 2026). The choice
+ * still comes on the way out.
+ */
+const POKE_M = 0.002;
 /**
  * All these are measured from the finger's skin, not from its tip joint: the headset puts the
  * joint about this far inside the fingertip (metres), so a finger that looked as if it touched a
