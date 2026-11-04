@@ -117,6 +117,8 @@ export interface MeasureHost {
   handAim(side: Side, origin: Vector3, dir: Vector3): boolean;
   /** Whether hands work through rays and taps now (the hand menu is on). */
   handsRay(): boolean;
+  /** How much higher the desk's buttons stand now (desk units): some in the headset, none in the browser. */
+  lift(): number;
   /** Takes the taps of a hand's index finger that land on no card; call the result to stop. */
   handTaps(sink: (side: Side, origin: Vector3, dir: Vector3) => void): () => void;
   /** A signed-in student's grade; a guest picks one. */
@@ -303,6 +305,12 @@ const PAPER_SCALE = 1.5;
 /** A ball is drawn larger still: its middle is to be found inside it. */
 const BALL_SCALE = 2;
 const OBJECT_MARGIN = 0.02;
+/**
+ * A paper object, its pins and its net stand this much over the buttons' lift (desk units), so in the
+ * headset its lowest corners are above the real table top and a fingertip can reach them, as the
+ * buttons' are. A real object stays where it is: it stands on the real table.
+ */
+const PAPER_LIFT_EXTRA = 0.015;
 /** On a paper polygon a pin goes only this near a corner, and onto it; the foot of a triangle's height this near a side. */
 const CORNER_REACH_M = 0.06;
 const SIDE_REACH_M = 0.025;
@@ -1010,6 +1018,8 @@ export class MeasureDesk {
     if (this.gone) return;
     this.group.getWorldScale(this.n);
     if (this.n.x > 0) this.metric.scale.setScalar(1 / this.n.x);
+    const lift = this.host.lift();
+    this.metric.position.y = this.paper && lift > 0 ? lift + PAPER_LIFT_EXTRA : 0;
     if (this.panel) {
       const k = 0.5 - 0.5 * Math.cos((performance.now() / 1000 / PANEL_PULSE_S) * Math.PI * 2);
       this.panel.scale.setScalar(1 + PANEL_PULSE * k);

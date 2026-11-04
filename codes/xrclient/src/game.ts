@@ -2421,6 +2421,7 @@ export class GameSystem extends createSystem({
       hands: () => (this.input.xr as unknown as { visualAdapters?: { hand?: HandAdapters } }).visualAdapters?.hand,
       handAim: (side, origin, dir) => this.handMenu?.aimOf(side, origin, dir) ?? false,
       handsRay: () => this.handMenu?.isActive() ?? false,
+      lift: () => this.buttonLift(),
       handTaps: (sink) => {
         this.handMenu?.setSink(sink);
         return () => this.handMenu?.setSink(undefined);
