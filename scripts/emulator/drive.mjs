@@ -138,7 +138,8 @@ export async function card(x) {
 /** Presses a standing card at desk (x, y, z) turned by `yaw`: in along its facing, then back out. */
 export async function pressFacing(x, y, z, yaw) {
   const nx = Math.sin(yaw), nz = Math.cos(yaw);
-  for (const k of [1, 0.6, 0.3, 0.1, -0.05]) { await tip(x + nx * 0.08 * k, y, z + nz * 0.08 * k); await sleep(0.15); }
+  // A poke as on a touch screen (hand-menu.ts): in front, 1.2 cm in, and back out, which presses.
+  for (const k of [1, 0.6, 0.3, 0.1, -0.15, -0.3, 0.1, 0.3]) { await tip(x + nx * 0.08 * k, y, z + nz * 0.08 * k); await sleep(0.15); }
   await sleep(0.3);
   await tip(x + nx * 0.2, y, z + nz * 0.2); await sleep(2.5);
 }

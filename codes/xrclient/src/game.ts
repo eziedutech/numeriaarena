@@ -3386,7 +3386,8 @@ export class GameSystem extends createSystem({
           if (!obj.visible) return Infinity;
           this.touchAt.set(0, (obj.userData.middle as number | undefined) ?? BALLOON_MIDDLE, 0);
           obj.localToWorld(this.touchAt);
-          return Math.max(0, tip.distanceTo(this.touchAt) - BALLOON_TOUCH_R);
+          // Signed: less than zero inside its paper, where a poke goes.
+          return tip.distanceTo(this.touchAt) - BALLOON_TOUCH_R;
         },
         // Pointed at from afar: a ray passing near its middle takes it (a rising balloon is small and moving).
         aimAt: (out) => obj.localToWorld(out.set(0, (obj.userData.middle as number | undefined) ?? BALLOON_MIDDLE, 0)),

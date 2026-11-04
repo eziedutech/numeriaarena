@@ -1,4 +1,4 @@
-import { Box3, CylinderGeometry, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Raycaster, SphereGeometry, Vector3, type Object3D } from '@iwsdk/core';
+import { Box3, CylinderGeometry, DoubleSide, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Raycaster, RingGeometry, SphereGeometry, Vector3, type Object3D } from '@iwsdk/core';
 import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 
 /**
@@ -60,34 +60,40 @@ const ORDER: readonly Side[] = ['right', 'left'];
 /** The fingertip this near a card (metres, from its surface) lights it and puts the ray away. */
 const NEAR_M = 0.07;
 /**
- * The fingertip this near, or inside, presses it: a touch, not a hover. (1.2 cm pressed cards a
- * finger was only coming near on a real Quest; near lights, a touch chooses, everywhere in the game.)
+ * The index fingertip works a card as a finger works a touch screen (Zia, 4 Nov 2026):
+ *  - it is first in front of the card's face, by it (READY_EDGE_M), at least READY_M off it;
+ *  - from there it pokes in, at least POKE_M behind the face, within READY_S: the card is down;
+ *  - it comes back out through the face, over the card still: that is the press, on the way out.
+ * Slid off the card's edge while down, pushed on through it (CANCEL_M), or come in from the side,
+ * from behind or across it, it presses nothing. The tip must have moved itself, so a balloon that
+ * drifts onto a still finger is not poked. Only the index fingertip counts, of either hand.
  */
-const PRESS_M = 0.006;
-/** After a press the fingertip must come this far back out before it presses again. */
-const REARM_M = 0.035;
+const READY_M = 0.012;
+const POKE_M = 0.008;
+const READY_S = 0.8;
+const CANCEL_M = 0.04;
+/** Back out this far in front of the face: the press. */
+const RELEASE_M = 0.002;
 /**
- * The pinch read from the joints: tips this close close it, this far open it again. Wider than
- * the measuring hands' own (1.5 cm), as the joints sit inside a real finger: touching pads leave
- * their centres nearly 2 cm apart. The headset's own pinch (select) is read as well.
+ * The fingertip may be this far past the card's edges (metres) and still be over it; down in it,
+ * DOWN_EDGE_M (a finger poking straight on at a card that lies back slides along it as it goes in).
  */
-const PINCH_SHUT_M = 0.022;
-const PINCH_OPEN_M = 0.035;
+const EDGE_M = 0.004;
+const DOWN_EDGE_M = 0.015;
+/**
+ * Ready, in front of it, it may be this far past them: a finger coming at a card that lies back
+ * comes in over its near edge. The poke and the way out are over the card itself (EDGE_M); a hand
+ * reaching past a card goes on through it and never comes back out of its face, so it presses nothing.
+ */
+const READY_EDGE_M = 0.03;
+/** On a card or in it: read by the desk, which must not take a card for the table. */
+const ON_CARD_M = 0.011;
 const PRESS_COOLDOWN_S = 0.3;
 /**
  * A card that has just come up takes no fingertip for this long (seconds): the answers that come up
  * when the last pin of Measure Hunt is joined are where the hand passes on its way back.
  */
 const NEW_WAIT_S = 0.6;
-/**
- * A fingertip presses a card only moving into it through its face: over the last PUSH_S its way
- * runs into the face at least PUSH_SHARE of how far it went, and at least PUSH_MIN_M. A hand drawn
- * back across a card lying nearly flat (going along its face) presses nothing.
- */
-const PUSH_S = 0.2;
-const PUSH_SHARE = 0.5;
-const PUSH_MIN_M = 0.003;
-const TIP_N = 32;
 const REACH_M = 1.2;
 /** A card the dot has left stays lit this long (seconds). */
 const HOLD_S = 0.2;
@@ -129,11 +135,10 @@ interface Aim {
   /** The card the fingertip is near, and how far from it (metres). */
   near?: MenuTarget;
   nearD: number;
-  /** The fingertip has come out since its last press. */
-  armed: boolean;
-  /** The fingertip's last moments, newest at `tipHead`. */
-  tips: { t: number; at: Vector3 }[];
-  tipHead: number;
+  /** The fingertip's poke of a card: in front of it (ready), or in it (down). */
+  poke?: { obj: Object3D; down: boolean; at: number; tip: Vector3; way: Vector3 };
+  /** A ring on the card under the fingertip, smaller the nearer it is, as the headset's browser shows. */
+  ring: Mesh;
   /** The card the dot is on after the right hand took precedence. */
   target?: MenuTarget;
   dim: boolean;
@@ -147,8 +152,6 @@ interface Aim {
   lockD: Vector3;
   /** Whether IWSDK's own ray was last told to hide. */
   taking?: boolean;
-  /** Thumb and index are shut in a pinch (see PINCH_SHUT_M). */
-  shut: boolean;
   /** The card the dot has just left, kept lit a moment so a card that grows under the dot does not blink. */
   holdT?: MenuTarget;
   holdUntil: number;
@@ -187,6 +190,7 @@ export function fingertipOnCard(side: Side): boolean {
 
 const rayGeo = new CylinderGeometry(0.0015, 0.0015, 1, 6).translate(0, 0.5, 0);
 const dotGeo = new SphereGeometry(0.006, 12, 8);
+const ringGeo = new RingGeometry(0.0055, 0.0085, 28);
 const UP = new Vector3(0, 1, 0);
 
 export class HandMenu {
@@ -209,8 +213,8 @@ export class HandMenu {
   /** When each card now up came up (seconds), and the cards up last frame. */
   private upSince = new Map<Object3D, number>();
   private wasUp = new Set<Object3D>();
-  private move = new Vector3();
   private axis = new Vector3();
+  private face = { depth: 0, over: false, near: false, at: new Vector3(), normal: new Vector3() };
   private quat = new Quaternion();
 
   constructor(private host: HandMenuHost) {
@@ -218,12 +222,15 @@ export class HandMenu {
     const make = (): Aim => {
       const ray = new Mesh(rayGeo, new MeshBasicMaterial({ color: RAY_COLOR, transparent: true, opacity: 0.85, depthWrite: false }));
       const dot = new Mesh(dotGeo, new MeshBasicMaterial({ color: 0xffffff, depthWrite: false }));
+      const ring = new Mesh(ringGeo, new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, side: DoubleSide }));
       ray.visible = false;
       dot.visible = false;
+      ring.visible = false;
+      ring.renderOrder = 32;
       ray.renderOrder = 30;
       dot.renderOrder = 31;
-      host.parent.add(ray, dot);
-      return { up: false, shut: false, nearD: Infinity, armed: true, tips: Array.from({ length: TIP_N }, () => ({ t: -Infinity, at: new Vector3() })), tipHead: 0, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      host.parent.add(ray, dot, ring);
+      return { up: false, ring, nearD: Infinity, dim: false, cooldown: 0, holdUntil: 0, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -365,18 +372,16 @@ export class HandMenu {
     }
   }
 
-  /** The fingertip near a card, and the press when it pushes into it. */
+  /** The fingertip near a card, and its poke of it (see READY_M): a press on the way back out. */
   private touch(side: Side, a: Aim, tip: Vector3 | undefined, targets: MenuTarget[]): void {
     a.near = undefined;
     a.nearD = Infinity;
     onCard[side] = false;
+    a.ring.visible = false;
     if (!tip) {
-      a.armed = true;
+      this.endPoke(side, a, 'the hand was lost');
       return;
     }
-    a.tipHead = (a.tipHead + 1) % TIP_N;
-    a.tips[a.tipHead].t = this.now;
-    a.tips[a.tipHead].at.copy(tip);
     for (const t of targets) {
       const d = t.distance ? t.distance(tip) : this.distance(t.object, tip);
       if (d < a.nearD) {
@@ -384,21 +389,133 @@ export class HandMenu {
         a.near = t;
       }
     }
-    onCard[side] = a.nearD <= PRESS_M + 0.005;
-    if (a.nearD > NEAR_M) a.near = undefined;
-    if (a.nearD > REARM_M) a.armed = true;
-    if (!a.near || !a.armed || a.cooldown > 0 || a.nearD > PRESS_M) return;
-    if (this.now - (this.upSince.get(a.near.object) ?? -Infinity) < NEW_WAIT_S) return;
-    if (!a.near.distance && !this.pushedInto(a, a.near.object, tip)) {
-      // Slid onto it: it waits for the fingertip to come out and in again.
-      a.armed = false;
-      console.info(`[hand-menu] ${side} fingertip slid onto ${a.near.object.name || 'a card'}: not pressed`);
+    // A card being poked keeps the fingertip while it is in it, though another be nearer.
+    const held = a.poke?.down ? targets.find((t) => t.object === a.poke?.obj) : undefined;
+    if (held) a.near = held;
+    if (!a.near || (!held && a.nearD > NEAR_M)) {
+      a.near = undefined;
+      this.endPoke(side, a, 'the fingertip went off it');
       return;
     }
-    a.armed = false;
-    a.cooldown = PRESS_COOLDOWN_S;
-    console.info(`[hand-menu] ${side} fingertip presses ${a.near.object.name || 'a card'}`);
-    a.near.press();
+    const t = a.near;
+    const f = this.faceOf(t, tip, a.poke?.down ? a.poke.way : undefined);
+    onCard[side] = f.over && f.depth <= ON_CARD_M;
+    if (a.poke && a.poke.obj !== t.object) this.endPoke(side, a, 'the fingertip went to another');
+    this.showRing(a, f);
+    if (a.poke?.down) {
+      if (!f.over) return this.endPoke(side, a, 'slid off its edge');
+      if (!t.distance && f.depth < -CANCEL_M) return this.endPoke(side, a, 'pushed on through it');
+      if (f.depth < RELEASE_M) return;
+      a.poke = undefined;
+      a.cooldown = PRESS_COOLDOWN_S;
+      console.info(`[hand-menu] ${side} fingertip presses ${t.object.name || 'a card'}`);
+      t.press();
+      return;
+    }
+    if (f.near && f.depth >= READY_M) {
+      // In front of it: ready, from here.
+      if (!a.poke) a.poke = { obj: t.object, down: false, at: this.now, tip: new Vector3(), way: new Vector3() };
+      a.poke.at = this.now;
+      a.poke.tip.copy(tip);
+      a.poke.way.copy(f.normal);
+      return;
+    }
+    if (f.depth > -POKE_M) return;
+    // In it: a poke, if it came from in front of it just now, moving itself, over the card.
+    const ready = a.poke;
+    a.poke = undefined;
+    if (!ready || !f.over || this.now - ready.at > READY_S || a.cooldown > 0) return;
+    if (tip.distanceTo(ready.tip) < READY_M + POKE_M - 0.004) return;
+    if (this.now - (this.upSince.get(t.object) ?? -Infinity) < NEW_WAIT_S) return;
+    a.poke = ready;
+    ready.down = true;
+    console.info(`[hand-menu] ${side} fingertip pokes into ${t.object.name || 'a card'} (pressed on the way out)`);
+  }
+
+  /** Lets go of a poke; one that was down is cancelled, and says why. */
+  private endPoke(side: Side, a: Aim, why: string): void {
+    if (a.poke?.down) console.info(`[hand-menu] ${side} poke of ${a.poke.obj.name || 'a card'} cancelled: ${why}`);
+    a.poke = undefined;
+  }
+
+  /**
+   * How far the fingertip is in front of a card's face (metres, less than zero behind it), whether it
+   * is over the card, and the point under it on the face with the face's way out. A card looks out
+   * along the + side of its thinnest side (a plane's +Z); a balloon, weight, gate or plank all round,
+   * and the fingertip must come out of one on the side it went in by (`way`).
+   */
+  private faceOf(t: MenuTarget, tip: Vector3, way: Vector3 | undefined): { depth: number; over: boolean; near: boolean; at: Vector3; normal: Vector3 } {
+    const f = this.face;
+    if (t.distance) {
+      f.depth = t.distance(tip);
+      f.over = true;
+      f.near = true;
+      if (t.aimAt) {
+        t.aimAt(f.at);
+        f.normal.copy(tip).sub(f.at);
+        const n = f.normal.length();
+        if (n > 1e-6) f.normal.divideScalar(n);
+        else f.normal.set(0, 0, 1);
+        f.at.addScaledVector(f.normal, t.aimR ?? 0);
+        // Out of it again: on the side it came in by, or through the far side (which is no press).
+        if (way && f.depth >= 0 && f.normal.dot(way) < 0.3) f.over = false;
+      } else {
+        f.at.copy(tip);
+        f.normal.set(0, 0, 1);
+      }
+      return f;
+    }
+    const obj = t.object;
+    const box = this.boxOf(obj);
+    if (!box) {
+      f.depth = Infinity;
+      f.over = false;
+      f.near = false;
+      return f;
+    }
+    this.local.copy(tip);
+    obj.worldToLocal(this.local);
+    obj.getWorldScale(this.scale);
+    let thin = obj.userData.touchThin as number | undefined;
+    if (thin === undefined) {
+      box.getSize(this.axis);
+      thin = this.axis.x <= this.axis.y && this.axis.x <= this.axis.z ? 0 : this.axis.y <= this.axis.z ? 1 : 2;
+      obj.userData.touchThin = thin;
+    }
+    const l = [this.local.x, this.local.y, this.local.z];
+    const lo = [box.min.x, box.min.y, box.min.z];
+    const hi = [box.max.x, box.max.y, box.max.z];
+    const k = [Math.abs(this.scale.x), Math.abs(this.scale.y), Math.abs(this.scale.z)];
+    f.depth = (l[thin] - hi[thin]) * k[thin];
+    f.over = true;
+    f.near = true;
+    for (let i = 0; i < 3; i += 1) {
+      if (i === thin) continue;
+      const m = (way ? DOWN_EDGE_M : EDGE_M) / Math.max(k[i], 1e-6);
+      if (l[i] < lo[i] - m || l[i] > hi[i] + m) f.over = false;
+      const r = READY_EDGE_M / Math.max(k[i], 1e-6);
+      if (l[i] < lo[i] - r || l[i] > hi[i] + r) f.near = false;
+      l[i] = Math.min(Math.max(l[i], lo[i]), hi[i]);
+    }
+    l[thin] = hi[thin];
+    f.at.set(l[0], l[1], l[2]);
+    obj.localToWorld(f.at);
+    f.normal.set(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0).applyQuaternion(obj.getWorldQuaternion(this.quat));
+    return f;
+  }
+
+  /** The ring under the fingertip: white near, yellow ready, green while down in the card. */
+  private showRing(a: Aim, f: { depth: number; over: boolean; near: boolean; at: Vector3; normal: Vector3 }): void {
+    if (!f.near || f.depth > NEAR_M) return;
+    const down = !!a.poke?.down;
+    const ready = !!a.poke && !down;
+    a.ring.visible = true;
+    a.ring.position.copy(f.at).addScaledVector(f.normal, 0.001);
+    this.axis.copy(a.ring.position).add(f.normal);
+    a.ring.lookAt(this.axis);
+    const k = Math.min(1, Math.max(0, f.depth / NEAR_M));
+    a.ring.scale.setScalar(down ? 0.8 : 1 + 1.6 * k);
+    (a.ring.material as MeshBasicMaterial).color.setHex(down ? 0x2f9d4a : ready ? HOVER_COLOR : 0xffffff);
   }
 
   /** The small thing a ray passes nearest, if near enough (see ASSIST_M); `point` goes onto it. */
@@ -450,31 +567,6 @@ export class HandMenu {
     a.lockD.copy(take.dir);
   }
 
-  /** Whether the fingertip came into the card through its face (along its thin side), not across it. */
-  private pushedInto(a: Aim, obj: Object3D, tip: Vector3): boolean {
-    const box = this.boxOf(obj);
-    if (!box) return true;
-    let old: Vector3 | undefined;
-    for (let i = 1; i < TIP_N; i += 1) {
-      const q = a.tips[(a.tipHead - i + TIP_N) % TIP_N];
-      if (q.t === -Infinity) break;
-      old = q.at;
-      if (this.now - q.t >= PUSH_S) break;
-    }
-    if (!old) return true;
-    this.move.copy(tip).sub(old);
-    const went = this.move.length();
-    if (went < PUSH_MIN_M) return false;
-    box.getSize(this.part.min);
-    const z = this.part.min;
-    const thin = z.x <= z.y && z.x <= z.z ? 0 : z.y <= z.z ? 1 : 2;
-    this.axis.set(thin === 0 ? 1 : 0, thin === 1 ? 1 : 0, thin === 2 ? 1 : 0).applyQuaternion(obj.getWorldQuaternion(this.quat));
-    // A card's face looks along its +Z (a plane's front): it is pushed from there, into it. A hand
-    // drawn back toward the player through a card that leans back goes through it from behind.
-    const into = thin === 2 ? -this.move.dot(this.axis) : Math.abs(this.move.dot(this.axis));
-    return into >= PUSH_SHARE * went;
-  }
-
   /** How far a point is from a card's paper (metres), zero inside it. */
   private distance(obj: Object3D, world: Vector3): number {
     if (!obj.visible) return Infinity;
@@ -509,11 +601,9 @@ export class HandMenu {
   /** A pinch from afar presses the card the dot was on before the fingers closed. */
   private pinch(side: Side, a: Aim): void {
     const h = this.hands.get(side);
-    const gap = h.tracked ? h.tip.distanceTo(h.thumb) : Infinity;
-    const was = a.shut;
-    // An untracked hand counts as shut, so one that is found already pinching presses nothing.
-    a.shut = !h.tracked || (was ? gap < PINCH_OPEN_M : gap < PINCH_SHUT_M);
-    const pinched = (a.shut && !was) || this.host.select(side);
+    // The headset's own pinch only, as its browser reads it: thumb and index read from the joints
+    // closed by themselves on a relaxed or curling hand on a real Quest, and pressed what the ray was on.
+    const pinched = this.host.select(side);
     if (!pinched || a.near || resting[side] || !h.tracked || a.cooldown > 0 || this.host.holding(side)) return;
     a.cooldown = PRESS_COOLDOWN_S;
     const target = a.dim ? undefined : a.lastTarget;
@@ -550,6 +640,8 @@ export class HandMenu {
       a.target = undefined;
       a.ray.visible = false;
       a.dot.visible = false;
+      a.ring.visible = false;
+      a.poke = undefined;
     }
     for (const o of this.lit) o.userData.handHover = false;
     this.lit.clear();
@@ -561,6 +653,8 @@ export class HandMenu {
       const a = this.aim[side];
       a.ray.removeFromParent();
       a.dot.removeFromParent();
+      a.ring.removeFromParent();
+      (a.ring.material as MeshBasicMaterial).dispose();
       (a.ray.material as MeshBasicMaterial).dispose();
       (a.dot.material as MeshBasicMaterial).dispose();
     }
