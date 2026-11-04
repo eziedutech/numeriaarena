@@ -305,11 +305,12 @@ const OBJECT_MARGIN = 0.02;
 const CORNER_REACH_M = 0.06;
 const SIDE_REACH_M = 0.025;
 /**
- * Hands are helped more than controllers (a real Quest showed a hand cannot hold a ray as still):
- * a corner this near (paper frame) is the one meant, and a pointed spot this near one goes onto it.
+ * A hand's corner reach and pull (paper frame metres). Since hands measure by touch alone (v0.4.9) a
+ * corner is meant only when touched, so these stay small: at 9 and 4.5 cm a touch on a triangle's side,
+ * for its height, went onto the nearest corner and no foot could be pinned.
  */
-const CORNER_REACH_HAND_M = 0.09;
-const MAGNET_HAND_M = 0.045;
+const CORNER_REACH_HAND_M = 0.035;
+const MAGNET_HAND_M = 0.02;
 /** The moving dashes from the chosen pin to the corners next to it: dash and gap (paper frame metres), speed (m/s). */
 const GUIDE_DASH = 0.012;
 const GUIDE_GAP = 0.012;
@@ -1320,6 +1321,13 @@ export class MeasureDesk {
       }
       const made = this.addPin(this.v);
       this.selectedBy = side;
+      // A triangle's height foot is joined from the corner across from its side, whichever pin the line was at.
+      const apex = this.heightFrom(made);
+      if (apex) {
+        this.clearSelection();
+        this.join(apex, made);
+        continue;
+      }
       if (this.selected && made !== this.selected) this.join(this.selected, made);
       // The line goes on from the new pin, until the shape has what it needs and the answers come.
       if (this.step === 'measure') this.selected = made;
@@ -2074,6 +2082,36 @@ export class MeasureDesk {
     return false;
   }
 
+  /**
+   * For a triangle's area: a pin on a side (not on a corner) is the height's foot, and the corner pinned
+   * across from that side is where its thread starts. Undefined for any other pin or task.
+   */
+  private heightFrom(pin: Pin): Pin | undefined {
+    const o = this.offer;
+    if (!this.paper || o?.shape !== 'triangle' || o.task !== 'area' || !o.keys || o.keys.length < 3) return undefined;
+    const at = pin.mesh.position;
+    const k = o.keys.slice(0, 3);
+    if (k.some(([x, y, z]) => Math.hypot(at.x - x / 100, at.y - y / 100, at.z - z / 100) < 0.005)) return undefined;
+    let side = -1;
+    let best = Infinity;
+    for (let i = 0; i < 3; i += 1) {
+      const a = k[i];
+      const b = k[(i + 1) % 3];
+      const abx = (b[0] - a[0]) / 100;
+      const abz = (b[2] - a[2]) / 100;
+      const len2 = abx * abx + abz * abz;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((at.x - a[0] / 100) * abx + (at.z - a[2] / 100) * abz) / len2)) : 0;
+      const d = Math.hypot(at.x - (a[0] / 100 + abx * t), at.z - (a[2] / 100 + abz * t));
+      if (d < best) {
+        best = d;
+        side = i;
+      }
+    }
+    if (side < 0) return undefined;
+    const apex = (side + 2) % 3;
+    return this.pins.find((p) => p !== pin && this.cornerOf(p.mesh.position) === apex);
+  }
+
   /** A world point near enough to be pinned. */
   private pinnable(world: Vector3): boolean {
     if (this.paper && this.polygon()) {
@@ -2506,6 +2544,12 @@ export class MeasureDesk {
     const spots = ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
     if (!spots) {
       console.info(`[measure] waiting: ${this.pins.length} pins, ${this.threads.length} threads`);
+      // A triangle's three sides are joined for its area: what is still wanted is said, not left to guess.
+      if (o.shape === 'triangle' && o.task === 'area' && this.pins.length === 3 && this.threads.length === 3) {
+        this.message = this.t.heightNext;
+        this.messageInk = '#3469c4';
+        this.showTask();
+      }
       return;
     }
     const points = spots.map((sp): P3 => [sp.at.x * 100, sp.at.y * 100, sp.at.z * 100]);
