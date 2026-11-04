@@ -43,6 +43,11 @@ const Games = {
   ReadAloud: 'read_aloud',
   SteadyAim: 'steady_aim',
   HowtoAgain: 'howto_again',
+  Desk: 'desk',
+  DeskBack: 'desk_back',
+  DeskUp: 'desk_up',
+  DeskDown: 'desk_down',
+  DeskAgain: 'desk_again',
   /** ROOM, floating over the desk menu in the headset: the room around the desk. */
   Room: 'room',
   /** SOUND and MUSIC in the desk menu's settings: sound effects and the quiet music on or off. */

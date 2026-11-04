@@ -1302,10 +1302,20 @@ export class TownDesk {
     c.model.position.copy(this.hold);
   }
 
-  /** Where `side`'s ray meets the page's plane, in tiles, into `this.p`; false when it does not come down onto it or meets it outside the window. */
-  private onPage(side: Side): boolean {
+  /**
+   * Where `side`'s ray meets the page's plane, in tiles, into `this.p`; false when it does not come
+   * down onto it or meets it outside the window. With `under`, the spot straight under that object
+   * instead: a building carried in a hand goes down under the hand, not where its ray points (Zia,
+   * 4 Nov 2026: the ray's end, far ahead of the hand, set it down).
+   */
+  private onPage(side: Side, under?: Object3D): boolean {
     const h = this.holder?.object3D;
-    if (!h || !this.hit(side, h)) return false;
+    if (!h) return false;
+    if (under) {
+      under.getWorldPosition(this.p);
+      h.worldToLocal(this.p);
+      this.p.y = 0;
+    } else if (!this.hit(side, h)) return false;
     const r = townRulesNow();
     const [hw, hd] = this.windowHalf();
     const m = PAGE_MARGIN / this.zoom;
@@ -1339,7 +1349,8 @@ export class TownDesk {
     const c = this.carry!;
     this.carryAlong();
     const a = assetOf(c.asset)!;
-    const over = this.onPage(c.side);
+    // A hand sets it down under itself; a controller's ray (or grip) where the ray points, as before.
+    const over = this.onPage(c.side, c.grip || this.host.controllers() ? undefined : c.model);
     if (!over) {
       if (c.over || Number.isNaN(c.x)) {
         this.ghost.hide();

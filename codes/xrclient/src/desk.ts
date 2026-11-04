@@ -56,6 +56,23 @@ const TOUCH_REACH_M = 0.85;
 const TOUCH_FALL_S = 3;
 /** A table touched this near under the eyes still counts (a high table, a low chair). */
 const TOUCH_DROP_MIN_M = 0.12;
+/**
+ * The fingertip must be at least this far in front of the eyes (metres, along the way the head
+ * faces): a hand resting in the lap while the child waits held still too, and put the desk under
+ * the table (Zia, 4 Nov 2026).
+ */
+const TOUCH_AHEAD_M = 0.3;
+/** One press of HIGHER or LOWER on the desk menu moves the book this much (metres). */
+export const DESK_STEP_M = 0.01;
+
+/** After PLACE AGAIN, no fingertip is read this long (seconds): the pressing finger is still there. */
+const AGAIN_WAIT_S = 1;
+/** Asked from the desk menu: put the book down again by a fingertip (see placeDeskAgain). */
+let againAsked = false;
+/** The book goes away and waits for a fingertip on the table again, Space Setup's table skipped. */
+export function placeDeskAgain(): void {
+  againAsked = true;
+}
 /*
  * A desk that rose by itself to a fingertip resting still over it (v0.4.2) was taken out in
  * v0.4.3: a hand held still in the air after a press looks the same, and raised it too high.
@@ -203,6 +220,14 @@ export class DeskSystem extends createSystem({
   private forward = new Vector3();
   private hands!: Hands;
   private clock = 0;
+  /** Placed again from the menu: Space Setup's table is not taken this time. */
+  private skipTable = false;
+  /** How the book was last put down (DeskRoot's method), told under Ready!. */
+  private method = 0;
+  /** No fingertip is read before this (clock seconds): the finger that pressed PLACE AGAIN must come down anew. */
+  private touchFrom = 0;
+  /** The table's height a fingertip is holding still on now, before it is taken; NaN when none. */
+  private touching = NaN;
   /** Each hand's fingertip: where it holds still and since when, and the highest it was lately. */
   private touch: Record<Side, { at: Vector3; since: number; hiY: number; hiT: number }> = {
     left: { at: new Vector3(), since: -1, hiY: -Infinity, hiT: 0 },
@@ -280,6 +305,7 @@ export class DeskSystem extends createSystem({
     if (!e) return;
     e.setValue(DeskRoot, 'placed', placed);
     e.setValue(DeskRoot, 'method', method);
+    this.method = method;
     this.root.visible = placed;
     this.ghost.visible = false;
     // A book placed in XR is announced for a moment; in the browser there is no card.
@@ -371,6 +397,7 @@ export class DeskSystem extends createSystem({
   }
 
   private placeInFront(): void {
+    this.skipTable = false;
     this.frontOf(this.root);
     this.setPlaced(true, 4);
     console.info('[desk] no reachable table and no pinch: placed in front of the player');
@@ -430,7 +457,12 @@ export class DeskSystem extends createSystem({
   private touchedTop(delta: number, lo: number, hi: number): number | undefined {
     this.clock += delta;
     this.hands.update(delta);
+    this.touching = NaN;
     this.player.head.getWorldPosition(this.head);
+    this.player.head.getWorldDirection(this.forward).negate();
+    this.forward.y = 0;
+    if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
+    this.forward.normalize();
     for (const side of ['right', 'left'] as const) {
       const h = this.hands.get(side);
       const t = this.touch[side];
@@ -440,19 +472,29 @@ export class DeskSystem extends createSystem({
         continue;
       }
       const tip = h.tip;
+      if (this.clock < this.touchFrom) {
+        t.since = -1;
+        t.hiY = tip.y;
+        t.hiT = this.clock;
+        continue;
+      }
       if (tip.y > t.hiY || this.clock - t.hiT > TOUCH_FALL_S) {
         t.hiY = tip.y;
         t.hiT = this.clock;
       }
       const across = Math.hypot(tip.x - this.head.x, tip.z - this.head.z);
+      const ahead = (tip.x - this.head.x) * this.forward.x + (tip.z - this.head.z) * this.forward.z;
       // A pinching hand holds something (a crystal): its fingertip is not resting on the table.
-      const fits = tip.y >= lo && tip.y <= hi && across <= TOUCH_REACH_M && !h.pinching;
+      const fits = tip.y >= lo && tip.y <= hi && across <= TOUCH_REACH_M && ahead >= TOUCH_AHEAD_M && !h.pinching;
       if (!fits || t.since < 0 || tip.distanceTo(t.at) > TOUCH_STILL_M) {
         t.at.copy(tip);
         t.since = fits ? this.clock : -1;
         continue;
       }
-      if (this.clock - t.since >= TOUCH_HOLD_S && t.hiY - t.at.y >= TOUCH_DROP_M) {
+      if (t.hiY - t.at.y < TOUCH_DROP_M) continue;
+      // Held still on the table: the ghost book goes down to it, so the child sees where it will land.
+      if (Number.isNaN(this.touching) || side === 'right') this.touching = t.at.y - TOUCH_PAD_M;
+      if (this.clock - t.since >= TOUCH_HOLD_S) {
         t.since = -1;
         return t.at.y - TOUCH_PAD_M;
       }
@@ -468,13 +510,24 @@ export class DeskSystem extends createSystem({
       this.curtain.visible = false;
       return;
     }
+    if (againAsked) {
+      againAsked = false;
+      if (e.getValue(DeskRoot, 'placed')) {
+        console.info('[desk] placed again from the menu: waiting for a fingertip on the table');
+        this.skipTable = true;
+        this.waited = TABLE_WAIT_S;
+        this.touchFrom = this.clock + AGAIN_WAIT_S;
+        this.setPlaced(false, 0);
+        return;
+      }
+    }
     if (e.getValue(DeskRoot, 'placed')) {
       if (this.readyLeft > 0) {
         this.readyLeft -= delta;
         // On the book itself, over the front of the pages and under the
         // portal, so it never covers the portal or the title.
         this.root.localToWorld(this.readyAt.copy(READY_ON_BOOK));
-        this.showStatus(T.ready, delta, false, 0, this.readyAt, { name: 'status_ready', scale: 0.55 }, 0);
+        this.showStatus(T.ready, delta, false, 0, this.readyAt, { name: 'status_ready', scale: 0.55, small: T.placedBy[this.method] }, 0);
       } else {
         this.status.visible = false;
         this.curtain.visible = false;
@@ -482,7 +535,7 @@ export class DeskSystem extends createSystem({
       }
       return;
     }
-    if (this.placeOnTable()) return;
+    if (!this.skipTable && this.placeOnTable()) return;
     this.waited += delta;
     if (this.waited < TABLE_WAIT_S) {
       const dots = '.'.repeat(1 + (Math.floor(this.waited * 2) % 3));
@@ -506,7 +559,9 @@ export class DeskSystem extends createSystem({
     this.statusSmall.mesh.visible = true;
     this.player.head.getWorldPosition(this.head);
     const top = this.touchedTop(delta, this.head.y - TABLE_DROP_MAX_M, this.head.y - TOUCH_DROP_MIN_M);
+    if (!Number.isNaN(this.touching)) this.ghost.position.y = this.touching;
     if (top !== undefined) {
+      this.skipTable = false;
       this.frontOf(this.root);
       this.root.position.y = top;
       this.setPlaced(true, 5);
@@ -517,6 +572,7 @@ export class DeskSystem extends createSystem({
     if (pads.right?.getSelectStart() || pads.left?.getSelectStart()) {
       this.root.position.copy(this.ghost.position);
       this.root.rotation.copy(this.ghost.rotation);
+      this.skipTable = false;
       this.setPlaced(true, 2);
       console.info('[desk] placed by pinch');
       return;

@@ -74,7 +74,15 @@ const NEAR_M = 0.07;
  * drifts onto a still finger is not poked. Only the index fingertip counts, of either hand.
  */
 const READY_M = 0.012;
-const POKE_M = 0.008;
+const POKE_M = 0.005;
+/**
+ * All these are measured from the finger's skin, not from its tip joint: the headset puts the
+ * joint about this far inside the fingertip (metres), so a finger that looked as if it touched a
+ * card was still short of it and its ring stayed white (Zia, 4 Nov 2026).
+ */
+const FINGER_R = 0.008;
+/** A press keeps the ring green this long after it (seconds), so it is always seen. */
+const PRESS_FLASH_S = 0.3;
 const READY_S = 0.8;
 const CANCEL_M = 0.04;
 /** Back out this far in front of the face: the press. */
@@ -157,6 +165,8 @@ interface Aim {
   poke?: { obj: Object3D; down: boolean; at: number; tip: Vector3; way: Vector3; deep: number };
   /** A ring on the card under the fingertip, smaller the nearer it is, as the headset's browser shows. */
   ring: Mesh;
+  /** Until when the ring stays green after a press. */
+  flashUntil: number;
   /** The card the dot is on after the right hand took precedence. */
   target?: MenuTarget;
   dim: boolean;
@@ -255,7 +265,7 @@ export class HandMenu {
       ray.renderOrder = 30;
       dot.renderOrder = 31;
       host.parent.add(ray, dot, ring);
-      return { up: false, ring, nearD: Infinity, dim: false, cooldown: 0, holdUntil: 0, onSince: 0, settledSeen: -Infinity, pinchSeen: -Infinity, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
+      return { up: false, ring, flashUntil: 0, nearD: Infinity, dim: false, cooldown: 0, holdUntil: 0, onSince: 0, settledSeen: -Infinity, pinchSeen: -Infinity, past: Array.from({ length: HISTORY_N }, () => ({ t: -Infinity, origin: new Vector3(), dir: new Vector3(0, 0, -1) })), head: 0, point: new Vector3(), origin: new Vector3(), aimDir: new Vector3(0, 0, -1), lockO: new Vector3(), lockD: new Vector3(0, 0, -1), ray, dot };
     };
     this.aim = { right: make(), left: make() };
   }
@@ -413,7 +423,7 @@ export class HandMenu {
     a.near = undefined;
     a.nearD = Infinity;
     onCard[side] = false;
-    a.ring.visible = false;
+    a.ring.visible = this.now < a.flashUntil;
     if (!tip) {
       this.endPoke(side, a, 'the hand was lost');
       return;
@@ -435,6 +445,7 @@ export class HandMenu {
     }
     const t = a.near;
     const f = this.faceOf(t, tip, a.poke?.down ? a.poke.way : undefined);
+    f.depth -= FINGER_R;
     onCard[side] = f.over && f.depth <= ON_CARD_M;
     if (a.poke && a.poke.obj !== t.object) this.endPoke(side, a, 'the fingertip went to another');
     this.showRing(a, f);
@@ -445,6 +456,8 @@ export class HandMenu {
       if (f.depth < RELEASE_M && f.depth - a.poke.deep < RETREAT_M) return;
       a.poke = undefined;
       a.cooldown = PRESS_COOLDOWN_S;
+      // The ring was drawn green this frame: it stays so a moment where it is.
+      if (a.ring.visible) a.flashUntil = this.now + PRESS_FLASH_S;
       console.info(`[hand-menu] ${side} fingertip presses ${t.object.name || 'a card'}`);
       t.press();
       return;
@@ -544,7 +557,7 @@ export class HandMenu {
 
   /** The ring under the fingertip: white near, green while down in the card (no yellow: Zia, 4 Nov 2026). */
   private showRing(a: Aim, f: { depth: number; over: boolean; near: boolean; at: Vector3; normal: Vector3 }): void {
-    if (!f.near || f.depth > NEAR_M) return;
+    if (this.now < a.flashUntil || !f.near || f.depth > NEAR_M) return;
     const down = !!a.poke?.down;
     a.ring.visible = true;
     a.ring.position.copy(f.at).addScaledVector(f.normal, 0.001);
@@ -713,6 +726,7 @@ export class HandMenu {
       a.ray.visible = false;
       a.dot.visible = false;
       a.ring.visible = false;
+      a.flashUntil = 0;
       a.poke = undefined;
       a.pinchOn = undefined;
       a.settled = undefined;

@@ -81,6 +81,7 @@ import { onStudent, reportPlay, seatKey, studentState, type Student } from './ho
 import { teacherState, type TeacherState } from './home/teacher.js';
 import { noteGuestPlay, TownModel } from './town/town-model.js';
 import { skillTitle, unmarked } from './town/town-landmarks.js';
+import { DESK_STEP_M, placeDeskAgain } from './desk.js';
 import { isTownChoice, TownDesk, type TownChoice, type TownHost } from './town/town-desk.js';
 import { openTown } from './town/town-page.js';
 import { TOWN_TEXT } from './town/town-text.js';
@@ -504,7 +505,9 @@ type MenuChoice = GameKind | 'race';
 /** A game on the desk menu: Measure Hunt is played on its own desk, not as a practice. */
 type MenuGame = MenuChoice | 'measure_hunt';
 /** A desk button: a game, or HOME (leave the headset for the home page). */
-type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | AccessChoice | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice | 'measure_hunt' | MeasureChoice;
+/** The desk line of the settings (headset only): BACK, HIGHER, LOWER, PLACE AGAIN. */
+type DeskChoice = 'desk' | 'desk_back' | 'desk_up' | 'desk_down' | 'desk_again';
+type ButtonChoice = MenuChoice | 'home' | 'lang' | 'bigtext' | AccessChoice | DeskChoice | 'room' | 'sound' | 'music' | 'town' | 'again' | 'games' | 'done' | 'quit' | 'build' | TownChoice | 'measure_hunt' | MeasureChoice;
 // A choice missing from MenuButton's enum fails only at run time, when the button is made: caught here instead.
 const BUTTON_CHOICES_IN_ENUM: ButtonChoice extends MenuButtonValue ? true : never = true;
 void BUTTON_CHOICES_IN_ENUM;
@@ -977,6 +980,26 @@ export class GameSystem extends createSystem({
       setBigText(!bigText());
       return;
     }
+    // DESK swaps the settings for the desk's own line, as ACCESSIBILITY does.
+    if (pressed === 'desk' || pressed === 'desk_back') {
+      this.deskOpen = pressed === 'desk';
+      this.accessOpen = false;
+      this.clearMenu();
+      this.showMenu(this.menuOnly);
+      return;
+    }
+    if (pressed === 'desk_up' || pressed === 'desk_down') {
+      const root = this.deskEntity()?.object3D;
+      if (root) root.position.y += pressed === 'desk_up' ? DESK_STEP_M : -DESK_STEP_M;
+      console.info(`[menu] desk ${pressed === 'desk_up' ? 'up' : 'down'} to y=${root?.position.y.toFixed(3)}`);
+      return;
+    }
+    if (pressed === 'desk_again') {
+      this.deskOpen = false;
+      this.clearMenu();
+      placeDeskAgain();
+      return;
+    }
     // ACCESSIBILITY swaps the settings for its own line; BACK swaps them back.
     if (pressed === 'access' || pressed === 'access_back') {
       this.accessOpen = pressed === 'access';
@@ -1285,7 +1308,12 @@ export class GameSystem extends createSystem({
     // off for them; HOME ends the session (or the game in the browser) for the home page.
     // The room is the headset's only: in the browser its place stays empty.
     const anyAccess = bigText() || ACCESS_CHIPS.some(([, a]) => accessOn(a));
-    const settings: (MenuCell | null)[] = this.accessOpen ? [
+    const settings: (MenuCell | null)[] = this.deskOpen && !browser ? [
+      ['desk_back', 'back', T.back, 'plain'],
+      ['desk_up', 'arrowUp', T.deskUp, 'plain'],
+      ['desk_down', 'arrowDown', T.deskDown, 'plain'],
+      ['desk_again', 'replay', T.deskAgain, 'plain'],
+    ] : this.accessOpen ? [
       ['access_back', 'back', T.back, 'plain'],
       ['bigtext', 'textSize', tip(T.bigCaption, T.onOff(bigText())), bigText() ? 'on' : 'plain'],
       ...ACCESS_CHIPS.map(([choice, a, icon]): MenuCell => [choice, icon, tip(T.access[a], T.onOff(accessOn(a))), accessOn(a) ? 'on' : 'plain']),
@@ -1294,6 +1322,7 @@ export class GameSystem extends createSystem({
       ['lang', 'language', tip(T.langCaption, getLang().toUpperCase()), 'plain'],
       ['access', 'access', T.accessCaption, anyAccess ? 'on' : 'plain'],
       browser ? null : ['room', 'room', tip(T.roomCaption, T.roomName[getRoom()]), getRoom() === 'here' ? 'plain' : 'on'],
+      browser ? null : ['desk', 'table', T.deskCaption, 'plain'],
       ['sound', soundOn() ? 'sound' : 'soundOff', tip(T.soundCaption, T.onOff(soundOn())), soundOn() ? 'plain' : 'off'],
       ['music', musicOn() ? 'music' : 'musicOff', tip(T.musicCaption, T.onOff(musicOn())), musicOn() ? 'plain' : 'off'],
       ['home', 'exit', T.home, 'accent'],
@@ -1312,6 +1341,8 @@ export class GameSystem extends createSystem({
 
   /** The desk menu shows the accessibility line in place of the settings. */
   private accessOpen = false;
+  /** The desk menu shows the desk's line (higher, lower, place again) in place of the settings. */
+  private deskOpen = false;
 
   /** Clears the desk menu: its buttons, envelopes and the writing on the book. */
   private clearMenu(): void {
@@ -1799,6 +1830,7 @@ export class GameSystem extends createSystem({
     if (desk && !this.score.mesh.parent) desk.add(this.score.mesh);
     this.showTitle();
     this.accessOpen = false;
+    this.deskOpen = false;
     this.clearMenu();
     this.played = 0;
     this.practiceRight = 0;
@@ -3356,6 +3388,8 @@ export class GameSystem extends createSystem({
   /** The cards a hand's ray may light and tap: every menu button, and the emulator's SIT card. */
   private handTargets(): MenuTarget[] {
     const out: MenuTarget[] = [];
+    // While the book is being put down (again) its cards are hidden with it and take no hand.
+    if (!this.deskEntity()?.getValue(DeskRoot, 'placed')) return out;
     for (const e of this.queries.buttons.entities) {
       const obj = e.object3D;
       if (!obj?.visible) continue;
