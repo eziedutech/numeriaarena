@@ -93,7 +93,13 @@ const FINGER_R = 0.008;
 /** A press keeps the ring green this long after it (seconds), so it is always seen. */
 const PRESS_FLASH_S = 0.3;
 const READY_S = 0.8;
-const CANCEL_M = 0.04;
+/**
+ * 10 cm, not 4 (v0.4.24): a card stands over the desk and leans back, so a finger tapping it down to
+ * the real table, as one taps a thing with nothing to feel, went 5 to 6 cm behind its face and was
+ * taken as reaching through it; the card had to be tapped two or three times (Zia, 5 Nov 2026). A hand
+ * reaching past a card still slides off its edge and presses nothing.
+ */
+const CANCEL_M = 0.1;
 /** A card the finger is ready at stays its card unless another is this much nearer (metres). */
 const KEEP_M = 0.005;
 /** Back out this far in front of the face: the press. */

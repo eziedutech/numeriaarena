@@ -34,6 +34,8 @@ export interface PaperObject {
   /** How far round its middle reaches, in metres. */
   readonly radius: number;
   readonly solid: boolean;
+  /** A solid's half size each way about its middle (metres, in its own frame): how low a turn takes it. */
+  readonly half: readonly [number, number, number];
   /** A box opens to its net (1) and folds up again (0). */
   readonly unfold?: (u: number) => void;
   dispose(): void;
@@ -83,6 +85,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
   };
   let height = 0;
   let reach = 0;
+  let half: [number, number, number] = [0, 0, 0];
   let unfold: ((u: number) => void) | undefined;
   switch (shape) {
     case 'square':
@@ -115,6 +118,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
       add(frame, new CylinderGeometry(r, r, height, 64).translate(0, height / 2, 0));
       dot(frame, 0, height + 0.0005, 0);
       reach = Math.hypot(r, height / 2);
+      half = [r, height / 2, r];
       break;
     }
     case 'sphere': {
@@ -128,6 +132,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
       frame.add(ring);
       owned.push(ring);
       reach = d / 2;
+      half = [d / 2, d / 2, d / 2];
       break;
     }
     case 'cube':
@@ -137,6 +142,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
       height = shape === 'cube' ? g('s') : g('t');
       unfold = boxNet(frame, w, d, height, add);
       reach = Math.hypot(w, d, height) / 2;
+      half = [w / 2, height / 2, d / 2];
       break;
     }
   }
@@ -149,6 +155,7 @@ export function paperObject(shape: Shape, size: Record<string, number>, keys: P3
     frame,
     radius: reach,
     solid: height > 0,
+    half,
     unfold,
     dispose: () => {
       for (const o of owned) o.geometry.dispose();

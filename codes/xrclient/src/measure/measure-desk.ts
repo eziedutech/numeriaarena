@@ -2962,6 +2962,12 @@ export class MeasureDesk {
       this.spinVel = 0;
     }
     if (this.unfoldTo > 0 && holding.length < 2) spin.quaternion.slerp(SQUARE[0], 1 - Math.exp(-SETTLE * delta));
+    // It turns about its middle, which is raised so its lowest corner stays on the desk: a box turned onto
+    // its short side went into the desk by half its length, and its bottom corners could not be pinned
+    // (Zia, 5 Nov 2026).
+    const { x, y, z, w } = spin.quaternion;
+    const [hx, hy, hz] = paper.half;
+    spin.position.y = Math.abs(2 * (x * y + w * z)) * hx + Math.abs(1 - 2 * (x * x + z * z)) * hy + Math.abs(2 * (y * z - w * x)) * hz;
     if (paper.unfold && this.unfolded !== this.unfoldTo) {
       const step = UNFOLD_SPEED * delta;
       this.unfolded = this.unfoldTo > this.unfolded ? Math.min(this.unfoldTo, this.unfolded + step) : Math.max(this.unfoldTo, this.unfolded - step);
