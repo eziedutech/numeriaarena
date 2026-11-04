@@ -89,6 +89,8 @@ const FINGER_R = 0.008;
 const PRESS_FLASH_S = 0.3;
 const READY_S = 0.8;
 const CANCEL_M = 0.04;
+/** A card the finger is ready at stays its card unless another is this much nearer (metres). */
+const KEEP_M = 0.005;
 /** Back out this far in front of the face: the press. */
 const RELEASE_M = 0.002;
 /**
@@ -439,9 +441,18 @@ export class HandMenu {
         a.near = t;
       }
     }
-    // A card being poked keeps the fingertip while it is in it, though another be nearer.
-    const held = a.poke?.down ? targets.find((t) => t.object === a.poke?.obj) : undefined;
+    // A card being poked keeps the fingertip while it is in it, though another be nearer; one it is
+    // ready at keeps it unless another is nearer by KEEP_M, so a finger between two cards keeps its own.
+    const mine = a.poke ? targets.find((t) => t.object === a.poke?.obj) : undefined;
+    const held = a.poke?.down ? mine : undefined;
     if (held) a.near = held;
+    else if (mine && a.near !== mine) {
+      const d = mine.distance ? mine.distance(tip) : this.distance(mine.object, tip);
+      if (d <= a.nearD + KEEP_M) {
+        a.near = mine;
+        a.nearD = d;
+      }
+    }
     if (!a.near || (!held && a.nearD > NEAR_M)) {
       a.near = undefined;
       this.endPoke(side, a, 'the fingertip went off it');
@@ -454,7 +465,9 @@ export class HandMenu {
     if (a.poke && a.poke.obj !== t.object) this.endPoke(side, a, 'the fingertip went to another');
     this.showRing(a, f);
     if (a.poke?.down) {
-      if (!f.over) return this.endPoke(side, a, 'slid off its edge');
+      // A card is let go only once the finger is well off it (READY_EDGE_M): poking straight on at a
+      // card that lies back slides the finger up it as it goes in. A balloon's way out is its own (over).
+      if (t.distance ? !f.over : !f.near) return this.endPoke(side, a, 'slid off its edge');
       if (!t.distance && f.depth < -CANCEL_M) return this.endPoke(side, a, 'pushed on through it');
       a.poke.deep = Math.min(a.poke.deep, f.depth);
       if (f.depth < RELEASE_M && f.depth - a.poke.deep < RETREAT_M) return;
@@ -475,10 +488,17 @@ export class HandMenu {
       return;
     }
     if (f.depth > -POKE_M) return;
-    // In it: a poke, if it came from in front of it just now, moving itself, over the card.
+    // In it: a poke, if it came from in front of it, over the card. Not over it yet (by its edge) or in
+    // the cooldown, the finger stays ready, as a balloon's does, and goes down once it is: before, the
+    // ready was thrown away and the finger had to come out and in again, and the ring stayed white.
     const ready = a.poke;
+    if (!ready) return;
+    if (!t.distance && f.depth < -CANCEL_M) {
+      a.poke = undefined;
+      return;
+    }
+    if (!f.over || a.cooldown > 0) return;
     a.poke = undefined;
-    if (!ready || !f.over || a.cooldown > 0) return;
     // A balloon, weight, gate or plank moves: one drifting onto a still finger is no poke, so the finger
     // must have come in itself, just now. A card stands still, and a finger resting at its face before
     // pushing in, as one does with nothing to feel there, was over READY_S and never went green (Zia,
