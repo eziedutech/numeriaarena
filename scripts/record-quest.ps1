@@ -1,6 +1,6 @@
 # Records the Quest 2 view over USB with scrcpy, passthrough included (the headset's own
 # recording and casting show black in real mode), then cuts one eye into a 1920x1080 video
-# with a blurred fill at the sides, ready for the demo edit.
+# with a blurred fill at the sides, ready for the demo edit. Files go to recordings/ (git-ignored).
 #
 #   .\scripts\record-quest.ps1                 # record until Ctrl+C
 #   .\scripts\record-quest.ps1 -Seconds 60     # record 60 s
@@ -11,7 +11,7 @@
 param(
   [int]$Seconds = 0,
   [ValidateSet('tall', 'wide')][string]$Layout = 'tall',
-  [string]$OutDir = (Join-Path $HOME 'Videos\numeria'),
+  [string]$OutDir = (Join-Path (Split-Path $PSScriptRoot) 'recordings'),
   [string]$Scrcpy = '',
   [string]$Adb = ''
 )

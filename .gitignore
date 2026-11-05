@@ -43,3 +43,6 @@ Thumbs.db
 .idea/
 /assets/my_animals/
 scripts/loading/bundle-report.txt
+
+# Quest recordings from scripts/record-quest.ps1
+recordings/
