@@ -257,8 +257,6 @@ export class DeskSystem extends createSystem({
   private head = new Vector3();
   private forward = new Vector3();
   private hands!: Hands;
-  /** Whether each hand adapter's drawn model was last shown (see syncHandModels). */
-  private handModelOn = new WeakMap<object, boolean>();
   /** Seconds until Space Setup's box corners are read again. */
   private cornersIn = 0;
   private clock = 0;
@@ -611,13 +609,15 @@ export class DeskSystem extends createSystem({
   }
 
   private syncHandModels(): void {
+    // Only the model's visibility is set, every frame: toggleVisual also stops the visual's joint
+    // updates, and a model shown again without them (after the hand was lost and found) froze stiff.
     const want = getRoom() !== 'here';
-    const hands = (this.input.xr as unknown as { visualAdapters?: { hand?: Record<Side, { toggleVisual(on: boolean): void } | undefined> } }).visualAdapters?.hand;
+    const hands = (this.input.xr as unknown as { visualAdapters?: { hand?: Record<Side, { visual?: { model: Object3D; enabled?: boolean; toggle?(on: boolean): void } } | undefined> } }).visualAdapters?.hand;
     for (const side of ['left', 'right'] as const) {
-      const a = hands?.[side];
-      if (!a || this.handModelOn.get(a) === want) continue;
-      a.toggleVisual(want);
-      this.handModelOn.set(a, want);
+      const v = hands?.[side]?.visual;
+      if (!v) continue;
+      if (v.enabled === false) v.toggle?.(true);
+      v.model.visible = want;
     }
   }
 
