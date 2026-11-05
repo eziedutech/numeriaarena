@@ -15,6 +15,7 @@ param(
   [ValidateSet('tall', 'wide')][string]$Layout = 'tall',
   [string]$OutDir = (Join-Path (Split-Path $PSScriptRoot) 'recordings'),
   [string]$From = '',
+  [switch]$Preview,
   [string]$Scrcpy = '',
   [string]$Adb = ''
 )
@@ -60,8 +61,11 @@ $env:ADB = Find-Tool $Adb 'adb.exe' @("$env:LOCALAPPDATA\Android\Sdk\platform-to
 
 # The only encoder on Quest 2 that keeps running; the c2.qti ones stop with
 # "Pending dequeue output buffer request cancelled". MKV stays readable if stopped with Ctrl+C.
-$scArgs = @('--no-window', '--no-audio', '--video-codec=h264', '--video-encoder=OMX.qcom.video.encoder.avc',
+$scArgs = @('--no-audio', '--video-codec=h264', '--video-encoder=OMX.qcom.video.encoder.avc',
   '--max-size=1920', '--max-fps=30', "--record=$raw")
+# -Preview shows a small window of what is recorded; closing it (or record-quest.bat run again)
+# ends the recording cleanly.
+if ($Preview) { $scArgs += @('--window-title=Quest recording', '--window-width=640', '--no-control') } else { $scArgs += '--no-window' }
 if ($Seconds -gt 0) { $scArgs += "--time-limit=$Seconds" }
 
 Write-Host "Recording to $raw" -ForegroundColor Cyan
