@@ -50,6 +50,7 @@ function Cut-Eye {
     & ffmpeg -nostdin -loglevel error -y -i $raw -filter_complex $filter -c:v libx264 -crf 18 -preset medium -r 30 $out
     if (Test-Path $out) { Write-Host "Done: $out (raw kept: $raw)" -ForegroundColor Green }
   } else {
+    if (-not $From -and (Test-Path $raw)) { Remove-Item $raw }
     Write-Host 'Nothing was recorded. Is the headset on your head and USB debugging allowed?' -ForegroundColor Yellow
   }
 }
@@ -58,6 +59,20 @@ if ($From) { Cut-Eye; return }
 
 $Scrcpy = Find-Tool $Scrcpy 'scrcpy.exe' @("$HOME\tools\scrcpy\scrcpy.exe")
 $env:ADB = Find-Tool $Adb 'adb.exe' @("$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe", (Join-Path (Split-Path $Scrcpy) 'adb.exe'))
+
+# After the headset sleeps it may drop off USB or ask again to allow USB debugging: wait for it,
+# up to two minutes, telling what to do in the headset.
+$told = ''
+for ($i = 0; $i -lt 60; $i++) {
+  $state = (& $env:ADB devices | Select-Object -Skip 1 | Where-Object { $_ -match '\S' } | ForEach-Object { ($_ -split '\s+')[1] }) -join ','
+  if ($state -match '(^|,)device(,|$)') { break }
+  $msg = if ($state -match 'unauthorized') {
+    'Put the headset on and press Allow on "Allow USB debugging?", with "Always allow from this computer" ticked.'
+  } else { 'No headset on USB. Plug it in and wake it (put it on or press the power button).' }
+  if ($msg -ne $told) { Write-Host $msg -ForegroundColor Yellow; $told = $msg }
+  Start-Sleep -Seconds 2
+}
+if ($state -notmatch '(^|,)device(,|$)') { Write-Host 'The headset never came; nothing recorded.' -ForegroundColor Red; exit 1 }
 
 # The only encoder on Quest 2 that keeps running; the c2.qti ones stop with
 # "Pending dequeue output buffer request cancelled". MKV stays readable if stopped with Ctrl+C.
