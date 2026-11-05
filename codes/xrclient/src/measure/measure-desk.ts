@@ -491,6 +491,8 @@ export class MeasureDesk {
   private k1 = new Vector3();
   private k2 = new Vector3();
   private k3 = new Vector3();
+  /** The pins of a real thing being moved onto it by a pinch: where the pinch began, the hand's turn then, the pinched pin, and every pin then (desk frame). */
+  private realDrag?: { side: Side; from: Vector3; yaw: number; pivot: Vector3; base: Vector3[] };
   private rc = new Vector3();
   private rd = new Vector3();
   private rp = new Vector3();
@@ -1364,6 +1366,14 @@ export class MeasureDesk {
       }
       const made = this.addPin(this.v);
       this.selectedBy = side;
+      // A real box's first pin on its top stands over the table: its foot goes on the desk under it and
+      // the height is joined, so only the top's corners are pinned (its bottom ones are hard to reach).
+      if (this.source === 'real' && this.solid && this.pins.length === 1 && made.mesh.position.y > REAL_UP_M) {
+        this.u.copy(made.mesh.position);
+        this.u.y = 0;
+        const foot = this.addPin(this.real.localToWorld(this.u).clone());
+        this.join(foot, made);
+      }
       // A triangle's height foot is joined from the corner across from its side, whichever pin the line was at.
       const apex = this.heightFrom(made);
       if (apex) {
@@ -2221,7 +2231,7 @@ export class MeasureDesk {
     ghost.visible = false;
     if (this.pulls.has(side) || this.turns.has(side)) return;
     if (this.source === 'real' && this.handRay()) {
-      this.dropPinReal(side, delta);
+      if (!this.dragReal(side)) this.dropPinReal(side, delta);
       return;
     }
     if (this.rayMode()) {
@@ -2339,6 +2349,61 @@ export class MeasureDesk {
     this.lastPin[side].copy(tip);
     console.info(`[measure] ${side} fingertip pins the real thing${onPin ? ' on a pin' : ''}`);
     this.tapAim[side] = { origin: tip.clone(), dir: new Vector3(0, -1, 0), at: spot.clone() };
+  }
+
+  /**
+   * The game cannot see a real thing move, so its pins are moved onto it by hand: a pinch on a pin takes
+   * every pin, which follow the pinch across the desk and turn about the pinched pin as the hand turns.
+   * True while this hand drags them (it pins nothing then).
+   */
+  private dragReal(side: Side): boolean {
+    const h = this.hands.get(side);
+    const d = this.realDrag;
+    if (d && d.side !== side) return false;
+    if (d) {
+      if (!h.tracked || !h.pinching) {
+        this.realDrag = undefined;
+        sfx('place', { at: h.pinchAt });
+        console.info(`[measure] ${side} hand moved the pins of the real thing`);
+        this.changed();
+        return true;
+      }
+      this.u.copy(h.pinchAt);
+      this.metric.worldToLocal(this.u);
+      const turn = this.handYaw(h) - d.yaw;
+      const c = Math.cos(turn);
+      const s = Math.sin(turn);
+      const dx = this.u.x - d.from.x;
+      const dz = this.u.z - d.from.z;
+      this.pins.forEach((p, i) => {
+        const b = d.base[i];
+        if (!b) return;
+        const x = b.x - d.pivot.x;
+        const z = b.z - d.pivot.z;
+        p.mesh.position.set(d.pivot.x + x * c + z * s + dx, b.y, d.pivot.z - x * s + z * c + dz);
+      });
+      for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
+      this.ghosts[side].visible = false;
+      return true;
+    }
+    if (!h.tracked || !h.pinchStart || this.pins.length === 0 || fingertipOnCard(side)) return false;
+    const pin = this.nearestPin(h.pinchAt, GRAB_M);
+    if (!pin) return false;
+    this.u.copy(h.pinchAt);
+    this.metric.worldToLocal(this.u);
+    this.realDrag = { side, from: this.u.clone(), yaw: this.handYaw(h), pivot: pin.mesh.position.clone(), base: this.pins.map((p) => p.mesh.position.clone()) };
+    this.dwell[side] = 0;
+    sfx('grab', { at: h.pinchAt });
+    return true;
+  }
+
+  /** Which way a hand faces about the desk's up (radians): from its wrist to its index knuckle. */
+  private handYaw(h: { wrist: Vector3; knuckle: Vector3 }): number {
+    this.k1.copy(h.wrist);
+    this.metric.worldToLocal(this.k1);
+    this.k3.copy(h.knuckle);
+    this.metric.worldToLocal(this.k3);
+    return Math.atan2(this.k3.x - this.k1.x, this.k3.z - this.k1.z);
   }
 
   /**
@@ -2501,6 +2566,7 @@ export class MeasureDesk {
   }
 
   private clearPins(): void {
+    this.realDrag = undefined;
     this.dropSpin();
     this.clearSelection();
     for (const pull of this.pulls.values()) {

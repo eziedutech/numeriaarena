@@ -23,7 +23,7 @@ const EN = {
   realInRoom: 'To measure something real near you, set ROOM to MY ROOM on the desk menu.',
   pickObject: 'WHAT DO YOU HAVE?',
   objectNote: 'A book is a rectangle, a plate a circle, a box a box. It must be bigger than 5 cm.',
-  realTask: 'Pin the corners of your object. A box is pinned along its base, then up from a corner.',
+  realTask: 'Point at a corner and hold still to pin it. A box: pin along its top, its height comes from the table. Moved it? Pinch a pin and move or turn the pins back onto it.',
   shapes: {
     square: 'SQUARE',
     rectangle: 'RECTANGLE',
@@ -143,7 +143,7 @@ const ID: MeasureText = {
   realInRoom: 'Untuk mengukur benda nyata di dekatmu, ubah RUANG menjadi RUANGANKU di menu meja.',
   pickObject: 'APA YANG KAMU PUNYA?',
   objectNote: 'Buku itu persegi panjang, piring itu lingkaran, kardus itu balok. Ukurannya harus lebih dari 5 cm.',
-  realTask: 'Pasang pin di sudut bendamu. Balok dipasang di alasnya dulu, lalu ke atas dari satu sudut.',
+  realTask: 'Tunjuk sudut dan tahan diam untuk memasang pin. Balok: pasang pin di sisi atasnya, tingginya diambil dari meja. Bendanya bergeser? Cubit satu pin lalu geser atau putar pin kembali ke bendanya.',
   shapes: {
     square: 'PERSEGI',
     rectangle: 'PERSEGI PANJANG',
