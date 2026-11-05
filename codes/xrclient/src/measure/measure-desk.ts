@@ -352,9 +352,12 @@ const REAL_PLANE_M = 0.04;
 const REAL_SQUARE_M = 0.05;
 /** A fingertip this near a corner of a box Space Setup knows (a table, storage) pins onto that corner. */
 const REAL_SCENE_M = 0.04;
-/** The green frame of the box a real thing's pins make, drawn as they are set, and where CHECK stands. */
+/** The green frame of the box a real thing's top pins make. */
 const FRAME_R = 0.0022;
-const CHECK_X = 0.16;
+/** A pin on something real goes on the finger's pad, this far under its tip joint (the finger's thickness). */
+const REAL_SKIN_M = 0.008;
+/** A real box's top corner is read only when its two edges are no further off square than this (|cos|). */
+const REAL_CORNER_COS = Math.cos((55 * Math.PI) / 180);
 /** The words over the desk, and the time and points under them. */
 const HEADER = new Vector3(0, 0.3, -0.32);
 const STATUS = new Vector3(0, 0.265, -0.32);
@@ -505,11 +508,9 @@ export class MeasureDesk {
   private k3 = new Vector3();
   /** The pins of a real thing being moved onto it by a pinch: where the pinch began, the hand's turn then, the pinched pin, and every pin then (desk frame). */
   private realDrag?: { side: Side; from: Vector3; yaw: number; pivot: Vector3; base: Vector3[] };
-  /** The twelve edges of the green frame over a real box, and the CHECK card that has it read. */
+  /** The twelve edges of the green frame over a real box. */
   private frameEdges: Mesh[] = [];
-  private checkCard?: Entity;
-  /** CHECK was pressed: this reading of a real box goes to the core. */
-  private checking = false;
+  private skin = new Vector3();
   private f1 = new Vector3();
   private f2 = new Vector3();
   private rc = new Vector3();
@@ -985,12 +986,6 @@ export class MeasureDesk {
           this.showTask();
         }
         return;
-      case 'me_check':
-        if (this.step !== 'measure' || !this.realBox()) return;
-        this.checking = true;
-        this.changed();
-        this.checking = false;
-        return;
       case 'me_clear':
         if (this.step !== 'measure') return;
         this.clearPins();
@@ -1095,7 +1090,6 @@ export class MeasureDesk {
     }
     this.paintPins();
     this.syncRemoveCard();
-    this.syncCheckCard();
     this.showPreview();
     this.updateBin(delta);
     // A controller's trigger works as a hand's tap does: the same running line, pin by pin.
@@ -2338,7 +2332,9 @@ export class MeasureDesk {
       this.dwell[side] = 0;
       return;
     }
-    const tip = h.tip;
+    // The pin goes where the finger's pad meets the thing, under the tip joint, not over it.
+    const tip = this.skin.copy(h.tip);
+    tip.y -= REAL_SKIN_M;
     if (!this.armed[side]) {
       if (tip.distanceTo(this.lastPin[side]) > REARM_M) this.armed[side] = true;
       else return;
@@ -2714,7 +2710,7 @@ export class MeasureDesk {
     const g = this.t.realBox;
     if (this.frameEdges[0]?.visible) return g.framed;
     const top = this.pins.filter((p) => p.mesh.position.y > REAL_FLOOR_M).length;
-    return [g.first, g.second, g.third][top] ?? g.more;
+    return [g.first, g.second, g.third][top] ?? g.framed;
   }
 
   /**
@@ -2723,7 +2719,7 @@ export class MeasureDesk {
    * False while the pins make no box yet.
    */
   private paintFrame(): boolean {
-    const spots = this.step === 'measure' && this.realBox() ? this.fromEdges() : undefined;
+    const spots = this.step === 'measure' && this.realBox() ? this.realBoxSpots() : undefined;
     if (!spots || spots.length < 4) {
       for (const m of this.frameEdges) m.visible = false;
       return false;
@@ -2757,19 +2753,41 @@ export class MeasureDesk {
     return true;
   }
 
-  /** CHECK stands at the front while a real box's frame shows. */
-  private syncCheckCard(): void {
-    if (this.checkCard && !this.checkCard.active) this.checkCard = undefined;
-    const want = this.step === 'measure' && this.realBox() && !!this.frameEdges[0]?.visible;
-    if (want && !this.checkCard) {
-      this.card('me_check', this.t.check, CHECK_X, TURN_Z, TEAL);
-      this.checkCard = this.cards[this.cards.length - 1];
-    } else if (!want && this.checkCard) {
-      const card = this.checkCard;
-      this.checkCard = undefined;
-      this.cards = this.cards.filter((c) => c !== card);
-      if (card.active) this.host.remove(card);
+  /**
+   * A real box from three corners of its top alone: the table is its bottom, so its height is how high
+   * the top pins stand. The corner whose two edges are squarest is the box's corner; the edges are laid
+   * flat and made square, and the box goes to the core as a corner on the desk and its three edges.
+   */
+  private realBoxSpots(): Spot[] | undefined {
+    const top = this.pins.filter((p) => p.mesh.position.y > REAL_FLOOR_M).slice(0, 3);
+    if (top.length < 3) return undefined;
+    let best = -1;
+    let bestCos = REAL_CORNER_COS;
+    const flat = (from: Vector3, to: Vector3, out: Vector3) => out.copy(to).sub(from).setY(0);
+    for (let i = 0; i < 3; i += 1) {
+      const c = top[i].mesh.position;
+      flat(c, top[(i + 1) % 3].mesh.position, this.f1);
+      flat(c, top[(i + 2) % 3].mesh.position, this.f2);
+      if (this.f1.length() < 1e-3 || this.f2.length() < 1e-3) continue;
+      const cos = Math.abs(this.f1.normalize().dot(this.f2.normalize()));
+      if (cos < bestCos) {
+        best = i;
+        bestCos = cos;
+      }
     }
+    if (best < 0) {
+      this.tell(this.t.realBox.notSquare);
+      return undefined;
+    }
+    const c = top[best].mesh.position;
+    const along = flat(c, top[(best + 1) % 3].mesh.position, new Vector3());
+    const across = flat(c, top[(best + 2) % 3].mesh.position, new Vector3());
+    // Square: the across edge loses what of it runs along.
+    const dir = along.clone().normalize();
+    across.addScaledVector(dir, -across.dot(dir));
+    const h = top.reduce((sum, p) => sum + p.mesh.position.y, 0) / 3;
+    const foot = c.clone().setY(0);
+    return [{ at: foot }, { at: foot.clone().add(along) }, { at: foot.clone().add(across) }, { at: foot.clone().setY(h) }];
   }
 
   /**
@@ -2933,16 +2951,13 @@ export class MeasureDesk {
   private changed(): void {
     const o = this.offer;
     if (!o || !this.core || this.step !== 'measure' || this.spin) return;
-    // A real box is read only when CHECK is pressed: till then its green frame shows what the pins make.
-    if (this.realBox()) {
-      const framed = this.paintFrame();
-      if (!this.checking || !framed) {
-        this.showTask();
-        return;
-      }
+    // A real box is read from three corners of its top, as soon as they are pinned.
+    if (this.realBox() && !this.paintFrame()) {
+      this.showTask();
+      return;
     }
-    const ring = this.order();
-    const spots = ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
+    const ring = this.realBox() ? undefined : this.order();
+    const spots = this.realBox() ? this.realBoxSpots() : ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
     if (!spots) {
       console.info(`[measure] waiting: ${this.pins.length} pins, ${this.threads.length} threads`);
       // A triangle's three sides are joined for its area: what is still wanted is said, not left to guess.
