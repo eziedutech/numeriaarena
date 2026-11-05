@@ -358,8 +358,11 @@ const REAL_SQUARE_M = 0.05;
 const REAL_SCENE_M = 0.04;
 /** The green frame of the box a real thing's top pins make. */
 const FRAME_R = 0.0022;
-/** A pin on something real goes on the finger's pad, this far under its tip joint (the finger's thickness). */
+/** A pin on something real goes on the finger's skin, this far ahead of its tip joint along the finger. */
 const REAL_SKIN_M = 0.008;
+/** A finger come this far down from a real box's chosen top corner, this near under it, draws its height to the table. */
+const REAL_DROP_M = 0.04;
+const REAL_DROP_REACH_M = 0.1;
 /** A real box's line is upright when it rises this many times more than it runs, level when under half. */
 const REAL_UPRIGHT = 2;
 const REAL_LEVEL = 0.5;
@@ -519,6 +522,7 @@ export class MeasureDesk {
   /** The twelve edges of the green frame over a real box. */
   private frameEdges: Mesh[] = [];
   private skin = new Vector3();
+  private fingerDir = new Vector3();
   private e1 = new Vector3();
   private e2 = new Vector3();
   private e3 = new Vector3();
@@ -2351,13 +2355,16 @@ export class MeasureDesk {
       this.dwell[side] = 0;
       return;
     }
-    // The pin goes where the finger's pad meets the thing, under the tip joint, not over it.
+    // The pin goes where the finger's skin meets the thing: ahead of the tip joint along the finger, as it
+    // is held, whether it comes down onto a top or in from the side.
     const tip = this.skin.copy(h.tip);
-    tip.y -= REAL_SKIN_M;
+    this.fingerDir.copy(h.tip).sub(h.knuckle);
+    if (this.fingerDir.length() > 1e-3) tip.addScaledVector(this.fingerDir.normalize(), REAL_SKIN_M);
     if (!this.armed[side]) {
       if (tip.distanceTo(this.lastPin[side]) > REARM_M) this.armed[side] = true;
       else return;
     }
+    if (this.realBoxDrop(side, tip)) return;
     if (!h.pointing() || !h.still()) {
       this.dwell[side] = 0;
       return;
@@ -2394,6 +2401,28 @@ export class MeasureDesk {
     this.lastPin[side].copy(tip);
     console.info(`[measure] ${side} fingertip pins the real thing${onPin ? ' on a pin' : ''}`);
     this.tapAim[side] = { origin: tip.clone(), dir: new Vector3(0, -1, 0), at: spot.clone() };
+  }
+
+  /**
+   * A real box's height: a finger come down from the chosen top corner draws it at once, straight down to
+   * the table, where the box stands. Nothing is held: pointing down beside a box, the hand hides the
+   * fingertip from the headset, which then never reads it still. True when it drew the height.
+   */
+  private realBoxDrop(side: Side, tip: Vector3): boolean {
+    const top = this.selected;
+    if (!this.realBox() || !top || top.mesh.position.y <= REAL_FLOOR_M || this.threads.some((t) => t.kind === 'h')) return false;
+    const p = top.mesh.position;
+    this.u.copy(tip);
+    this.metric.worldToLocal(this.u);
+    if (this.u.y > p.y - Math.min(REAL_DROP_M, p.y / 2) || Math.hypot(this.u.x - p.x, this.u.z - p.z) > REAL_DROP_REACH_M) return false;
+    this.u.set(p.x, 0, p.z);
+    this.metric.localToWorld(this.u);
+    this.dwell[side] = 0;
+    this.armed[side] = false;
+    this.lastPin[side].copy(tip);
+    console.info(`[measure] ${side} finger draws the real box's height down to the table`);
+    this.tapAim[side] = { origin: tip.clone(), dir: new Vector3(0, -1, 0), at: this.u.clone() };
+    return true;
   }
 
   /**
