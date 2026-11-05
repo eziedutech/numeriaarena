@@ -18,6 +18,7 @@ import { boardUp, setBoard, setBoardNear } from '../art/board.js';
 import { Label } from '../art/label.js';
 import { textPanel, ToolButton, type PanelLine, type ToolIcon, type ToolLook } from '../art/tool-icon.js';
 import { sfx } from '../audio.js';
+import { sceneBoxCorners } from '../desk.js';
 import { fingertipOnCard, setRayReach, setRayRest } from '../hand-menu.js';
 import { accessOn, getLang, getRoom, setRoom, type Room } from '../settings.js';
 import { Hands, type HandAdapters, type Side } from './hands.js';
@@ -72,6 +73,7 @@ export type MeasureChoice =
   | 'me_net'
   | 'me_spin'
   | 'me_remove'
+  | 'me_check'
   | 'me_sh_square'
   | 'me_sh_rectangle'
   | 'me_sh_triangle'
@@ -348,6 +350,11 @@ const REAL_REST_HIGH_M = 0.4;
 const REAL_PLANE_M = 0.04;
 /** Once a real thing is read, a pin this near a corner of the true shape goes onto it. */
 const REAL_SQUARE_M = 0.05;
+/** A fingertip this near a corner of a box Space Setup knows (a table, storage) pins onto that corner. */
+const REAL_SCENE_M = 0.04;
+/** The green frame of the box a real thing's pins make, drawn as they are set, and where CHECK stands. */
+const FRAME_R = 0.0022;
+const CHECK_X = 0.16;
 /** The words over the desk, and the time and points under them. */
 const HEADER = new Vector3(0, 0.3, -0.32);
 const STATUS = new Vector3(0, 0.265, -0.32);
@@ -386,6 +393,7 @@ const CARD_ICON: Partial<Record<MeasureChoice, ToolIcon>> = {
   me_net: 'box',
   me_spin: 'turnRight',
   me_remove: 'trash',
+  me_check: 'check',
   me_sh_square: 'square',
   me_sh_rectangle: 'rectangle',
   me_sh_triangle: 'triangle',
@@ -422,6 +430,8 @@ const threadMat = new MeshStandardMaterial({ color: BLUE, roughness: 0.8, polygo
 const THREAD_LIFT = 0.004;
 /** A pin and its threads while REMOVE PIN is lit: what it takes away. */
 const removeMat = new MeshStandardMaterial({ color: 0xe53935, roughness: 0.6, emissive: 0x5a0000 });
+const frameGeo = new CylinderGeometry(FRAME_R, FRAME_R, 1, 6).translate(0, 0.5, 0);
+const frameMat = new MeshBasicMaterial({ color: 0x2fbf71, transparent: true, opacity: 0.6, depthWrite: false });
 const guideGeo = new CylinderGeometry(0.0022, 0.0022, 1, 6).translate(0, 0.5, 0);
 const guideMat = new MeshBasicMaterial({ color: 0xffc940, transparent: true, opacity: 0.95, depthWrite: false });
 // The line a turning ball writes on itself.
@@ -495,6 +505,13 @@ export class MeasureDesk {
   private k3 = new Vector3();
   /** The pins of a real thing being moved onto it by a pinch: where the pinch began, the hand's turn then, the pinched pin, and every pin then (desk frame). */
   private realDrag?: { side: Side; from: Vector3; yaw: number; pivot: Vector3; base: Vector3[] };
+  /** The twelve edges of the green frame over a real box, and the CHECK card that has it read. */
+  private frameEdges: Mesh[] = [];
+  private checkCard?: Entity;
+  /** CHECK was pressed: this reading of a real box goes to the core. */
+  private checking = false;
+  private f1 = new Vector3();
+  private f2 = new Vector3();
   private rc = new Vector3();
   private rd = new Vector3();
   private rp = new Vector3();
@@ -855,7 +872,10 @@ export class MeasureDesk {
     if (o.source === 'paper' && (o.shape === 'cube' || o.shape === 'cuboid')) lines.push([this.t.toolsNote, 0.014, INK]);
     if (o.source === 'paper' && o.shape === 'cylinder') lines.push([this.t.sweepNote, 0.014, INK]);
     if (o.source === 'paper' && o.shape === 'sphere' && this.spin?.stage !== 'turn') lines.push([this.t.sweepBall, 0.014, INK]);
-    if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
+    if (this.realBox()) {
+      lines.push([this.realGuide(), 0.017, '#3469c4']);
+      lines.push([this.t.realBox.moved, 0.014, INK]);
+    } else if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
     this.say(lines);
@@ -965,6 +985,12 @@ export class MeasureDesk {
           this.showTask();
         }
         return;
+      case 'me_check':
+        if (this.step !== 'measure' || !this.realBox()) return;
+        this.checking = true;
+        this.changed();
+        this.checking = false;
+        return;
       case 'me_clear':
         if (this.step !== 'measure') return;
         this.clearPins();
@@ -1069,6 +1095,7 @@ export class MeasureDesk {
     }
     this.paintPins();
     this.syncRemoveCard();
+    this.syncCheckCard();
     this.showPreview();
     this.updateBin(delta);
     // A controller's trigger works as a hand's tap does: the same running line, pin by pin.
@@ -2326,8 +2353,9 @@ export class MeasureDesk {
     else this.dwellAt[side].lerp(tip, k);
     const onPin = this.nearestPin(this.dwellAt[side], TOUCH_PIN_M);
     const spot = this.v;
+    let onScene = false;
     if (onPin) onPin.mesh.getWorldPosition(spot);
-    else this.realSpot(spot.copy(this.dwellAt[side]));
+    else onScene = this.realSpot(spot.copy(this.dwellAt[side]));
     if (!onPin) {
       if (!this.pinnable(spot) || this.nearestPin(spot, this.pinGap())) {
         this.dwell[side] = 0;
@@ -2341,7 +2369,7 @@ export class MeasureDesk {
     }
     this.dwell[side] += delta;
     ghost.visible = true;
-    ghost.material = onPin ? ghostLitMat : ghostMat;
+    ghost.material = onPin || onScene ? ghostLitMat : ghostMat;
     ghost.position.copy(spot);
     this.metric.worldToLocal(ghost.position);
     ghost.scale.setScalar(0.4 + 0.8 * Math.min(1, this.dwell[side] / REAL_DWELL_S));
@@ -2385,6 +2413,7 @@ export class MeasureDesk {
         p.mesh.position.set(d.pivot.x + x * c + z * s + dx, b.y, d.pivot.z - x * s + z * c + dz);
       });
       for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
+      if (this.realBox()) this.paintFrame();
       this.ghosts[side].visible = false;
       return true;
     }
@@ -2413,7 +2442,21 @@ export class MeasureDesk {
    * over it, on the vertical line over a box's base pin if near one, and onto the plane of a flat
    * thing's first three pins if near it, so a trembling hand does not make it uneven.
    */
-  private realSpot(world: Vector3): void {
+  private realSpot(world: Vector3): boolean {
+    // A corner of a box Space Setup knows (the table, storage) is where it is: the pin goes onto it.
+    let near: Vector3 | undefined;
+    let nearD = REAL_SCENE_M;
+    for (const c of sceneBoxCorners()) {
+      const d = c.distanceTo(world);
+      if (d < nearD) {
+        near = c;
+        nearD = d;
+      }
+    }
+    if (near) {
+      world.copy(near);
+      return true;
+    }
     this.u.copy(world);
     this.metric.worldToLocal(this.u);
     if (this.u.y < REAL_FLOOR_M) this.u.y = 0;
@@ -2443,6 +2486,7 @@ export class MeasureDesk {
       }
     }
     this.metric.localToWorld(world.copy(this.u));
+    return false;
   }
 
   private addPin(spot: Vector3): Pin {
@@ -2478,6 +2522,10 @@ export class MeasureDesk {
     for (const th of this.threads.filter((t) => t.a === pin || t.b === pin)) this.removeThread(th);
     pin.mesh.removeFromParent();
     this.pins = this.pins.filter((p) => p !== pin);
+    if (this.realBox()) {
+      this.paintFrame();
+      this.showTask();
+    }
   }
 
   private removeThread(th: Thread): void {
@@ -2569,6 +2617,7 @@ export class MeasureDesk {
 
   private clearPins(): void {
     this.realDrag = undefined;
+    for (const m of this.frameEdges) m.visible = false;
     this.dropSpin();
     this.clearSelection();
     for (const pull of this.pulls.values()) {
@@ -2651,6 +2700,75 @@ export class MeasureDesk {
         const th = this.threads[0];
         return this.threads.length === 1 && th ? [th.a, th.b] : undefined;
       }
+    }
+  }
+
+  /** The task is a real box (a cube or a cuboid near the player). */
+  private realBox(): boolean {
+    const o = this.offer;
+    return o?.source === 'real' && (o.shape === 'cube' || o.shape === 'cuboid');
+  }
+
+  /** What a real box's pins want next, told one corner at a time. */
+  private realGuide(): string {
+    const g = this.t.realBox;
+    if (this.frameEdges[0]?.visible) return g.framed;
+    const top = this.pins.filter((p) => p.mesh.position.y > REAL_FLOOR_M).length;
+    return [g.first, g.second, g.third][top] ?? g.more;
+  }
+
+  /**
+   * The green frame of the box the pins make (desk frame), as soon as three edges from a corner are
+   * joined: the child sees where it misses the real box and moves the pins onto it before CHECK.
+   * False while the pins make no box yet.
+   */
+  private paintFrame(): boolean {
+    const spots = this.step === 'measure' && this.realBox() ? this.fromEdges() : undefined;
+    if (!spots || spots.length < 4) {
+      for (const m of this.frameEdges) m.visible = false;
+      return false;
+    }
+    const c = spots[0].at;
+    const e = [1, 2, 3].map((i) => spots[i].at.clone().sub(c));
+    const corner = (i: number, out: Vector3) =>
+      out.copy(c).addScaledVector(e[0], i & 1).addScaledVector(e[1], (i >> 1) & 1).addScaledVector(e[2], (i >> 2) & 1);
+    let k = 0;
+    for (let i = 0; i < 8; i += 1) {
+      for (let b = 0; b < 3; b += 1) {
+        if (i & (1 << b)) continue;
+        let m = this.frameEdges[k];
+        if (!m) {
+          m = new Mesh(frameGeo, frameMat);
+          m.name = 'measure-frame';
+          m.renderOrder = 4;
+          this.frameEdges.push(m);
+        }
+        if (m.parent !== this.real) this.real.add(m);
+        corner(i, this.f1);
+        corner(i | (1 << b), this.f2).sub(this.f1);
+        const length = this.f2.length();
+        m.visible = true;
+        m.position.copy(this.f1);
+        m.scale.set(1, Math.max(length, 1e-4), 1);
+        if (length > 1e-4) m.quaternion.setFromUnitVectors(UP, this.f2.divideScalar(length));
+        k += 1;
+      }
+    }
+    return true;
+  }
+
+  /** CHECK stands at the front while a real box's frame shows. */
+  private syncCheckCard(): void {
+    if (this.checkCard && !this.checkCard.active) this.checkCard = undefined;
+    const want = this.step === 'measure' && this.realBox() && !!this.frameEdges[0]?.visible;
+    if (want && !this.checkCard) {
+      this.card('me_check', this.t.check, CHECK_X, TURN_Z, TEAL);
+      this.checkCard = this.cards[this.cards.length - 1];
+    } else if (!want && this.checkCard) {
+      const card = this.checkCard;
+      this.checkCard = undefined;
+      this.cards = this.cards.filter((c) => c !== card);
+      if (card.active) this.host.remove(card);
     }
   }
 
@@ -2815,6 +2933,14 @@ export class MeasureDesk {
   private changed(): void {
     const o = this.offer;
     if (!o || !this.core || this.step !== 'measure' || this.spin) return;
+    // A real box is read only when CHECK is pressed: till then its green frame shows what the pins make.
+    if (this.realBox()) {
+      const framed = this.paintFrame();
+      if (!this.checking || !framed) {
+        this.showTask();
+        return;
+      }
+    }
     const ring = this.order();
     const spots = ring ? ring.map((p): Spot => ({ pin: p, at: this.at(p).clone() })) : this.fromEdges();
     if (!spots) {
@@ -2849,6 +2975,8 @@ export class MeasureDesk {
     });
     if (o.source === 'real') this.squareRest(r.pins, spots);
     for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
+    // The frame follows the box made true.
+    if (this.realBox()) this.paintFrame();
     sfx('sparkle');
     this.message = this.t.measured(r.process_points);
     this.messageInk = '#2f7d32';

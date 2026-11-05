@@ -100,6 +100,17 @@ let againAsked = false;
 export function placeDeskAgain(): void {
   againAsked = true;
 }
+/**
+ * The corners (world) of the boxes Space Setup knows round the player (a table, storage, a bed, a
+ * couch...), not the room's walls, floor or ceiling: Measure Hunt pins a real thing's corner onto one
+ * a fingertip is near. Refreshed once a second while in XR.
+ */
+const boxCorners: Vector3[] = [];
+const NOT_FURNITURE = new Set(['floor', 'ceiling', 'wall', 'global mesh', 'invisible wall face', 'door frame', 'window frame', 'wall art']);
+const CORNERS_EVERY_S = 1;
+export function sceneBoxCorners(): readonly Vector3[] {
+  return boxCorners;
+}
 /*
  * A desk that rose by itself to a fingertip resting still over it (v0.4.2) was taken out in
  * v0.4.3: a hand held still in the air after a press looks the same, and raised it too high.
@@ -248,6 +259,8 @@ export class DeskSystem extends createSystem({
   private hands!: Hands;
   /** Whether each hand adapter's drawn model was last shown (see syncHandModels). */
   private handModelOn = new WeakMap<object, boolean>();
+  /** Seconds until Space Setup's box corners are read again. */
+  private cornersIn = 0;
   private clock = 0;
   /** Placed again from the menu: Space Setup's table is not taken this time. */
   private skipTable = false;
@@ -578,6 +591,25 @@ export class DeskSystem extends createSystem({
    * (Quest 2 has no depth to hide them). In the classroom and the bedroom, where nothing real shows,
    * they are drawn. The pokes, rings and rays are not the models and stay.
    */
+  private refreshCorners(): void {
+    let n = 0;
+    for (const e of this.queries.meshes.entities) {
+      if (!e.getValue(XRMesh, 'isBounded3D')) continue;
+      if (NOT_FURNITURE.has(String(e.getValue(XRMesh, 'semanticLabel') ?? '').toLowerCase())) continue;
+      const obj = e.object3D;
+      if (!obj) continue;
+      const min = e.getVectorView(XRMesh, 'min');
+      const max = e.getVectorView(XRMesh, 'max');
+      obj.updateWorldMatrix(true, false);
+      for (let i = 0; i < 8; i += 1) {
+        const v = (boxCorners[n] ??= new Vector3());
+        v.set(i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]).applyMatrix4(obj.matrixWorld);
+        n += 1;
+      }
+    }
+    boxCorners.length = n;
+  }
+
   private syncHandModels(): void {
     const want = getRoom() !== 'here';
     const hands = (this.input.xr as unknown as { visualAdapters?: { hand?: Record<Side, { toggleVisual(on: boolean): void } | undefined> } }).visualAdapters?.hand;
@@ -598,6 +630,11 @@ export class DeskSystem extends createSystem({
       return;
     }
     this.syncHandModels();
+    this.cornersIn -= delta;
+    if (this.cornersIn <= 0) {
+      this.cornersIn = CORNERS_EVERY_S;
+      this.refreshCorners();
+    }
     if (againAsked) {
       againAsked = false;
       if (e.getValue(DeskRoot, 'placed')) {

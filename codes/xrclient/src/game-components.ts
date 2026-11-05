@@ -123,6 +123,7 @@ const Games = {
   MeNet: 'me_net',
   MeSpin: 'me_spin',
   MeRemove: 'me_remove',
+  MeCheck: 'me_check',
   MeShSquare: 'me_sh_square',
   MeShRectangle: 'me_sh_rectangle',
   MeShTriangle: 'me_sh_triangle',
