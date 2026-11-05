@@ -79,8 +79,12 @@ const FLAT_HOLD_S = 1;
 const FLAT_STILL_M = 0.02;
 /** The flat hand must be at least this far in front of the eyes (metres): held out, not in the lap. */
 const FLAT_AHEAD_M = 0.2;
-/** The desk top goes this far under the lowest fingertip joint (metres): the finger's pad is below it. */
-const FLAT_PAD_M = 0.007;
+/**
+ * The desk top goes this far under the lowest fingertip joint (metres): the finger's pad is below it,
+ * and the tracked joints ride above a hand lying on the table. 0.7 cm left the book over the table, and
+ * Zia found two presses of LOWER (2 cm more) the best fit (6 Nov 2026), so that is where it starts.
+ */
+const FLAT_PAD_M = 0.027;
 /** With no flat hand this long (seconds), the book is put in front of the player at a guessed height. */
 const FLAT_WAIT_S = 25;
 const JOINT_M = new Matrix4();
