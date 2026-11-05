@@ -158,11 +158,15 @@ interface Spot {
   at: Vector3;
 }
 
+/** Which edge of a real box a thread is: its length (left-right), width (front-back) or height (up-down). */
+type BoxEdge = 'l' | 'w' | 'h';
+
 interface Thread {
   a: Pin;
   b: Pin;
   mesh: Mesh;
   label: Label;
+  kind?: BoxEdge;
 }
 
 interface Pull {
@@ -356,8 +360,12 @@ const REAL_SCENE_M = 0.04;
 const FRAME_R = 0.0022;
 /** A pin on something real goes on the finger's pad, this far under its tip joint (the finger's thickness). */
 const REAL_SKIN_M = 0.008;
-/** A real box's top corner is read only when its two edges are no further off square than this (|cos|). */
-const REAL_CORNER_COS = Math.cos((55 * Math.PI) / 180);
+/** A real box's line is upright when it rises this many times more than it runs, level when under half. */
+const REAL_UPRIGHT = 2;
+const REAL_LEVEL = 0.5;
+/** A level line this near the box's first level line (|cos|) runs with it, this near square to it across it. */
+const REAL_ALONG_COS = Math.cos((30 * Math.PI) / 180);
+const REAL_ACROSS_COS = Math.cos((60 * Math.PI) / 180);
 /** The words over the desk, and the time and points under them. */
 const HEADER = new Vector3(0, 0.3, -0.32);
 const STATUS = new Vector3(0, 0.265, -0.32);
@@ -511,6 +519,9 @@ export class MeasureDesk {
   /** The twelve edges of the green frame over a real box. */
   private frameEdges: Mesh[] = [];
   private skin = new Vector3();
+  private e1 = new Vector3();
+  private e2 = new Vector3();
+  private e3 = new Vector3();
   private f1 = new Vector3();
   private f2 = new Vector3();
   private rc = new Vector3();
@@ -607,7 +618,7 @@ export class MeasureDesk {
   /** Where a button's quarter turn is taking the solid. */
   private turnGoal?: Quaternion;
   private unfolded = 0;
-  private hint = '';
+  private hint: string[] = [];
   private message = '';
   private messageInk = INK;
   private timeLeft = SESSION_S;
@@ -855,7 +866,7 @@ export class MeasureDesk {
     row.forEach(([choice, word, color], i) => this.card(choice, word, (i - (row.length - 1) / 2) * TURN_STEP, TURN_Z, color));
   }
 
-  private steps(o: HuntOffer): string {
+  private steps(o: HuntOffer): string[] {
     const s = this.t.steps;
     if (o.shape === 'cube' || o.shape === 'cuboid') return s.box;
     if (o.shape === 'triangle' && o.task === 'area') return s.triangleArea;
@@ -867,16 +878,17 @@ export class MeasureDesk {
   private showTask(): void {
     const o = this.offer;
     if (!o) return;
-    const lines: [string, number, string][] = [[o.prompt[getLang()], 0.022, HEAD], [this.hint, 0.016, INK]];
+    const lines: [string, number, string][] = [[o.prompt[getLang()], 0.022, HEAD]];
+    if (!this.realBox()) for (const l of this.hint) lines.push([l, 0.016, INK]);
     // How a pin is made is told before the play (CARA MENGUKUR): the board keeps to the question and one short line.
     // The turn and net cards are a box's; a ball or a cylinder says how it is swept instead.
     if (o.source === 'paper' && (o.shape === 'cube' || o.shape === 'cuboid')) lines.push([this.t.toolsNote, 0.014, INK]);
     if (o.source === 'paper' && o.shape === 'cylinder') lines.push([this.t.sweepNote, 0.014, INK]);
     if (o.source === 'paper' && o.shape === 'sphere' && this.spin?.stage !== 'turn') lines.push([this.t.sweepBall, 0.014, INK]);
     if (this.realBox()) {
+      for (const l of this.t.realBox.steps) lines.push([l, 0.015, INK]);
       lines.push([this.realGuide(), 0.017, '#3469c4']);
-      lines.push([this.t.realBox.moved, 0.014, INK]);
-    } else if (o.source === 'real') lines.push([this.t.realTask, 0.015, INK]);
+    } else if (o.source === 'real') for (const l of this.t.realTask) lines.push([l, 0.015, INK]);
     if (o.shape === 'circle' || o.shape === 'cylinder' || o.shape === 'sphere') lines.push([this.t.pi, 0.015, INK]);
     if (this.message) lines.push([this.message, 0.018, this.messageInk]);
     this.say(lines);
@@ -1391,7 +1403,7 @@ export class MeasureDesk {
       this.selectedBy = side;
       // A real box's first pin on its top stands over the table: its foot goes on the desk under it and
       // the height is joined, so only the top's corners are pinned (its bottom ones are hard to reach).
-      if (this.source === 'real' && this.solid && this.pins.length === 1 && made.mesh.position.y > REAL_UP_M) {
+      if (this.source === 'real' && this.solid && !this.realBox() && this.pins.length === 1 && made.mesh.position.y > REAL_UP_M) {
         this.u.copy(made.mesh.position);
         this.u.y = 0;
         const foot = this.addPin(this.real.localToWorld(this.u).clone());
@@ -1404,9 +1416,15 @@ export class MeasureDesk {
         this.join(apex, made);
         continue;
       }
-      if (this.selected && made !== this.selected) this.join(this.selected, made);
-      // The line goes on from the new pin, until the shape has what it needs and the answers come.
-      if (this.step === 'measure') this.selected = made;
+      const from = this.selected;
+      if (from && made !== from && !this.join(from, made) && this.realBox()) {
+        // Not along an edge of the box: the pin goes, and the line stays at its pin.
+        this.removePin(made);
+        continue;
+      }
+      // The line goes on from the new pin, until the shape has what it needs and the answers come; a real
+      // box's height ends on the table, so its line goes back up to the top corner, never across from there.
+      if (this.step === 'measure') this.selected = this.realBox() && from && made.mesh.position.y <= REAL_FLOOR_M ? from : made;
     }
   }
 
@@ -1423,8 +1441,9 @@ export class MeasureDesk {
       this.clearSelection();
       return;
     }
-    this.join(this.selected, pin);
-    if (this.step === 'measure') this.selected = pin;
+    const from = this.selected;
+    if (!this.join(from, pin) && this.realBox()) return;
+    if (this.step === 'measure') this.selected = this.realBox() && pin.mesh.position.y <= REAL_FLOOR_M ? from : pin;
   }
 
   private clearSelection(): void {
@@ -2456,6 +2475,12 @@ export class MeasureDesk {
     this.u.copy(world);
     this.metric.worldToLocal(this.u);
     if (this.u.y < REAL_FLOOR_M) this.u.y = 0;
+    // A real box's height: a finger come down from the chosen top corner goes straight under it.
+    const top = this.selected?.mesh.position;
+    if (this.realBox() && top && top.y > REAL_FLOOR_M && this.u.y < top.y - REAL_UP_M && Math.hypot(this.u.x - top.x, this.u.z - top.z) < VERT_REACH_M) {
+      this.u.x = top.x;
+      this.u.z = top.z;
+    }
     if (this.solid && this.u.y > REAL_UP_M) {
       let best: Pin | undefined;
       let bestD = VERT_REACH_M;
@@ -2582,18 +2607,28 @@ export class MeasureDesk {
     this.join(pull.from, to);
   }
 
-  private join(a: Pin, b: Pin): void {
-    if (this.threads.some((t) => (t.a === a && t.b === b) || (t.a === b && t.b === a))) return;
+  private join(a: Pin, b: Pin): boolean {
+    if (this.threads.some((t) => (t.a === a && t.b === b) || (t.a === b && t.b === a))) return false;
+    // A real box's lines go only along its edges, each put straight and as long as the first of its kind.
+    let kind: BoxEdge | undefined;
+    if (this.realBox()) {
+      kind = this.boxEdge(a, b);
+      if (!kind) {
+        this.tell(this.t.realBox.diagonal);
+        return false;
+      }
+    }
     const mesh = new Mesh(threadGeo, threadMat);
     const label = new Label('', { height: 0.026 });
     this.frame().add(mesh, label.mesh);
     this.host.billboard(label.mesh);
     onTop(label);
-    const th = { a, b, mesh, label };
+    const th: Thread = { a, b, mesh, label, kind };
     this.threads.push(th);
     this.lay(mesh, label, a.mesh.position, b.mesh.position);
     sfx('join', { at: b.mesh.getWorldPosition(this.u) });
     this.changed();
+    return true;
   }
 
   /** A thread from a to b (frame-local metres) with its length on it. */
@@ -2705,12 +2740,66 @@ export class MeasureDesk {
     return o?.source === 'real' && (o.shape === 'cube' || o.shape === 'cuboid');
   }
 
-  /** What a real box's pins want next, told one corner at a time. */
+  /** Which of a real box's edges is wanted next: its length, width, then height. */
   private realGuide(): string {
     const g = this.t.realBox;
-    if (this.frameEdges[0]?.visible) return g.framed;
-    const top = this.pins.filter((p) => p.mesh.position.y > REAL_FLOOR_M).length;
-    return [g.first, g.second, g.third][top] ?? g.framed;
+    const has = (k: BoxEdge) => this.threads.some((t) => t.kind === k);
+    if (!has('l')) return g.nowLength;
+    if (!has('w')) return g.nowWidth;
+    if (!has('h')) return g.nowHeight;
+    return g.framed;
+  }
+
+  /** The level direction of a thread (desk frame, unit), into out. */
+  private levelDir(t: Thread, out: Vector3): Vector3 {
+    return out.copy(t.b.mesh.position).sub(t.a.mesh.position).setY(0).normalize();
+  }
+
+  /**
+   * Which edge of a real box a line from a to b is, or undefined for one across a face (a diagonal). An
+   * upright line is the height; a level one is the length or the width, told from the player's left-right
+   * and front-back until the first, then by running with the first or square to it. A new pin b is put
+   * where its edge says: straight up or down, or straight along, at the length of the first line of its kind.
+   */
+  private boxEdge(a: Pin, b: Pin): BoxEdge | undefined {
+    const pa = a.mesh.position;
+    const pb = b.mesh.position;
+    const d = this.e1.copy(pb).sub(pa);
+    const run = Math.hypot(d.x, d.z);
+    const free = !this.threads.some((t) => t.a === b || t.b === b);
+    const ref = (k: BoxEdge) => this.threads.find((t) => t.kind === k);
+    const length = (t: Thread) => t.a.mesh.position.distanceTo(t.b.mesh.position);
+    if (Math.abs(d.y) > REAL_UPRIGHT * run) {
+      if (free) {
+        const r = ref('h');
+        pb.x = pa.x;
+        pb.z = pa.z;
+        if (r) pb.y = Math.max(0, pa.y + Math.sign(d.y) * length(r));
+      }
+      return 'h';
+    }
+    if (Math.abs(d.y) > REAL_LEVEL * run) return undefined;
+    const dir = this.e2.set(d.x, 0, d.z).normalize();
+    const first = this.threads.find((t) => t.kind === 'l' || t.kind === 'w');
+    let kind: BoxEdge;
+    if (first?.kind) {
+      const fd = this.levelDir(first, this.e3);
+      const c = dir.dot(fd);
+      if (Math.abs(c) > REAL_ALONG_COS) {
+        kind = first.kind;
+        dir.copy(fd).multiplyScalar(Math.sign(c));
+      } else if (Math.abs(c) < REAL_ACROSS_COS) {
+        kind = first.kind === 'l' ? 'w' : 'l';
+        fd.set(-fd.z, 0, fd.x);
+        dir.copy(fd).multiplyScalar(Math.sign(dir.dot(fd)) || 1);
+      } else return undefined;
+    } else kind = Math.abs(d.x) >= Math.abs(d.z) ? 'l' : 'w';
+    if (free) {
+      const r = ref(kind);
+      const len = r ? length(r) : run;
+      pb.set(pa.x + dir.x * len, pa.y, pa.z + dir.z * len);
+    }
+    return kind;
   }
 
   /**
@@ -2759,36 +2848,35 @@ export class MeasureDesk {
    * flat and made square, and the box goes to the core as a corner on the desk and its three edges.
    */
   private realBoxSpots(): Spot[] | undefined {
-    const top = this.pins.filter((p) => p.mesh.position.y > REAL_FLOOR_M).slice(0, 3);
-    if (top.length < 3) return undefined;
-    let best = -1;
-    let bestCos = REAL_CORNER_COS;
-    const flat = (from: Vector3, to: Vector3, out: Vector3) => out.copy(to).sub(from).setY(0);
-    for (let i = 0; i < 3; i += 1) {
-      const c = top[i].mesh.position;
-      flat(c, top[(i + 1) % 3].mesh.position, this.f1);
-      flat(c, top[(i + 2) % 3].mesh.position, this.f2);
-      if (this.f1.length() < 1e-3 || this.f2.length() < 1e-3) continue;
-      const cos = Math.abs(this.f1.normalize().dot(this.f2.normalize()));
-      if (cos < bestCos) {
-        best = i;
-        bestCos = cos;
-      }
+    const ref = (k: BoxEdge) => this.threads.find((t) => t.kind === k);
+    const l = ref('l');
+    const w = ref('w');
+    const h = ref('h');
+    const first = this.threads.find((t) => t.kind === 'l' || t.kind === 'w');
+    if (!l || !w || !h || !first) return undefined;
+    const length = (t: Thread) => t.a.mesh.position.distanceTo(t.b.mesh.position);
+    // The length runs along the first level line, or square to it when that was the width.
+    const along = this.levelDir(first, new Vector3());
+    if (first.kind === 'w') along.set(along.z, 0, -along.x);
+    const across = new Vector3(-along.z, 0, along.x);
+    // The box's corner: where its pins reach least far along and across.
+    const p0 = this.pins[0].mesh.position;
+    let s = Infinity;
+    let t = Infinity;
+    for (const p of this.pins) {
+      const v = this.e1.copy(p.mesh.position).sub(p0);
+      s = Math.min(s, v.dot(along));
+      t = Math.min(t, v.dot(across));
     }
-    if (best < 0) {
-      this.tell(this.t.realBox.notSquare);
-      return undefined;
-    }
-    const c = top[best].mesh.position;
-    const along = flat(c, top[(best + 1) % 3].mesh.position, new Vector3());
-    const across = flat(c, top[(best + 2) % 3].mesh.position, new Vector3());
-    // Square: the across edge loses what of it runs along.
-    const dir = along.clone().normalize();
-    across.addScaledVector(dir, -across.dot(dir));
-    const h = top.reduce((sum, p) => sum + p.mesh.position.y, 0) / 3;
-    const foot = c.clone().setY(0);
-    return [{ at: foot }, { at: foot.clone().add(along) }, { at: foot.clone().add(across) }, { at: foot.clone().setY(h) }];
+    const foot = p0.clone().addScaledVector(along, s).addScaledVector(across, t).setY(0);
+    return [
+      { at: foot },
+      { at: foot.clone().addScaledVector(along, length(l)) },
+      { at: foot.clone().addScaledVector(across, length(w)) },
+      { at: foot.clone().setY(length(h)) },
+    ];
   }
+
 
   /**
    * Once a real rectangle or box is read, the core has made it true (square corners, parallel sides
