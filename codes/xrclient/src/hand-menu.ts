@@ -39,6 +39,11 @@ export interface MenuTarget {
    */
   aimAt?: (out: Vector3) => Vector3;
   aimR?: number;
+  /**
+   * Taken by a fingertip only, never by a hand's ray and pinch: the headset read pinches from a relaxed
+   * hand with its dot resting on a balloon, which then burst by itself (Zia, 6 Nov 2026).
+   */
+  touchOnly?: boolean;
 }
 
 export interface HandMenuHost {
@@ -264,6 +269,8 @@ export class HandMenu {
   private map = new Map<Object3D, MenuTarget>();
   /** When each card now up came up (seconds), and the cards up last frame. */
   private upSince = new Map<Object3D, number>();
+  /** Things that came up with a hand's fingertip already at them: that fingertip must leave first. */
+  private bornAt: Record<Side, Set<Object3D>> = { left: new Set(), right: new Set() };
   private wasUp = new Set<Object3D>();
   private axis = new Vector3();
   private face = { depth: 0, over: false, near: false, at: new Vector3(), normal: new Vector3() };
@@ -344,14 +351,23 @@ export class HandMenu {
     this.map.clear();
     this.wasUp.clear();
     for (const t of targets) {
-      if (!this.upSince.has(t.object)) this.upSince.set(t.object, this.now);
+      if (!this.upSince.has(t.object)) {
+        this.upSince.set(t.object, this.now);
+        // A balloon that comes up where a fingertip already is (the one that pressed the game's card) is
+        // not poked by that finger drawing back: it must go off it first.
+        for (const side of ORDER) {
+          const h = this.hands.get(side);
+          if (h.tracked && (t.distance ? t.distance(h.tip) : this.distance(t.object, h.tip)) < NEAR_M) this.bornAt[side].add(t.object);
+        }
+      }
       this.wasUp.add(t.object);
     }
     for (const o of this.upSince.keys()) if (!this.wasUp.has(o)) this.upSince.delete(o);
+    for (const side of ORDER) for (const o of this.bornAt[side]) if (!this.wasUp.has(o)) this.bornAt[side].delete(o);
     const objects: Object3D[] = [];
     for (const t of targets) {
       this.map.set(t.object, t);
-      objects.push(t.object);
+      if (!t.touchOnly) objects.push(t.object);
     }
     const hits: (MenuTarget | undefined)[] = [];
     for (const side of ORDER) {
@@ -466,10 +482,17 @@ export class HandMenu {
     }
     if (!a.near || (!held && a.nearD > NEAR_M)) {
       a.near = undefined;
+      this.bornAt[side].clear();
       this.endPoke(side, a, 'the fingertip went off it');
       return;
     }
     const t = a.near;
+    const born = this.bornAt[side];
+    for (const o of born) if (o !== t.object) born.delete(o);
+    if (born.has(t.object)) {
+      this.endPoke(side, a, 'it came up at the fingertip');
+      return;
+    }
     const f = this.faceOf(t, tip, a.poke?.way);
     f.depth -= FINGER_R;
     onCard[side] = f.over && f.depth <= ON_CARD_M;
@@ -613,7 +636,7 @@ export class HandMenu {
     let bestD = ASSIST_M;
     const far = reachNow ?? REACH_M;
     for (const t of targets) {
-      if (!t.aimAt || !t.object.visible) continue;
+      if (!t.aimAt || t.touchOnly || !t.object.visible) continue;
       // The one the dot is on already is held to a wider reach.
       const reach = was && was.object === t.object ? STICK_M : ASSIST_M;
       t.aimAt(this.local);
