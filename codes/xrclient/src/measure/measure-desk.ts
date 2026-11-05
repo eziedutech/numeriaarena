@@ -346,6 +346,8 @@ const REAL_UP_M = 0.03;
 const REAL_REST_HIGH_M = 0.4;
 /** A flat real thing's fourth pin goes onto the plane of its first three if it is this near it (metres). */
 const REAL_PLANE_M = 0.04;
+/** Once a real thing is read, a pin this near a corner of the true shape goes onto it. */
+const REAL_SQUARE_M = 0.05;
 /** The words over the desk, and the time and points under them. */
 const HEADER = new Vector3(0, 0.3, -0.32);
 const STATUS = new Vector3(0, 0.265, -0.32);
@@ -2653,6 +2655,40 @@ export class MeasureDesk {
   }
 
   /**
+   * Once a real rectangle or box is read, the core has made it true (square corners, parallel sides
+   * alike, whole centimetres); the pins it was not read from go onto its corners too, so every thread
+   * shows the length the answer uses.
+   */
+  private squareRest(read: P3[], spots: Spot[]): void {
+    const shape = this.offer?.shape;
+    const box = shape === 'cube' || shape === 'cuboid';
+    if (read.length < 4 || (!box && shape !== 'square' && shape !== 'rectangle')) return;
+    const m = (p: P3) => new Vector3(p[0] / 100, p[1] / 100, p[2] / 100);
+    const corners: Vector3[] = [];
+    if (box) {
+      const c = m(read[0]);
+      const e = [1, 2, 3].map((i) => m(read[i]).sub(c));
+      for (let i = 0; i < 8; i += 1) {
+        corners.push(c.clone().addScaledVector(e[0], i & 1).addScaledVector(e[1], (i >> 1) & 1).addScaledVector(e[2], (i >> 2) & 1));
+      }
+    } else for (const p of read.slice(0, 4)) corners.push(m(p));
+    const used = new Set(spots.map((sp) => sp.pin));
+    for (const pin of this.pins) {
+      if (used.has(pin)) continue;
+      let near: Vector3 | undefined;
+      let nearD = REAL_SQUARE_M;
+      for (const c of corners) {
+        const d = c.distanceTo(pin.mesh.position);
+        if (d < nearD) {
+          near = c;
+          nearD = d;
+        }
+      }
+      if (near) pin.mesh.position.copy(near);
+    }
+  }
+
+  /**
    * Squares, rectangles and boxes need only their edges: two threads that meet
    * at a corner, square to each other (along, across), or three that are square
    * to each other, from one corner or end to end (along, across, up). The rest
@@ -2668,36 +2704,47 @@ export class MeasureDesk {
     const ths = this.threads;
     if (ths.length < (box ? 3 : 2)) return undefined;
     const dir = (t: Thread) => this.at(t.b).clone().sub(this.at(t.a));
-    const square = (x: Thread, y: Thread) => {
+    // How far from square two threads are (|cos|, 0 square); Infinity for a thread of no length.
+    const skew = (x: Thread, y: Thread) => {
       const u = dir(x);
       const v = dir(y);
-      return u.length() > 1e-4 && v.length() > 1e-4 && Math.abs(u.normalize().dot(v.normalize())) < SQUARE_COS;
+      return u.length() > 1e-4 && v.length() > 1e-4 ? Math.abs(u.normalize().dot(v.normalize())) : Infinity;
     };
+    const square = (x: Thread, y: Thread) => skew(x, y) < SQUARE_COS;
     // Two pins at one corner of the box are that corner (it shows in several places on an opened net).
     const has = (t: Thread, p: Pin) => this.same(t.a, p) || this.same(t.b, p);
     const other = (t: Thread, p: Pin) => (this.same(t.a, p) ? t.b : t.a);
     const share = (x: Thread, y: Thread) => [x.a, x.b].find((p) => has(y, p));
     const spot = (p: Pin): Spot => ({ pin: p, at: this.at(p).clone() });
+    // Of all the corners the threads make, the squarest is read: on a real thing the first found was
+    // often too far off square for the core, and since it was found first every time no answers came.
+    let best: Spot[] | undefined;
+    let bestSkew = Infinity;
     if (flat) {
       for (let i = 0; i < ths.length; i += 1) {
         for (let j = i + 1; j < ths.length; j += 1) {
           const corner = share(ths[i], ths[j]);
           if (!corner || !square(ths[i], ths[j])) continue;
+          const sk = skew(ths[i], ths[j]);
+          if (sk >= bestSkew) continue;
           const a = other(ths[i], corner);
           const c = other(ths[j], corner);
           if (!this.onKeys([a, corner, c])) return undefined;
           // The fourth corner completes the rectangle.
           const d = this.at(a).clone().add(this.at(c)).sub(this.at(corner));
-          return [spot(a), spot(corner), spot(c), { at: d }];
+          best = [spot(a), spot(corner), spot(c), { at: d }];
+          bestSkew = sk;
         }
       }
-      return undefined;
+      return best;
     }
     for (let i = 0; i < ths.length; i += 1) {
       for (let j = i + 1; j < ths.length; j += 1) {
         for (let k = j + 1; k < ths.length; k += 1) {
           const t = [ths[i], ths[j], ths[k]];
           if (!square(t[0], t[1]) || !square(t[0], t[2]) || !square(t[1], t[2])) continue;
+          const sk = skew(t[0], t[1]) + skew(t[0], t[2]) + skew(t[1], t[2]);
+          if (sk >= bestSkew) continue;
           // The corner: the pin all three share, else the one a path of three turns on.
           let corner = [t[0].a, t[0].b].find((p) => has(t[1], p) && has(t[2], p));
           if (!corner) {
@@ -2715,16 +2762,24 @@ export class MeasureDesk {
               spots.push(spot(other(x, corner)));
               continue;
             }
-            // An edge elsewhere is the same edge from this corner, towards the box.
-            const v = dir(x);
-            const up = at.clone().add(v);
-            const down = at.clone().sub(v);
-            spots.push({ at: this.nearKey(down) < this.nearKey(up) ? down : up });
+            // An edge elsewhere is the same edge from this corner, towards the box: on paper the way
+            // nearer its corners; on a real thing from the end it shares with another thread to its other.
+            if (this.offer?.keys?.length) {
+              const v = dir(x);
+              const up = at.clone().add(v);
+              const down = at.clone().sub(v);
+              spots.push({ at: this.nearKey(down) < this.nearKey(up) ? down : up });
+              continue;
+            }
+            const from = [x.a, x.b].find((p) => t.some((y) => y !== x && has(y, p))) ?? x.a;
+            spots.push({ at: at.clone().add(this.at(other(x, from))).sub(this.at(from)) });
           }
-          return spots;
+          best = spots;
+          bestSkew = sk;
         }
       }
     }
+    if (best) return best;
     if (this.pins.length >= 6 && ths.length >= 5) this.tell(this.t.oneCorner);
     return undefined;
   }
@@ -2792,6 +2847,7 @@ export class MeasureDesk {
         this.seat(pin);
       } else pin.mesh.position.set(p[0] / 100, p[1] / 100, p[2] / 100);
     });
+    if (o.source === 'real') this.squareRest(r.pins, spots);
     for (const th of this.threads) this.lay(th.mesh, th.label, th.a.mesh.position, th.b.mesh.position);
     sfx('sparkle');
     this.message = this.t.measured(r.process_points);

@@ -42,8 +42,8 @@ pub const CHOICES: usize = 5;
 const SHORTEST_CM: f64 = 5.0;
 /// A real corner counts as square within this many degrees.
 const SQUARE_DEG: f64 = 12.0;
-/// The three edges of a real box may lean a little more.
-const BOX_DEG: f64 = 15.0;
+/// A real box's corners may be this far off square (15 was found too strict for a hand's pins); its pins are made square once read.
+const REAL_BOX_DEG: f64 = 25.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1130,7 +1130,7 @@ fn real(shape: Shape, task: Task, points: &[P]) -> Looked {
                     return Err(("not_square", points.to_vec()));
                 }
             }
-            Ok(flat4(shape, points.to_vec(), squareness(sum / 4.0, SQUARE_DEG)))
+            Ok(flat4(shape, true_rectangle(shape, points), squareness(sum / 4.0, SQUARE_DEG)))
         }
         Shape::Triangle => {
             let n = if task == Task::Area { 4 } else { 3 };
@@ -1222,7 +1222,7 @@ fn real(shape: Shape, task: Task, points: &[P]) -> Looked {
                 worst = worst.max(dev);
                 sum += dev;
             }
-            if worst > BOX_DEG {
+            if worst > REAL_BOX_DEG {
                 return Err(("not_square_corner", points.to_vec()));
             }
             if shape == Shape::Cube {
@@ -1234,9 +1234,89 @@ fn real(shape: Shape, task: Task, points: &[P]) -> Looked {
                     return Err(("not_cube", points.to_vec()));
                 }
             }
-            box_edges(shape, points.to_vec(), squareness(sum / 3.0, BOX_DEG))
+            box_edges(shape, true_box(shape, points), squareness(sum / 3.0, REAL_BOX_DEG))
         }
     }
+}
+
+/// A real rectangle (or square) as it is meant: the pins kept about their middle and the way the first
+/// side runs, the corners made square, the opposite sides as long as each other (all four for a
+/// square), each a whole centimetre. A hand's pins are never that exact, and parallel sides read
+/// different lengths otherwise.
+fn true_rectangle(shape: Shape, p: &[P]) -> Vec<P> {
+    let sides: Vec<f64> = (0..4).map(|i| dist(p[i], p[(i + 1) % 4])).collect();
+    let (a, b) = if shape == Shape::Square {
+        let s = f64::from(whole(sides.iter().sum::<f64>() / 4.0));
+        (s, s)
+    } else {
+        (f64::from(whole((sides[0] + sides[2]) / 2.0)), f64::from(whole((sides[1] + sides[3]) / 2.0)))
+    };
+    // The first side's way, and the way across it in the plane of the pins.
+    let along = sub(p[1], p[0]);
+    let n = cross(along, sub(p[3], p[0]));
+    let (lu, ln) = (len(along), len(n));
+    if lu < 1e-9 || ln < 1e-9 {
+        return p[..4].to_vec();
+    }
+    let u = [along[0] / lu, along[1] / lu, along[2] / lu];
+    let nn = [n[0] / ln, n[1] / ln, n[2] / ln];
+    // n = along x across, so across = n x u.
+    let v = cross(nn, u);
+    let c: P = (0..3)
+        .map(|k| p[..4].iter().map(|q| q[k]).sum::<f64>() / 4.0)
+        .collect::<Vec<f64>>()
+        .try_into()
+        .unwrap_or(p[0]);
+    let at = |x: f64, y: f64| -> P {
+        [
+            c[0] + u[0] * x + v[0] * y,
+            c[1] + u[1] * x + v[1] * y,
+            c[2] + u[2] * x + v[2] * y,
+        ]
+    };
+    vec![at(-a / 2.0, -b / 2.0), at(a / 2.0, -b / 2.0), at(a / 2.0, b / 2.0), at(-a / 2.0, b / 2.0)]
+}
+
+/// A real box as it is meant: from the first pin, its most upright edge kept, the other two made square
+/// to it and to each other, each a whole centimetre (all three alike for a cube), so its parallel
+/// edges read the same.
+fn true_box(shape: Shape, p: &[P]) -> Vec<P> {
+    let edges: Vec<P> = (1..4).map(|i| sub(p[i], p[0])).collect();
+    let sizes: Vec<f64> = edges.iter().map(|e| len(*e)).collect();
+    if sizes.iter().any(|s| *s < 1e-9) {
+        return p[..4].to_vec();
+    }
+    let unit = |e: P| -> P {
+        let l = len(e);
+        [e[0] / l, e[1] / l, e[2] / l]
+    };
+    let up = (0..3)
+        .max_by(|a, b| (edges[*a][1].abs() / sizes[*a]).total_cmp(&(edges[*b][1].abs() / sizes[*b])))
+        .unwrap_or(2);
+    let rest: Vec<usize> = (0..3).filter(|i| *i != up).collect();
+    let w3 = unit(edges[up]);
+    let e1 = edges[rest[0]];
+    let d1 = dot(e1, w3);
+    let o1 = [e1[0] - w3[0] * d1, e1[1] - w3[1] * d1, e1[2] - w3[2] * d1];
+    if len(o1) < 1e-9 {
+        return p[..4].to_vec();
+    }
+    let w1 = unit(o1);
+    let mut w2 = cross(w3, w1);
+    if dot(w2, edges[rest[1]]) < 0.0 {
+        w2 = [-w2[0], -w2[1], -w2[2]];
+    }
+    let mut ways = [[0.0; 3]; 3];
+    ways[up] = w3;
+    ways[rest[0]] = w1;
+    ways[rest[1]] = w2;
+    let cube = f64::from(whole(sizes.iter().sum::<f64>() / 3.0));
+    let mut out = vec![p[0]];
+    for i in 0..3 {
+        let l = if shape == Shape::Cube { cube } else { f64::from(whole(sizes[i])) };
+        out.push([p[0][0] + ways[i][0] * l, p[0][1] + ways[i][1] * l, p[0][2] + ways[i][2] * l]);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -1351,6 +1431,32 @@ mod tests {
         assert!(r.choices.contains(&"7200".to_string()), "{:?}", r.choices);
         // Only the shape is judged, so the process counts for at most 40 points.
         assert_eq!(r.process_points, REAL_PROCESS_MAX);
+    }
+
+    #[test]
+    fn a_real_reading_makes_parallel_sides_and_edges_alike() {
+        let mut h = hunt(Some(4));
+        let id = task_id(&h, Shape::Rectangle, Task::Perimeter);
+        let offer = h.next(&id, false, Source::Real, 0.0).expect("offer");
+        let pins = vec![[0.0, 0.0, 0.0], [24.6, 0.4, 0.8], [25.3, 0.1, 17.4], [0.2, -0.3, 16.6]];
+        let r = h.measure(offer.offer_id, &Pins { points: pins }).expect("reading");
+        assert!(r.ok, "{:?}", r.problem);
+        let side = |i: usize| dist(r.pins[i], r.pins[(i + 1) % 4]);
+        for i in 0..4 {
+            assert!((side(i) - f64::from(r.lengths[i])).abs() < 1e-6, "{i}: {} vs {}", side(i), r.lengths[i]);
+        }
+        assert!(dot(sub(r.pins[1], r.pins[0]), sub(r.pins[3], r.pins[0])).abs() < 1e-6);
+        // A cube off square by about 20 degrees, its edges 9.4 to 10.6 cm: read, its pins made a true cube.
+        let mut h = hunt(Some(5));
+        let id = task_id(&h, Shape::Cube, h.tasks(true).iter().find(|t| t.shape == Shape::Cube).map(|t| t.task).expect("cube"));
+        let offer = h.next(&id, true, Source::Real, 0.0).expect("offer");
+        let pins = vec![[0.0, 0.0, 0.0], [10.6, 0.3, 1.2], [-3.0, 0.2, 9.0], [0.8, 9.9, 0.4]];
+        let r = h.measure(offer.offer_id, &Pins { points: pins }).expect("reading");
+        assert!(r.ok, "{:?}", r.problem);
+        let e: Vec<P> = (1..4).map(|i| sub(r.pins[i], r.pins[0])).collect();
+        let l: Vec<f64> = e.iter().map(|v| len(*v)).collect();
+        assert!(l.iter().all(|x| (x - 10.0).abs() < 1e-6), "{l:?}");
+        assert!(dot(e[0], e[1]).abs() < 1e-6 && dot(e[0], e[2]).abs() < 1e-6 && dot(e[1], e[2]).abs() < 1e-6);
     }
 
     #[test]
