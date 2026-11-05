@@ -22,6 +22,7 @@ import { uiImage, type UiName } from './art/ui2d.js';
 import { DeskRoot } from './game-components.js';
 import { Hands, type HandAdapters, type Side } from './measure/hands.js';
 import { FLAT_JOINTS, notFlat, type P3 } from './flat-hand.js';
+import { getRoom } from './settings.js';
 import { T } from './text.js';
 
 /** Seconds to wait for a detected table before offering pinch placement. */
@@ -245,6 +246,8 @@ export class DeskSystem extends createSystem({
   private head = new Vector3();
   private forward = new Vector3();
   private hands!: Hands;
+  /** Whether each hand adapter's drawn model was last shown (see syncHandModels). */
+  private handModelOn = new WeakMap<object, boolean>();
   private clock = 0;
   /** Placed again from the menu: Space Setup's table is not taken this time. */
   private skipTable = false;
@@ -569,6 +572,23 @@ export class DeskSystem extends createSystem({
     target.rotation.set(0, Math.atan2(this.head.x - at.x, this.head.z - at.z), 0);
   }
 
+  /**
+   * In MY ROOM the real hands show through passthrough, so the drawn hand models are put away: drawn
+   * over the camera image they showed through the real table, a hand under it seen on top of it
+   * (Quest 2 has no depth to hide them). In the classroom and the bedroom, where nothing real shows,
+   * they are drawn. The pokes, rings and rays are not the models and stay.
+   */
+  private syncHandModels(): void {
+    const want = getRoom() !== 'here';
+    const hands = (this.input.xr as unknown as { visualAdapters?: { hand?: Record<Side, { toggleVisual(on: boolean): void } | undefined> } }).visualAdapters?.hand;
+    for (const side of ['left', 'right'] as const) {
+      const a = hands?.[side];
+      if (!a || this.handModelOn.get(a) === want) continue;
+      a.toggleVisual(want);
+      this.handModelOn.set(a, want);
+    }
+  }
+
   update(delta: number): void {
     const e = this.desk();
     if (!e) return;
@@ -577,6 +597,7 @@ export class DeskSystem extends createSystem({
       this.curtain.visible = false;
       return;
     }
+    this.syncHandModels();
     if (againAsked) {
       againAsked = false;
       if (e.getValue(DeskRoot, 'placed')) {
