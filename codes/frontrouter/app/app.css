@@ -980,6 +980,53 @@ button.tool {
   gap: 10px;
 }
 
+/* The teacher's class screen on a phone: everything smaller, the rows still one line each. */
+@media (max-width: 1023px) {
+  .arena {
+    padding: 12px 16px 32px;
+  }
+  .arena-board {
+    padding: 14px 12px;
+  }
+  .arena-head h1 {
+    font-size: 22px;
+  }
+  .arena-clock {
+    font-size: 34px;
+  }
+  .arena-row {
+    grid-template-columns: 36px 40px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 6px;
+    font-size: 17px;
+  }
+  .arena-avatar svg {
+    width: 34px;
+    height: 34px;
+  }
+  .arena-points {
+    font-size: 22px;
+  }
+  .arena-gain {
+    font-size: 18px;
+  }
+  .arena-work {
+    font-size: 14px;
+  }
+  .arena-play-code {
+    font-size: 48px;
+  }
+  .arena-names {
+    font-size: 16px;
+  }
+  .arena-turn-now {
+    font-size: 20px;
+  }
+  .arena-countdown {
+    font-size: 24px;
+  }
+}
+
 .arena-code-field {
   font-size: 28px;
   letter-spacing: 0.2em;

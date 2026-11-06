@@ -469,13 +469,19 @@ export default function Screen() {
         </a>
         <LangSwitch lang={lang} setLang={setLang} />
       </nav>
-      <WideOnly lang={lang}>
-        {addr.code ? (
-          <Watching key={addr.code} t={t} lang={lang} code={addr.code} host={addr.host} play={addr.play} />
-        ) : (
-          <AskCode t={t} />
-        )}
-      </WideOnly>
+      {addr.code && addr.host ? (
+        // The teacher's own screen (opened from /manage with the host token) works on a phone too,
+        // so the START and group buttons are there wherever the teacher stands.
+        <Watching key={addr.code} t={t} lang={lang} code={addr.code} host={addr.host} play={addr.play} />
+      ) : (
+        <WideOnly lang={lang}>
+          {addr.code ? (
+            <Watching key={addr.code} t={t} lang={lang} code={addr.code} host={addr.host} play={addr.play} />
+          ) : (
+            <AskCode t={t} />
+          )}
+        </WideOnly>
+      )}
     </main>
   );
 }
