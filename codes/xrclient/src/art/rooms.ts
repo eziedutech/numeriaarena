@@ -33,7 +33,7 @@ export interface Seat {
   ry: number;
   /** The rivals' seats ahead left and right of the player, or a classmate's. */
   role: 'left' | 'right' | 'class';
-  /** The top of the seat's desk; the classmate (or the rival's robot) is lifted to it. */
+  /** The top of the seat's desk; the classmate is scaled to it, the rival's robot stands on it. */
   top: number;
 }
 
@@ -72,6 +72,14 @@ const CLASS_COLUMN_X = 2.75;
  */
 const CLASS_DESK_DROP = 0.02;
 const CLASS_FRONT_DESK_DROP = 0.05;
+/**
+ * The other desks stay school desks however high the real one is: the
+ * classmates grow with them (classroom-life.ts) but sit on the floor, so a
+ * high real table no longer lifts them off it.
+ */
+const CLASS_DESK_LOW = KID_DESK_TOP * 0.92;
+const CLASS_DESK_HIGH = KID_DESK_TOP * 1.12;
+const classTop = (t: number) => Math.min(Math.max(t, CLASS_DESK_LOW), CLASS_DESK_HIGH);
 /** The classroom's front wall, its chalkboard (centre and size) and its clock. */
 export const CLASS_FRONT_Z = -3.4;
 export const CLASS_BOARD = { x: 0, y: 1.55, w: 3.28, h: 1.2 };
@@ -564,7 +572,7 @@ function classroom(deskTop: number): Group {
   // Three rows of three desks, a little lower than the player's, the row
   // ahead lower still. Beside the player, a classmate at work at each desk;
   // their own chairs come with them.
-  const side = Math.max(KID_DESK_TOP, deskTop - CLASS_DESK_DROP);
+  const side = classTop(deskTop - CLASS_DESK_DROP);
   const seats: Seat[] = [];
   for (const x of [-CLASS_COLUMN_X, CLASS_COLUMN_X]) {
     classDesk(b, prints, x, -0.03, 1.0, 0.6, side);
@@ -577,7 +585,7 @@ function classroom(deskTop: number): Group {
   const chairColors = [0x3469c4, 0x3fb6a0, 0xf2716b, 0xf9c74f];
   let n = 0;
   for (const z of [-1.35, 1.4]) {
-    const top = z < 0 ? Math.max(KID_DESK_TOP - 0.06, deskTop - CLASS_FRONT_DESK_DROP) : side;
+    const top = z < 0 ? classTop(deskTop - CLASS_FRONT_DESK_DROP) : side;
     for (const x of [-CLASS_COLUMN_X, 0, CLASS_COLUMN_X]) {
       const rival = z < 0 && x !== 0;
       classDesk(b, prints, x, z, x === 0 ? 1.15 : 1.0, 0.6, top);

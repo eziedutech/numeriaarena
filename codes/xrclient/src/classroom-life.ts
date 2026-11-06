@@ -168,9 +168,10 @@ export class ClassroomLife {
         { shirt, chair: CHAIRS[(n + desk) % CHAIRS.length], hair: KID_HAIRS[n % KID_HAIRS.length], tufts: n % 2 === 1 },
         31 + n * 7,
       );
-      // Lifted from the desk the classmates are drawn for to the seat's own.
-      const lift = seat.top - KID_DESK_TOP;
-      fig.root.position.set(seat.x, lift, seat.z);
+      // Grown from the desk the classmates are drawn for to the seat's own, the feet on the floor.
+      const grow = seat.top / KID_DESK_TOP;
+      fig.root.position.set(seat.x, 0, seat.z);
+      fig.root.scale.setScalar(grow);
       fig.root.rotation.y = seat.ry;
       room.add(fig.root);
       const dx = PLAYER_X - seat.x;
@@ -200,8 +201,8 @@ export class ClassroomLife {
         kid.name = this.label(' ', 0.07, true);
         kid.status = this.label(' ', 0.05, true);
         const yaw = Math.atan2(PLAYER_X - seat.x, PLAYER_Z - seat.z);
-        kid.name.mesh.position.set(seat.x, 1.45 + lift, seat.z - 0.05);
-        kid.status.mesh.position.set(seat.x, 1.36 + lift, seat.z - 0.05);
+        kid.name.mesh.position.set(seat.x, 1.45 * grow, seat.z - 0.05);
+        kid.status.mesh.position.set(seat.x, 1.36 * grow, seat.z - 0.05);
         kid.name.mesh.rotation.y = yaw;
         kid.status.mesh.rotation.y = yaw;
         fig.root.visible = false;
