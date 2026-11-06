@@ -480,6 +480,32 @@ button.tool {
   gap: 10px;
 }
 
+.room-opened {
+  background: #bfe3c9;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.room-warn {
+  background: #f9e2a8;
+  padding: 8px 12px;
+}
+
+.ticket.fresh {
+  outline: 4px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+.fresh-tag {
+  justify-self: start;
+  align-self: flex-start;
+  background: var(--cobalt);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
 .race-setup {
   display: grid;
   gap: 8px;

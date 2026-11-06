@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { User } from "firebase/auth";
 
@@ -125,8 +125,12 @@ const TEXT = {
     ],
     raceTitle: "NEW RACE ROOM",
     raceFor: "Who races in it?",
-    forClass: (l: string) => `ONLY CLASS ${l}`,
-    forAnyone: "OPEN TO ANYONE",
+    forClass: (l: string) => `OPEN A ROOM FOR CLASS ${l}`,
+    forAnyone: "OPEN A ROOM FOR ANYONE",
+    raceForTap: "Each press opens one new room straight away.",
+    activeNow: (n: number) => `${n === 1 ? "1 room is" : `${n} rooms are`} already active below. Use one of them, or close the ones not needed, before opening another.`,
+    opened: (code: string) => `Room ${code} is open. It is the marked card under ACTIVE ROOMS.`,
+    freshTag: "JUST OPENED",
     raceForNote:
       "A room for a class seats only its students, signed in to their seats, and its results go to each seat's official record. A room open to anyone takes any player with the code and is counted apart.",
     noClasses: "No class yet: make one under MY CLASSES to race as a class.",
@@ -309,8 +313,12 @@ const TEXT = {
     ],
     raceTitle: "BUAT RUANG LOMBA",
     raceFor: "Siapa yang berlomba?",
-    forClass: (l: string) => `HANYA KELAS ${l}`,
-    forAnyone: "TERBUKA UNTUK SIAPA SAJA",
+    forClass: (l: string) => `BUKA RUANG UNTUK KELAS ${l}`,
+    forAnyone: "BUKA RUANG UNTUK SIAPA SAJA",
+    raceForTap: "Tiap tekan langsung membuka satu ruang baru.",
+    activeNow: (n: number) => `Sudah ada ${n} ruang aktif di bawah. Pakai salah satunya, atau tutup yang tidak dipakai, sebelum membuka ruang lagi.`,
+    opened: (code: string) => `Ruang ${code} sudah dibuka. Kartunya ditandai di RUANG AKTIF.`,
+    freshTag: "BARU DIBUKA",
     raceForNote:
       "Ruang untuk kelas hanya menerima siswanya yang sudah masuk ke kursi, dan hasilnya masuk ke catatan resmi tiap kursi. Ruang terbuka menerima siapa saja yang punya kodenya dan dihitung terpisah.",
     noClasses: "Belum ada kelas: buat dulu di KELAS SAYA untuk berlomba sebagai kelas.",
@@ -743,6 +751,8 @@ function Account({
   const tab: Tab = hash === "#rooms" ? "rooms" : "classes";
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
+  // The room just opened here, marked and scrolled to in the list of active rooms.
+  const [fresh, setFresh] = useState<OpenedRoom | null>(null);
   const [setup, setSetup] = useState<RoomSetup>(USUAL);
   useEffect(() => setSetup(readSetup(me.email)), [me.email]);
   const status = me.organizer?.status;
@@ -758,6 +768,7 @@ function Account({
     if (opening) return;
     setOpening(true);
     setOpenError("");
+    setFresh(null);
     if (!toRoom) show("rooms");
     api<OpenedRoom>(user, "/rooms", {
       method: "POST",
@@ -765,6 +776,7 @@ function Account({
     })
       .then(
         (room) => {
+          setFresh(room);
           setRooms((n) => n + 1);
           if (toRoom) navigate(`/manage/room/${encodeURIComponent(room.id)}`);
         },
@@ -862,7 +874,7 @@ function Account({
       )}
       {me.organizer && (!working || tab === "rooms") && (
         <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms">
-          {working && <RaceRooms t={t} lang={lang} owner={me.email} setup={setup} onSetup={setSetup} user={user} version={rooms} opening={opening} openError={openError} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
+          {working && <RaceRooms t={t} lang={lang} owner={me.email} setup={setup} onSetup={setSetup} user={user} version={rooms} opening={opening} openError={openError} fresh={fresh} onOpen={openRoom} onChange={() => setRooms((n) => n + 1)} />}
           <RoomHistory t={t} user={user} version={rooms} />
         </div>
       )}
@@ -906,6 +918,7 @@ function RaceRooms({
   version,
   opening,
   openError,
+  fresh,
   onOpen,
   onChange,
 }: {
@@ -918,11 +931,18 @@ function RaceRooms({
   version: number;
   opening: boolean;
   openError: string;
+  fresh: OpenedRoom | null;
   onOpen: (classId?: string) => void;
   onChange: () => void;
 }) {
   // undefined while asking the server.
   const [rooms, setRooms] = useState<OpenedRoom[]>();
+  const freshCard = useRef<HTMLDivElement>(null);
+  const freshShown = !!fresh && !!rooms?.some((r) => r.id === fresh.id);
+  // Once the list holds the new room, bring its card into view: on a phone it is below the buttons.
+  useEffect(() => {
+    if (freshShown) freshCard.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [freshShown]);
   const [classes, setClasses] = useState<ClassChoice[]>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -968,18 +988,37 @@ function RaceRooms({
           </button>
         </div>
         {classes?.length === 0 && <p className="soft">{t.noClasses}</p>}
-        <p className="soft">{opening ? t.opening : t.raceForNote}</p>
+        {opening ? (
+          <p className="soft">{t.opening}</p>
+        ) : fresh ? (
+          <p className="room-opened" role="status">
+            {t.opened(fresh.play_code)}
+          </p>
+        ) : rooms && rooms.length > 0 ? (
+          <p className="room-warn">{t.activeNow(rooms.length)}</p>
+        ) : (
+          <p className="soft">{t.raceForTap}</p>
+        )}
+        <p className="soft">{t.raceForNote}</p>
         <ErrorLine t={t} code={openError} />
       </section>
       <section className="paper-sheet">
-        <h2 className="sheet-title">{t.openRooms}</h2>
+        <h2 className="sheet-title">
+          {t.openRooms}
+          {rooms && rooms.length > 0 ? ` (${rooms.length})` : ""}
+        </h2>
         <ErrorLine t={t} code={error} />
         {rooms?.length === 0 && <p className="soft">{t.noOpenRooms}</p>}
         <div className="tools tickets">
           {rooms?.map((room) => {
             const screen = screenUrl(room);
             return (
-              <div key={room.id} className="tool ticket">
+              <div
+                key={room.id}
+                ref={room.id === fresh?.id ? freshCard : undefined}
+                className={room.id === fresh?.id ? "tool ticket fresh" : "tool ticket"}
+              >
+                {room.id === fresh?.id && <span className="fresh-tag">{t.freshTag}</span>}
                 <strong>{t.roomFor(room.class_label)}</strong>
                 <span>{room.class_label ? t.roomPlayClass(room.class_label) : t.roomPlay}</span>
                 <CopyCode big label={t.roomCode} code={room.play_code} copyText={t.copy} copiedText={t.copied} />
